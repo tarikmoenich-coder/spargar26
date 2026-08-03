@@ -1,0 +1,35 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+body {
+  @apply bg-neutral-50 text-neutral-900;
+}
+
+table {
+  @apply w-full border-collapse text-sm;
+}
+
+th, td {
+  @apply border border-neutral-200 px-2 py-1 text-left;
+}
+
+th {
+  @apply bg-neutral-100 font-medium;
+}
+
+input, select {
+  @apply rounded border border-neutral-300 px-2 py-1 text-sm;
+}
+
+button.btn {
+  @apply rounded bg-emerald-700 px-3 py-1.5 text-sm text-white hover:bg-emerald-800 disabled:opacity-50;
+}
+
+button.btn-secondary {
+  @apply rounded border border-neutral-300 px-3 py-1.5 text-sm hover:bg-neutral-100;
+}
+
+button.btn-danger {
+  @apply rounded bg-red-600 px-3 py-1.5 text-sm text-white hover:bg-red-700 disabled:opacity-50;
+}
