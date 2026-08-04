@@ -9,6 +9,11 @@ import {
   type Arbeitsgruppe,
   type Employee,
 } from "@/lib/types";
+import {
+  ANZAHL_PERSONALNUMMERN_KREISE,
+  naechsteFreieNummer,
+  parsePersonalNrNummer,
+} from "@/lib/personalnummern";
 
 const emptyForm = {
   personal_nr: "",
@@ -39,26 +44,52 @@ export default function MitarbeiterPage() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Alle je vergebenen Personalnummern (auch inaktive Mitarbeiter, da deren
+  // Nummer nicht neu vergeben wird) - für Dubletten-Warnung + "nächste freie
+  // Nummer"-Hilfe.
+  const [allePersonalNummern, setAllePersonalNummern] = useState<
+    { personal_nr: string; name: string; vorname: string }[]
+  >([]);
+  const [naechsteKreis, setNaechsteKreis] = useState("1");
 
   const canEdit = profile?.role === "admin" || profile?.role === "hr";
   const gruppenLabel: Record<string, string> = Object.fromEntries(
     gruppen.map((g) => [g.gruppe_nr, g.bezeichnung])
   );
 
+  const personalNrKonflikt = (() => {
+    const typed = form.personal_nr.trim().toLowerCase();
+    if (!typed) return null;
+    const eigeneNr = editingId
+      ? employees
+          .find((e) => e.id === editingId)
+          ?.personal_nr.trim()
+          .toLowerCase()
+      : null;
+    if (eigeneNr && typed === eigeneNr) return null; // unverändert beim Bearbeiten
+    return (
+      allePersonalNummern.find(
+        (r) => r.personal_nr.trim().toLowerCase() === typed
+      ) ?? null
+    );
+  })();
+
   async function load() {
     setLoading(true);
     const supabase = getSupabaseClient();
     let query = supabase.from("employees").select("*").order("name");
     if (!showInactive) query = query.eq("aktiv", true);
-    const [{ data, error }, { data: ersteTage }, { data: gruppenData }] =
-      await Promise.all([
-        query,
-        supabase.from("employee_erster_arbeitstag").select("*"),
-        supabase
-          .from("arbeitsgruppen")
-          .select("*")
-          .order("reihenfolge"),
-      ]);
+    const [
+      { data, error },
+      { data: ersteTage },
+      { data: gruppenData },
+      { data: alleNrData },
+    ] = await Promise.all([
+      query,
+      supabase.from("employee_erster_arbeitstag").select("*"),
+      supabase.from("arbeitsgruppen").select("*").order("reihenfolge"),
+      supabase.from("employees").select("personal_nr, name, vorname"),
+    ]);
     if (!error) setEmployees((data as Employee[]) ?? []);
     const map: Record<string, string> = {};
     (ersteTage ?? []).forEach((row: { employee_id: string; erster_arbeitstag: string }) => {
@@ -66,7 +97,20 @@ export default function MitarbeiterPage() {
     });
     setAktivSeit(map);
     setGruppen((gruppenData as Arbeitsgruppe[]) ?? []);
+    setAllePersonalNummern(alleNrData ?? []);
     setLoading(false);
+  }
+
+  function naechsteFreieUebernehmen() {
+    const belegt = new Set<number>();
+    allePersonalNummern.forEach((r) => {
+      const n = parsePersonalNrNummer(r.personal_nr);
+      if (n !== null) belegt.add(n);
+    });
+    const frei = naechsteFreieNummer(belegt, Number(naechsteKreis));
+    if (frei !== null) {
+      setForm((f) => ({ ...f, personal_nr: frei.toString() }));
+    }
   }
 
   useEffect(() => {
@@ -169,12 +213,48 @@ export default function MitarbeiterPage() {
           onSubmit={handleSubmit}
           className="grid grid-cols-2 gap-3 rounded border border-neutral-200 bg-white p-4 sm:grid-cols-4"
         >
-          <input
-            placeholder="Personalnummer"
-            required
-            value={form.personal_nr}
-            onChange={(e) => setForm({ ...form, personal_nr: e.target.value })}
-          />
+          <div className="col-span-2 flex flex-col gap-1">
+            <div className="flex gap-2">
+              <input
+                placeholder="Personalnummer"
+                required
+                value={form.personal_nr}
+                onChange={(e) =>
+                  setForm({ ...form, personal_nr: e.target.value })
+                }
+              />
+              {!editingId && (
+                <>
+                  <select
+                    value={naechsteKreis}
+                    onChange={(e) => setNaechsteKreis(e.target.value)}
+                  >
+                    {Array.from(
+                      { length: ANZAHL_PERSONALNUMMERN_KREISE },
+                      (_, i) => i + 1
+                    ).map((k) => (
+                      <option key={k} value={k}>
+                        Kreis {k}
+                      </option>
+                    ))}
+                  </select>
+                  <button
+                    type="button"
+                    className="btn-secondary whitespace-nowrap text-xs"
+                    onClick={naechsteFreieUebernehmen}
+                  >
+                    Nächste freie Nr.
+                  </button>
+                </>
+              )}
+            </div>
+            {personalNrKonflikt && (
+              <span className="text-xs text-red-600">
+                Bereits vergeben an {personalNrKonflikt.name},{" "}
+                {personalNrKonflikt.vorname}
+              </span>
+            )}
+          </div>
           <select
             value={form.gruppe_nr}
             onChange={(e) => setForm({ ...form, gruppe_nr: e.target.value })}
@@ -270,7 +350,11 @@ export default function MitarbeiterPage() {
             }
           />
           <div className="col-span-full flex gap-2">
-            <button type="submit" className="btn" disabled={saving}>
+            <button
+              type="submit"
+              className="btn"
+              disabled={saving || !!personalNrKonflikt}
+            >
               {editingId ? "Speichern" : "Anlegen"}
             </button>
             {editingId && (

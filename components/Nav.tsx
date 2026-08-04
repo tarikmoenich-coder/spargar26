@@ -15,6 +15,11 @@ interface NavItem {
 const items: NavItem[] = [
   { href: "/mitarbeiter", label: "Personal", roles: ["admin", "hr"] },
   {
+    href: "/personalnummern",
+    label: "Personalnummern",
+    roles: ["admin", "hr"],
+  },
+  {
     href: "/erfassung",
     label: "Stundenerfassung",
     roles: ["admin", "hr", "zeiterfassung"],
