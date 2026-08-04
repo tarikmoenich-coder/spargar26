@@ -412,7 +412,9 @@ export default function MitarbeiterPage() {
                 <td>{emp.personal_nr}</td>
                 <td>
                   {emp.gruppe_nr
-                    ? gruppenLabel[emp.gruppe_nr] ?? emp.gruppe_nr
+                    ? `${emp.gruppe_nr} – ${
+                        gruppenLabel[emp.gruppe_nr] ?? "?"
+                      }`
                     : "—"}
                 </td>
                 <td>{emp.name}</td>

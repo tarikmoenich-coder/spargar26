@@ -12,7 +12,7 @@ function todayIso() {
 
 interface Gruppierung {
   key: string;
-  bezeichnung: string;
+  anzeige: string;
   employees: Employee[];
 }
 
@@ -36,10 +36,10 @@ function gruppiere(
   });
   return keys.map((key) => ({
     key,
-    bezeichnung:
+    anzeige:
       key === OHNE_GRUPPE_KEY
         ? "Ohne Gruppe"
-        : gruppenByNr.get(key)?.bezeichnung ?? key,
+        : `${key} – ${gruppenByNr.get(key)?.bezeichnung ?? key}`,
     employees: buckets.get(key)!,
   }));
 }
@@ -210,7 +210,7 @@ export default function ErfassungPage() {
         <div className="flex flex-wrap gap-2 print:hidden">
           {gruppierungen.map((g) => (
             <a key={g.key} href={`#gruppe-${g.key}`} className="btn-secondary text-xs">
-              {g.bezeichnung} ({g.employees.length})
+              {g.anzeige} ({g.employees.length})
             </a>
           ))}
         </div>
@@ -229,14 +229,19 @@ export default function ErfassungPage() {
           >
             <div className="hidden print:block">
               <h2 className="text-base font-semibold">
-                Gruppenstundenzettel – {g.bezeichnung}
+                Gruppenstundenzettel – {g.anzeige}
               </h2>
-              <p className="text-sm">Datum: {datum}</p>
+              <p className="text-sm">
+                Datum:{" "}
+                <span className="inline-block w-40 border-b border-black">
+                  &nbsp;
+                </span>
+              </p>
             </div>
 
             <div className="flex items-center justify-between gap-3 print:hidden">
               <h2 className="text-base font-semibold text-emerald-800">
-                {g.bezeichnung}{" "}
+                {g.anzeige}{" "}
                 <span className="font-normal text-neutral-500">
                   ({g.employees.length} Pers., {gruppenStunden(g).toFixed(2)} Std.)
                 </span>
