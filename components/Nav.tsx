@@ -54,7 +54,7 @@ export default function Nav() {
   }
 
   return (
-    <nav className="border-b border-neutral-200 bg-white">
+    <nav className="border-b border-neutral-200 bg-white print:hidden">
       <div className="mx-auto flex max-w-6xl items-center justify-between px-4 py-3">
         <div className="flex items-center gap-4">
           <span className="font-semibold text-emerald-800">Spargar</span>

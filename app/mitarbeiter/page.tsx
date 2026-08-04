@@ -6,11 +6,13 @@ import { useProfile } from "@/lib/useProfile";
 import {
   ABRECHNUNGSART_LABELS,
   type Abrechnungsart,
+  type Arbeitsgruppe,
   type Employee,
 } from "@/lib/types";
 
 const emptyForm = {
   personal_nr: "",
+  gruppe_nr: "",
   name: "",
   vorname: "",
   geburtsdatum: "",
@@ -28,6 +30,7 @@ const emptyForm = {
 export default function MitarbeiterPage() {
   const { profile } = useProfile();
   const [employees, setEmployees] = useState<Employee[]>([]);
+  const [gruppen, setGruppen] = useState<Arbeitsgruppe[]>([]);
   const [aktivSeit, setAktivSeit] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
@@ -38,22 +41,31 @@ export default function MitarbeiterPage() {
   const [error, setError] = useState<string | null>(null);
 
   const canEdit = profile?.role === "admin" || profile?.role === "hr";
+  const gruppenLabel: Record<string, string> = Object.fromEntries(
+    gruppen.map((g) => [g.gruppe_nr, g.bezeichnung])
+  );
 
   async function load() {
     setLoading(true);
     const supabase = getSupabaseClient();
     let query = supabase.from("employees").select("*").order("name");
     if (!showInactive) query = query.eq("aktiv", true);
-    const [{ data, error }, { data: ersteTage }] = await Promise.all([
-      query,
-      supabase.from("employee_erster_arbeitstag").select("*"),
-    ]);
+    const [{ data, error }, { data: ersteTage }, { data: gruppenData }] =
+      await Promise.all([
+        query,
+        supabase.from("employee_erster_arbeitstag").select("*"),
+        supabase
+          .from("arbeitsgruppen")
+          .select("*")
+          .order("reihenfolge"),
+      ]);
     if (!error) setEmployees((data as Employee[]) ?? []);
     const map: Record<string, string> = {};
     (ersteTage ?? []).forEach((row: { employee_id: string; erster_arbeitstag: string }) => {
       map[row.employee_id] = row.erster_arbeitstag;
     });
     setAktivSeit(map);
+    setGruppen((gruppenData as Arbeitsgruppe[]) ?? []);
     setLoading(false);
   }
 
@@ -66,6 +78,7 @@ export default function MitarbeiterPage() {
     setEditingId(emp.id);
     setForm({
       personal_nr: emp.personal_nr,
+      gruppe_nr: emp.gruppe_nr ?? "",
       name: emp.name,
       vorname: emp.vorname,
       geburtsdatum: emp.geburtsdatum ?? "",
@@ -93,6 +106,7 @@ export default function MitarbeiterPage() {
     const supabase = getSupabaseClient();
     const payload = {
       personal_nr: form.personal_nr,
+      gruppe_nr: form.gruppe_nr || null,
       name: form.name,
       vorname: form.vorname,
       geburtsdatum: form.geburtsdatum || null,
@@ -161,6 +175,17 @@ export default function MitarbeiterPage() {
             value={form.personal_nr}
             onChange={(e) => setForm({ ...form, personal_nr: e.target.value })}
           />
+          <select
+            value={form.gruppe_nr}
+            onChange={(e) => setForm({ ...form, gruppe_nr: e.target.value })}
+          >
+            <option value="">— keine Gruppe —</option>
+            {gruppen.map((g) => (
+              <option key={g.gruppe_nr} value={g.gruppe_nr}>
+                {g.gruppe_nr} – {g.bezeichnung}
+              </option>
+            ))}
+          </select>
           <input
             placeholder="Name"
             required
@@ -286,6 +311,7 @@ export default function MitarbeiterPage() {
           <thead>
             <tr>
               <th>Pers.-Nr.</th>
+              <th>Gruppe</th>
               <th>Name</th>
               <th>Vorname</th>
               <th>Ort</th>
@@ -300,6 +326,11 @@ export default function MitarbeiterPage() {
             {filtered.map((emp) => (
               <tr key={emp.id} className={emp.aktiv ? "" : "opacity-50"}>
                 <td>{emp.personal_nr}</td>
+                <td>
+                  {emp.gruppe_nr
+                    ? gruppenLabel[emp.gruppe_nr] ?? emp.gruppe_nr
+                    : "—"}
+                </td>
                 <td>{emp.name}</td>
                 <td>{emp.vorname}</td>
                 <td>{emp.ort}</td>

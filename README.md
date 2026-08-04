@@ -10,7 +10,11 @@ Enthalten:
 - Personalstamm (anlegen/bearbeiten/deaktivieren, keine Löschung), inkl.
   Abrechnungsart (pauschal/Lohnsteuerklasse 1/sozialversicherungspflichtig)
   und automatisch berechnetem "Aktiv seit" (erster Arbeitstag mit Stunden > 0)
-- Tägliche Stundenerfassung mit Live-Sync zwischen mehreren Nutzern
+- Tägliche Stundenerfassung mit Live-Sync zwischen mehreren Nutzern, nach
+  Arbeitsgruppen (z.B. Sortierer, Träger) gruppiert mit Sprungleiste und
+  Druckansicht pro Gruppe ("Gruppenstundenzettel")
+- Arbeitsgruppen-Verwaltung unter Einstellungen (nur admin): Bezeichnung und
+  Anzeige-/Druckreihenfolge je Gruppe
 - Automatische Saison-Lohnübersicht (Stunden, Prämien, Verpflegungs-/
   Unterkunft-Abzüge, Vorschüsse, pauschale Lohnsteuer bei Abrechnungsart
   "pauschal": 5,275% vom Bruttolohn)

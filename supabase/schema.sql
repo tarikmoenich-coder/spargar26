@@ -53,6 +53,20 @@ returns boolean language sql stable as $$
 $$;
 
 -- ---------------------------------------------------------------------------
+-- 1a. Arbeitsgruppen (z.B. "Sortierer", "Träger", "Schälmannschaft") - dient
+--     der übersichtlichen Gruppierung/Sortierung auf der Stundenerfassung
+--     und den gedruckten Gruppenstundenzetteln.
+-- ---------------------------------------------------------------------------
+create table arbeitsgruppen (
+  gruppe_nr text primary key,
+  bezeichnung text not null,
+  -- Anzeige-/Druckreihenfolge der Gruppen (nicht alphabetisch nach gruppe_nr,
+  -- da z.B. "10" vor "2" sortiert würde).
+  reihenfolge int not null default 0,
+  created_at timestamptz not null default now()
+);
+
+-- ---------------------------------------------------------------------------
 -- 2. Mitarbeiter (entspricht Sheet "Pers.dat")
 --    ADR-004: stabile interne ID (uuid) + Alt-Personalnummer bleibt als
 --    eigenes, weiterhin sichtbares/suchbares Feld erhalten.
@@ -68,7 +82,8 @@ create table employees (
   -- Alt-Personalnummer aus Excel, z.T. alphanumerisch (z.B. "8226a") - bleibt
   -- eindeutig und durchsuchbar, ist aber NICHT mehr der Primärschlüssel.
   personal_nr text not null unique,
-  gruppe_nr text,
+  gruppe_nr text references arbeitsgruppen (gruppe_nr)
+    on update cascade on delete set null,
   herkunft text,
   nationalitaet text,
   name text not null,
@@ -445,6 +460,7 @@ grant select on season_summary to authenticated;
 -- 13. Row Level Security (ADR-006: Berechtigungen serverseitig, nicht nur UI)
 -- ---------------------------------------------------------------------------
 alter table profiles enable row level security;
+alter table arbeitsgruppen enable row level security;
 alter table employees enable row level security;
 alter table work_entries enable row level security;
 alter table periods enable row level security;
@@ -462,6 +478,12 @@ create policy "profiles_select" on profiles for select
   using (id = auth.uid() or is_admin());
 create policy "profiles_update_self" on profiles for update
   using (id = auth.uid());
+
+-- arbeitsgruppen: alle eingeloggten Rollen lesen, nur admin pflegt
+create policy "arbeitsgruppen_select" on arbeitsgruppen for select
+  using (auth.uid() is not null);
+create policy "arbeitsgruppen_admin_write" on arbeitsgruppen for all
+  using (is_admin()) with check (is_admin());
 
 -- employees: volle Sicht/Bearbeitung für admin und hr
 create policy "employees_admin_hr_all" on employees for all

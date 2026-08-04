@@ -87,6 +87,12 @@ export interface VerpflegungsSatz {
   wohnen: number;
 }
 
+export interface Arbeitsgruppe {
+  gruppe_nr: string;
+  bezeichnung: string;
+  reihenfolge: number;
+}
+
 export interface Advance {
   id: number;
   belegnummer: string;

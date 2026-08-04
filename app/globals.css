@@ -22,14 +22,14 @@ input, select {
   @apply rounded border border-neutral-300 px-2 py-1 text-sm;
 }
 
-button.btn {
+.btn {
   @apply rounded bg-emerald-700 px-3 py-1.5 text-sm text-white hover:bg-emerald-800 disabled:opacity-50;
 }
 
-button.btn-secondary {
+.btn-secondary {
   @apply rounded border border-neutral-300 px-3 py-1.5 text-sm hover:bg-neutral-100;
 }
 
-button.btn-danger {
+.btn-danger {
   @apply rounded bg-red-600 px-3 py-1.5 text-sm text-white hover:bg-red-700 disabled:opacity-50;
 }
