@@ -15,6 +15,10 @@ Enthalten:
   Druckansicht pro Gruppe ("Gruppenstundenzettel")
 - Arbeitsgruppen-Verwaltung unter Einstellungen (nur admin): Bezeichnung und
   Anzeige-/Druckreihenfolge je Gruppe
+- Personalnummern-Übersicht: 10 Nummernkreise (1–999, 1000–1999, …),
+  Dubletten-Erkennung, nächste freie Nummer je Kreis
+- Personal-Import aus Excel/CSV mit Vorschau, Spaltenerkennung und
+  Fehlerprüfung (u.a. bereits vergebene Personalnummern)
 - Automatische Saison-Lohnübersicht (Stunden, Prämien, Verpflegungs-/
   Unterkunft-Abzüge, Vorschüsse, pauschale Lohnsteuer bei Abrechnungsart
   "pauschal": 5,275% vom Bruttolohn)

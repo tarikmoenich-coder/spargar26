@@ -20,6 +20,11 @@ const items: NavItem[] = [
     roles: ["admin", "hr"],
   },
   {
+    href: "/personal-import",
+    label: "Import",
+    roles: ["admin", "hr"],
+  },
+  {
     href: "/erfassung",
     label: "Stundenerfassung",
     roles: ["admin", "hr", "zeiterfassung"],
