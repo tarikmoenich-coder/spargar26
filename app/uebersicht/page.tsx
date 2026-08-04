@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { getSupabaseClient } from "@/lib/supabase/client";
-import type { SeasonSummaryRow } from "@/lib/types";
+import { ABRECHNUNGSART_LABELS, type SeasonSummaryRow } from "@/lib/types";
 
 const CURRENT_YEAR = new Date().getFullYear();
 
@@ -25,14 +25,6 @@ export default function UebersichtPage() {
     }
     load();
   }, [jahr]);
-
-  const nettoNaeherung = (r: SeasonSummaryRow) =>
-    r.bruttolohn -
-    r.abzug_fruehstueck -
-    r.abzug_mittag -
-    r.abzug_abend -
-    r.abzug_wohnen -
-    r.vorschuss_summe;
 
   return (
     <div className="flex flex-col gap-4">
@@ -69,8 +61,10 @@ export default function UebersichtPage() {
                 <th>Name</th>
                 <th>Std.</th>
                 <th>Tage</th>
+                <th>Abrechnungsart</th>
                 <th>Brutto €</th>
-                <th>Verpfl./Wohnen €</th>
+                <th>Lohnsteuer (pauschal) €</th>
+                <th>Verpfl./Unterkunft €</th>
                 <th>Vorschüsse €</th>
                 <th>≈ Netto nach Abzügen €</th>
               </tr>
@@ -84,18 +78,17 @@ export default function UebersichtPage() {
                   </td>
                   <td>{Number(r.gesamt_stunden).toFixed(2)}</td>
                   <td>{r.anwesenheitstage}</td>
+                  <td>{ABRECHNUNGSART_LABELS[r.abrechnungsart]}</td>
                   <td>{Number(r.bruttolohn).toFixed(2)}</td>
+                  <td>{Number(r.lohnsteuer_pauschal).toFixed(2)}</td>
                   <td>
                     {(
-                      Number(r.abzug_fruehstueck) +
-                      Number(r.abzug_mittag) +
-                      Number(r.abzug_abend) +
-                      Number(r.abzug_wohnen)
+                      Number(r.abzug_verpflegung) + Number(r.abzug_wohnen)
                     ).toFixed(2)}
                   </td>
                   <td>{Number(r.vorschuss_summe).toFixed(2)}</td>
                   <td className="font-medium">
-                    {nettoNaeherung(r).toFixed(2)}
+                    {Number(r.nettolohn).toFixed(2)}
                   </td>
                 </tr>
               ))}

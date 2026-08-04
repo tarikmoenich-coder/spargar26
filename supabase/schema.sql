@@ -57,6 +57,12 @@ $$;
 --    ADR-004: stabile interne ID (uuid) + Alt-Personalnummer bleibt als
 --    eigenes, weiterhin sichtbares/suchbares Feld erhalten.
 -- ---------------------------------------------------------------------------
+create type abrechnungsart as enum (
+  'pauschal',                  -- pauschale Lohnsteuer, siehe season_summary
+  'lohnsteuerklasse_1',
+  'sozialversicherungspflichtig'
+);
+
 create table employees (
   id uuid primary key default gen_random_uuid(),
   -- Alt-Personalnummer aus Excel, z.T. alphanumerisch (z.B. "8226a") - bleibt
@@ -87,6 +93,9 @@ create table employees (
   iban text,
   bic text,
   stundenlohn numeric(10, 2),
+  -- Art der Lohnabrechnung: bei 'pauschal' wird in der Lohnübersicht
+  -- automatisch pauschale Lohnsteuer (5,275% vom Bruttolohn) berechnet.
+  abrechnungsart abrechnungsart not null default 'sozialversicherungspflichtig',
   saison_beginn date,
   saison_ende date,
   -- ADR-011: kein Löschen von Personen mit Historie - stattdessen deaktivieren
@@ -164,16 +173,18 @@ create table season_bonuses (
 );
 
 -- ---------------------------------------------------------------------------
--- 6. Verpflegungs-/Wohnen-Sätze (ADR-007: versioniert je Saisonjahr, aus
---    Sheet "Summen" AH3:AK3)
+-- 6. Verpflegungs-/Wohnen-Sätze (ADR-007: versioniert je Saisonjahr, über
+--    die Einstellungen-Seite konfigurierbar, Default 10€/Tag je Kategorie)
 -- ---------------------------------------------------------------------------
 create table verpflegungssaetze (
   saison_jahr int primary key,
-  fruehstueck numeric(6, 2) not null default 0,
-  mittag numeric(6, 2) not null default 0,
-  abend numeric(6, 2) not null default 0,
-  wohnen numeric(6, 2) not null default 0
+  verpflegung numeric(6, 2) not null default 10.00, -- € pro Anwesenheitstag
+  wohnen numeric(6, 2) not null default 10.00        -- € pro Anwesenheitstag
 );
+
+insert into verpflegungssaetze (saison_jahr, verpflegung, wohnen)
+values (extract(year from current_date)::int, 10.00, 10.00)
+on conflict (saison_jahr) do nothing;
 
 -- ---------------------------------------------------------------------------
 -- 7. Zentrale Belegnummern-Vergabe (ADR-010: atomar, auch bei gleichzeitiger
@@ -346,58 +357,89 @@ create trigger trg_work_entries_updated_at before update on work_entries
   for each row execute function set_updated_at_and_version();
 
 -- ---------------------------------------------------------------------------
--- 12. View: Saison-Summen je Mitarbeiter (ersetzt die Kernkennzahlen aus
+-- 12a. View: erster erfasster Arbeitstag je Mitarbeiter ("Aktiv seit" auf
+--      der Personal-Seite) - erster Tag mit Stunden > 0, unabhängig vom
+--      Saisonjahr.
+-- ---------------------------------------------------------------------------
+create or replace view employee_erster_arbeitstag as
+select employee_id, min(datum) as erster_arbeitstag
+from work_entries
+where stunden > 0
+group by employee_id;
+
+alter view employee_erster_arbeitstag set (security_invoker = true);
+grant select on employee_erster_arbeitstag to authenticated;
+
+-- ---------------------------------------------------------------------------
+-- 12b. View: Saison-Summen je Mitarbeiter (ersetzt die Kernkennzahlen aus
 --     Sheet "Summen"). ACHTUNG: erster Entwurf, vor Live-Auszahlungen gegen
 --     die bestehende Excel-Datei verifizieren (siehe Open Issue OI-009).
+--     Pauschale Lohnsteuer (5,275% vom Bruttolohn) nur bei
+--     abrechnungsart = 'pauschal' - Satz ebenfalls ungeprüft, siehe OI-009.
 -- ---------------------------------------------------------------------------
 create or replace view season_summary as
-select
-  e.id as employee_id,
-  e.personal_nr,
-  e.name,
-  e.vorname,
-  we.saison_jahr,
-  we.gesamt_stunden,
-  we.anwesenheitstage,
-  coalesce(b.akkord_betrag, 0)
-    + coalesce(b.praemie_ausgleich, 0)
-    + coalesce(b.fahrer_zulage, 0)
-    + coalesce(b.erdbeer_praemie, 0)
-    + coalesce(b.spargel_praemie, 0) as praemien_summe,
-  (we.gesamt_stunden * coalesce(e.stundenlohn, 0)) as basis_brutto,
-  (we.gesamt_stunden * coalesce(e.stundenlohn, 0))
-    + coalesce(b.akkord_betrag, 0)
-    + coalesce(b.praemie_ausgleich, 0)
-    + coalesce(b.fahrer_zulage, 0)
-    + coalesce(b.erdbeer_praemie, 0)
-    + coalesce(b.spargel_praemie, 0) as bruttolohn,
-  coalesce(v.fruehstueck, 0) * we.anwesenheitstage as abzug_fruehstueck,
-  coalesce(v.mittag, 0) * we.anwesenheitstage as abzug_mittag,
-  coalesce(v.abend, 0) * we.anwesenheitstage as abzug_abend,
-  coalesce(v.wohnen, 0) * we.anwesenheitstage as abzug_wohnen,
-  coalesce((
-    select sum(coalesce(ar.anteil, a.betrag / greatest(cnt.n, 1)))
-    from advance_recipients ar
-    join advances a on a.id = ar.advance_id
-    join (
-      select advance_id, count(*) n from advance_recipients group by advance_id
-    ) cnt on cnt.advance_id = ar.advance_id
-    where ar.employee_id = e.id
-      and a.storniert = false
-      and extract(year from a.datum) = we.saison_jahr
-  ), 0) as vorschuss_summe
-from employees e
-join lateral (
+with base as (
   select
-    extract(year from we2.datum)::int as saison_jahr,
-    sum(coalesce(we2.stunden, 0) + (case when we2.markierung = 'U' then 8 else 0 end)) as gesamt_stunden,
-    count(*) filter (where we2.stunden > 0 or we2.markierung is not null) as anwesenheitstage
-  from work_entries we2
-  where we2.employee_id = e.id
-  group by extract(year from we2.datum)
-) we on true
-left join season_bonuses b on b.employee_id = e.id and b.saison_jahr = we.saison_jahr
-left join verpflegungssaetze v on v.saison_jahr = we.saison_jahr;
+    e.id as employee_id,
+    e.personal_nr,
+    e.name,
+    e.vorname,
+    e.abrechnungsart,
+    we.saison_jahr,
+    we.gesamt_stunden,
+    we.anwesenheitstage,
+    coalesce(b.akkord_betrag, 0)
+      + coalesce(b.praemie_ausgleich, 0)
+      + coalesce(b.fahrer_zulage, 0)
+      + coalesce(b.erdbeer_praemie, 0)
+      + coalesce(b.spargel_praemie, 0) as praemien_summe,
+    (we.gesamt_stunden * coalesce(e.stundenlohn, 0)) as basis_brutto,
+    (we.gesamt_stunden * coalesce(e.stundenlohn, 0))
+      + coalesce(b.akkord_betrag, 0)
+      + coalesce(b.praemie_ausgleich, 0)
+      + coalesce(b.fahrer_zulage, 0)
+      + coalesce(b.erdbeer_praemie, 0)
+      + coalesce(b.spargel_praemie, 0) as bruttolohn,
+    coalesce(v.verpflegung, 0) * we.anwesenheitstage as abzug_verpflegung,
+    coalesce(v.wohnen, 0) * we.anwesenheitstage as abzug_wohnen,
+    coalesce((
+      select sum(coalesce(ar.anteil, a.betrag / greatest(cnt.n, 1)))
+      from advance_recipients ar
+      join advances a on a.id = ar.advance_id
+      join (
+        select advance_id, count(*) n from advance_recipients group by advance_id
+      ) cnt on cnt.advance_id = ar.advance_id
+      where ar.employee_id = e.id
+        and a.storniert = false
+        and extract(year from a.datum) = we.saison_jahr
+    ), 0) as vorschuss_summe
+  from employees e
+  join lateral (
+    select
+      extract(year from we2.datum)::int as saison_jahr,
+      sum(coalesce(we2.stunden, 0) + (case when we2.markierung = 'U' then 8 else 0 end)) as gesamt_stunden,
+      count(*) filter (where we2.stunden > 0 or we2.markierung is not null) as anwesenheitstage
+    from work_entries we2
+    where we2.employee_id = e.id
+    group by extract(year from we2.datum)
+  ) we on true
+  left join season_bonuses b on b.employee_id = e.id and b.saison_jahr = we.saison_jahr
+  left join verpflegungssaetze v on v.saison_jahr = we.saison_jahr
+)
+select
+  base.*,
+  case when abrechnungsart = 'pauschal'
+    then round(bruttolohn * 0.05275, 2)
+    else 0
+  end as lohnsteuer_pauschal,
+  bruttolohn
+    - (case when abrechnungsart = 'pauschal' then round(bruttolohn * 0.05275, 2) else 0 end)
+    - abzug_verpflegung
+    - abzug_wohnen
+    - vorschuss_summe as nettolohn
+from base;
+
+grant select on season_summary to authenticated;
 
 -- ---------------------------------------------------------------------------
 -- 13. Row Level Security (ADR-006: Berechtigungen serverseitig, nicht nur UI)

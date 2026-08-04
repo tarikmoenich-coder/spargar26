@@ -10,6 +10,17 @@ export type UserRole =
   | 'pruefer'
   | 'management';
 
+export type Abrechnungsart =
+  | 'pauschal'
+  | 'lohnsteuerklasse_1'
+  | 'sozialversicherungspflichtig';
+
+export const ABRECHNUNGSART_LABELS: Record<Abrechnungsart, string> = {
+  pauschal: 'Pauschal',
+  lohnsteuerklasse_1: 'Lohnsteuerklasse 1',
+  sozialversicherungspflichtig: 'Sozialversicherungspflichtig',
+};
+
 export interface Profile {
   id: string;
   full_name: string;
@@ -34,6 +45,7 @@ export interface Employee {
   bic?: string | null;
   zahlungsempfaenger?: string | null;
   stundenlohn: number | null;
+  abrechnungsart: Abrechnungsart;
   saison_beginn: string | null;
   saison_ende: string | null;
   aktiv: boolean;
@@ -55,17 +67,24 @@ export interface SeasonSummaryRow {
   personal_nr: string;
   name: string;
   vorname: string;
+  abrechnungsart: Abrechnungsart;
   saison_jahr: number;
   gesamt_stunden: number;
   anwesenheitstage: number;
   praemien_summe: number;
   basis_brutto: number;
   bruttolohn: number;
-  abzug_fruehstueck: number;
-  abzug_mittag: number;
-  abzug_abend: number;
+  abzug_verpflegung: number;
   abzug_wohnen: number;
   vorschuss_summe: number;
+  lohnsteuer_pauschal: number;
+  nettolohn: number;
+}
+
+export interface VerpflegungsSatz {
+  saison_jahr: number;
+  verpflegung: number;
+  wohnen: number;
 }
 
 export interface Advance {

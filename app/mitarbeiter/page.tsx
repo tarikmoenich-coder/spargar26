@@ -3,7 +3,11 @@
 import { useEffect, useState } from "react";
 import { getSupabaseClient } from "@/lib/supabase/client";
 import { useProfile } from "@/lib/useProfile";
-import type { Employee } from "@/lib/types";
+import {
+  ABRECHNUNGSART_LABELS,
+  type Abrechnungsart,
+  type Employee,
+} from "@/lib/types";
 
 const emptyForm = {
   personal_nr: "",
@@ -13,6 +17,7 @@ const emptyForm = {
   ort: "",
   land: "",
   stundenlohn: "",
+  abrechnungsart: "sozialversicherungspflichtig" as Abrechnungsart,
   sozialversicherungsnummer: "",
   steuer_id: "",
   iban: "",
@@ -23,6 +28,7 @@ const emptyForm = {
 export default function MitarbeiterPage() {
   const { profile } = useProfile();
   const [employees, setEmployees] = useState<Employee[]>([]);
+  const [aktivSeit, setAktivSeit] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [showInactive, setShowInactive] = useState(false);
@@ -38,8 +44,16 @@ export default function MitarbeiterPage() {
     const supabase = getSupabaseClient();
     let query = supabase.from("employees").select("*").order("name");
     if (!showInactive) query = query.eq("aktiv", true);
-    const { data, error } = await query;
+    const [{ data, error }, { data: ersteTage }] = await Promise.all([
+      query,
+      supabase.from("employee_erster_arbeitstag").select("*"),
+    ]);
     if (!error) setEmployees((data as Employee[]) ?? []);
+    const map: Record<string, string> = {};
+    (ersteTage ?? []).forEach((row: { employee_id: string; erster_arbeitstag: string }) => {
+      map[row.employee_id] = row.erster_arbeitstag;
+    });
+    setAktivSeit(map);
     setLoading(false);
   }
 
@@ -58,6 +72,7 @@ export default function MitarbeiterPage() {
       ort: emp.ort ?? "",
       land: emp.land ?? "",
       stundenlohn: emp.stundenlohn?.toString() ?? "",
+      abrechnungsart: emp.abrechnungsart ?? "sozialversicherungspflichtig",
       sozialversicherungsnummer: emp.sozialversicherungsnummer ?? "",
       steuer_id: emp.steuer_id ?? "",
       iban: emp.iban ?? "",
@@ -84,6 +99,7 @@ export default function MitarbeiterPage() {
       ort: form.ort || null,
       land: form.land || null,
       stundenlohn: form.stundenlohn ? Number(form.stundenlohn) : null,
+      abrechnungsart: form.abrechnungsart,
       sozialversicherungsnummer: form.sozialversicherungsnummer || null,
       steuer_id: form.steuer_id || null,
       iban: form.iban || null,
@@ -184,6 +200,21 @@ export default function MitarbeiterPage() {
               setForm({ ...form, stundenlohn: e.target.value })
             }
           />
+          <select
+            value={form.abrechnungsart}
+            onChange={(e) =>
+              setForm({
+                ...form,
+                abrechnungsart: e.target.value as Abrechnungsart,
+              })
+            }
+          >
+            {Object.entries(ABRECHNUNGSART_LABELS).map(([value, label]) => (
+              <option key={value} value={value}>
+                {label}
+              </option>
+            ))}
+          </select>
           <input
             placeholder="Sozialversicherungsnummer"
             value={form.sozialversicherungsnummer}
@@ -259,6 +290,8 @@ export default function MitarbeiterPage() {
               <th>Vorname</th>
               <th>Ort</th>
               <th>€/Std.</th>
+              <th>Abrechnungsart</th>
+              <th>Aktiv seit</th>
               <th>Status</th>
               {canEdit && <th></th>}
             </tr>
@@ -271,6 +304,8 @@ export default function MitarbeiterPage() {
                 <td>{emp.vorname}</td>
                 <td>{emp.ort}</td>
                 <td>{emp.stundenlohn?.toFixed(2)}</td>
+                <td>{ABRECHNUNGSART_LABELS[emp.abrechnungsart]}</td>
+                <td>{aktivSeit[emp.id] ?? "—"}</td>
                 <td>{emp.aktiv ? "aktiv" : "inaktiv"}</td>
                 {canEdit && (
                   <td className="flex gap-2">

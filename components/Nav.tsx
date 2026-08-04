@@ -34,6 +34,11 @@ const items: NavItem[] = [
     label: "Kassenbuch",
     roles: ["admin", "kasse", "pruefer", "management"],
   },
+  {
+    href: "/einstellungen",
+    label: "Einstellungen",
+    roles: ["admin"],
+  },
 ];
 
 export default function Nav() {

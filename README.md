@@ -7,10 +7,15 @@ Nutzer können gleichzeitig arbeiten, Änderungen werden live synchronisiert
 ## Umfang dieser Version (MVP)
 
 Enthalten:
-- Personalstamm (anlegen/bearbeiten/deaktivieren, keine Löschung)
+- Personalstamm (anlegen/bearbeiten/deaktivieren, keine Löschung), inkl.
+  Abrechnungsart (pauschal/Lohnsteuerklasse 1/sozialversicherungspflichtig)
+  und automatisch berechnetem "Aktiv seit" (erster Arbeitstag mit Stunden > 0)
 - Tägliche Stundenerfassung mit Live-Sync zwischen mehreren Nutzern
 - Automatische Saison-Lohnübersicht (Stunden, Prämien, Verpflegungs-/
-  Wohnen-Abzüge, Vorschüsse)
+  Unterkunft-Abzüge, Vorschüsse, pauschale Lohnsteuer bei Abrechnungsart
+  "pauschal": 5,275% vom Bruttolohn)
+- Einstellungen-Seite (nur admin): Verpflegungs-/Unterkunft-Satz pro Tag,
+  versioniert je Saisonjahr, Default 10€/10€
 - Vorschussverwaltung mit atomarer Belegnummer und Storno statt Löschen
 - Kassenbuch (Einzahlungen) mit Saldo und einfacher Kassenprüfung
 - Rollen/Rechte serverseitig über Postgres Row Level Security
@@ -49,6 +54,11 @@ atomare Belegnummern).
    oder `management`).
 4. Unter Project Settings → API: `Project URL` und `anon public key`
    kopieren.
+
+**Bereits ein Projekt am Laufen?** `schema.sql` legt Tabellen neu an und
+schlägt daher auf einer bestehenden Datenbank fehl. Führe stattdessen nur
+neue Migrations-Dateien aus `supabase/migration_*.sql` (in Dateinamen-
+Reihenfolge, jede nur einmal) im SQL Editor aus.
 
 ## 2. Lokale Konfiguration
 
