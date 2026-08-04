@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { getSupabaseClient } from "@/lib/supabase/client";
+import { useProfile } from "@/lib/useProfile";
 import type { Arbeitsgruppe, Employee, WorkEntry } from "@/lib/types";
 
 const OHNE_GRUPPE_KEY = "__ohne__";
@@ -45,6 +46,9 @@ function gruppiere(
 }
 
 export default function ErfassungPage() {
+  const { profile } = useProfile();
+  const canGruppeAendern =
+    profile?.role === "admin" || profile?.role === "hr";
   const [datum, setDatum] = useState(todayIso());
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [gruppen, setGruppen] = useState<Arbeitsgruppe[]>([]);
@@ -166,6 +170,19 @@ export default function ErfassungPage() {
     }
   }
 
+  async function gruppeAendern(employeeId: string, neueGruppeNr: string) {
+    const supabase = getSupabaseClient();
+    const gruppe_nr = neueGruppeNr || null;
+    const { error } = await supabase
+      .from("employees")
+      .update({ gruppe_nr })
+      .eq("id", employeeId);
+    if (error) return; // z.B. fehlende Rechte - Auswahl bleibt unverändert
+    setEmployees((prev) =>
+      prev.map((e) => (e.id === employeeId ? { ...e, gruppe_nr } : e))
+    );
+  }
+
   const gruppierungen = gruppiere(employees, gruppen);
 
   const gesamtStunden = Object.values(entries).reduce(
@@ -262,6 +279,7 @@ export default function ErfassungPage() {
                   <th>Name</th>
                   <th>Stunden</th>
                   <th>Markierung</th>
+                  {canGruppeAendern && <th>Gruppe</th>}
                 </tr>
               </thead>
               <tbody>
@@ -298,6 +316,23 @@ export default function ErfassungPage() {
                           <option value="U">U (Urlaub/Feiertag)</option>
                         </select>
                       </td>
+                      {canGruppeAendern && (
+                        <td>
+                          <select
+                            value={emp.gruppe_nr ?? ""}
+                            onChange={(e) =>
+                              gruppeAendern(emp.id, e.target.value)
+                            }
+                          >
+                            <option value="">— keine Gruppe —</option>
+                            {gruppen.map((gr) => (
+                              <option key={gr.gruppe_nr} value={gr.gruppe_nr}>
+                                {gr.gruppe_nr} – {gr.bezeichnung}
+                              </option>
+                            ))}
+                          </select>
+                        </td>
+                      )}
                     </tr>
                   );
                 })}
