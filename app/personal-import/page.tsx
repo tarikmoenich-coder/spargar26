@@ -30,6 +30,21 @@ const TEMPLATE_SPALTEN: Record<ImportFeld, string> = {
   zahlungsempfaenger: "Zahlungsempfaenger",
 };
 
+// Wandelt eine gelesene Zelle (String, Zahl, Date, Bool) in Text um.
+// Echte Datumszellen werden als TT.MM.JJJJ ausgegeben (UTC-Werte, wie sie
+// die cellDates-Option liefert - nicht mit lokalen Getter-Methoden lesen,
+// sonst kann es je nach Zeitzone zu einer Verschiebung um einen Tag kommen).
+function zellwertZuText(wert: unknown): string {
+  if (wert instanceof Date) {
+    const tag = String(wert.getUTCDate()).padStart(2, "0");
+    const monat = String(wert.getUTCMonth() + 1).padStart(2, "0");
+    const jahr = wert.getUTCFullYear();
+    return `${tag}.${monat}.${jahr}`;
+  }
+  if (wert === null || wert === undefined) return "";
+  return String(wert).trim();
+}
+
 function ladeVorlage() {
   const headers = IMPORT_FELDER.map((f) => TEMPLATE_SPALTEN[f]);
   const beispiel = [
@@ -89,11 +104,21 @@ export default function PersonalImportPage() {
     );
 
     const buffer = await file.arrayBuffer();
-    const workbook = XLSX.read(buffer, { type: "array" });
+    // cellDates: echte Excel-Datumszellen als Date-Objekt liefern statt als
+    // Text - sonst formatiert die Bibliothek sie nach einem US-Standard
+    // (M/T/JJ) unabhängig von der Anzeige in Excel.
+    const workbook = XLSX.read(buffer, { type: "array", cellDates: true });
     const sheet = workbook.Sheets[workbook.SheetNames[0]];
-    const rohZeilen = XLSX.utils.sheet_to_json<Record<string, string>>(sheet, {
-      raw: false,
-      defval: "",
+    const rohZeilenGemischt = XLSX.utils.sheet_to_json<Record<string, unknown>>(
+      sheet,
+      { raw: true, defval: "" }
+    );
+    const rohZeilen = rohZeilenGemischt.map((roh) => {
+      const zeile: Record<string, string> = {};
+      for (const [spalte, wert] of Object.entries(roh)) {
+        zeile[spalte] = zellwertZuText(wert);
+      }
+      return zeile;
     });
 
     const headers = rohZeilen.length > 0 ? Object.keys(rohZeilen[0]) : [];
