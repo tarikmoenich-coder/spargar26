@@ -227,13 +227,13 @@ export default function ErfassungPage() {
               printGroupKey && printGroupKey !== g.key ? "print:hidden" : ""
             }
           >
-            <div className="hidden print:block">
-              <h2 className="text-base font-semibold">
+            <div className="hidden print:mb-4 print:block">
+              <h2 className="text-xl font-semibold">
                 Gruppenstundenzettel – {g.anzeige}
               </h2>
-              <p className="text-sm">
+              <p className="mt-3 text-base">
                 Datum:{" "}
-                <span className="inline-block w-40 border-b border-black">
+                <span className="inline-block w-80 border-b-2 border-black">
                   &nbsp;
                 </span>
               </p>

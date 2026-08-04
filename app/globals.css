@@ -34,8 +34,8 @@ input, select {
   @apply rounded bg-red-600 px-3 py-1.5 text-sm text-white hover:bg-red-700 disabled:opacity-50;
 }
 
-/* Gruppenstundenzettel (Papierformular): mehr Platz pro Zeile zum
-   handschriftlichen Ausfüllen. */
+/* Gruppenstundenzettel (Papierformular): mehr Platz pro Zeile und größere
+   Schrift zum handschriftlichen Ausfüllen. */
 .print-form-table th,
 .print-form-table td {
   text-align: center;
@@ -44,7 +44,22 @@ input, select {
   text-align: left;
 }
 @media print {
+  .print-form-table {
+    font-size: 13pt;
+  }
+  .print-form-table th,
   .print-form-table td {
-    height: 2rem;
+    padding: 0.5rem 0.6rem;
+  }
+  .print-form-table td {
+    height: 3rem;
+  }
+  .print-form-table th:first-child,
+  .print-form-table td:first-child {
+    min-width: 10rem;
+  }
+  .print-form-table th:not(:first-child):not(:last-child),
+  .print-form-table td:not(:first-child):not(:last-child) {
+    min-width: 3.5rem;
   }
 }
