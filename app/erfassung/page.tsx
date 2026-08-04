@@ -250,13 +250,13 @@ export default function ErfassungPage() {
               </button>
             </div>
 
-            <table>
+            <table className="print:hidden">
               <thead>
                 <tr>
                   <th>Pers.-Nr.</th>
                   <th>Name</th>
                   <th>Stunden</th>
-                  <th className="print:hidden">Markierung</th>
+                  <th>Markierung</th>
                 </tr>
               </thead>
               <tbody>
@@ -281,7 +281,7 @@ export default function ErfassungPage() {
                           disabled={savingId === emp.id}
                         />
                       </td>
-                      <td className="print:hidden">
+                      <td>
                         <select
                           defaultValue={entry?.markierung ?? ""}
                           key={`m-${emp.id}-${entry?.version ?? 0}`}
@@ -296,6 +296,40 @@ export default function ErfassungPage() {
                     </tr>
                   );
                 })}
+              </tbody>
+            </table>
+
+            {/* Reine Papier-Vorlage zum handschriftlichen Ausfüllen -
+                bewusst ohne die digital erfassten Stunden, da vor Ort
+                ausgefüllt und später übertragen wird. */}
+            <table className="hidden print:table print-form-table">
+              <thead>
+                <tr>
+                  <th rowSpan={2}>Name</th>
+                  <th colSpan={2}>Vormittag</th>
+                  <th colSpan={2}>Nachmittag</th>
+                  <th rowSpan={2}>Summe Std.</th>
+                </tr>
+                <tr>
+                  <th>von</th>
+                  <th>bis</th>
+                  <th>von</th>
+                  <th>bis</th>
+                </tr>
+              </thead>
+              <tbody>
+                {g.employees.map((emp) => (
+                  <tr key={emp.id}>
+                    <td>
+                      {emp.name}, {emp.vorname}
+                    </td>
+                    <td></td>
+                    <td></td>
+                    <td></td>
+                    <td></td>
+                    <td></td>
+                  </tr>
+                ))}
               </tbody>
             </table>
           </section>

@@ -33,3 +33,18 @@ input, select {
 .btn-danger {
   @apply rounded bg-red-600 px-3 py-1.5 text-sm text-white hover:bg-red-700 disabled:opacity-50;
 }
+
+/* Gruppenstundenzettel (Papierformular): mehr Platz pro Zeile zum
+   handschriftlichen Ausfüllen. */
+.print-form-table th,
+.print-form-table td {
+  text-align: center;
+}
+.print-form-table td:first-child {
+  text-align: left;
+}
+@media print {
+  .print-form-table td {
+    height: 2rem;
+  }
+}
