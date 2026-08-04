@@ -3,46 +3,87 @@
 import { useEffect, useState } from "react";
 import { getSupabaseClient } from "@/lib/supabase/client";
 import { useProfile } from "@/lib/useProfile";
-import type { Advance, Employee } from "@/lib/types";
+import type {
+  Advance,
+  AdvanceRecipientDetail,
+  Arbeitsgruppe,
+  Employee,
+  Herkunft,
+} from "@/lib/types";
 
 function monatsSchluessel(d: Date) {
   const mm = String(d.getMonth() + 1).padStart(2, "0");
   return `${mm}-${d.getFullYear()}`;
 }
 
+interface AusgewaehltePerson {
+  employee_id: string;
+  personal_nr: string;
+  name: string;
+  vorname: string;
+  betrag: string;
+}
+
+interface Beleg {
+  belegnummer: string;
+  datum: string;
+  zahlungsart: string;
+  storniert: boolean;
+  empfaenger: AdvanceRecipientDetail[];
+}
+
 export default function VorschuessePage() {
   const { profile } = useProfile();
   const [advances, setAdvances] = useState<Advance[]>([]);
   const [employees, setEmployees] = useState<Employee[]>([]);
+  const [gruppen, setGruppen] = useState<Arbeitsgruppe[]>([]);
+  const [herkuenfte, setHerkuenfte] = useState<Herkunft[]>([]);
   const [loading, setLoading] = useState(true);
 
-  const [betrag, setBetrag] = useState("");
-  const [empfaengerText, setEmpfaengerText] = useState("");
-  const [begruendung, setBegruendung] = useState("");
+  const [basisBetrag, setBasisBetrag] = useState("");
   const [zahlungsart, setZahlungsart] = useState("BAR");
-  const [selectedEmployees, setSelectedEmployees] = useState<string[]>([]);
+  const [begruendung, setBegruendung] = useState("");
+  const [ausgewaehlt, setAusgewaehlt] = useState<AusgewaehltePerson[]>([]);
+  const [gruppenFilter, setGruppenFilter] = useState("");
+  const [herkunftFilter, setHerkunftFilter] = useState("");
+  const [suche, setSuche] = useState("");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  const [letzterBeleg, setLetzterBeleg] = useState<Beleg | null>(null);
+  const [druckBeleg, setDruckBeleg] = useState<Beleg | null>(null);
+
   const canWrite = profile?.role === "admin" || profile?.role === "kasse";
+  // Deckt sich mit der RLS-Policy "advance_recipients_rw" - management sieht
+  // zwar die Vorschuss-Liste, aber keine Empfänger-Details.
+  const canSeeDetails =
+    profile?.role === "admin" ||
+    profile?.role === "kasse" ||
+    profile?.role === "lohnabrechnung" ||
+    profile?.role === "pruefer";
 
   async function load() {
     setLoading(true);
     const supabase = getSupabaseClient();
-    const [{ data: adv }, { data: emp }] = await Promise.all([
-      supabase
-        .from("advances")
-        .select("*")
-        .order("datum", { ascending: false })
-        .limit(100),
-      supabase
-        .from("employees")
-        .select("id, personal_nr, name, vorname")
-        .eq("aktiv", true)
-        .order("name"),
-    ]);
+    const [{ data: adv }, { data: emp }, { data: gr }, { data: hk }] =
+      await Promise.all([
+        supabase
+          .from("advances")
+          .select("*")
+          .order("datum", { ascending: false })
+          .limit(100),
+        supabase
+          .from("employees")
+          .select("id, personal_nr, name, vorname, aktiv, gruppe_nr, herkunft")
+          .eq("aktiv", true)
+          .order("name"),
+        supabase.from("arbeitsgruppen").select("*").order("reihenfolge"),
+        supabase.from("herkuenfte").select("*").order("reihenfolge"),
+      ]);
     setAdvances((adv as Advance[]) ?? []);
     setEmployees((emp as Employee[]) ?? []);
+    setGruppen((gr as Arbeitsgruppe[]) ?? []);
+    setHerkuenfte((hk as Herkunft[]) ?? []);
     setLoading(false);
   }
 
@@ -50,10 +91,105 @@ export default function VorschuessePage() {
     load();
   }, []);
 
+  // Nach dem Öffnen des Druckdialogs (oder Abbruch) Druckauswahl zurücksetzen.
+  useEffect(() => {
+    function handleAfterPrint() {
+      setDruckBeleg(null);
+    }
+    window.addEventListener("afterprint", handleAfterPrint);
+    return () => window.removeEventListener("afterprint", handleAfterPrint);
+  }, []);
+
+  useEffect(() => {
+    if (druckBeleg === null) return;
+    const id = setTimeout(() => window.print(), 50);
+    return () => clearTimeout(id);
+  }, [druckBeleg]);
+
+  function istAusgewaehlt(id: string) {
+    return ausgewaehlt.some((p) => p.employee_id === id);
+  }
+
+  function personHinzufuegen(emp: Employee) {
+    if (istAusgewaehlt(emp.id)) return;
+    setAusgewaehlt((prev) => [
+      ...prev,
+      {
+        employee_id: emp.id,
+        personal_nr: emp.personal_nr,
+        name: emp.name,
+        vorname: emp.vorname,
+        betrag: basisBetrag || "0",
+      },
+    ]);
+  }
+
+  function personEntfernen(id: string) {
+    setAusgewaehlt((prev) => prev.filter((p) => p.employee_id !== id));
+  }
+
+  function toggleEinzeln(emp: Employee) {
+    if (istAusgewaehlt(emp.id)) personEntfernen(emp.id);
+    else personHinzufuegen(emp);
+  }
+
+  function gruppeHinzufuegen() {
+    if (!gruppenFilter) return;
+    employees
+      .filter((e) => e.gruppe_nr === gruppenFilter)
+      .forEach(personHinzufuegen);
+  }
+
+  function herkunftHinzufuegen() {
+    if (!herkunftFilter) return;
+    employees
+      .filter((e) => e.herkunft === herkunftFilter)
+      .forEach(personHinzufuegen);
+  }
+
+  function betragAendern(id: string, wert: string) {
+    setAusgewaehlt((prev) =>
+      prev.map((p) => (p.employee_id === id ? { ...p, betrag: wert } : p))
+    );
+  }
+
+  function basisBetragAufAlleAnwenden() {
+    setAusgewaehlt((prev) => prev.map((p) => ({ ...p, betrag: basisBetrag || "0" })));
+  }
+
+  function auswahlLeeren() {
+    setAusgewaehlt([]);
+  }
+
+  const summeAusgewaehlt = ausgewaehlt.reduce(
+    (sum, p) => sum + (Number(p.betrag) || 0),
+    0
+  );
+
+  function empfaengerTextAus(personen: AusgewaehltePerson[]) {
+    const namen = personen.map((p) => `${p.name}, ${p.vorname}`);
+    if (namen.length <= 6) return namen.join(" · ");
+    return `${namen.slice(0, 3).join(" · ")} + ${namen.length - 3} weitere`;
+  }
+
+  const gefilterteEmployees = employees.filter((e) => {
+    const q = suche.toLowerCase();
+    return (
+      !q ||
+      e.name.toLowerCase().includes(q) ||
+      e.vorname.toLowerCase().includes(q) ||
+      e.personal_nr.toLowerCase().includes(q)
+    );
+  });
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (selectedEmployees.length === 0) {
+    if (ausgewaehlt.length === 0) {
       setError("Bitte mindestens eine Person auswählen.");
+      return;
+    }
+    if (ausgewaehlt.some((p) => !(Number(p.betrag) > 0))) {
+      setError("Bitte für jede ausgewählte Person einen Betrag > 0 eintragen.");
       return;
     }
     setSaving(true);
@@ -76,8 +212,8 @@ export default function VorschuessePage() {
       .from("advances")
       .insert({
         belegnummer,
-        betrag: Number(betrag),
-        empfaenger_text: empfaengerText,
+        betrag: summeAusgewaehlt,
+        empfaenger_text: empfaengerTextAus(ausgewaehlt),
         begruendung,
         zahlungsart,
       })
@@ -90,18 +226,39 @@ export default function VorschuessePage() {
       return;
     }
 
-    await supabase.from("advance_recipients").insert(
-      selectedEmployees.map((employee_id) => ({
-        advance_id: inserted.id,
-        employee_id,
-        anteil: Number(betrag) / selectedEmployees.length,
-      }))
-    );
+    const { error: recipientsError } = await supabase
+      .from("advance_recipients")
+      .insert(
+        ausgewaehlt.map((p) => ({
+          advance_id: inserted.id,
+          employee_id: p.employee_id,
+          anteil: Number(p.betrag),
+        }))
+      );
 
-    setBetrag("");
-    setEmpfaengerText("");
+    if (recipientsError) {
+      setError(recipientsError.message);
+      setSaving(false);
+      return;
+    }
+
+    setLetzterBeleg({
+      belegnummer,
+      datum: inserted.datum,
+      zahlungsart,
+      storniert: false,
+      empfaenger: ausgewaehlt.map((p) => ({
+        employee_id: p.employee_id,
+        personal_nr: p.personal_nr,
+        name: p.name,
+        vorname: p.vorname,
+        anteil: Number(p.betrag),
+      })),
+    });
+
+    setBasisBetrag("");
     setBegruendung("");
-    setSelectedEmployees([]);
+    setAusgewaehlt([]);
     setSaving(false);
     load();
   }
@@ -123,29 +280,54 @@ export default function VorschuessePage() {
     load();
   }
 
+  async function belegDrucken(adv: Advance) {
+    const supabase = getSupabaseClient();
+    const { data, error } = await supabase
+      .from("advance_recipients")
+      .select("employee_id, anteil, employees(personal_nr, name, vorname)")
+      .eq("advance_id", adv.id);
+    if (error || !data) return;
+    const empfaenger: AdvanceRecipientDetail[] = data.map((row: any) => ({
+      employee_id: row.employee_id,
+      personal_nr: row.employees?.personal_nr ?? "",
+      name: row.employees?.name ?? "",
+      vorname: row.employees?.vorname ?? "",
+      anteil: Number(row.anteil ?? 0),
+    }));
+    setDruckBeleg({
+      belegnummer: adv.belegnummer,
+      datum: adv.datum,
+      zahlungsart: adv.zahlungsart,
+      storniert: adv.storniert,
+      empfaenger,
+    });
+  }
+
+  const anzeigeBeleg = druckBeleg ?? letzterBeleg;
+
   return (
     <div className="flex flex-col gap-6">
-      <div>
+      <div className="print:hidden">
         <h1 className="text-lg font-semibold text-emerald-800">Vorschüsse</h1>
         <p className="text-sm text-neutral-500">
-          Bestätigte Vorschüsse werden nicht gelöscht, sondern storniert -
-          die Belegnummer und Historie bleiben nachvollziehbar.
+          Einzeln, gruppenweise oder nach Herkunft auswählen. Bestätigte
+          Vorschüsse werden nicht gelöscht, sondern storniert - die
+          Belegnummer und Historie bleiben nachvollziehbar.
         </p>
       </div>
 
       {canWrite && (
         <form
           onSubmit={handleSubmit}
-          className="flex flex-col gap-3 rounded border border-neutral-200 bg-white p-4"
+          className="flex flex-col gap-4 rounded border border-neutral-200 bg-white p-4 print:hidden"
         >
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
             <input
               type="number"
               step="0.01"
-              placeholder="Betrag €"
-              required
-              value={betrag}
-              onChange={(e) => setBetrag(e.target.value)}
+              placeholder="Betrag € pro Person"
+              value={basisBetrag}
+              onChange={(e) => setBasisBetrag(e.target.value)}
             />
             <select
               value={zahlungsart}
@@ -154,56 +336,182 @@ export default function VorschuessePage() {
               <option value="BAR">BAR</option>
               <option value="AZ">Überweisung (AZ)</option>
             </select>
-            <input
-              placeholder="Empfänger (Freitext, z.B. mehrere Namen)"
-              value={empfaengerText}
-              onChange={(e) => setEmpfaengerText(e.target.value)}
-              className="col-span-2"
-            />
-            <input
-              placeholder="Begründung"
-              value={begruendung}
-              onChange={(e) => setBegruendung(e.target.value)}
-              className="col-span-full"
-            />
+            <div className="col-span-2" />
+
+            <div className="col-span-2 flex gap-2">
+              <select
+                value={gruppenFilter}
+                onChange={(e) => setGruppenFilter(e.target.value)}
+              >
+                <option value="">Gruppe wählen…</option>
+                {gruppen.map((g) => (
+                  <option key={g.gruppe_nr} value={g.gruppe_nr}>
+                    {g.gruppe_nr} – {g.bezeichnung}
+                  </option>
+                ))}
+              </select>
+              <button
+                type="button"
+                className="btn-secondary whitespace-nowrap text-xs"
+                onClick={gruppeHinzufuegen}
+              >
+                Gruppe hinzufügen
+              </button>
+            </div>
+            <div className="col-span-2 flex gap-2">
+              <select
+                value={herkunftFilter}
+                onChange={(e) => setHerkunftFilter(e.target.value)}
+              >
+                <option value="">Herkunft wählen…</option>
+                {herkuenfte.map((h) => (
+                  <option key={h.wert} value={h.wert}>
+                    {h.wert}
+                  </option>
+                ))}
+              </select>
+              <button
+                type="button"
+                className="btn-secondary whitespace-nowrap text-xs"
+                onClick={herkunftHinzufuegen}
+              >
+                Herkunft hinzufügen
+              </button>
+            </div>
           </div>
+
           <div>
-            <p className="mb-1 text-sm font-medium">Empfänger auswählen:</p>
+            <p className="mb-1 text-sm font-medium">
+              Einzeln hinzufügen (Suche nach Name oder Personalnummer):
+            </p>
+            <input
+              placeholder="Suchen…"
+              value={suche}
+              onChange={(e) => setSuche(e.target.value)}
+              className="mb-2 w-72"
+            />
             <div className="flex max-h-40 flex-wrap gap-2 overflow-y-auto rounded border border-neutral-100 p-2">
-              {employees.map((emp) => (
+              {gefilterteEmployees.map((emp) => (
                 <label
                   key={emp.id}
                   className="flex items-center gap-1 text-xs"
                 >
                   <input
                     type="checkbox"
-                    checked={selectedEmployees.includes(emp.id)}
-                    onChange={(e) =>
-                      setSelectedEmployees((prev) =>
-                        e.target.checked
-                          ? [...prev, emp.id]
-                          : prev.filter((id) => id !== emp.id)
-                      )
-                    }
+                    checked={istAusgewaehlt(emp.id)}
+                    onChange={() => toggleEinzeln(emp)}
                   />
-                  {emp.personal_nr} {emp.name}
+                  {emp.personal_nr} {emp.name}, {emp.vorname}
                 </label>
               ))}
             </div>
           </div>
+
+          {ausgewaehlt.length > 0 && (
+            <div>
+              <div className="mb-1 flex items-center justify-between">
+                <p className="text-sm font-medium">
+                  Ausgewählt: {ausgewaehlt.length} Person(en), Summe:{" "}
+                  {summeAusgewaehlt.toFixed(2)} €
+                </p>
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    className="btn-secondary text-xs"
+                    onClick={basisBetragAufAlleAnwenden}
+                  >
+                    Betrag auf alle anwenden
+                  </button>
+                  <button
+                    type="button"
+                    className="btn-secondary text-xs"
+                    onClick={auswahlLeeren}
+                  >
+                    Auswahl leeren
+                  </button>
+                </div>
+              </div>
+              <table>
+                <thead>
+                  <tr>
+                    <th>Pers.-Nr.</th>
+                    <th>Name</th>
+                    <th>Betrag €</th>
+                    <th></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {ausgewaehlt.map((p) => (
+                    <tr key={p.employee_id}>
+                      <td>{p.personal_nr}</td>
+                      <td>
+                        {p.name}, {p.vorname}
+                      </td>
+                      <td>
+                        <input
+                          type="number"
+                          step="0.01"
+                          className="w-24"
+                          value={p.betrag}
+                          onChange={(e) =>
+                            betragAendern(p.employee_id, e.target.value)
+                          }
+                        />
+                      </td>
+                      <td>
+                        <button
+                          type="button"
+                          className="btn-secondary text-xs"
+                          onClick={() => personEntfernen(p.employee_id)}
+                        >
+                          Entfernen
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+
+          <input
+            placeholder="Begründung (optional)"
+            value={begruendung}
+            onChange={(e) => setBegruendung(e.target.value)}
+          />
+
           <div className="flex items-center gap-2">
             <button type="submit" className="btn" disabled={saving}>
-              Vorschuss erfassen
+              Vorschuss bestätigen
             </button>
             {error && <span className="text-sm text-red-600">{error}</span>}
           </div>
         </form>
       )}
 
+      {letzterBeleg && (
+        <div className="flex items-center gap-3 rounded border border-emerald-200 bg-emerald-50 p-3 print:hidden">
+          <span className="text-sm text-emerald-800">
+            Beleg {letzterBeleg.belegnummer} erfasst, Summe{" "}
+            {letzterBeleg.empfaenger
+              .reduce((s, p) => s + p.anteil, 0)
+              .toFixed(2)}{" "}
+            €.
+          </span>
+          <button
+            type="button"
+            className="btn-secondary text-xs"
+            onClick={() => setDruckBeleg(letzterBeleg)}
+          >
+            Auszahlungsliste drucken
+          </button>
+        </div>
+      )}
+
       {loading ? (
-        <p className="text-neutral-500">Lädt…</p>
+        <p className="text-neutral-500 print:hidden">Lädt…</p>
       ) : (
-        <table>
+        <table className="print:hidden">
           <thead>
             <tr>
               <th>Beleg-Nr.</th>
@@ -213,7 +521,7 @@ export default function VorschuessePage() {
               <th>Begründung</th>
               <th>Art</th>
               <th>Status</th>
-              {canWrite && <th></th>}
+              <th></th>
             </tr>
           </thead>
           <tbody>
@@ -226,22 +534,77 @@ export default function VorschuessePage() {
                 <td>{a.begruendung}</td>
                 <td>{a.zahlungsart}</td>
                 <td>{a.storniert ? `storniert: ${a.storno_grund}` : "aktiv"}</td>
-                {canWrite && (
-                  <td>
-                    {!a.storniert && (
-                      <button
-                        className="btn-danger"
-                        onClick={() => storno(a)}
-                      >
-                        Stornieren
-                      </button>
-                    )}
-                  </td>
-                )}
+                <td className="flex gap-2">
+                  {canSeeDetails && (
+                    <button
+                      className="btn-secondary text-xs"
+                      onClick={() => belegDrucken(a)}
+                    >
+                      Drucken
+                    </button>
+                  )}
+                  {canWrite && !a.storniert && (
+                    <button
+                      className="btn-danger text-xs"
+                      onClick={() => storno(a)}
+                    >
+                      Stornieren
+                    </button>
+                  )}
+                </td>
               </tr>
             ))}
           </tbody>
         </table>
+      )}
+
+      {/* Auszahlungsliste zum Ausdrucken/Unterschreiben - nur im Druck sichtbar. */}
+      {anzeigeBeleg && (
+        <div className="hidden print:block">
+          <h2 className="text-xl font-semibold">
+            Vorschuss-Auszahlung{anzeigeBeleg.storniert ? " (STORNIERT)" : ""}
+          </h2>
+          <p className="mt-1 text-base">
+            Belegnummer: {anzeigeBeleg.belegnummer} · Datum:{" "}
+            {new Date(anzeigeBeleg.datum).toLocaleDateString("de-DE")} ·{" "}
+            {anzeigeBeleg.zahlungsart === "BAR" ? "Bar" : "Überweisung"}
+          </p>
+          <table className="mt-4 print-form-table">
+            <thead>
+              <tr>
+                <th>Pers.-Nr.</th>
+                <th>Name</th>
+                <th>Betrag €</th>
+                <th>Unterschrift</th>
+              </tr>
+            </thead>
+            <tbody>
+              {anzeigeBeleg.empfaenger.map((p) => (
+                <tr key={p.employee_id}>
+                  <td>{p.personal_nr}</td>
+                  <td>
+                    {p.name}, {p.vorname}
+                  </td>
+                  <td>{p.anteil.toFixed(2)}</td>
+                  <td></td>
+                </tr>
+              ))}
+            </tbody>
+            <tfoot>
+              <tr>
+                <td colSpan={2} className="text-right font-semibold">
+                  Summe
+                </td>
+                <td className="font-semibold">
+                  {anzeigeBeleg.empfaenger
+                    .reduce((s, p) => s + p.anteil, 0)
+                    .toFixed(2)}
+                </td>
+                <td></td>
+              </tr>
+            </tfoot>
+          </table>
+        </div>
       )}
     </div>
   );

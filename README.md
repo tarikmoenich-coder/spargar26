@@ -24,8 +24,14 @@ Enthalten:
   "pauschal": 5,275% vom Bruttolohn)
 - Einstellungen-Seite (nur admin): Verpflegungs-/Unterkunft-Satz pro Tag,
   versioniert je Saisonjahr, Default 10€/10€
-- Vorschussverwaltung mit atomarer Belegnummer und Storno statt Löschen
-- Kassenbuch (Einzahlungen) mit Saldo und einfacher Kassenprüfung
+- Herkünfte-Verwaltung unter Einstellungen (nur admin), als Dropdown im
+  Personalstamm (statt Freitext, damit Filter/Auswahl zuverlässig funktioniert)
+- Vorschussverwaltung: einzeln, gruppenweise (nach Arbeitsgruppe) oder nach
+  Herkunft auswählen, Betrag pro Person individuell anpassbar, atomare
+  Belegnummer, Storno statt Löschen, druckbare Auszahlungsliste mit
+  Unterschriftenfeldern
+- Kassenbuch (Einzahlungen) mit Saldo und einfacher Kassenprüfung -
+  Bar-Vorschüsse mindern automatisch den Kassenbestand, Überweisungen nicht
 - Rollen/Rechte serverseitig über Postgres Row Level Security
 - Append-only Audit-Log für Personal, Stunden, Vorschüsse, Kassenbuch
 

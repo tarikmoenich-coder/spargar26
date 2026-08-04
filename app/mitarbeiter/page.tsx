@@ -8,6 +8,7 @@ import {
   type Abrechnungsart,
   type Arbeitsgruppe,
   type Employee,
+  type Herkunft,
 } from "@/lib/types";
 import {
   ANZAHL_PERSONALNUMMERN_KREISE,
@@ -18,6 +19,7 @@ import {
 const emptyForm = {
   personal_nr: "",
   gruppe_nr: "",
+  herkunft: "",
   name: "",
   vorname: "",
   geburtsdatum: "",
@@ -36,6 +38,7 @@ export default function MitarbeiterPage() {
   const { profile } = useProfile();
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [gruppen, setGruppen] = useState<Arbeitsgruppe[]>([]);
+  const [herkuenfte, setHerkuenfte] = useState<Herkunft[]>([]);
   const [aktivSeit, setAktivSeit] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
@@ -83,11 +86,13 @@ export default function MitarbeiterPage() {
       { data, error },
       { data: ersteTage },
       { data: gruppenData },
+      { data: herkunftData },
       { data: alleNrData },
     ] = await Promise.all([
       query,
       supabase.from("employee_erster_arbeitstag").select("*"),
       supabase.from("arbeitsgruppen").select("*").order("reihenfolge"),
+      supabase.from("herkuenfte").select("*").order("reihenfolge"),
       supabase.from("employees").select("personal_nr, name, vorname"),
     ]);
     if (!error) setEmployees((data as Employee[]) ?? []);
@@ -97,6 +102,7 @@ export default function MitarbeiterPage() {
     });
     setAktivSeit(map);
     setGruppen((gruppenData as Arbeitsgruppe[]) ?? []);
+    setHerkuenfte((herkunftData as Herkunft[]) ?? []);
     setAllePersonalNummern(alleNrData ?? []);
     setLoading(false);
   }
@@ -123,6 +129,7 @@ export default function MitarbeiterPage() {
     setForm({
       personal_nr: emp.personal_nr,
       gruppe_nr: emp.gruppe_nr ?? "",
+      herkunft: emp.herkunft ?? "",
       name: emp.name,
       vorname: emp.vorname,
       geburtsdatum: emp.geburtsdatum ?? "",
@@ -151,6 +158,7 @@ export default function MitarbeiterPage() {
     const payload = {
       personal_nr: form.personal_nr,
       gruppe_nr: form.gruppe_nr || null,
+      herkunft: form.herkunft || null,
       name: form.name,
       vorname: form.vorname,
       geburtsdatum: form.geburtsdatum || null,
@@ -263,6 +271,17 @@ export default function MitarbeiterPage() {
             {gruppen.map((g) => (
               <option key={g.gruppe_nr} value={g.gruppe_nr}>
                 {g.gruppe_nr} – {g.bezeichnung}
+              </option>
+            ))}
+          </select>
+          <select
+            value={form.herkunft}
+            onChange={(e) => setForm({ ...form, herkunft: e.target.value })}
+          >
+            <option value="">— keine Herkunft —</option>
+            {herkuenfte.map((h) => (
+              <option key={h.wert} value={h.wert}>
+                {h.wert}
               </option>
             ))}
           </select>
@@ -396,6 +415,7 @@ export default function MitarbeiterPage() {
             <tr>
               <th>Pers.-Nr.</th>
               <th>Gruppe</th>
+              <th>Herkunft</th>
               <th>Name</th>
               <th>Vorname</th>
               <th>Ort</th>
@@ -417,6 +437,7 @@ export default function MitarbeiterPage() {
                       }`
                     : "—"}
                 </td>
+                <td>{emp.herkunft ?? "—"}</td>
                 <td>{emp.name}</td>
                 <td>{emp.vorname}</td>
                 <td>{emp.ort}</td>

@@ -93,6 +93,11 @@ export interface Arbeitsgruppe {
   reihenfolge: number;
 }
 
+export interface Herkunft {
+  wert: string;
+  reihenfolge: number;
+}
+
 export interface Advance {
   id: number;
   belegnummer: string;
@@ -104,6 +109,16 @@ export interface Advance {
   zahlungsart: string;
   storniert: boolean;
   storno_grund: string | null;
+}
+
+// Ein Empfänger innerhalb eines Vorschusses, mit seinem individuellen Anteil
+// (für die Auszahlungsliste zum Ausdrucken).
+export interface AdvanceRecipientDetail {
+  employee_id: string;
+  personal_nr: string;
+  name: string;
+  vorname: string;
+  anteil: number;
 }
 
 export interface CashDeposit {

@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { getSupabaseClient } from "@/lib/supabase/client";
 import { useProfile } from "@/lib/useProfile";
-import type { CashDeposit } from "@/lib/types";
+import type { Advance, CashDeposit } from "@/lib/types";
 
 interface CashCheckRow {
   id: number;
@@ -28,6 +28,7 @@ function monatsSchluessel(d: Date) {
 export default function KassePage() {
   const { profile } = useProfile();
   const [deposits, setDeposits] = useState<CashDeposit[]>([]);
+  const [barVorschuesse, setBarVorschuesse] = useState<Advance[]>([]);
   const [checks, setChecks] = useState<CashCheckRow[]>([]);
   const [toleranz, setToleranz] = useState(50);
   const [loading, setLoading] = useState(true);
@@ -44,13 +45,21 @@ export default function KassePage() {
   async function load() {
     setLoading(true);
     const supabase = getSupabaseClient();
-    const [{ data: dep }, { data: chk }, { data: settings }] =
+    const [{ data: dep }, { data: adv }, { data: chk }, { data: settings }] =
       await Promise.all([
         supabase
           .from("cash_deposits")
           .select("*")
           .order("datum", { ascending: false })
           .limit(100),
+        // Nur Bar-Vorschüsse mindern den physischen Kassenbestand -
+        // Überweisungen (AZ) verlassen die Kasse nicht.
+        supabase
+          .from("advances")
+          .select("*")
+          .eq("zahlungsart", "BAR")
+          .order("datum", { ascending: false })
+          .limit(200),
         supabase
           .from("cash_checks")
           .select("*")
@@ -62,6 +71,7 @@ export default function KassePage() {
           .single(),
       ]);
     setDeposits((dep as CashDeposit[]) ?? []);
+    setBarVorschuesse((adv as Advance[]) ?? []);
     setChecks((chk as CashCheckRow[]) ?? []);
     if (settings) setToleranz(Number(settings.toleranz_euro));
     setLoading(false);
@@ -71,9 +81,13 @@ export default function KassePage() {
     load();
   }, []);
 
-  const saldo = deposits
+  const einzahlungenSumme = deposits
     .filter((d) => !d.storniert)
     .reduce((sum, d) => sum + Number(d.betrag), 0);
+  const vorschuesseSumme = barVorschuesse
+    .filter((a) => !a.storniert)
+    .reduce((sum, a) => sum + Number(a.betrag), 0);
+  const saldo = einzahlungenSumme - vorschuesseSumme;
 
   async function addDeposit(e: React.FormEvent) {
     e.preventDefault();
@@ -117,8 +131,8 @@ export default function KassePage() {
       period_from: periodFrom,
       period_to: new Date().toISOString(),
       opening,
-      summe_vorschuesse: 0, // vereinfachtes MVP: reine Bar-Vorschuss-Auswertung folgt in Ausbaustufe 2
-      einzahlungen: saldo,
+      summe_vorschuesse: vorschuesseSumme,
+      einzahlungen: einzahlungenSumme,
       soll: saldo,
       ist,
       differenz,
@@ -142,9 +156,14 @@ export default function KassePage() {
       </div>
 
       <div className="rounded border border-neutral-200 bg-white p-4">
-        <p className="text-sm text-neutral-500">Aktueller Kassensaldo (Einzahlungen)</p>
+        <p className="text-sm text-neutral-500">Aktueller Kassensaldo</p>
         <p className="text-2xl font-semibold text-emerald-800">
           {saldo.toFixed(2)} €
+        </p>
+        <p className="mt-1 text-xs text-neutral-500">
+          Einzahlungen {einzahlungenSumme.toFixed(2)} € − Bar-Vorschüsse{" "}
+          {vorschuesseSumme.toFixed(2)} € (Überweisungen zählen nicht zum
+          Kassenbestand)
         </p>
       </div>
 

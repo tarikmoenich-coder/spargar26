@@ -3,11 +3,12 @@
 import { useEffect, useState } from "react";
 import { getSupabaseClient } from "@/lib/supabase/client";
 import { useProfile } from "@/lib/useProfile";
-import type { Arbeitsgruppe, VerpflegungsSatz } from "@/lib/types";
+import type { Arbeitsgruppe, Herkunft, VerpflegungsSatz } from "@/lib/types";
 
 const CURRENT_YEAR = new Date().getFullYear();
 
 const emptyGruppenForm = { gruppe_nr: "", bezeichnung: "", reihenfolge: "0" };
+const emptyHerkunftForm = { wert: "", reihenfolge: "0" };
 
 export default function EinstellungenPage() {
   const { profile } = useProfile();
@@ -27,20 +28,31 @@ export default function EinstellungenPage() {
   const [gruppenSaving, setGruppenSaving] = useState(false);
   const [gruppenError, setGruppenError] = useState<string | null>(null);
 
+  const [herkuenfte, setHerkuenfte] = useState<Herkunft[]>([]);
+  const [herkunftForm, setHerkunftForm] = useState(emptyHerkunftForm);
+  const [editingHerkunftWert, setEditingHerkunftWert] = useState<
+    string | null
+  >(null);
+  const [herkunftSaving, setHerkunftSaving] = useState(false);
+  const [herkunftError, setHerkunftError] = useState<string | null>(null);
+
   const isAdmin = profile?.role === "admin";
 
   async function load() {
     setLoading(true);
     const supabase = getSupabaseClient();
-    const [{ data, error }, { data: gruppenData }] = await Promise.all([
-      supabase
-        .from("verpflegungssaetze")
-        .select("*")
-        .order("saison_jahr", { ascending: false }),
-      supabase.from("arbeitsgruppen").select("*").order("reihenfolge"),
-    ]);
+    const [{ data, error }, { data: gruppenData }, { data: herkunftData }] =
+      await Promise.all([
+        supabase
+          .from("verpflegungssaetze")
+          .select("*")
+          .order("saison_jahr", { ascending: false }),
+        supabase.from("arbeitsgruppen").select("*").order("reihenfolge"),
+        supabase.from("herkuenfte").select("*").order("reihenfolge"),
+      ]);
     if (!error) setSaetze((data as VerpflegungsSatz[]) ?? []);
     setGruppen((gruppenData as Arbeitsgruppe[]) ?? []);
+    setHerkuenfte((herkunftData as Herkunft[]) ?? []);
     setLoading(false);
   }
 
@@ -104,6 +116,34 @@ export default function EinstellungenPage() {
       return;
     }
     resetGruppenForm();
+    load();
+  }
+
+  function editHerkunft(h: Herkunft) {
+    setEditingHerkunftWert(h.wert);
+    setHerkunftForm({ wert: h.wert, reihenfolge: h.reihenfolge.toString() });
+  }
+
+  function resetHerkunftForm() {
+    setEditingHerkunftWert(null);
+    setHerkunftForm(emptyHerkunftForm);
+  }
+
+  async function handleHerkunftSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    setHerkunftSaving(true);
+    setHerkunftError(null);
+    const supabase = getSupabaseClient();
+    const { error } = await supabase.from("herkuenfte").upsert({
+      wert: herkunftForm.wert,
+      reihenfolge: Number(herkunftForm.reihenfolge) || 0,
+    });
+    setHerkunftSaving(false);
+    if (error) {
+      setHerkunftError(error.message);
+      return;
+    }
+    resetHerkunftForm();
     load();
   }
 
@@ -279,6 +319,92 @@ export default function EinstellungenPage() {
                     <button
                       className="btn-secondary"
                       onClick={() => editGruppe(g)}
+                    >
+                      Bearbeiten
+                    </button>
+                  </td>
+                )}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
+
+      <div>
+        <h2 className="text-lg font-semibold text-emerald-800">
+          Herkünfte
+        </h2>
+        <p className="text-sm text-neutral-500">
+          Feste Liste der Herkünfte für den Personalstamm - damit sich
+          Vorschüsse zuverlässig nach Herkunft auswählen lassen (keine
+          Tippfehler-Varianten).
+        </p>
+      </div>
+
+      {isAdmin && (
+        <form
+          onSubmit={handleHerkunftSubmit}
+          className="grid grid-cols-2 gap-3 rounded border border-neutral-200 bg-white p-4 sm:grid-cols-4"
+        >
+          <input
+            placeholder="Herkunft (z.B. Kroatien)"
+            required
+            disabled={editingHerkunftWert !== null}
+            value={herkunftForm.wert}
+            onChange={(e) =>
+              setHerkunftForm({ ...herkunftForm, wert: e.target.value })
+            }
+          />
+          <input
+            type="number"
+            placeholder="Reihenfolge"
+            value={herkunftForm.reihenfolge}
+            onChange={(e) =>
+              setHerkunftForm({
+                ...herkunftForm,
+                reihenfolge: e.target.value,
+              })
+            }
+          />
+          <div className="col-span-full flex items-center gap-2">
+            <button type="submit" className="btn" disabled={herkunftSaving}>
+              {editingHerkunftWert ? "Speichern" : "Anlegen"}
+            </button>
+            {editingHerkunftWert && (
+              <button
+                type="button"
+                className="btn-secondary"
+                onClick={resetHerkunftForm}
+              >
+                Abbrechen
+              </button>
+            )}
+            {herkunftError && (
+              <span className="text-sm text-red-600">{herkunftError}</span>
+            )}
+          </div>
+        </form>
+      )}
+
+      {!loading && (
+        <table>
+          <thead>
+            <tr>
+              <th>Herkunft</th>
+              <th>Reihenfolge</th>
+              {isAdmin && <th></th>}
+            </tr>
+          </thead>
+          <tbody>
+            {herkuenfte.map((h) => (
+              <tr key={h.wert}>
+                <td>{h.wert}</td>
+                <td>{h.reihenfolge}</td>
+                {isAdmin && (
+                  <td>
+                    <button
+                      className="btn-secondary"
+                      onClick={() => editHerkunft(h)}
                     >
                       Bearbeiten
                     </button>

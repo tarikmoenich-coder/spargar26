@@ -67,6 +67,17 @@ create table arbeitsgruppen (
 );
 
 -- ---------------------------------------------------------------------------
+-- 1b. Herkünfte (feste Liste statt Freitext, damit "nach Herkunft
+--     auswählen/filtern" bei Vorschüssen zuverlässig funktioniert - keine
+--     Tippfehler-Varianten wie "Kroatien"/"kroatien").
+-- ---------------------------------------------------------------------------
+create table herkuenfte (
+  wert text primary key,
+  reihenfolge int not null default 0,
+  created_at timestamptz not null default now()
+);
+
+-- ---------------------------------------------------------------------------
 -- 2. Mitarbeiter (entspricht Sheet "Pers.dat")
 --    ADR-004: stabile interne ID (uuid) + Alt-Personalnummer bleibt als
 --    eigenes, weiterhin sichtbares/suchbares Feld erhalten.
@@ -84,7 +95,8 @@ create table employees (
   personal_nr text not null unique,
   gruppe_nr text references arbeitsgruppen (gruppe_nr)
     on update cascade on delete set null,
-  herkunft text,
+  herkunft text references herkuenfte (wert)
+    on update cascade on delete set null,
   nationalitaet text,
   name text not null,
   vorname text not null,
@@ -461,6 +473,7 @@ grant select on season_summary to authenticated;
 -- ---------------------------------------------------------------------------
 alter table profiles enable row level security;
 alter table arbeitsgruppen enable row level security;
+alter table herkuenfte enable row level security;
 alter table employees enable row level security;
 alter table work_entries enable row level security;
 alter table periods enable row level security;
@@ -483,6 +496,12 @@ create policy "profiles_update_self" on profiles for update
 create policy "arbeitsgruppen_select" on arbeitsgruppen for select
   using (auth.uid() is not null);
 create policy "arbeitsgruppen_admin_write" on arbeitsgruppen for all
+  using (is_admin()) with check (is_admin());
+
+-- herkuenfte: alle eingeloggten Rollen lesen, nur admin pflegt
+create policy "herkuenfte_select" on herkuenfte for select
+  using (auth.uid() is not null);
+create policy "herkuenfte_admin_write" on herkuenfte for all
   using (is_admin()) with check (is_admin());
 
 -- employees: volle Sicht/Bearbeitung für admin und hr

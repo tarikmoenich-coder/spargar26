@@ -40,7 +40,8 @@ input, select {
 .print-form-table td {
   text-align: center;
 }
-.print-form-table td:first-child {
+.print-form-table td:first-child,
+.print-form-table td:nth-child(2) {
   text-align: left;
 }
 @media print {

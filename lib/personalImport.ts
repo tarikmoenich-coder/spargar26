@@ -154,7 +154,8 @@ export interface ImportZeile {
 export function baueZeile(
   zeile: number,
   werte: Partial<Record<ImportFeld, string>>,
-  bekannteGruppen: Set<string>
+  bekannteGruppen: Set<string>,
+  bekannteHerkuenfte: Set<string>
 ): ImportZeile {
   const fehler: string[] = [];
   const warnungen: string[] = [];
@@ -172,6 +173,14 @@ export function baueZeile(
       `Gruppe "${gruppe_nr}" ist nicht angelegt - wurde leer gelassen`
     );
     gruppe_nr = null;
+  }
+
+  let herkunft = (werte.herkunft ?? "").trim() || null;
+  if (herkunft && !bekannteHerkuenfte.has(herkunft)) {
+    warnungen.push(
+      `Herkunft "${herkunft}" ist nicht angelegt - wurde leer gelassen`
+    );
+    herkunft = null;
   }
 
   let geburtsdatum: string | null = null;
@@ -205,7 +214,7 @@ export function baueZeile(
     name,
     vorname,
     gruppe_nr,
-    herkunft: werte.herkunft?.trim() || null,
+    herkunft,
     nationalitaet: werte.nationalitaet?.trim() || null,
     geburtsdatum,
     ort: werte.ort?.trim() || null,

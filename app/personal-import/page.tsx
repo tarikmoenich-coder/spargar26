@@ -91,16 +91,21 @@ export default function PersonalImportPage() {
     setDateiname(file.name);
 
     const supabase = getSupabaseClient();
-    const [{ data: bestehende }, { data: gruppenData }] = await Promise.all([
-      supabase.from("employees").select("personal_nr, name, vorname"),
-      supabase.from("arbeitsgruppen").select("gruppe_nr"),
-    ]);
+    const [{ data: bestehende }, { data: gruppenData }, { data: herkunftData }] =
+      await Promise.all([
+        supabase.from("employees").select("personal_nr, name, vorname"),
+        supabase.from("arbeitsgruppen").select("gruppe_nr"),
+        supabase.from("herkuenfte").select("wert"),
+      ]);
     const bestehendeNummern = new Map<string, string>();
     (bestehende ?? []).forEach((r: { personal_nr: string; name: string; vorname: string }) => {
       bestehendeNummern.set(r.personal_nr.trim().toLowerCase(), `${r.name}, ${r.vorname}`);
     });
     const bekannteGruppen = new Set(
       (gruppenData ?? []).map((g: { gruppe_nr: string }) => g.gruppe_nr)
+    );
+    const bekannteHerkuenfte = new Set(
+      (herkunftData ?? []).map((h: { wert: string }) => h.wert)
     );
 
     const buffer = await file.arrayBuffer();
@@ -134,7 +139,7 @@ export default function PersonalImportPage() {
         const feld = spaltenMap[header];
         if (feld) werte[feld] = wert;
       }
-      return baueZeile(i + 2, werte, bekannteGruppen);
+      return baueZeile(i + 2, werte, bekannteGruppen, bekannteHerkuenfte);
     });
 
     // Dubletten innerhalb der Datei + gegen bestehenden Personalstamm prüfen.
