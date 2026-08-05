@@ -24,6 +24,13 @@ Enthalten:
   "pauschal": 5,275% vom Bruttolohn)
 - Einstellungen-Seite (nur admin): Verpflegungs-/Unterkunft-Satz pro Tag,
   versioniert je Saisonjahr, Default 10€/10€
+- "Jetzt Abrechnen" auf der Lohnübersicht (admin/lohnabrechnung, auch
+  mehrere Personen gleichzeitig): markiert die Saison für die Person als
+  abgerechnet und setzt sie auf inaktiv - reversibel über "Reaktivieren"
+  auf der Personal-Seite für die nächste Saison
+- Bei Abrechnungsart "Lohnsteuerklasse 1"/"sozialversicherungspflichtig":
+  Eingabefeld für den vom externen Lohnprogramm gelieferten Netto-Betrag
+  (App berechnet hier bewusst keine eigene Lohnsteuer)
 - Herkünfte-Verwaltung unter Einstellungen (nur admin), als Dropdown im
   Personalstamm (statt Freitext, damit Filter/Auswahl zuverlässig funktioniert)
 - Vorschussverwaltung: einzeln, gruppenweise (nach Arbeitsgruppe) oder nach

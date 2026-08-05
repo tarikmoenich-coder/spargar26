@@ -200,10 +200,40 @@ create table season_bonuses (
   -- ("Netto-Summe (HSC)"): Lohnbuchhaltung trägt den vom Lohnprogramm
   -- gelieferten Netto-Betrag hier von Hand ein, die App rechnet ab da weiter.
   netto_extern numeric(10, 2),
+  -- "Jetzt Abrechnen" auf der Lohnübersicht (pro Saison-Jahr, nicht
+  -- permanent - damit eine Wiederkehr in der nächsten Saison nicht mit
+  -- dieser Markierung kollidiert).
+  abgerechnet_am timestamptz,
+  abgerechnet_von uuid references profiles (id),
   updated_by uuid references profiles (id),
   updated_at timestamptz not null default now(),
   unique (employee_id, saison_jahr)
 );
+
+-- "Jetzt Abrechnen" auf der Lohnübersicht: markiert die Saison für diese
+-- Person als abgerechnet UND setzt employees.aktiv = false (sichtbarer
+-- Status), atomar in einer Transaktion. security definer, weil die Rolle
+-- lohnabrechnung season_bonuses pflegen darf, aber employees.aktiv laut
+-- RLS eigentlich nur admin/hr ändern dürfen - diese Funktion ist der eine
+-- kontrollierte Ausnahmeweg dafür, ohne die employees-Policy generell zu
+-- öffnen.
+create or replace function saison_abrechnen(p_employee_id uuid, p_saison_jahr int)
+returns void language plpgsql security definer as $$
+begin
+  if current_role_name() not in ('admin', 'lohnabrechnung') then
+    raise exception 'Keine Berechtigung für "Jetzt Abrechnen"';
+  end if;
+
+  insert into season_bonuses (employee_id, saison_jahr, abgerechnet_am, abgerechnet_von)
+  values (p_employee_id, p_saison_jahr, now(), auth.uid())
+  on conflict (employee_id, saison_jahr)
+  do update set abgerechnet_am = now(), abgerechnet_von = auth.uid();
+
+  update employees set aktiv = false where id = p_employee_id;
+end;
+$$;
+
+grant execute on function saison_abrechnen(uuid, int) to authenticated;
 
 -- ---------------------------------------------------------------------------
 -- 6. Verpflegungs-/Wohnen-Sätze (ADR-007: versioniert je Saisonjahr, über
@@ -421,6 +451,7 @@ with base as (
     e.name,
     e.vorname,
     e.abrechnungsart,
+    e.aktiv,
     we.saison_jahr,
     we.gesamt_stunden,
     we.anwesenheitstage,
@@ -437,6 +468,7 @@ with base as (
       + coalesce(b.erdbeer_praemie, 0)
       + coalesce(b.spargel_praemie, 0) as bruttolohn,
     b.netto_extern,
+    b.abgerechnet_am,
     coalesce(v.verpflegung, 0) * we.anwesenheitstage as abzug_verpflegung,
     coalesce(v.wohnen, 0) * we.anwesenheitstage as abzug_wohnen,
     coalesce((
@@ -489,6 +521,20 @@ select
 from steuer;
 
 grant select on season_summary to authenticated;
+
+-- ---------------------------------------------------------------------------
+-- 12c. View: letztes Abrechnungsdatum je Mitarbeiter, für die Personal-Seite
+--      ("Zuletzt abgerechnet am"). Bewusst NICHT security_invoker: zeigt nur
+--      das Datum (keine Beträge), damit auch hr - die season_bonuses selbst
+--      nicht lesen darf - diesen einen Wert sieht.
+-- ---------------------------------------------------------------------------
+create or replace view employee_letzte_abrechnung as
+select employee_id, max(abgerechnet_am) as abgerechnet_am
+from season_bonuses
+where abgerechnet_am is not null
+group by employee_id;
+
+grant select on employee_letzte_abrechnung to authenticated;
 
 -- ---------------------------------------------------------------------------
 -- 13. Row Level Security (ADR-006: Berechtigungen serverseitig, nicht nur UI)

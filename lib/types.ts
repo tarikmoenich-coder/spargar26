@@ -68,6 +68,8 @@ export interface SeasonSummaryRow {
   name: string;
   vorname: string;
   abrechnungsart: Abrechnungsart;
+  aktiv: boolean;
+  abgerechnet_am: string | null;
   saison_jahr: number;
   gesamt_stunden: number;
   anwesenheitstage: number;

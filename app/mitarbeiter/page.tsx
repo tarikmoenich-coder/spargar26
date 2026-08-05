@@ -41,6 +41,9 @@ export default function MitarbeiterPage() {
   const [gruppen, setGruppen] = useState<Arbeitsgruppe[]>([]);
   const [herkuenfte, setHerkuenfte] = useState<Herkunft[]>([]);
   const [aktivSeit, setAktivSeit] = useState<Record<string, string>>({});
+  const [letzteAbrechnung, setLetzteAbrechnung] = useState<
+    Record<string, string>
+  >({});
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [showInactive, setShowInactive] = useState(false);
@@ -86,12 +89,14 @@ export default function MitarbeiterPage() {
     const [
       { data, error },
       { data: ersteTage },
+      { data: abrechnungen },
       { data: gruppenData },
       { data: herkunftData },
       { data: alleNrData },
     ] = await Promise.all([
       query,
       supabase.from("employee_erster_arbeitstag").select("*"),
+      supabase.from("employee_letzte_abrechnung").select("*"),
       supabase.from("arbeitsgruppen").select("*").order("reihenfolge"),
       supabase.from("herkuenfte").select("*").order("reihenfolge"),
       supabase.from("employees").select("personal_nr, name, vorname"),
@@ -102,6 +107,13 @@ export default function MitarbeiterPage() {
       map[row.employee_id] = row.erster_arbeitstag;
     });
     setAktivSeit(map);
+    const abrechnungMap: Record<string, string> = {};
+    (abrechnungen ?? []).forEach(
+      (row: { employee_id: string; abgerechnet_am: string }) => {
+        abrechnungMap[row.employee_id] = row.abgerechnet_am;
+      }
+    );
+    setLetzteAbrechnung(abrechnungMap);
     setGruppen((gruppenData as Arbeitsgruppe[]) ?? []);
     setHerkuenfte((herkunftData as Herkunft[]) ?? []);
     setAllePersonalNummern(alleNrData ?? []);
@@ -423,6 +435,7 @@ export default function MitarbeiterPage() {
               <th>€/Std.</th>
               <th>Abrechnungsart</th>
               <th>Aktiv seit</th>
+              <th>Zuletzt abgerechnet am</th>
               <th>Status</th>
               {canEdit && <th></th>}
             </tr>
@@ -445,6 +458,7 @@ export default function MitarbeiterPage() {
                 <td>{emp.stundenlohn?.toFixed(2)}</td>
                 <td>{ABRECHNUNGSART_LABELS[emp.abrechnungsart]}</td>
                 <td>{formatDatumDE(aktivSeit[emp.id])}</td>
+                <td>{formatDatumDE(letzteAbrechnung[emp.id])}</td>
                 <td>{emp.aktiv ? "aktiv" : "inaktiv"}</td>
                 {canEdit && (
                   <td className="flex gap-2">
