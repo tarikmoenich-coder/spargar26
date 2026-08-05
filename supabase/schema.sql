@@ -146,6 +146,43 @@ create view employees_public as
   from employees;
 
 -- ---------------------------------------------------------------------------
+-- 2a. Mitarbeiter-Dokumente (z.B. Hochzeitsurkunde, Ausweiskopie) - werden
+--     als Datei in Supabase Storage abgelegt, dieser Eintrag verweist nur
+--     darauf. Feste Kategorie-Liste (Nutzer-Vorgabe), siehe
+--     lib/types.ts DOKUMENT_KATEGORIEN - muss synchron gehalten werden.
+--     Zugriff wie bei anderen sensiblen Personaldaten (SV-Nr., IBAN) nur
+--     admin/hr, siehe RLS-Policy weiter unten + Storage-Policy.
+-- ---------------------------------------------------------------------------
+create table employee_documents (
+  id bigint generated always as identity primary key,
+  employee_id uuid not null references employees (id) on delete restrict,
+  kategorie text not null check (kategorie in (
+    'Hochzeitsurkunde',
+    'Ausweiskopie',
+    'Führerschein Kopie',
+    'Arbeitsvertrag',
+    'Werks- und Mietvertrag',
+    'Formular "Doppelte Haushaltsführung"',
+    'Formular zur Feststellung der Versicherungspflicht',
+    'Sonstiges'
+  )),
+  dateiname text not null,
+  -- Pfad im Storage-Bucket "mitarbeiter-dokumente", z.B.
+  -- "<employee_id>/<zeitstempel>_<dateiname>".
+  storage_path text not null unique,
+  hochgeladen_von uuid references profiles (id),
+  hochgeladen_am timestamptz not null default now()
+);
+
+create index idx_employee_documents_employee on employee_documents (employee_id);
+
+-- Privater Storage-Bucket für die eigentlichen Dateien (kein öffentlicher
+-- Zugriff - Downloads laufen über zeitlich begrenzte signierte URLs).
+insert into storage.buckets (id, name, public)
+values ('mitarbeiter-dokumente', 'mitarbeiter-dokumente', false)
+on conflict (id) do nothing;
+
+-- ---------------------------------------------------------------------------
 -- 3. Tageserfassung (ersetzt Sheets "Jan" bis "August")
 -- ---------------------------------------------------------------------------
 create table work_entries (
@@ -548,6 +585,11 @@ create trigger trg_audit_cash_deposits
 create trigger trg_audit_cash_checks
   after insert or update on cash_checks
   for each row execute function write_audit_log();
+-- Dokumente: auch "delete" mitloggen, da hier (anders als sonst) echtes
+-- Löschen möglich ist (z.B. versehentlich falsche Datei hochgeladen).
+create trigger trg_audit_employee_documents
+  after insert or update or delete on employee_documents
+  for each row execute function write_audit_log();
 
 -- ---------------------------------------------------------------------------
 -- Trigger: updated_at + version automatisch pflegen (optimistische Sperre)
@@ -811,6 +853,7 @@ alter table cash_deposits enable row level security;
 alter table cash_checks enable row level security;
 alter table kassenpruefung_einstellungen enable row level security;
 alter table audit_log enable row level security;
+alter table employee_documents enable row level security;
 
 -- profiles
 create policy "profiles_select" on profiles for select
@@ -844,6 +887,16 @@ revoke select on employees from authenticated;
 grant select (id, personal_nr, gruppe_nr, herkunft, nationalitaet, name, vorname,
   geburtsdatum, ort, land, stundenlohn, saison_beginn, saison_ende, aktiv)
   on employees to authenticated;
+
+-- employee_documents: wie andere sensible Personaldaten nur admin/hr, sowohl
+-- für die Metadaten-Tabelle als auch für die Dateien im Storage-Bucket.
+create policy "employee_documents_admin_hr_all" on employee_documents for all
+  using (current_role_name() in ('admin', 'hr'))
+  with check (current_role_name() in ('admin', 'hr'));
+
+create policy "mitarbeiter_dokumente_storage_admin_hr" on storage.objects for all
+  using (bucket_id = 'mitarbeiter-dokumente' and current_role_name() in ('admin', 'hr'))
+  with check (bucket_id = 'mitarbeiter-dokumente' and current_role_name() in ('admin', 'hr'));
 
 -- work_entries: zeiterfassung/admin/hr/lohnabrechnung dürfen schreiben,
 -- alle eingeloggten Rollen dürfen lesen.

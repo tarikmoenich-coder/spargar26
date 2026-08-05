@@ -22,6 +22,12 @@ Enthalten:
 - Personalnummern-Übersicht: 10 Nummernkreise (1–999, 1000–1999, …),
   Dubletten-Erkennung, nächste freie Nummer je Kreis - Kreis-Auswahl beim
   Neuanlegen zeigt den Nummernbereich direkt mit an (z.B. "Kreis 1 (1-999)")
+- Dokumenten-Upload je Mitarbeiter (nur admin/hr, wie andere sensible
+  Personaldaten): Hochzeitsurkunde, Ausweiskopie, Führerschein-Kopie,
+  Arbeitsvertrag, Werks-/Mietvertrag, Formular "Doppelte
+  Haushaltsführung", Formular zur Feststellung der Versicherungspflicht,
+  Sonstiges - Dateien liegen in einem privaten Supabase-Storage-Bucket,
+  Downloads laufen über zeitlich begrenzte signierte Links
 - Personal-Import aus Excel/CSV mit Vorschau, Spaltenerkennung und
   Fehlerprüfung (u.a. bereits vergebene Personalnummern)
 - Automatische Saison-Lohnübersicht (Stunden, Prämien, Verpflegungs-/

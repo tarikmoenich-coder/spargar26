@@ -28,6 +28,33 @@ export interface Profile {
   aktiv: boolean;
 }
 
+// Feste Kategorie-Liste für Mitarbeiter-Dokumente (Nutzer-Vorgabe) - muss
+// synchron mit dem CHECK-Constraint in supabase/schema.sql gehalten werden.
+export const DOKUMENT_KATEGORIEN = [
+  'Hochzeitsurkunde',
+  'Ausweiskopie',
+  'Führerschein Kopie',
+  'Arbeitsvertrag',
+  'Werks- und Mietvertrag',
+  'Formular "Doppelte Haushaltsführung"',
+  'Formular zur Feststellung der Versicherungspflicht',
+  'Sonstiges',
+] as const;
+
+export type DokumentKategorie = (typeof DOKUMENT_KATEGORIEN)[number];
+
+// Verweis auf eine im Storage-Bucket "mitarbeiter-dokumente" abgelegte
+// Datei (z.B. Hochzeitsurkunde, Ausweiskopie) - Zugriff nur admin/hr.
+export interface EmployeeDocument {
+  id: number;
+  employee_id: string;
+  kategorie: string;
+  dateiname: string;
+  storage_path: string;
+  hochgeladen_von: string | null;
+  hochgeladen_am: string;
+}
+
 export interface Employee {
   id: string;
   personal_nr: string;
