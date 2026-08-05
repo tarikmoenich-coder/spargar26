@@ -775,14 +775,17 @@ grant select on employee_sv_pruefung to authenticated;
 --      wissen"). Begründung ist bewusst mit dabei (Nutzer-Vorgabe: muss
 --      auf der Suche-Seite zwingend sichtbar sein).
 -- ---------------------------------------------------------------------------
+-- Achtung: CREATE OR REPLACE VIEW darf bestehende Spalten weder umbenennen
+-- noch ihre Reihenfolge ändern - neue Spalten müssen ans Ende. Deshalb
+-- steht "begruendung" hier hinter "storniert" statt davor.
 create or replace view employee_vorschuss_historie as
 select
   ar.employee_id,
   a.datum,
   ar.anteil as betrag,
   a.zahlungsart,
-  a.begruendung,
-  a.storniert
+  a.storniert,
+  a.begruendung
 from advance_recipients ar
 join advances a on a.id = ar.advance_id;
 
