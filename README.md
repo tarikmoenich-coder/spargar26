@@ -79,6 +79,11 @@ Enthalten:
   letzter Arbeitstag mit Stunden > 0" - ersetzt nicht die rechtliche
   Prüfung der Sozialversicherungsbefreiung selbst (eigenes Formular nötig,
   noch offen)
+- "Management"-Seite, zweiter Abschnitt "Abweichungen bei Auszahlungen":
+  listet alle bereits abgerechneten Personen, deren Live-Berechnung
+  inzwischen vom eingefrorenen Schnappschuss abweicht (das „⚠" von der
+  Auszahlungen-Seite), mit konkreter Angabe je Feld (alt → neu) statt nur
+  des Warnzeichens
 - Rollen/Rechte serverseitig über Postgres Row Level Security
 - Append-only Audit-Log für Personal, Stunden, Vorschüsse, Kassenbuch
 
