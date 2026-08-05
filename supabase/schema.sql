@@ -404,6 +404,11 @@ create table advances (
   empfaenger_text text,
   bearbeiter_id uuid references profiles (id),
   begruendung text,
+  -- Name der Person (z.B. Gruppenleiter), der das Geld zur Verteilung an
+  -- die einzelnen Empfänger übergeben wird - erscheint auf dem separaten
+  -- Übergabe-Beleg (siehe Druck auf der Vorschüsse-Seite). Optional wie
+  -- Begründung.
+  uebergeben_an text,
   zahlungsart text not null, -- z.B. 'BAR', 'AZ' (Überweisung)
   storniert boolean not null default false,
   storniert_am timestamptz,

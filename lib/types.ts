@@ -231,6 +231,9 @@ export interface Advance {
   betrag: number;
   empfaenger_text: string | null;
   begruendung: string | null;
+  // Person (z.B. Gruppenleiter), der das Geld zur Verteilung übergeben
+  // wird - erscheint auf dem separaten Übergabe-Beleg beim Drucken.
+  uebergeben_an: string | null;
   zahlungsart: string;
   storniert: boolean;
   storno_grund: string | null;

@@ -44,6 +44,14 @@ input, select {
 .print-form-table td:nth-child(2) {
   text-align: left;
 }
+/* Erzwingt einen Seitenumbruch vor dem Element - z.B. damit
+   Unterschriftenliste und Übergabe-Beleg beim Vorschuss-Druck auf
+   getrennten Blättern landen. */
+.print-page-break {
+  break-before: page;
+  page-break-before: always;
+}
+
 @media print {
   .print-form-table {
     font-size: 13pt;

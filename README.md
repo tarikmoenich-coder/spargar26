@@ -72,9 +72,14 @@ Enthalten:
   Personalstamm (statt Freitext, damit Filter/Auswahl zuverlässig funktioniert)
 - Vorschussverwaltung: einzeln, gruppenweise (nach Arbeitsgruppe) oder nach
   Herkunft auswählen, Betrag pro Person individuell anpassbar, atomare
-  Belegnummer, Storno statt Löschen, druckbare Auszahlungsliste mit
-  Unterschriftenfeldern, filterbar nach Jahr und Monat (wie bei
-  Auszahlungen)
+  Belegnummer, Storno statt Löschen, filterbar nach Jahr und Monat (wie
+  bei Auszahlungen). Druck erzeugt zwei getrennte Blätter: eine
+  Mitarbeiter-Unterschriftenliste (wie bisher, aber ohne Summe - die
+  Empfänger müssen die Gesamtsumme nicht sehen) und einen separaten
+  Übergabe-Beleg für die Person, die das Geld zur Verteilung bekommt
+  (z.B. Gruppenleiter) - mit Summe, optionalem Feld "Übergeben an" (wie
+  Begründung beim Erfassen abfragbar) und einem einzigen
+  Unterschriftenfeld für diese eine Person
 - Nachträgliche Korrektur eines bereits bestätigten Vorschuss-Betrags
   (admin/kasse, auch nach Storno-Sperre): Grund ist Pflichtfeld, jede
   Korrektur wird mit Anwender, Zeitstempel und Differenz in den

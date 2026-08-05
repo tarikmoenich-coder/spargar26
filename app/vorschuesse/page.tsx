@@ -35,6 +35,7 @@ interface Beleg {
   datum: string;
   zahlungsart: string;
   storniert: boolean;
+  uebergeben_an: string | null;
   empfaenger: AdvanceRecipientDetail[];
 }
 
@@ -49,6 +50,10 @@ export default function VorschuessePage() {
   const [basisBetrag, setBasisBetrag] = useState("");
   const [zahlungsart, setZahlungsart] = useState("BAR");
   const [begruendung, setBegruendung] = useState("");
+  // Person (z.B. Gruppenleiter), die das Geld zur Verteilung an die
+  // einzelnen Empfänger bekommt - erscheint auf dem separaten
+  // Übergabe-Beleg beim Drucken.
+  const [uebergebenAn, setUebergebenAn] = useState("");
   const [ausgewaehlt, setAusgewaehlt] = useState<AusgewaehltePerson[]>([]);
   const [gruppenFilter, setGruppenFilter] = useState("");
   const [herkunftFilter, setHerkunftFilter] = useState("");
@@ -246,6 +251,7 @@ export default function VorschuessePage() {
         betrag: summeAusgewaehlt,
         empfaenger_text: empfaengerTextAus(ausgewaehlt),
         begruendung,
+        uebergeben_an: uebergebenAn || null,
         zahlungsart,
       })
       .select()
@@ -278,6 +284,7 @@ export default function VorschuessePage() {
       datum: inserted.datum,
       zahlungsart,
       storniert: false,
+      uebergeben_an: uebergebenAn || null,
       empfaenger: ausgewaehlt.map((p) => ({
         employee_id: p.employee_id,
         personal_nr: p.personal_nr,
@@ -289,6 +296,7 @@ export default function VorschuessePage() {
 
     setBasisBetrag("");
     setBegruendung("");
+    setUebergebenAn("");
     setAusgewaehlt([]);
     setSaving(false);
     load();
@@ -330,6 +338,7 @@ export default function VorschuessePage() {
       datum: adv.datum,
       zahlungsart: adv.zahlungsart,
       storniert: adv.storniert,
+      uebergeben_an: adv.uebergeben_an,
       empfaenger,
     });
   }
@@ -569,6 +578,19 @@ export default function VorschuessePage() {
             onChange={(e) => setBegruendung(e.target.value)}
           />
 
+          <div className="flex flex-col gap-1">
+            <input
+              placeholder="Übergeben an (optional, z.B. Gruppenleiter)"
+              value={uebergebenAn}
+              onChange={(e) => setUebergebenAn(e.target.value)}
+            />
+            <p className="text-xs text-neutral-500">
+              Falls jemand das Geld zur Verteilung an die einzelnen
+              Empfänger bekommt: erscheint auf dem separaten
+              Übergabe-Beleg beim Drucken (siehe unten).
+            </p>
+          </div>
+
           <div className="flex items-center gap-2">
             <button type="submit" className="btn" disabled={saving}>
               Vorschuss bestätigen
@@ -765,7 +787,13 @@ export default function VorschuessePage() {
         </table>
       )}
 
-      {/* Auszahlungsliste zum Ausdrucken/Unterschreiben - nur im Druck sichtbar. */}
+      {/* Zwei getrennte Druckblätter - nur im Druck sichtbar.
+          1) Mitarbeiter-Unterschriftenliste: wie bisher, aber ohne Summe -
+             die Empfänger müssen die Gesamtsumme nicht sehen.
+          2) Übergabe-Beleg: für die Person, die das Geld zur Verteilung
+             bekommt (z.B. Gruppenleiter) - mit Summe und einem einzigen
+             Unterschriftenfeld für diese Person, aber ohne
+             Unterschriftenfelder je Empfänger. */}
       {anzeigeBeleg && (
         <div className="hidden print:block">
           <h2 className="text-xl font-semibold">
@@ -797,20 +825,62 @@ export default function VorschuessePage() {
                 </tr>
               ))}
             </tbody>
-            <tfoot>
-              <tr>
-                <td colSpan={2} className="text-right font-semibold">
-                  Summe
-                </td>
-                <td className="font-semibold">
-                  {anzeigeBeleg.empfaenger
-                    .reduce((s, p) => s + p.anteil, 0)
-                    .toFixed(2)}
-                </td>
-                <td></td>
-              </tr>
-            </tfoot>
           </table>
+
+          <div className="print-page-break">
+            <h2 className="text-xl font-semibold">Vorschuss-Übergabe</h2>
+            <p className="mt-1 text-base">
+              Belegnummer: {anzeigeBeleg.belegnummer} · Datum:{" "}
+              {new Date(anzeigeBeleg.datum).toLocaleDateString("de-DE")} ·{" "}
+              {anzeigeBeleg.zahlungsart === "BAR" ? "Bar" : "Überweisung"}
+            </p>
+            <table className="mt-4 print-form-table">
+              <thead>
+                <tr>
+                  <th>Pers.-Nr.</th>
+                  <th>Name</th>
+                  <th>Betrag €</th>
+                </tr>
+              </thead>
+              <tbody>
+                {anzeigeBeleg.empfaenger.map((p) => (
+                  <tr key={p.employee_id}>
+                    <td>{p.personal_nr}</td>
+                    <td>
+                      {p.name}, {p.vorname}
+                    </td>
+                    <td>{p.anteil.toFixed(2)}</td>
+                  </tr>
+                ))}
+              </tbody>
+              <tfoot>
+                <tr>
+                  <td colSpan={2} className="text-right font-semibold">
+                    Summe
+                  </td>
+                  <td className="font-semibold">
+                    {anzeigeBeleg.empfaenger
+                      .reduce((s, p) => s + p.anteil, 0)
+                      .toFixed(2)}
+                  </td>
+                </tr>
+              </tfoot>
+            </table>
+            <p className="mt-6 text-base">
+              Übergeben an:{" "}
+              {anzeigeBeleg.uebergeben_an || (
+                <span className="inline-block w-64 border-b-2 border-black">
+                  &nbsp;
+                </span>
+              )}
+            </p>
+            <p className="mt-8 text-base">
+              Unterschrift:{" "}
+              <span className="ml-2 inline-block w-64 border-b-2 border-black">
+                &nbsp;
+              </span>
+            </p>
+          </div>
         </div>
       )}
     </div>
