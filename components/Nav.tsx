@@ -10,19 +10,17 @@ interface NavItem {
   href: string;
   label: string;
   roles: UserRole[] | "all";
+  // Weitere Pfade, die diesen Menüpunkt ebenfalls als aktiv markieren sollen
+  // (z.B. Unterseiten wie Personalnummern/Import unter "Personal").
+  auchAktivBei?: string[];
 }
 
 const items: NavItem[] = [
-  { href: "/mitarbeiter", label: "Personal", roles: ["admin", "hr"] },
   {
-    href: "/personalnummern",
-    label: "Personalnummern",
+    href: "/mitarbeiter",
+    label: "Personal",
     roles: ["admin", "hr"],
-  },
-  {
-    href: "/personal-import",
-    label: "Import",
-    roles: ["admin", "hr"],
+    auchAktivBei: ["/personalnummern", "/personal-import"],
   },
   {
     href: "/erfassung",
@@ -79,19 +77,24 @@ export default function Nav() {
                 item.roles === "all" ||
                 (profile && item.roles.includes(profile.role))
             )
-            .map((item) => (
-              <Link
-                key={item.href}
-                href={item.href}
-                className={`text-sm ${
-                  pathname?.startsWith(item.href)
-                    ? "font-semibold text-emerald-800"
-                    : "text-neutral-600 hover:text-emerald-800"
-                }`}
-              >
-                {item.label}
-              </Link>
-            ))}
+            .map((item) => {
+              const aktiv =
+                pathname?.startsWith(item.href) ||
+                item.auchAktivBei?.some((p) => pathname?.startsWith(p));
+              return (
+                <Link
+                  key={item.href}
+                  href={item.href}
+                  className={`text-sm ${
+                    aktiv
+                      ? "font-semibold text-emerald-800"
+                      : "text-neutral-600 hover:text-emerald-800"
+                  }`}
+                >
+                  {item.label}
+                </Link>
+              );
+            })}
         </div>
         <div className="flex items-center gap-3 text-sm text-neutral-600">
           {profile && (

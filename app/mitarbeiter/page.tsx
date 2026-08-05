@@ -16,6 +16,7 @@ import {
   parsePersonalNrNummer,
 } from "@/lib/personalnummern";
 import { formatDatumDE } from "@/lib/format";
+import PersonalTabs from "@/components/PersonalTabs";
 
 const emptyForm = {
   personal_nr: "",
@@ -221,6 +222,7 @@ export default function MitarbeiterPage() {
 
   return (
     <div className="flex flex-col gap-6">
+      <PersonalTabs />
       <div>
         <h1 className="text-lg font-semibold text-emerald-800">Personal</h1>
         <p className="text-sm text-neutral-500">

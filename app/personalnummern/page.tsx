@@ -8,6 +8,7 @@ import {
   naechsteFreieNummer,
   parsePersonalNrNummer,
 } from "@/lib/personalnummern";
+import PersonalTabs from "@/components/PersonalTabs";
 
 interface Row {
   personal_nr: string;
@@ -82,6 +83,7 @@ export default function PersonalnummernPage() {
 
   return (
     <div className="flex flex-col gap-6">
+      <PersonalTabs />
       <div>
         <h1 className="text-lg font-semibold text-emerald-800">
           Personalnummern

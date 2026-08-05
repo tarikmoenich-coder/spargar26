@@ -10,6 +10,7 @@ import {
   type ImportFeld,
   type ImportZeile,
 } from "@/lib/personalImport";
+import PersonalTabs from "@/components/PersonalTabs";
 
 const TEMPLATE_SPALTEN: Record<ImportFeld, string> = {
   personal_nr: "Personalnummer",
@@ -219,6 +220,7 @@ export default function PersonalImportPage() {
 
   return (
     <div className="flex flex-col gap-6">
+      <PersonalTabs />
       <div>
         <h1 className="text-lg font-semibold text-emerald-800">
           Personal importieren
