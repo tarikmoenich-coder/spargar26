@@ -99,7 +99,7 @@ export default function SuchePage() {
 
   return (
     <div className="flex flex-col gap-4">
-      <div>
+      <div className="print:hidden">
         <h1 className="text-lg font-semibold text-emerald-800">Suche</h1>
         <p className="text-sm text-neutral-500">
           Nach Name oder Personalnummer suchen, um Arbeitsstunden und
@@ -107,7 +107,7 @@ export default function SuchePage() {
         </p>
       </div>
 
-      <div className="rounded border border-neutral-200 bg-white p-4">
+      <div className="rounded border border-neutral-200 bg-white p-4 print:hidden">
         <input
           autoFocus
           placeholder="Name oder Personalnummer eingeben…"
@@ -157,7 +157,7 @@ export default function SuchePage() {
       </div>
 
       {ausgewaehlt && (
-        <div className="flex flex-col gap-4">
+        <div className="flex flex-col gap-4 print:hidden">
           <div className="flex flex-wrap items-center justify-between gap-3 rounded border border-neutral-200 bg-white p-4">
             <div>
               <p className="text-base font-semibold">
@@ -180,6 +180,13 @@ export default function SuchePage() {
                   </option>
                 ))}
               </select>
+              <button
+                type="button"
+                className="btn-secondary text-xs"
+                onClick={() => window.print()}
+              >
+                Drucken
+              </button>
               <button
                 type="button"
                 className="btn-secondary text-xs"
@@ -257,6 +264,7 @@ export default function SuchePage() {
                           <th>Datum</th>
                           <th>Betrag €</th>
                           <th>Art</th>
+                          <th>Begründung</th>
                           <th>Status</th>
                         </tr>
                       </thead>
@@ -269,6 +277,7 @@ export default function SuchePage() {
                             <td>{formatDatumDE(v.datum)}</td>
                             <td>{Number(v.betrag).toFixed(2)}</td>
                             <td>{v.zahlungsart === "BAR" ? "Bar" : "Überweisung"}</td>
+                            <td>{v.begruendung ?? "—"}</td>
                             <td>{v.storniert ? "storniert" : "aktiv"}</td>
                           </tr>
                         ))}
@@ -278,6 +287,78 @@ export default function SuchePage() {
                 )}
               </div>
             </div>
+          )}
+        </div>
+      )}
+
+      {/* Übersicht zum Aushändigen an den Mitarbeiter - nur im Druck sichtbar. */}
+      {ausgewaehlt && !ladenDetail && (
+        <div className="hidden print:block">
+          <h2 className="text-xl font-semibold">
+            Arbeitsstunden &amp; Vorschüsse – {ausgewaehlt.name},{" "}
+            {ausgewaehlt.vorname}
+          </h2>
+          <p className="mt-1 text-base">
+            Personalnummer: {ausgewaehlt.personal_nr} · Saison-Jahr:{" "}
+            {saisonJahr} · Gedruckt am: {formatDatumDE(new Date().toISOString())}
+          </p>
+
+          <h3 className="mt-4 text-base font-semibold">
+            Arbeitsstunden ({stundenGesamt.toFixed(2)} Std. · {tageGesamt} Tage)
+          </h3>
+          {stunden.length === 0 ? (
+            <p className="mt-1 text-sm">Keine Einträge in diesem Jahr.</p>
+          ) : (
+            <table className="mt-2 print-form-table">
+              <thead>
+                <tr>
+                  <th>Datum</th>
+                  <th>Std.</th>
+                  <th>Markierung</th>
+                  <th>Notiz</th>
+                </tr>
+              </thead>
+              <tbody>
+                {stunden.map((e) => (
+                  <tr key={e.id}>
+                    <td>{formatDatumDE(e.datum)}</td>
+                    <td>{e.stunden ?? "—"}</td>
+                    <td>{e.markierung ?? "—"}</td>
+                    <td>{e.notiz ?? "—"}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+
+          <h3 className="mt-6 text-base font-semibold">
+            Vorschüsse ({vorschussGesamt.toFixed(2)} € aktiv)
+          </h3>
+          {vorschuesse.length === 0 ? (
+            <p className="mt-1 text-sm">Keine Vorschüsse erfasst.</p>
+          ) : (
+            <table className="mt-2 print-form-table">
+              <thead>
+                <tr>
+                  <th>Datum</th>
+                  <th>Betrag €</th>
+                  <th>Art</th>
+                  <th>Begründung</th>
+                  <th>Status</th>
+                </tr>
+              </thead>
+              <tbody>
+                {vorschuesse.map((v, i) => (
+                  <tr key={`${v.datum}-${i}`}>
+                    <td>{formatDatumDE(v.datum)}</td>
+                    <td>{Number(v.betrag).toFixed(2)}</td>
+                    <td>{v.zahlungsart === "BAR" ? "Bar" : "Überweisung"}</td>
+                    <td>{v.begruendung ?? "—"}</td>
+                    <td>{v.storniert ? "storniert" : "aktiv"}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           )}
         </div>
       )}

@@ -170,6 +170,24 @@ export default function ErfassungPage() {
     }
   }
 
+  // Freitext-Vermerk zum Tag (z.B. "krank", "zu spät") - erscheint auch in
+  // der "Suche"-Seite bei den Arbeitsstunden der Person.
+  async function saveNotiz(employeeId: string, notiz: string) {
+    const supabase = getSupabaseClient();
+    const existing = entries[employeeId];
+    const value = notiz.trim() === "" ? null : notiz;
+    if (existing) {
+      await supabase
+        .from("work_entries")
+        .update({ notiz: value })
+        .eq("id", existing.id);
+    } else {
+      await supabase
+        .from("work_entries")
+        .insert({ employee_id: employeeId, datum, notiz: value });
+    }
+  }
+
   async function gruppeAendern(employeeId: string, neueGruppeNr: string) {
     const supabase = getSupabaseClient();
     const gruppe_nr = neueGruppeNr || null;
@@ -279,6 +297,7 @@ export default function ErfassungPage() {
                   <th>Name</th>
                   <th>Stunden</th>
                   <th>Markierung</th>
+                  <th>Notiz</th>
                   {canGruppeAendern && <th>Gruppe</th>}
                 </tr>
               </thead>
@@ -315,6 +334,16 @@ export default function ErfassungPage() {
                           <option value="">—</option>
                           <option value="U">U (Urlaub/Feiertag)</option>
                         </select>
+                      </td>
+                      <td>
+                        <input
+                          type="text"
+                          placeholder="z.B. krank, zu spät"
+                          className="w-36"
+                          defaultValue={entry?.notiz ?? ""}
+                          key={`n-${emp.id}-${entry?.version ?? 0}`}
+                          onBlur={(e) => saveNotiz(emp.id, e.target.value)}
+                        />
                       </td>
                       {canGruppeAendern && (
                         <td>

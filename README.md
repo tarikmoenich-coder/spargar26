@@ -69,9 +69,12 @@ Enthalten:
   nachträglichen Vorschuss-Korrekturen ("Kassenbewegungen") - Bar-Vorschüsse
   mindern automatisch den Kassenbestand, Überweisungen nicht
 - "Suche"-Seite (alle Rollen): nach Name oder Personalnummer suchen und
-  Arbeitsstunden sowie Vorschuss-Historie einer Person einsehen - damit
-  nicht nur die Verwaltung, sondern auch untere Ebenen selbst Auskunft
-  geben können
+  Arbeitsstunden (inkl. Notiz je Tag) sowie Vorschuss-Historie (inkl.
+  Begründung) einer Person einsehen und als Übersicht für den Mitarbeiter
+  ausdrucken - damit nicht nur die Verwaltung, sondern auch untere Ebenen
+  selbst Auskunft geben können
+- Freitext-Notiz je Tag auf der Stundenerfassung (z.B. "krank", "zu
+  spät") - erscheint auch auf der "Suche"-Seite
 - 90-Tage-/15-Wochen-Kontrolle (SV-Freiheit landwirtschaftliche
   Saisonarbeit, OI-004): Spalten auf der Personal-Seite (Rest bis 90 Tage,
   theoretisches Austrittsdatum, Status) sowie eine "Management"-Seite mit

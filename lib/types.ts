@@ -153,13 +153,14 @@ export interface Kassenbewegung {
 }
 
 // Ein Vorschuss-Eintrag für die "Suche"-Seite (schmale, breit zugängliche
-// Sicht - keine Begründung/Bearbeiter/Belegnummer wie in der vollen
-// advances-Tabelle).
+// Sicht - kein Bearbeiter/keine Belegnummer wie in der vollen
+// advances-Tabelle, Begründung aber bewusst mit dabei).
 export interface VorschussHistorieEintrag {
   employee_id: string;
   datum: string;
   betrag: number;
   zahlungsart: string;
+  begruendung: string | null;
   storniert: boolean;
 }
 

@@ -769,10 +769,11 @@ grant select on employee_sv_pruefung to authenticated;
 
 -- ---------------------------------------------------------------------------
 -- 12f. View: Vorschuss-Historie je Mitarbeiter für die "Suche"-Seite -
---      bewusst schmal (nur Datum/Betrag/Zahlungsart, keine Begründung/
---      Bearbeiter/Belegnummer), damit auch Rollen wie zeiterfassung, die
---      die volle advances-Tabelle nicht lesen dürfen, hier Auskunft geben
---      können ("darf nicht nur der Chef wissen").
+--      bewusst schmal (kein Bearbeiter/keine Belegnummer), damit auch
+--      Rollen wie zeiterfassung, die die volle advances-Tabelle nicht
+--      lesen dürfen, hier Auskunft geben können ("darf nicht nur der Chef
+--      wissen"). Begründung ist bewusst mit dabei (Nutzer-Vorgabe: muss
+--      auf der Suche-Seite zwingend sichtbar sein).
 -- ---------------------------------------------------------------------------
 create or replace view employee_vorschuss_historie as
 select
@@ -780,6 +781,7 @@ select
   a.datum,
   ar.anteil as betrag,
   a.zahlungsart,
+  a.begruendung,
   a.storniert
 from advance_recipients ar
 join advances a on a.id = ar.advance_id;
