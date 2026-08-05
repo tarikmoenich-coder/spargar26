@@ -6,6 +6,9 @@
 --    landwirtschaftliche Saisonarbeit, OI-004) - reine Tage-/Wochen-Zählung.
 -- ============================================================================
 
+-- auszahlungsbeleg_summary hängt von season_summary ab - muss vor dem Drop
+-- weg und wird am Ende unverändert neu angelegt.
+drop view if exists auszahlungsbeleg_summary;
 drop view if exists season_summary;
 
 create view season_summary as
@@ -83,6 +86,28 @@ select
 from steuer;
 
 grant select on season_summary to authenticated;
+
+-- auszahlungsbeleg_summary unverändert neu anlegen (siehe
+-- migration_2026-08-05_auszahlungsbelege.sql für die Erklärung).
+create view auszahlungsbeleg_summary as
+select
+  ab.id,
+  ab.belegnummer,
+  ab.saison_jahr,
+  ab.erstellt_am,
+  ab.erstellt_von,
+  count(sb.employee_id) as anzahl_personen,
+  sum((sb.snapshot ->> 'auszahlungsbetrag')::numeric) as summe_auszahlungsbetrag,
+  bool_or(
+    (sb.snapshot ->> 'auszahlungsbetrag')::numeric is distinct from ss.auszahlungsbetrag
+  ) as weicht_ab
+from auszahlungsbelege ab
+join season_bonuses sb on sb.auszahlungsbeleg_id = ab.id
+left join season_summary ss
+  on ss.employee_id = sb.employee_id and ss.saison_jahr = sb.saison_jahr
+group by ab.id, ab.belegnummer, ab.saison_jahr, ab.erstellt_am, ab.erstellt_von;
+
+grant select on auszahlungsbeleg_summary to authenticated;
 
 create or replace view employee_sv_pruefung as
 select
