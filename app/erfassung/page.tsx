@@ -11,6 +11,25 @@ function todayIso() {
   return new Date().toISOString().slice(0, 10);
 }
 
+// Reine Kalendertag-Arithmetik auf Basis von "YYYY-MM-DD" - bewusst über
+// UTC-Millisekunden statt lokaler Zeitzone, damit ein Tagessprung nicht je
+// nach Zeitzone/Sommerzeit auf den falschen Tag landen kann.
+function addDays(iso: string, delta: number): string {
+  const [j, m, t] = iso.split("-").map(Number);
+  const ms = Date.UTC(j, m - 1, t) + delta * 86400000;
+  return new Date(ms).toISOString().slice(0, 10);
+}
+
+// Kurzform "Mo 04.08." für die Spaltenköpfe der vorherigen Tage.
+function kurzDatum(iso: string): string {
+  const [, m, t] = iso.split("-");
+  const wochentag = new Date(`${iso}T00:00:00Z`).toLocaleDateString("de-DE", {
+    weekday: "short",
+    timeZone: "UTC",
+  });
+  return `${wochentag} ${t}.${m}.`;
+}
+
 interface Gruppierung {
   key: string;
   anzeige: string;
@@ -53,22 +72,36 @@ export default function ErfassungPage() {
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [gruppen, setGruppen] = useState<Arbeitsgruppe[]>([]);
   const [entries, setEntries] = useState<Record<string, WorkEntry>>({});
+  // Nur zur Kontrolle/Übersicht: Stunden der 3 vorherigen Tage, nicht
+  // bearbeitbar - Bearbeitung bleibt auf das oben gewählte Datum beschränkt.
+  const [vorherigeEntries, setVorherigeEntries] = useState<
+    Record<string, Record<string, WorkEntry>>
+  >({});
   const [loading, setLoading] = useState(true);
   const [savingId, setSavingId] = useState<string | null>(null);
   const [printGroupKey, setPrintGroupKey] = useState<string | null>(null);
 
+  const vorherigeDaten = [
+    addDays(datum, -3),
+    addDays(datum, -2),
+    addDays(datum, -1),
+  ];
+
   const loadAll = useCallback(async (forDate: string) => {
     setLoading(true);
     const supabase = getSupabaseClient();
-    const [{ data: emp }, { data: we }, { data: gr }] = await Promise.all([
-      supabase
-        .from("employees")
-        .select("id, personal_nr, name, vorname, aktiv, gruppe_nr")
-        .eq("aktiv", true)
-        .order("name"),
-      supabase.from("work_entries").select("*").eq("datum", forDate),
-      supabase.from("arbeitsgruppen").select("*").order("reihenfolge"),
-    ]);
+    const vorherige = [addDays(forDate, -3), addDays(forDate, -2), addDays(forDate, -1)];
+    const [{ data: emp }, { data: we }, { data: gr }, { data: weVorher }] =
+      await Promise.all([
+        supabase
+          .from("employees")
+          .select("id, personal_nr, name, vorname, aktiv, gruppe_nr")
+          .eq("aktiv", true)
+          .order("name"),
+        supabase.from("work_entries").select("*").eq("datum", forDate),
+        supabase.from("arbeitsgruppen").select("*").order("reihenfolge"),
+        supabase.from("work_entries").select("*").in("datum", vorherige),
+      ]);
     setEmployees((emp as Employee[]) ?? []);
     setGruppen((gr as Arbeitsgruppe[]) ?? []);
     const map: Record<string, WorkEntry> = {};
@@ -76,6 +109,12 @@ export default function ErfassungPage() {
       map[row.employee_id] = row;
     });
     setEntries(map);
+    const vorherigeMap: Record<string, Record<string, WorkEntry>> = {};
+    ((weVorher as WorkEntry[]) ?? []).forEach((row) => {
+      if (!vorherigeMap[row.datum]) vorherigeMap[row.datum] = {};
+      vorherigeMap[row.datum][row.employee_id] = row;
+    });
+    setVorherigeEntries(vorherigeMap);
     setLoading(false);
   }, []);
 
@@ -188,6 +227,24 @@ export default function ErfassungPage() {
     }
   }
 
+  // Pfeiltasten hoch/runter im Stunden-Feld springen direkt zum selben
+  // Feld der vorherigen/nächsten Person, ohne erst Markierung/Notiz/Gruppe
+  // dieser Zeile durchlaufen zu müssen (schnellere Eingabe als mit Tab).
+  function handleStundenKeyDown(e: React.KeyboardEvent<HTMLInputElement>) {
+    if (e.key !== "ArrowUp" && e.key !== "ArrowDown") return;
+    e.preventDefault();
+    const felder = Array.from(
+      document.querySelectorAll<HTMLInputElement>(
+        'input[data-stunden-feld="true"]'
+      )
+    );
+    const idx = felder.indexOf(e.currentTarget);
+    if (idx === -1) return;
+    const naechstes = felder[e.key === "ArrowDown" ? idx + 1 : idx - 1];
+    naechstes?.focus();
+    naechstes?.select();
+  }
+
   async function gruppeAendern(employeeId: string, neueGruppeNr: string) {
     const supabase = getSupabaseClient();
     const gruppe_nr = neueGruppeNr || null;
@@ -230,11 +287,29 @@ export default function ErfassungPage() {
       <div className="flex items-center gap-3 print:hidden">
         <label className="text-sm">
           Datum{" "}
-          <input
-            type="date"
-            value={datum}
-            onChange={(e) => setDatum(e.target.value)}
-          />
+          <span className="inline-flex items-center gap-1">
+            <button
+              type="button"
+              className="btn-secondary px-2 text-xs"
+              onClick={() => setDatum((d) => addDays(d, -1))}
+              title="Ein Tag zurück"
+            >
+              ←
+            </button>
+            <input
+              type="date"
+              value={datum}
+              onChange={(e) => setDatum(e.target.value)}
+            />
+            <button
+              type="button"
+              className="btn-secondary px-2 text-xs"
+              onClick={() => setDatum((d) => addDays(d, 1))}
+              title="Ein Tag vor"
+            >
+              →
+            </button>
+          </span>
         </label>
         <span className="text-sm text-neutral-500">
           Tagessumme: {gesamtStunden.toFixed(2)} Std.
@@ -295,6 +370,15 @@ export default function ErfassungPage() {
                 <tr>
                   <th>Pers.-Nr.</th>
                   <th>Name</th>
+                  {vorherigeDaten.map((d) => (
+                    <th
+                      key={d}
+                      className="font-normal text-neutral-400"
+                      title="Nur zur Kontrolle - hier nicht bearbeitbar"
+                    >
+                      {kurzDatum(d)}
+                    </th>
+                  ))}
                   <th>Stunden</th>
                   <th>Markierung</th>
                   <th>Notiz</th>
@@ -310,6 +394,14 @@ export default function ErfassungPage() {
                       <td>
                         {emp.name}, {emp.vorname}
                       </td>
+                      {vorherigeDaten.map((d) => {
+                        const alt = vorherigeEntries[d]?.[emp.id];
+                        return (
+                          <td key={d} className="text-neutral-400">
+                            {alt?.stunden ?? alt?.markierung ?? "—"}
+                          </td>
+                        );
+                      })}
                       <td>
                         <input
                           type="number"
@@ -319,7 +411,9 @@ export default function ErfassungPage() {
                           className="w-20"
                           defaultValue={entry?.stunden ?? ""}
                           key={`${emp.id}-${entry?.version ?? 0}`}
+                          data-stunden-feld="true"
                           onBlur={(e) => saveHours(emp.id, e.target.value)}
+                          onKeyDown={handleStundenKeyDown}
                           disabled={savingId === emp.id}
                         />
                       </td>
