@@ -635,7 +635,7 @@ export default function VorschuessePage() {
                   <tr>
                     <td colSpan={8} className="bg-neutral-50">
                       <p className="mb-2 text-xs text-neutral-500">
-                        Betrag ändern und Enter/Tab drücken - Grund wird
+                        Betrag ändern und auf „Speichern" klicken - Grund wird
                         abgefragt und protokolliert (wer, wann, Differenz).
                         Wirkt sich sofort auf den Kassenbestand aus.
                       </p>
