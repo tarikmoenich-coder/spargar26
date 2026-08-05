@@ -3,8 +3,14 @@
 import { useEffect, useState } from "react";
 import { getSupabaseClient } from "@/lib/supabase/client";
 import { useProfile } from "@/lib/useProfile";
-import { ABRECHNUNGSART_LABELS, type SeasonSummaryRow } from "@/lib/types";
+import {
+  ABRECHNUNGSART_LABELS,
+  type Arbeitsgruppe,
+  type SeasonSummaryRow,
+} from "@/lib/types";
 import { formatDatumDE } from "@/lib/format";
+
+const OHNE_GRUPPE_KEY = "__ohne__";
 
 const CURRENT_YEAR = new Date().getFullYear();
 
@@ -32,6 +38,8 @@ function weichtAb(r: SeasonSummaryRow) {
 export default function UebersichtPage() {
   const { profile } = useProfile();
   const [rows, setRows] = useState<SeasonSummaryRow[]>([]);
+  const [gruppen, setGruppen] = useState<Arbeitsgruppe[]>([]);
+  const [gruppeFilter, setGruppeFilter] = useState("");
   const [loading, setLoading] = useState(true);
   const [jahr, setJahr] = useState(CURRENT_YEAR);
   const [ausgewaehlt, setAusgewaehlt] = useState<Set<string>>(new Set());
@@ -64,6 +72,31 @@ export default function UebersichtPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [jahr]);
 
+  useEffect(() => {
+    async function ladeGruppen() {
+      const supabase = getSupabaseClient();
+      const { data } = await supabase
+        .from("arbeitsgruppen")
+        .select("*")
+        .order("reihenfolge");
+      setGruppen((data as Arbeitsgruppe[]) ?? []);
+    }
+    ladeGruppen();
+  }, []);
+
+  const gruppenByNr = new Map(gruppen.map((g) => [g.gruppe_nr, g]));
+
+  // Damit eine Mitarbeiterin z.B. alle zur Abrechnung vorgesehenen Personen
+  // vorab in eine Gruppe (z.B. "101 - Abrechnen") packen kann und diese hier
+  // gefiltert und komplett auf einmal markiert werden können.
+  const gefilterteRows = !gruppeFilter
+    ? rows
+    : rows.filter((r) =>
+        gruppeFilter === OHNE_GRUPPE_KEY
+          ? !r.gruppe_nr
+          : r.gruppe_nr === gruppeFilter
+      );
+
   // Druck: nach dem Öffnen des Druckdialogs (oder Abbruch) zurücksetzen.
   useEffect(() => {
     function handleAfterPrint() {
@@ -88,10 +121,21 @@ export default function UebersichtPage() {
     });
   }
 
+  // Wirkt bewusst nur auf die (ggf. nach Gruppe gefilterten) sichtbaren
+  // Zeilen, nicht auf alle - so lässt sich z.B. gezielt nur die Gruppe
+  // "101 - Abrechnen" komplett markieren.
   function alleTogglen() {
-    const alleIds = rows.map((r) => r.employee_id);
+    const alleIds = gefilterteRows.map((r) => r.employee_id);
     const alleAusgewaehlt = alleIds.every((id) => ausgewaehlt.has(id));
-    setAusgewaehlt(alleAusgewaehlt ? new Set() : new Set(alleIds));
+    setAusgewaehlt((prev) => {
+      const next = new Set(prev);
+      if (alleAusgewaehlt) {
+        alleIds.forEach((id) => next.delete(id));
+      } else {
+        alleIds.forEach((id) => next.add(id));
+      }
+      return next;
+    });
   }
 
   async function jetztAbrechnen() {
@@ -240,6 +284,21 @@ export default function UebersichtPage() {
             className="w-24"
           />
         </label>
+        <label className="text-sm">
+          Gruppe{" "}
+          <select
+            value={gruppeFilter}
+            onChange={(e) => setGruppeFilter(e.target.value)}
+          >
+            <option value="">Alle</option>
+            {gruppen.map((g) => (
+              <option key={g.gruppe_nr} value={g.gruppe_nr}>
+                {g.gruppe_nr} – {g.bezeichnung}
+              </option>
+            ))}
+            <option value={OHNE_GRUPPE_KEY}>Ohne Gruppe</option>
+          </select>
+        </label>
         {canEdit && (
           <label className="text-sm">
             Zahlungsart{" "}
@@ -299,14 +358,16 @@ export default function UebersichtPage() {
                       type="checkbox"
                       onChange={alleTogglen}
                       checked={
-                        rows.length > 0 &&
-                        rows.every((r) => ausgewaehlt.has(r.employee_id))
+                        gefilterteRows.length > 0 &&
+                        gefilterteRows.every((r) => ausgewaehlt.has(r.employee_id))
                       }
+                      title="Markiert/entmarkiert alle sichtbaren (gefilterten) Zeilen"
                     />
                   </th>
                 )}
                 <th>Pers.-Nr.</th>
                 <th>Name</th>
+                <th>Gruppe</th>
                 <th>Std.</th>
                 <th>Tage</th>
                 <th>Abrechnungsart</th>
@@ -323,7 +384,7 @@ export default function UebersichtPage() {
               </tr>
             </thead>
             <tbody>
-              {rows.map((r) => (
+              {gefilterteRows.map((r) => (
                 <tr key={r.employee_id} className={r.aktiv ? "" : "opacity-60"}>
                   {canEdit && (
                     <td>
@@ -337,6 +398,13 @@ export default function UebersichtPage() {
                   <td>{r.personal_nr}</td>
                   <td>
                     {r.name}, {r.vorname}
+                  </td>
+                  <td className="text-sm text-neutral-500">
+                    {r.gruppe_nr
+                      ? `${r.gruppe_nr} – ${
+                          gruppenByNr.get(r.gruppe_nr)?.bezeichnung ?? r.gruppe_nr
+                        }`
+                      : "—"}
                   </td>
                   <td>{fmt(anzeige(r, "gesamt_stunden"))}</td>
                   <td>{anzeige(r, "anwesenheitstage") ?? "—"}</td>

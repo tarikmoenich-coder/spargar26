@@ -24,8 +24,15 @@ function weichtAb(r: SeasonSummaryRow) {
   return Math.abs(eingefroren - live) > 0.005;
 }
 
+const MONATSNAMEN = [
+  "Januar", "Februar", "März", "April", "Mai", "Juni",
+  "Juli", "August", "September", "Oktober", "November", "Dezember",
+];
+
 export default function AuszahlungenPage() {
   const [belege, setBelege] = useState<AuszahlungsbelegSummary[]>([]);
+  const [jahrFilter, setJahrFilter] = useState<number | "alle">("alle");
+  const [monatFilter, setMonatFilter] = useState<number | "alle">("alle");
   const [loading, setLoading] = useState(true);
   const [offen, setOffen] = useState<Set<number>>(new Set());
   const [details, setDetails] = useState<Record<number, SeasonSummaryRow[]>>({});
@@ -97,6 +104,19 @@ export default function AuszahlungenPage() {
     });
   }
 
+  const jahreOptionen = Array.from(
+    new Set(belege.map((b) => b.saison_jahr))
+  ).sort((a, b) => b - a);
+
+  const belegeGefiltert = belege.filter((b) => {
+    if (jahrFilter !== "alle" && b.saison_jahr !== jahrFilter) return false;
+    if (monatFilter !== "alle") {
+      const monat = new Date(b.erstellt_am).getMonth() + 1;
+      if (monat !== monatFilter) return false;
+    }
+    return true;
+  });
+
   return (
     <div className="flex flex-col gap-4">
       <div className="print:hidden">
@@ -111,15 +131,63 @@ export default function AuszahlungenPage() {
         </p>
       </div>
 
+      {!loading && belege.length > 0 && (
+        <div className="flex flex-wrap items-center gap-3 print:hidden">
+          <label className="text-sm">
+            Saison-Jahr{" "}
+            <select
+              value={jahrFilter}
+              onChange={(e) =>
+                setJahrFilter(
+                  e.target.value === "alle" ? "alle" : Number(e.target.value)
+                )
+              }
+            >
+              <option value="alle">Alle</option>
+              {jahreOptionen.map((j) => (
+                <option key={j} value={j}>
+                  {j}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="text-sm">
+            Monat{" "}
+            <select
+              value={monatFilter}
+              onChange={(e) =>
+                setMonatFilter(
+                  e.target.value === "alle" ? "alle" : Number(e.target.value)
+                )
+              }
+            >
+              <option value="alle">Alle</option>
+              {MONATSNAMEN.map((name, i) => (
+                <option key={name} value={i + 1}>
+                  {name}
+                </option>
+              ))}
+            </select>
+          </label>
+          <span className="text-sm text-neutral-500">
+            {belegeGefiltert.length} von {belege.length} Beleg(en)
+          </span>
+        </div>
+      )}
+
       {loading ? (
         <p className="text-neutral-500 print:hidden">Lädt…</p>
       ) : belege.length === 0 ? (
         <p className="text-neutral-500 print:hidden">
           Noch keine Auszahlungen erfasst.
         </p>
+      ) : belegeGefiltert.length === 0 ? (
+        <p className="text-neutral-500 print:hidden">
+          Keine Auszahlungen für diesen Filter.
+        </p>
       ) : (
         <div className="flex flex-col gap-2 print:hidden">
-          {belege.map((beleg) => {
+          {belegeGefiltert.map((beleg) => {
             const istOffen = offen.has(beleg.id);
             const zeilen = details[beleg.id];
             return (

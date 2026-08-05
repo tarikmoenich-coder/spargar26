@@ -13,6 +13,7 @@ import {
 } from "@/lib/types";
 import {
   ANZAHL_PERSONALNUMMERN_KREISE,
+  kreisBereich,
   naechsteFreieNummer,
   parsePersonalNrNummer,
 } from "@/lib/personalnummern";
@@ -269,11 +270,14 @@ export default function MitarbeiterPage() {
                     {Array.from(
                       { length: ANZAHL_PERSONALNUMMERN_KREISE },
                       (_, i) => i + 1
-                    ).map((k) => (
-                      <option key={k} value={k}>
-                        Kreis {k}
-                      </option>
-                    ))}
+                    ).map((k) => {
+                      const [von, bis] = kreisBereich(k);
+                      return (
+                        <option key={k} value={k}>
+                          Kreis {k} ({von}-{bis})
+                        </option>
+                      );
+                    })}
                   </select>
                   <button
                     type="button"

@@ -89,6 +89,7 @@ export interface SeasonSummaryRow {
   personal_nr: string;
   name: string;
   vorname: string;
+  gruppe_nr: string | null;
   abrechnungsart: Abrechnungsart;
   aktiv: boolean;
   abgerechnet_am: string | null;

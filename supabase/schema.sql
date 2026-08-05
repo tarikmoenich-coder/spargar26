@@ -601,6 +601,7 @@ with base as (
     e.personal_nr,
     e.name,
     e.vorname,
+    e.gruppe_nr,
     e.abrechnungsart,
     e.aktiv,
     we.saison_jahr,

@@ -20,12 +20,15 @@ Enthalten:
 - Arbeitsgruppen-Verwaltung unter Einstellungen (nur admin): Bezeichnung und
   Anzeige-/Druckreihenfolge je Gruppe
 - Personalnummern-Übersicht: 10 Nummernkreise (1–999, 1000–1999, …),
-  Dubletten-Erkennung, nächste freie Nummer je Kreis
+  Dubletten-Erkennung, nächste freie Nummer je Kreis - Kreis-Auswahl beim
+  Neuanlegen zeigt den Nummernbereich direkt mit an (z.B. "Kreis 1 (1-999)")
 - Personal-Import aus Excel/CSV mit Vorschau, Spaltenerkennung und
   Fehlerprüfung (u.a. bereits vergebene Personalnummern)
 - Automatische Saison-Lohnübersicht (Stunden, Prämien, Verpflegungs-/
   Unterkunft-Abzüge, Vorschüsse, pauschale Lohnsteuer bei Abrechnungsart
-  "pauschal": 5,275% vom Bruttolohn)
+  "pauschal": 5,275% vom Bruttolohn), filterbar nach Arbeitsgruppe - z.B.
+  um alle zur Abrechnung vorgesehenen Personen vorab in eine Gruppe wie
+  "101 - Abrechnen" zu packen und dort gesammelt zu markieren
 - Einstellungen-Seite (nur admin): Verpflegungs-/Unterkunft-Satz pro Tag,
   versioniert je Saisonjahr, Default 10€/10€
 - "Jetzt Abrechnen" auf der Lohnübersicht (admin/lohnabrechnung, auch
@@ -41,7 +44,8 @@ Enthalten:
   Vorschüssen/Kassenbuch), aufklappbar mit Personalnummer, Name, Stunden,
   Anwesenheitstage, Brutto, Steuer, Netto, Verpflegung/Unterkunft,
   Vorschüsse, Buskosten und Auszahlungsbetrag je Person, mit
-  Abweichungs-Warnung und eigener Druckfunktion je Beleg
+  Abweichungs-Warnung und eigener Druckfunktion je Beleg, filterbar nach
+  Saison-Jahr und Monat (des Abrechnungsdatums)
 - Buskosten (vorfinanzierte Heimreise) als eigene, sichtbare
   Abzugsposition im Auszahlungsbetrag (getrennt von Kassen-Vorschüssen,
   "damit es zu keinen Missverständnissen kommen kann")
