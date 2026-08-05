@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { getSupabaseClient } from "@/lib/supabase/client";
 import { useProfile } from "@/lib/useProfile";
-import type { Advance, CashDeposit } from "@/lib/types";
+import type { Advance, CashDeposit, Kassenbewegung } from "@/lib/types";
 
 interface CashCheckRow {
   id: number;
@@ -29,6 +29,9 @@ export default function KassePage() {
   const { profile } = useProfile();
   const [deposits, setDeposits] = useState<CashDeposit[]>([]);
   const [barVorschuesse, setBarVorschuesse] = useState<Advance[]>([]);
+  const [bewegungen, setBewegungen] = useState<
+    (Kassenbewegung & { profiles?: { full_name: string } | null })[]
+  >([]);
   const [checks, setChecks] = useState<CashCheckRow[]>([]);
   const [toleranz, setToleranz] = useState(50);
   const [loading, setLoading] = useState(true);
@@ -45,33 +48,44 @@ export default function KassePage() {
   async function load() {
     setLoading(true);
     const supabase = getSupabaseClient();
-    const [{ data: dep }, { data: adv }, { data: chk }, { data: settings }] =
-      await Promise.all([
-        supabase
-          .from("cash_deposits")
-          .select("*")
-          .order("datum", { ascending: false })
-          .limit(100),
-        // Nur Bar-Vorschüsse mindern den physischen Kassenbestand -
-        // Überweisungen (AZ) verlassen die Kasse nicht.
-        supabase
-          .from("advances")
-          .select("*")
-          .eq("zahlungsart", "BAR")
-          .order("datum", { ascending: false })
-          .limit(200),
-        supabase
-          .from("cash_checks")
-          .select("*")
-          .order("check_zeit", { ascending: false })
-          .limit(20),
-        supabase
-          .from("kassenpruefung_einstellungen")
-          .select("toleranz_euro")
-          .single(),
-      ]);
+    const [
+      { data: dep },
+      { data: adv },
+      { data: bew },
+      { data: chk },
+      { data: settings },
+    ] = await Promise.all([
+      supabase
+        .from("cash_deposits")
+        .select("*")
+        .order("datum", { ascending: false })
+        .limit(100),
+      // Nur Bar-Vorschüsse mindern den physischen Kassenbestand -
+      // Überweisungen (AZ) verlassen die Kasse nicht.
+      supabase
+        .from("advances")
+        .select("*")
+        .eq("zahlungsart", "BAR")
+        .order("datum", { ascending: false })
+        .limit(200),
+      supabase
+        .from("kassenbewegungen")
+        .select("*, profiles(full_name)")
+        .order("zeitstempel", { ascending: false })
+        .limit(100),
+      supabase
+        .from("cash_checks")
+        .select("*")
+        .order("check_zeit", { ascending: false })
+        .limit(20),
+      supabase
+        .from("kassenpruefung_einstellungen")
+        .select("toleranz_euro")
+        .single(),
+    ]);
     setDeposits((dep as CashDeposit[]) ?? []);
     setBarVorschuesse((adv as Advance[]) ?? []);
+    setBewegungen(bew ?? []);
     setChecks((chk as CashCheckRow[]) ?? []);
     if (settings) setToleranz(Number(settings.toleranz_euro));
     setLoading(false);
@@ -218,6 +232,48 @@ export default function KassePage() {
               ))}
             </tbody>
           </table>
+
+          {bewegungen.length > 0 && (
+            <div>
+              <h2 className="mb-2 text-base font-semibold text-emerald-800">
+                Kassenbewegungen (Korrekturen)
+              </h2>
+              <p className="mb-2 text-sm text-neutral-500">
+                Nachträgliche Änderungen an bereits bestätigten
+                Vorschuss-Beträgen (auch nach Abschluss möglich) - fließen
+                direkt in den Kassenbestand oben ein.
+              </p>
+              <table>
+                <thead>
+                  <tr>
+                    <th>Zeitpunkt</th>
+                    <th>Art</th>
+                    <th>Beleg-Nr.</th>
+                    <th>Differenz €</th>
+                    <th>Art (Zahlung)</th>
+                    <th>Bearbeiter</th>
+                    <th>Hinweis</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {bewegungen.map((b) => (
+                    <tr key={b.id}>
+                      <td>{new Date(b.zeitstempel).toLocaleString("de-DE")}</td>
+                      <td>{b.art}</td>
+                      <td>{b.belegnummer}</td>
+                      <td className={Number(b.delta) < 0 ? "text-red-600" : ""}>
+                        {Number(b.delta) > 0 ? "+" : ""}
+                        {Number(b.delta).toFixed(2)}
+                      </td>
+                      <td>{b.zahlungsart}</td>
+                      <td>{b.profiles?.full_name ?? "—"}</td>
+                      <td>{b.hinweis}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
 
           <div>
             <h2 className="mb-2 text-base font-semibold text-emerald-800">

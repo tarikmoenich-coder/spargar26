@@ -28,6 +28,11 @@ const items: NavItem[] = [
     roles: ["admin", "hr", "zeiterfassung"],
   },
   {
+    href: "/suche",
+    label: "Suche",
+    roles: "all",
+  },
+  {
     href: "/uebersicht",
     label: "Lohnübersicht",
     roles: ["admin", "hr", "lohnabrechnung", "pruefer", "management"],

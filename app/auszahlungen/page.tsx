@@ -31,6 +31,7 @@ export default function AuszahlungenPage() {
   const [details, setDetails] = useState<Record<number, SeasonSummaryRow[]>>({});
   const [druckZeilen, setDruckZeilen] = useState<{
     belegnummer: string;
+    zahlungsart: string;
     zeilen: SeasonSummaryRow[];
   } | null>(null);
 
@@ -89,7 +90,11 @@ export default function AuszahlungenPage() {
   function drucken(beleg: AuszahlungsbelegSummary) {
     const zeilen = details[beleg.id];
     if (!zeilen) return;
-    setDruckZeilen({ belegnummer: beleg.belegnummer, zeilen });
+    setDruckZeilen({
+      belegnummer: beleg.belegnummer,
+      zahlungsart: beleg.zahlungsart,
+      zeilen,
+    });
   }
 
   return (
@@ -136,7 +141,8 @@ export default function AuszahlungenPage() {
                     )}
                   </span>
                   <span className="text-sm text-neutral-500">
-                    Saison {beleg.saison_jahr} · {formatDatumDE(beleg.erstellt_am)}
+                    Saison {beleg.saison_jahr} · {formatDatumDE(beleg.erstellt_am)} ·{" "}
+                    {beleg.zahlungsart === "BAR" ? "Bar" : "Überweisung"}
                   </span>
                   <span className="text-sm text-neutral-500">
                     {beleg.anzahl_personen} Person(en)
@@ -178,6 +184,8 @@ export default function AuszahlungenPage() {
                                 <th>Verpfl./Unterk. €</th>
                                 <th>Vorschüsse €</th>
                                 <th>Buskosten €</th>
+                                <th>Fahrerkaution €</th>
+                                <th>Zimmerkaution €</th>
                                 <th>Auszahlung €</th>
                               </tr>
                             </thead>
@@ -201,6 +209,8 @@ export default function AuszahlungenPage() {
                                   </td>
                                   <td>{fmt(anzeige(r, "vorschuss_summe"))}</td>
                                   <td>{fmt(anzeige(r, "bus_kosten"))}</td>
+                                  <td>{fmt(anzeige(r, "fahrer_kaution"))}</td>
+                                  <td>{fmt(anzeige(r, "zimmer_kaution"))}</td>
                                   <td className="font-medium">
                                     {fmt(anzeige(r, "auszahlungsbetrag"))}
                                     {weichtAb(r) && (
@@ -236,8 +246,9 @@ export default function AuszahlungenPage() {
             Auszahlungsliste – Beleg {druckZeilen.belegnummer}
           </h2>
           <p className="mt-1 text-base">
-            Datum: {formatDatumDE(new Date().toISOString())} · Anzahl
-            Personen: {druckZeilen.zeilen.length}
+            Datum: {formatDatumDE(new Date().toISOString())} ·{" "}
+            {druckZeilen.zahlungsart === "BAR" ? "Bar" : "Überweisung"} ·
+            Anzahl Personen: {druckZeilen.zeilen.length}
           </p>
           <table className="mt-4 print-form-table">
             <thead>
@@ -252,6 +263,8 @@ export default function AuszahlungenPage() {
                 <th>Verpfl./Unterk. €</th>
                 <th>Vorschüsse €</th>
                 <th>Buskosten €</th>
+                <th>Fahrerkaution €</th>
+                <th>Zimmerkaution €</th>
                 <th>Auszahlung €</th>
                 <th>Unterschrift</th>
               </tr>
@@ -276,6 +289,8 @@ export default function AuszahlungenPage() {
                   </td>
                   <td>{fmt(anzeige(r, "vorschuss_summe"))}</td>
                   <td>{fmt(anzeige(r, "bus_kosten"))}</td>
+                  <td>{fmt(anzeige(r, "fahrer_kaution"))}</td>
+                  <td>{fmt(anzeige(r, "zimmer_kaution"))}</td>
                   <td className="font-semibold">
                     {fmt(anzeige(r, "auszahlungsbetrag"))}
                   </td>
@@ -285,7 +300,7 @@ export default function AuszahlungenPage() {
             </tbody>
             <tfoot>
               <tr>
-                <td colSpan={10} className="text-right font-semibold">
+                <td colSpan={12} className="text-right font-semibold">
                   Summe Auszahlung
                 </td>
                 <td className="font-semibold">

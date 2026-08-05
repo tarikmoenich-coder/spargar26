@@ -189,6 +189,9 @@ create table auszahlungsbelege (
   id bigint generated always as identity primary key,
   belegnummer text not null unique,
   saison_jahr int not null,
+  -- 'BAR' oder 'AZ' (Überweisung) - relevant z.B. für Personen, die schon
+  -- abgereist sind und erst später per Überweisung ausgezahlt werden.
+  zahlungsart text not null default 'BAR',
   erstellt_am timestamptz not null default now(),
   erstellt_von uuid references profiles (id)
 );
@@ -207,6 +210,12 @@ create table season_bonuses (
   spargel_praemie numeric(10, 2) not null default 0,
   bus_hin numeric(10, 2) not null default 0,
   bus_rueck numeric(10, 2) not null default 0,
+  -- Kautionen, bei bevorstehender Abreise wie ein Vorschuss von der
+  -- Auszahlung abgezogen, aber separat ausgewiesen. Rückzahlung (nach
+  -- Fahrzeug-/Zimmerkontrolle) läuft weiterhin außerhalb der App in bar.
+  -- Fahrerkaution nur bei Fahrern (die auch fahrer_zulage bekommen).
+  fahrer_kaution numeric(10, 2) not null default 0,
+  zimmer_kaution numeric(10, 2) not null default 0,
   -- Bei abrechnungsart 'lohnsteuerklasse_1'/'sozialversicherungspflichtig'
   -- kann/darf die App die Lohnsteuer nicht selbst berechnen (das macht ein
   -- echtes Lohnprogramm) - entspricht Sheet "Summen", Spalte BA
@@ -239,9 +248,14 @@ create table season_bonuses (
 -- season_bonuses pflegen darf, aber employees.aktiv laut RLS eigentlich
 -- nur admin/hr ändern dürfen - diese Funktion ist der eine kontrollierte
 -- Ausnahmeweg dafür, ohne die employees-Policy generell zu öffnen.
+-- Neuer Parameter p_zahlungsart -> andere Signatur als zuvor, alte Version
+-- explizit entfernen statt als zusätzlichen Overload stehen zu lassen.
+drop function if exists saison_abrechnen_batch(uuid[], int);
+
 create or replace function saison_abrechnen_batch(
   p_employee_ids uuid[],
-  p_saison_jahr int
+  p_saison_jahr int,
+  p_zahlungsart text default 'BAR'
 )
 returns text language plpgsql security definer as $$
 declare
@@ -256,8 +270,8 @@ begin
 
   neue_belegnummer := naechste_belegnummer('AZ-' || to_char(now(), 'MM-YYYY'));
 
-  insert into auszahlungsbelege (belegnummer, saison_jahr, erstellt_von)
-  values (neue_belegnummer, p_saison_jahr, auth.uid())
+  insert into auszahlungsbelege (belegnummer, saison_jahr, zahlungsart, erstellt_von)
+  values (neue_belegnummer, p_saison_jahr, p_zahlungsart, auth.uid())
   returning id into neuer_beleg_id;
 
   foreach emp_id in array p_employee_ids loop
@@ -291,7 +305,7 @@ begin
 end;
 $$;
 
-grant execute on function saison_abrechnen_batch(uuid[], int) to authenticated;
+grant execute on function saison_abrechnen_batch(uuid[], int, text) to authenticated;
 
 -- ---------------------------------------------------------------------------
 -- 6. Verpflegungs-/Wohnen-Sätze (ADR-007: versioniert je Saisonjahr, über
@@ -360,6 +374,81 @@ create table advance_recipients (
   anteil numeric(10, 2), -- optional: individueller Anteil, sonst gleichmäßig
   primary key (advance_id, employee_id)
 );
+
+-- ---------------------------------------------------------------------------
+-- 8a. Kassenbewegungen: Log für nachträgliche Korrekturen bereits
+--     bestätigter Vorschuss-Beträge (auch nach Abschluss möglich, wie im
+--     bisherigen Excel-Workflow) - wer, wann, wie viel Differenz, warum.
+--     Beeinflusst den Kassenbestand, da advances.betrag live in die
+--     Kassensaldo-Berechnung einfließt.
+-- ---------------------------------------------------------------------------
+create table kassenbewegungen (
+  id bigint generated always as identity primary key,
+  zeitstempel timestamptz not null default now(),
+  art text not null, -- z.B. 'Vorschuss-Korrektur'
+  belegnummer text not null,
+  delta numeric(10, 2) not null, -- +/- Änderung des Betrags
+  zahlungsart text,
+  bearbeiter_id uuid references profiles (id),
+  hinweis text
+);
+
+-- Korrigiert den Anteil einer Person in einem bereits bestätigten
+-- Vorschuss-Beleg, passt advances.betrag entsprechend an und protokolliert
+-- die Änderung. security definer + eigene Rollenprüfung, analog zu den
+-- anderen kontrollierten Ausnahmewegen in diesem Schema.
+create or replace function vorschuss_korrigieren(
+  p_advance_id bigint,
+  p_employee_id uuid,
+  p_neuer_betrag numeric,
+  p_hinweis text
+)
+returns void language plpgsql security definer as $$
+declare
+  alter_betrag numeric;
+  v_belegnummer text;
+  v_zahlungsart text;
+  v_delta numeric;
+begin
+  if current_role_name() not in ('admin', 'kasse') then
+    raise exception 'Keine Berechtigung für Beleg-Korrektur';
+  end if;
+
+  if p_neuer_betrag <= 0 then
+    raise exception 'Betrag muss größer als 0 sein';
+  end if;
+
+  select ar.anteil into alter_betrag
+  from advance_recipients ar
+  where ar.advance_id = p_advance_id and ar.employee_id = p_employee_id;
+
+  if not found then
+    raise exception 'Empfänger nicht in diesem Beleg gefunden';
+  end if;
+
+  select belegnummer, zahlungsart into v_belegnummer, v_zahlungsart
+  from advances where id = p_advance_id;
+
+  v_delta := p_neuer_betrag - coalesce(alter_betrag, 0);
+
+  update advance_recipients
+  set anteil = p_neuer_betrag
+  where advance_id = p_advance_id and employee_id = p_employee_id;
+
+  update advances
+  set betrag = (
+    select coalesce(sum(anteil), 0)
+    from advance_recipients
+    where advance_id = p_advance_id
+  )
+  where id = p_advance_id;
+
+  insert into kassenbewegungen (art, belegnummer, delta, zahlungsart, bearbeiter_id, hinweis)
+  values ('Vorschuss-Korrektur', v_belegnummer, v_delta, v_zahlungsart, auth.uid(), p_hinweis);
+end;
+$$;
+
+grant execute on function vorschuss_korrigieren(bigint, uuid, numeric, text) to authenticated;
 
 -- ---------------------------------------------------------------------------
 -- 9. Kassenbuch: Einzahlungen (Sheet "Einzahlungen")
@@ -534,6 +623,8 @@ with base as (
     b.snapshot,
     b.auszahlungsbeleg_id,
     coalesce(b.bus_hin, 0) + coalesce(b.bus_rueck, 0) as bus_kosten,
+    coalesce(b.fahrer_kaution, 0) as fahrer_kaution,
+    coalesce(b.zimmer_kaution, 0) as zimmer_kaution,
     coalesce(v.verpflegung, 0) * we.anwesenheitstage as abzug_verpflegung,
     coalesce(v.wohnen, 0) * we.anwesenheitstage as abzug_wohnen,
     coalesce((
@@ -585,6 +676,7 @@ select
   -- NULL, solange bei nicht-pauschalen Abrechnungsarten noch kein
   -- netto_extern eingetragen wurde - bewusst kein Platzhalterwert.
   netto - abzug_verpflegung - abzug_wohnen - vorschuss_summe - bus_kosten
+    - fahrer_kaution - zimmer_kaution
     as auszahlungsbetrag
 from steuer;
 
@@ -615,6 +707,7 @@ select
   ab.id,
   ab.belegnummer,
   ab.saison_jahr,
+  ab.zahlungsart,
   ab.erstellt_am,
   ab.erstellt_von,
   count(sb.employee_id) as anzahl_personen,
@@ -626,7 +719,7 @@ from auszahlungsbelege ab
 join season_bonuses sb on sb.auszahlungsbeleg_id = ab.id
 left join season_summary ss
   on ss.employee_id = sb.employee_id and ss.saison_jahr = sb.saison_jahr
-group by ab.id, ab.belegnummer, ab.saison_jahr, ab.erstellt_am, ab.erstellt_von;
+group by ab.id, ab.belegnummer, ab.saison_jahr, ab.zahlungsart, ab.erstellt_am, ab.erstellt_von;
 
 grant select on auszahlungsbeleg_summary to authenticated;
 
@@ -675,6 +768,25 @@ where w.erster_arbeitstag is not null;
 grant select on employee_sv_pruefung to authenticated;
 
 -- ---------------------------------------------------------------------------
+-- 12f. View: Vorschuss-Historie je Mitarbeiter für die "Suche"-Seite -
+--      bewusst schmal (nur Datum/Betrag/Zahlungsart, keine Begründung/
+--      Bearbeiter/Belegnummer), damit auch Rollen wie zeiterfassung, die
+--      die volle advances-Tabelle nicht lesen dürfen, hier Auskunft geben
+--      können ("darf nicht nur der Chef wissen").
+-- ---------------------------------------------------------------------------
+create or replace view employee_vorschuss_historie as
+select
+  ar.employee_id,
+  a.datum,
+  ar.anteil as betrag,
+  a.zahlungsart,
+  a.storniert
+from advance_recipients ar
+join advances a on a.id = ar.advance_id;
+
+grant select on employee_vorschuss_historie to authenticated;
+
+-- ---------------------------------------------------------------------------
 -- 13. Row Level Security (ADR-006: Berechtigungen serverseitig, nicht nur UI)
 -- ---------------------------------------------------------------------------
 alter table profiles enable row level security;
@@ -688,6 +800,7 @@ alter table auszahlungsbelege enable row level security;
 alter table verpflegungssaetze enable row level security;
 alter table advances enable row level security;
 alter table advance_recipients enable row level security;
+alter table kassenbewegungen enable row level security;
 alter table cash_deposits enable row level security;
 alter table cash_checks enable row level security;
 alter table kassenpruefung_einstellungen enable row level security;
@@ -759,6 +872,10 @@ create policy "advances_update" on advances for update
 create policy "advance_recipients_rw" on advance_recipients for all
   using (current_role_name() in ('admin', 'kasse', 'lohnabrechnung', 'pruefer'))
   with check (current_role_name() in ('admin', 'kasse'));
+-- kassenbewegungen: nur lesend per Policy - Schreiben ausschließlich über
+-- die security-definer Funktion vorschuss_korrigieren.
+create policy "kassenbewegungen_select" on kassenbewegungen for select
+  using (current_role_name() in ('admin', 'kasse', 'lohnabrechnung', 'pruefer', 'management'));
 create policy "cash_deposits_select" on cash_deposits for select
   using (current_role_name() in ('admin', 'kasse', 'lohnabrechnung', 'pruefer', 'management'));
 create policy "cash_deposits_write" on cash_deposits for insert

@@ -108,6 +108,11 @@ export interface SeasonSummaryRow {
   // Vorfinanzierte Heimreise (bus_hin + bus_rueck aus season_bonuses) -
   // wird wie ein Vorschuss abgezogen, aber separat ausgewiesen.
   bus_kosten: number;
+  // Kautionen bei bevorstehender Abreise, ebenfalls wie ein Vorschuss
+  // abgezogen, aber separat ausgewiesen. Rückzahlung nach Kontrolle läuft
+  // außerhalb der App (bar).
+  fahrer_kaution: number;
+  zimmer_kaution: number;
   auszahlungsbeleg_id: number | null;
   lohnsteuer_pauschal: number;
   // Nur bei abrechnungsart 'lohnsteuerklasse_1'/'sozialversicherungspflichtig'
@@ -125,11 +130,37 @@ export interface AuszahlungsbelegSummary {
   id: number;
   belegnummer: string;
   saison_jahr: number;
+  zahlungsart: string;
   erstellt_am: string;
   erstellt_von: string | null;
   anzahl_personen: number;
   summe_auszahlungsbetrag: number | null;
   weicht_ab: boolean;
+}
+
+// Log-Eintrag für eine nachträgliche Korrektur eines bestätigten
+// Vorschuss-Betrags (wer/wann/Differenz/Grund) - beeinflusst den
+// Kassenbestand, da advances.betrag live in die Saldo-Berechnung einfließt.
+export interface Kassenbewegung {
+  id: number;
+  zeitstempel: string;
+  art: string;
+  belegnummer: string;
+  delta: number;
+  zahlungsart: string | null;
+  bearbeiter_id: string | null;
+  hinweis: string | null;
+}
+
+// Ein Vorschuss-Eintrag für die "Suche"-Seite (schmale, breit zugängliche
+// Sicht - keine Begründung/Bearbeiter/Belegnummer wie in der vollen
+// advances-Tabelle).
+export interface VorschussHistorieEintrag {
+  employee_id: string;
+  datum: string;
+  betrag: number;
+  zahlungsart: string;
+  storniert: boolean;
 }
 
 export interface VerpflegungsSatz {

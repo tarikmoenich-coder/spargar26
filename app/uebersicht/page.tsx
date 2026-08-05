@@ -41,6 +41,7 @@ export default function UebersichtPage() {
     SeasonSummaryRow[] | null
   >(null);
   const [letzterBeleg, setLetzterBeleg] = useState<string | null>(null);
+  const [abrechnenZahlungsart, setAbrechnenZahlungsart] = useState("BAR");
 
   const canEdit =
     profile?.role === "admin" || profile?.role === "lohnabrechnung";
@@ -113,7 +114,11 @@ export default function UebersichtPage() {
     // Eine Belegnummer für die ganze Aktion, egal wie viele Personen.
     const { data: belegnummer, error: fehler } = await supabase.rpc(
       "saison_abrechnen_batch",
-      { p_employee_ids: ids, p_saison_jahr: jahr }
+      {
+        p_employee_ids: ids,
+        p_saison_jahr: jahr,
+        p_zahlungsart: abrechnenZahlungsart,
+      }
     );
     if (fehler) setAbrechnenFehler(fehler.message);
 
@@ -174,6 +179,25 @@ export default function UebersichtPage() {
     load();
   }
 
+  // Kautionen (Fahrer/Zimmer) - wie Buskosten pro Person/Saison erfasst.
+  async function kautionSpeichern(
+    row: SeasonSummaryRow,
+    feld: "fahrer_kaution" | "zimmer_kaution",
+    wert: string
+  ) {
+    const supabase = getSupabaseClient();
+    const betrag = wert.trim() === "" ? 0 : Number(wert);
+    await supabase.from("season_bonuses").upsert(
+      {
+        employee_id: row.employee_id,
+        saison_jahr: row.saison_jahr,
+        [feld]: betrag,
+      },
+      { onConflict: "employee_id,saison_jahr" }
+    );
+    load();
+  }
+
   const auswahlAnzahlAbgerechnet = rows.filter(
     (r) => ausgewaehlt.has(r.employee_id) && r.abgerechnet_am
   ).length;
@@ -216,6 +240,18 @@ export default function UebersichtPage() {
             className="w-24"
           />
         </label>
+        {canEdit && (
+          <label className="text-sm">
+            Zahlungsart{" "}
+            <select
+              value={abrechnenZahlungsart}
+              onChange={(e) => setAbrechnenZahlungsart(e.target.value)}
+            >
+              <option value="BAR">BAR</option>
+              <option value="AZ">Überweisung (AZ)</option>
+            </select>
+          </label>
+        )}
         {canEdit && (
           <button
             type="button"
@@ -280,6 +316,8 @@ export default function UebersichtPage() {
                 <th>Verpfl./Unterkunft €</th>
                 <th>Vorschüsse €</th>
                 <th>Buskosten €</th>
+                <th>Fahrerkaution €</th>
+                <th>Zimmerkaution €</th>
                 <th>Auszahlungsbetrag €</th>
                 <th>Status</th>
               </tr>
@@ -344,6 +382,40 @@ export default function UebersichtPage() {
                       />
                     )}
                   </td>
+                  <td>
+                    {!canEdit || r.abgerechnet_am ? (
+                      fmt(anzeige(r, "fahrer_kaution"))
+                    ) : (
+                      <input
+                        type="number"
+                        step="0.01"
+                        className="w-20"
+                        defaultValue={r.fahrer_kaution || ""}
+                        placeholder="0,00"
+                        key={`${r.employee_id}-fk-${r.fahrer_kaution}`}
+                        onBlur={(e) =>
+                          kautionSpeichern(r, "fahrer_kaution", e.target.value)
+                        }
+                      />
+                    )}
+                  </td>
+                  <td>
+                    {!canEdit || r.abgerechnet_am ? (
+                      fmt(anzeige(r, "zimmer_kaution"))
+                    ) : (
+                      <input
+                        type="number"
+                        step="0.01"
+                        className="w-20"
+                        defaultValue={r.zimmer_kaution || ""}
+                        placeholder="0,00"
+                        key={`${r.employee_id}-zk-${r.zimmer_kaution}`}
+                        onBlur={(e) =>
+                          kautionSpeichern(r, "zimmer_kaution", e.target.value)
+                        }
+                      />
+                    )}
+                  </td>
                   <td className="font-medium">
                     {fmt(anzeige(r, "auszahlungsbetrag"))}
                     {weichtAb(r) && (
@@ -398,6 +470,8 @@ export default function UebersichtPage() {
                 <th>Verpfl./Unterk. €</th>
                 <th>Vorschüsse €</th>
                 <th>Buskosten €</th>
+                <th>Fahrerkaution €</th>
+                <th>Zimmerkaution €</th>
                 <th>Auszahlung €</th>
                 <th>Unterschrift</th>
               </tr>
@@ -422,6 +496,8 @@ export default function UebersichtPage() {
                   </td>
                   <td>{fmt(anzeige(r, "vorschuss_summe"))}</td>
                   <td>{fmt(anzeige(r, "bus_kosten"))}</td>
+                  <td>{fmt(anzeige(r, "fahrer_kaution"))}</td>
+                  <td>{fmt(anzeige(r, "zimmer_kaution"))}</td>
                   <td className="font-semibold">
                     {fmt(anzeige(r, "auszahlungsbetrag"))}
                   </td>
@@ -431,7 +507,7 @@ export default function UebersichtPage() {
             </tbody>
             <tfoot>
               <tr>
-                <td colSpan={10} className="text-right font-semibold">
+                <td colSpan={12} className="text-right font-semibold">
                   Summe Auszahlung
                 </td>
                 <td className="font-semibold">

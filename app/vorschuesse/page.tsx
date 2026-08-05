@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { Fragment, useEffect, useState } from "react";
 import { getSupabaseClient } from "@/lib/supabase/client";
 import { useProfile } from "@/lib/useProfile";
 import type {
@@ -52,6 +52,18 @@ export default function VorschuessePage() {
 
   const [letzterBeleg, setLetzterBeleg] = useState<Beleg | null>(null);
   const [druckBeleg, setDruckBeleg] = useState<Beleg | null>(null);
+
+  // Nachträgliche Korrektur eines bereits bestätigten Vorschuss-Betrags.
+  const [bearbeitenAdvanceId, setBearbeitenAdvanceId] = useState<
+    number | null
+  >(null);
+  const [bearbeitenEmpfaenger, setBearbeitenEmpfaenger] = useState<
+    AdvanceRecipientDetail[]
+  >([]);
+  const [korrekturBetraege, setKorrekturBetraege] = useState<
+    Record<string, string>
+  >({});
+  const [korrekturLaeuft, setKorrekturLaeuft] = useState<string | null>(null);
 
   const canWrite = profile?.role === "admin" || profile?.role === "kasse";
   // Deckt sich mit der RLS-Policy "advance_recipients_rw" - management sieht
@@ -303,6 +315,63 @@ export default function VorschuessePage() {
     });
   }
 
+  async function toggleBearbeiten(adv: Advance) {
+    if (bearbeitenAdvanceId === adv.id) {
+      setBearbeitenAdvanceId(null);
+      return;
+    }
+    const supabase = getSupabaseClient();
+    const { data, error } = await supabase
+      .from("advance_recipients")
+      .select("employee_id, anteil, employees(personal_nr, name, vorname)")
+      .eq("advance_id", adv.id);
+    if (error || !data) return;
+    const empfaenger: AdvanceRecipientDetail[] = data.map((row: any) => ({
+      employee_id: row.employee_id,
+      personal_nr: row.employees?.personal_nr ?? "",
+      name: row.employees?.name ?? "",
+      vorname: row.employees?.vorname ?? "",
+      anteil: Number(row.anteil ?? 0),
+    }));
+    setBearbeitenEmpfaenger(empfaenger);
+    setKorrekturBetraege(
+      Object.fromEntries(empfaenger.map((p) => [p.employee_id, String(p.anteil)]))
+    );
+    setBearbeitenAdvanceId(adv.id);
+  }
+
+  async function betragKorrigieren(
+    advanceId: number,
+    p: AdvanceRecipientDetail
+  ) {
+    const neuerWert = korrekturBetraege[p.employee_id];
+    const neuerBetrag = Number(neuerWert);
+    if (!neuerWert || !(neuerBetrag > 0)) return;
+    if (neuerBetrag === p.anteil) return; // keine Änderung
+    const hinweis = window.prompt(
+      `Grund für die Korrektur von ${p.anteil.toFixed(2)} € auf ${neuerBetrag.toFixed(
+        2
+      )} € bei ${p.name}, ${p.vorname} (Pflichtfeld, wird protokolliert):`
+    );
+    if (!hinweis) return;
+
+    setKorrekturLaeuft(p.employee_id);
+    const supabase = getSupabaseClient();
+    const { error } = await supabase.rpc("vorschuss_korrigieren", {
+      p_advance_id: advanceId,
+      p_employee_id: p.employee_id,
+      p_neuer_betrag: neuerBetrag,
+      p_hinweis: hinweis,
+    });
+    setKorrekturLaeuft(null);
+    if (error) {
+      window.alert(`Korrektur fehlgeschlagen: ${error.message}`);
+      return;
+    }
+    setBearbeitenAdvanceId(null);
+    load();
+  }
+
   const anzeigeBeleg = druckBeleg ?? letzterBeleg;
 
   return (
@@ -526,33 +595,99 @@ export default function VorschuessePage() {
           </thead>
           <tbody>
             {advances.map((a) => (
-              <tr key={a.id} className={a.storniert ? "opacity-50" : ""}>
-                <td>{a.belegnummer}</td>
-                <td>{new Date(a.datum).toLocaleString("de-DE")}</td>
-                <td>{Number(a.betrag).toFixed(2)}</td>
-                <td>{a.empfaenger_text}</td>
-                <td>{a.begruendung}</td>
-                <td>{a.zahlungsart}</td>
-                <td>{a.storniert ? `storniert: ${a.storno_grund}` : "aktiv"}</td>
-                <td className="flex gap-2">
-                  {canSeeDetails && (
-                    <button
-                      className="btn-secondary text-xs"
-                      onClick={() => belegDrucken(a)}
-                    >
-                      Drucken
-                    </button>
-                  )}
-                  {canWrite && !a.storniert && (
-                    <button
-                      className="btn-danger text-xs"
-                      onClick={() => storno(a)}
-                    >
-                      Stornieren
-                    </button>
-                  )}
-                </td>
-              </tr>
+              <Fragment key={a.id}>
+                <tr className={a.storniert ? "opacity-50" : ""}>
+                  <td>{a.belegnummer}</td>
+                  <td>{new Date(a.datum).toLocaleString("de-DE")}</td>
+                  <td>{Number(a.betrag).toFixed(2)}</td>
+                  <td>{a.empfaenger_text}</td>
+                  <td>{a.begruendung}</td>
+                  <td>{a.zahlungsart}</td>
+                  <td>{a.storniert ? `storniert: ${a.storno_grund}` : "aktiv"}</td>
+                  <td className="flex gap-2">
+                    {canSeeDetails && (
+                      <button
+                        className="btn-secondary text-xs"
+                        onClick={() => belegDrucken(a)}
+                      >
+                        Drucken
+                      </button>
+                    )}
+                    {canWrite && !a.storniert && (
+                      <button
+                        className="btn-secondary text-xs"
+                        onClick={() => toggleBearbeiten(a)}
+                      >
+                        {bearbeitenAdvanceId === a.id ? "Schließen" : "Bearbeiten"}
+                      </button>
+                    )}
+                    {canWrite && !a.storniert && (
+                      <button
+                        className="btn-danger text-xs"
+                        onClick={() => storno(a)}
+                      >
+                        Stornieren
+                      </button>
+                    )}
+                  </td>
+                </tr>
+                {bearbeitenAdvanceId === a.id && (
+                  <tr>
+                    <td colSpan={8} className="bg-neutral-50">
+                      <p className="mb-2 text-xs text-neutral-500">
+                        Betrag ändern und Enter/Tab drücken - Grund wird
+                        abgefragt und protokolliert (wer, wann, Differenz).
+                        Wirkt sich sofort auf den Kassenbestand aus.
+                      </p>
+                      <table>
+                        <thead>
+                          <tr>
+                            <th>Pers.-Nr.</th>
+                            <th>Name</th>
+                            <th>Betrag €</th>
+                            <th></th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {bearbeitenEmpfaenger.map((p) => (
+                            <tr key={p.employee_id}>
+                              <td>{p.personal_nr}</td>
+                              <td>
+                                {p.name}, {p.vorname}
+                              </td>
+                              <td>
+                                <input
+                                  type="number"
+                                  step="0.01"
+                                  className="w-24"
+                                  value={korrekturBetraege[p.employee_id] ?? ""}
+                                  onChange={(e) =>
+                                    setKorrekturBetraege((prev) => ({
+                                      ...prev,
+                                      [p.employee_id]: e.target.value,
+                                    }))
+                                  }
+                                  disabled={korrekturLaeuft === p.employee_id}
+                                />
+                              </td>
+                              <td>
+                                <button
+                                  type="button"
+                                  className="btn-secondary text-xs"
+                                  disabled={korrekturLaeuft === p.employee_id}
+                                  onClick={() => betragKorrigieren(a.id, p)}
+                                >
+                                  Speichern
+                                </button>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </td>
+                  </tr>
+                )}
+              </Fragment>
             ))}
           </tbody>
         </table>

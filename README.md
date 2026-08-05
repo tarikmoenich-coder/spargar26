@@ -50,8 +50,28 @@ Enthalten:
   Herkunft auswählen, Betrag pro Person individuell anpassbar, atomare
   Belegnummer, Storno statt Löschen, druckbare Auszahlungsliste mit
   Unterschriftenfeldern
-- Kassenbuch (Einzahlungen) mit Saldo und einfacher Kassenprüfung -
-  Bar-Vorschüsse mindern automatisch den Kassenbestand, Überweisungen nicht
+- Nachträgliche Korrektur eines bereits bestätigten Vorschuss-Betrags
+  (admin/kasse, auch nach Storno-Sperre): Grund ist Pflichtfeld, jede
+  Korrektur wird mit Anwender, Zeitstempel und Differenz in den
+  "Kassenbewegungen" protokolliert und wirkt sich direkt auf den
+  Kassenbestand aus
+- Kautionen (Fahrerkaution, Zimmerkaution) als eigene, sichtbare
+  Abzugspositionen im Auszahlungsbetrag (getrennt von Vorschüssen/
+  Buskosten, "damit es zu keinen Missverständnissen kommen kann").
+  Rückzahlung nach Fahrzeug-/Zimmerkontrolle läuft weiterhin außerhalb der
+  App in bar - die App bildet aktuell nur den Abzug ab, keinen offen/
+  zurückgezahlt-Status
+- Zahlungsart (Bar/Überweisung) bei "Jetzt Abrechnen" wählbar und je
+  Auszahlungsbeleg gespeichert - für Personen, die schon abgereist sind
+  und erst später per Überweisung ausgezahlt werden (siehe Arbeitsgruppe
+  "Ausstehend/Abgereist" als Merkposten dafür)
+- Kassenbuch (Einzahlungen) mit Saldo, einfacher Kassenprüfung und Log der
+  nachträglichen Vorschuss-Korrekturen ("Kassenbewegungen") - Bar-Vorschüsse
+  mindern automatisch den Kassenbestand, Überweisungen nicht
+- "Suche"-Seite (alle Rollen): nach Name oder Personalnummer suchen und
+  Arbeitsstunden sowie Vorschuss-Historie einer Person einsehen - damit
+  nicht nur die Verwaltung, sondern auch untere Ebenen selbst Auskunft
+  geben können
 - 90-Tage-/15-Wochen-Kontrolle (SV-Freiheit landwirtschaftliche
   Saisonarbeit, OI-004): Spalten auf der Personal-Seite (Rest bis 90 Tage,
   theoretisches Austrittsdatum, Status) sowie eine "Management"-Seite mit
