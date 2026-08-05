@@ -215,7 +215,11 @@ nicht ohne dich bzw. eine Steuerberatung klären:
   bereits 1:1 nutzbar, die eigentlichen Daten (inkl. hochgeladener
   Dokumente) müssten aber separat per `pg_dump`/Storage-Kopie umgezogen
   werden, und der laufende Betrieb (Wartung, Updates, Backups, TLS)
-  würde dann in Eigenregie liegen statt bei Supabase/Vercel.
+  würde dann in Eigenregie liegen statt bei Supabase/Vercel. Aktueller
+  Stand (Nutzer-Check im Dashboard): Supabase Free-Plan mit 1 GB
+  File-Storage (getrennt vom Datenbank-Kontingent) - Verbrauch unter
+  Project Settings → Usage im Blick behalten, bei Bedarf Upgrade auf
+  Pro-Plan statt Umzug.
 
 ## Architektur
 
