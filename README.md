@@ -27,7 +27,12 @@ Enthalten:
 - "Jetzt Abrechnen" auf der Lohnübersicht (admin/lohnabrechnung, auch
   mehrere Personen gleichzeitig): markiert die Saison für die Person als
   abgerechnet und setzt sie auf inaktiv - reversibel über "Reaktivieren"
-  auf der Personal-Seite für die nächste Saison
+  auf der Personal-Seite für die nächste Saison. Friert dabei den
+  berechneten Stand als Schnappschuss ein (spätere Satz-/Vorschuss-
+  Änderungen verändern eine bereits ausgezahlte Abrechnung nicht mehr
+  rückwirkend; Lohnübersicht warnt mit „⚠", falls die Live-Berechnung
+  seither abweicht) und erzeugt eine druckbare Auszahlungsliste (mehrere
+  Personen, eine Zeile pro Person, mit Unterschriftenspalte)
 - Bei Abrechnungsart "Lohnsteuerklasse 1"/"sozialversicherungspflichtig":
   Eingabefeld für den vom externen Lohnprogramm gelieferten Netto-Betrag
   (App berechnet hier bewusst keine eigene Lohnsteuer)
@@ -119,9 +124,15 @@ nicht ohne dich bzw. eine Steuerberatung klären:
   gegen echte, abgeschlossene Abrechnungen verifiziert werden). Stand:
   Netto/Auszahlungsbetrag-Trennung + manuelle Eingabe des externen
   Lohnprogramm-Nettos (bei Lohnsteuerklasse 1/sozialversicherungspflichtig)
-  sind umgesetzt, offen ist noch die Verifikation mit echten Testfällen
-  sowie die Rolle der `season_bonuses`-Felder `bus_hin`/`bus_rueck`
-  (aktuell nicht in der Brutto-Berechnung berücksichtigt).
+  sind umgesetzt. Die Formel (Brutto → 5,275% Steuer bei "pauschal" →
+  Netto → − Verpflegung/Unterkunft − Vorschüsse → Auszahlungsbetrag)
+  wurde gegen das Blatt "Auszahlungsbeleg" der Original-Excel-Datei
+  geprüft (Testperson Pers.-Nr. 3036) und stimmt exakt überein. Offen:
+  Verifikation mit weiteren echten Testfällen sowie die Rolle der
+  `season_bonuses`-Felder `bus_hin`/`bus_rueck` (aktuell nicht in der
+  Brutto-Berechnung berücksichtigt, im Excel-Blatt "Ausz.Liste" aber
+  offenbar relevant - dieses Blatt selbst ist allerdings sehr
+  unübersichtlich/teilweise defekt und nicht direkt auswertbar).
 - Migration bestehender Personal-/Saisondaten aus der `.xlsm`-Datei in
   dieses Schema (aktuell nicht automatisiert).
 - Druckvorlagen für Stundenzettel (A5/A6) als PDF-Erzeugung.

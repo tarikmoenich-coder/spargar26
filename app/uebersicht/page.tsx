@@ -8,8 +8,25 @@ import { formatDatumDE } from "@/lib/format";
 
 const CURRENT_YEAR = new Date().getFullYear();
 
-function fmt(n: number | null | undefined) {
-  return n === null || n === undefined ? "—" : Number(n).toFixed(2);
+function fmt(n: number | string | null | undefined) {
+  return n === null || n === undefined || n === "" ? "—" : Number(n).toFixed(2);
+}
+
+// Liest ein Feld aus dem eingefrorenen Schnappschuss, falls die Person
+// abgerechnet ist - sonst den live berechneten Wert. So bleibt eine bereits
+// ausgezahlte Abrechnung stabil, auch wenn sich Sätze/Vorschüsse danach
+// ändern.
+function anzeige(r: SeasonSummaryRow, feld: keyof SeasonSummaryRow) {
+  if (r.snapshot && feld in r.snapshot) return r.snapshot[feld];
+  return r[feld] as number | string | null;
+}
+
+function weichtAb(r: SeasonSummaryRow) {
+  if (!r.snapshot) return false;
+  const eingefroren = Number(r.snapshot.auszahlungsbetrag);
+  const live = r.auszahlungsbetrag === null ? NaN : Number(r.auszahlungsbetrag);
+  if (Number.isNaN(eingefroren) || Number.isNaN(live)) return false;
+  return Math.abs(eingefroren - live) > 0.005;
 }
 
 export default function UebersichtPage() {
@@ -20,6 +37,9 @@ export default function UebersichtPage() {
   const [ausgewaehlt, setAusgewaehlt] = useState<Set<string>>(new Set());
   const [abrechnenLaeuft, setAbrechnenLaeuft] = useState(false);
   const [abrechnenFehler, setAbrechnenFehler] = useState<string | null>(null);
+  const [auszahlungslisteZeilen, setAuszahlungslisteZeilen] = useState<
+    SeasonSummaryRow[] | null
+  >(null);
 
   const canEdit =
     profile?.role === "admin" || profile?.role === "lohnabrechnung";
@@ -42,6 +62,21 @@ export default function UebersichtPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [jahr]);
 
+  // Druck: nach dem Öffnen des Druckdialogs (oder Abbruch) zurücksetzen.
+  useEffect(() => {
+    function handleAfterPrint() {
+      setAuszahlungslisteZeilen(null);
+    }
+    window.addEventListener("afterprint", handleAfterPrint);
+    return () => window.removeEventListener("afterprint", handleAfterPrint);
+  }, []);
+
+  useEffect(() => {
+    if (auszahlungslisteZeilen === null) return;
+    const id = setTimeout(() => window.print(), 50);
+    return () => clearTimeout(id);
+  }, [auszahlungslisteZeilen]);
+
   function toggleAuswahl(employeeId: string) {
     setAusgewaehlt((prev) => {
       const next = new Set(prev);
@@ -52,9 +87,9 @@ export default function UebersichtPage() {
   }
 
   function alleTogglen() {
-    const alleAktivenIds = rows.filter((r) => r.aktiv).map((r) => r.employee_id);
-    const alleAusgewaehlt = alleAktivenIds.every((id) => ausgewaehlt.has(id));
-    setAusgewaehlt(alleAusgewaehlt ? new Set() : new Set(alleAktivenIds));
+    const alleIds = rows.map((r) => r.employee_id);
+    const alleAusgewaehlt = alleIds.every((id) => ausgewaehlt.has(id));
+    setAusgewaehlt(alleAusgewaehlt ? new Set() : new Set(alleIds));
   }
 
   async function jetztAbrechnen() {
@@ -73,8 +108,9 @@ export default function UebersichtPage() {
     setAbrechnenLaeuft(true);
     setAbrechnenFehler(null);
     const supabase = getSupabaseClient();
+    const ids = Array.from(ausgewaehlt);
     const ergebnisse = await Promise.all(
-      Array.from(ausgewaehlt).map((employee_id) =>
+      ids.map((employee_id) =>
         supabase.rpc("saison_abrechnen", {
           p_employee_id: employee_id,
           p_saison_jahr: jahr,
@@ -83,9 +119,29 @@ export default function UebersichtPage() {
     );
     const fehler = ergebnisse.find((r) => r.error)?.error;
     if (fehler) setAbrechnenFehler(fehler.message);
+
+    // Frisch geladene Daten (mit Schnappschuss) direkt für den Ausdruck
+    // holen, statt auf den nächsten Render zu warten.
+    const { data: frisch } = await supabase
+      .from("season_summary")
+      .select("*")
+      .in("employee_id", ids)
+      .eq("saison_jahr", jahr);
+    if (frisch && frisch.length > 0) {
+      setAuszahlungslisteZeilen(frisch as SeasonSummaryRow[]);
+    }
+
     setAusgewaehlt(new Set());
     setAbrechnenLaeuft(false);
     load();
+  }
+
+  function auszahlungslisteFuerAuswahlDrucken() {
+    const zeilen = rows.filter(
+      (r) => ausgewaehlt.has(r.employee_id) && r.abgerechnet_am
+    );
+    if (zeilen.length === 0) return;
+    setAuszahlungslisteZeilen(zeilen);
   }
 
   async function nettoExternSpeichern(row: SeasonSummaryRow, wert: string) {
@@ -102,9 +158,13 @@ export default function UebersichtPage() {
     load();
   }
 
+  const auswahlAnzahlAbgerechnet = rows.filter(
+    (r) => ausgewaehlt.has(r.employee_id) && r.abgerechnet_am
+  ).length;
+
   return (
     <div className="flex flex-col gap-4">
-      <div>
+      <div className="print:hidden">
         <h1 className="text-lg font-semibold text-emerald-800">
           Saison-Lohnübersicht
         </h1>
@@ -122,9 +182,15 @@ export default function UebersichtPage() {
           „Netto-Summe (HSC)"). Ohne diesen Wert bleibt der
           Auszahlungsbetrag leer.
         </p>
+        <p className="mt-1 text-sm text-neutral-500">
+          Abgerechnete Personen zeigen den eingefrorenen Stand von der
+          Abrechnung, nicht die Live-Berechnung. „⚠" bedeutet: die aktuelle
+          Live-Berechnung weicht inzwischen davon ab (z.B. weil danach ein
+          Vorschuss oder Satz geändert wurde).
+        </p>
       </div>
 
-      <div className="flex flex-wrap items-center gap-3">
+      <div className="flex flex-wrap items-center gap-3 print:hidden">
         <label className="text-sm">
           Saison-Jahr{" "}
           <input
@@ -146,15 +212,26 @@ export default function UebersichtPage() {
               : "Jetzt Abrechnen"}
           </button>
         )}
+        {canEdit && (
+          <button
+            type="button"
+            className="btn-secondary"
+            disabled={auswahlAnzahlAbgerechnet === 0}
+            onClick={auszahlungslisteFuerAuswahlDrucken}
+          >
+            Auszahlungsliste für Auswahl drucken
+            {auswahlAnzahlAbgerechnet > 0 ? ` (${auswahlAnzahlAbgerechnet})` : ""}
+          </button>
+        )}
         {abrechnenFehler && (
           <span className="text-sm text-red-600">{abrechnenFehler}</span>
         )}
       </div>
 
       {loading ? (
-        <p className="text-neutral-500">Lädt…</p>
+        <p className="text-neutral-500 print:hidden">Lädt…</p>
       ) : (
-        <div className="overflow-x-auto">
+        <div className="overflow-x-auto print:hidden">
           <table>
             <thead>
               <tr>
@@ -164,10 +241,8 @@ export default function UebersichtPage() {
                       type="checkbox"
                       onChange={alleTogglen}
                       checked={
-                        rows.some((r) => r.aktiv) &&
-                        rows
-                          .filter((r) => r.aktiv)
-                          .every((r) => ausgewaehlt.has(r.employee_id))
+                        rows.length > 0 &&
+                        rows.every((r) => ausgewaehlt.has(r.employee_id))
                       }
                     />
                   </th>
@@ -194,7 +269,6 @@ export default function UebersichtPage() {
                       <input
                         type="checkbox"
                         checked={ausgewaehlt.has(r.employee_id)}
-                        disabled={!r.aktiv}
                         onChange={() => toggleAuswahl(r.employee_id)}
                       />
                     </td>
@@ -203,15 +277,15 @@ export default function UebersichtPage() {
                   <td>
                     {r.name}, {r.vorname}
                   </td>
-                  <td>{Number(r.gesamt_stunden).toFixed(2)}</td>
-                  <td>{r.anwesenheitstage}</td>
+                  <td>{fmt(anzeige(r, "gesamt_stunden"))}</td>
+                  <td>{anzeige(r, "anwesenheitstage") ?? "—"}</td>
                   <td>{ABRECHNUNGSART_LABELS[r.abrechnungsart]}</td>
-                  <td>{Number(r.bruttolohn).toFixed(2)}</td>
-                  <td>{Number(r.lohnsteuer_pauschal).toFixed(2)}</td>
+                  <td>{fmt(anzeige(r, "bruttolohn"))}</td>
+                  <td>{fmt(anzeige(r, "lohnsteuer_pauschal"))}</td>
                   <td>
-                    {r.abrechnungsart === "pauschal" ? (
-                      fmt(r.netto)
-                    ) : canEdit ? (
+                    {r.abrechnungsart === "pauschal" || !canEdit || r.abgerechnet_am ? (
+                      fmt(anzeige(r, "netto"))
+                    ) : (
                       <input
                         type="number"
                         step="0.01"
@@ -223,17 +297,28 @@ export default function UebersichtPage() {
                           nettoExternSpeichern(r, e.target.value)
                         }
                       />
-                    ) : (
-                      fmt(r.netto)
                     )}
                   </td>
                   <td>
                     {(
-                      Number(r.abzug_verpflegung) + Number(r.abzug_wohnen)
+                      Number(anzeige(r, "abzug_verpflegung")) +
+                      Number(anzeige(r, "abzug_wohnen"))
                     ).toFixed(2)}
                   </td>
-                  <td>{Number(r.vorschuss_summe).toFixed(2)}</td>
-                  <td className="font-medium">{fmt(r.auszahlungsbetrag)}</td>
+                  <td>{fmt(anzeige(r, "vorschuss_summe"))}</td>
+                  <td className="font-medium">
+                    {fmt(anzeige(r, "auszahlungsbetrag"))}
+                    {weichtAb(r) && (
+                      <span
+                        className="ml-1 text-amber-600"
+                        title={`Live-Berechnung aktuell: ${fmt(
+                          r.auszahlungsbetrag
+                        )} €`}
+                      >
+                        ⚠
+                      </span>
+                    )}
+                  </td>
                   <td>
                     {r.aktiv ? "aktiv" : "inaktiv"}
                     {r.abgerechnet_am && (
@@ -248,6 +333,76 @@ export default function UebersichtPage() {
                 </tr>
               ))}
             </tbody>
+          </table>
+        </div>
+      )}
+
+      {/* Auszahlungsliste zum Ausdrucken - nur im Druck sichtbar. */}
+      {auszahlungslisteZeilen && (
+        <div className="hidden print:block">
+          <h2 className="text-xl font-semibold">
+            Auszahlungsliste Saison {jahr}
+          </h2>
+          <p className="mt-1 text-base">
+            Datum: {formatDatumDE(new Date().toISOString())} · Anzahl
+            Personen: {auszahlungslisteZeilen.length}
+          </p>
+          <table className="mt-4 print-form-table">
+            <thead>
+              <tr>
+                <th>Pers.-Nr.</th>
+                <th>Name</th>
+                <th>Std.</th>
+                <th>Brutto €</th>
+                <th>Steuer €</th>
+                <th>Netto €</th>
+                <th>Verpfl./Unterk. €</th>
+                <th>Vorschüsse €</th>
+                <th>Auszahlung €</th>
+                <th>Unterschrift</th>
+              </tr>
+            </thead>
+            <tbody>
+              {auszahlungslisteZeilen.map((r) => (
+                <tr key={r.employee_id}>
+                  <td>{r.personal_nr}</td>
+                  <td>
+                    {r.name}, {r.vorname}
+                  </td>
+                  <td>{fmt(anzeige(r, "gesamt_stunden"))}</td>
+                  <td>{fmt(anzeige(r, "bruttolohn"))}</td>
+                  <td>{fmt(anzeige(r, "lohnsteuer_pauschal"))}</td>
+                  <td>{fmt(anzeige(r, "netto"))}</td>
+                  <td>
+                    {(
+                      Number(anzeige(r, "abzug_verpflegung")) +
+                      Number(anzeige(r, "abzug_wohnen"))
+                    ).toFixed(2)}
+                  </td>
+                  <td>{fmt(anzeige(r, "vorschuss_summe"))}</td>
+                  <td className="font-semibold">
+                    {fmt(anzeige(r, "auszahlungsbetrag"))}
+                  </td>
+                  <td></td>
+                </tr>
+              ))}
+            </tbody>
+            <tfoot>
+              <tr>
+                <td colSpan={8} className="text-right font-semibold">
+                  Summe Auszahlung
+                </td>
+                <td className="font-semibold">
+                  {auszahlungslisteZeilen
+                    .reduce(
+                      (s, r) => s + Number(anzeige(r, "auszahlungsbetrag") ?? 0),
+                      0
+                    )
+                    .toFixed(2)}
+                </td>
+                <td></td>
+              </tr>
+            </tfoot>
           </table>
         </div>
       )}

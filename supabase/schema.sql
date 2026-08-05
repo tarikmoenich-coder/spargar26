@@ -205,6 +205,13 @@ create table season_bonuses (
   -- dieser Markierung kollidiert).
   abgerechnet_am timestamptz,
   abgerechnet_von uuid references profiles (id),
+  -- Eingefrorener Stand von season_summary zum Zeitpunkt des Abrechnens
+  -- (Stunden, Brutto, Abzüge, Netto, Auszahlungsbetrag, ...). Spätere
+  -- Änderungen an Sätzen/Vorschüssen dürfen eine bereits ausgezahlte
+  -- Abrechnung nicht rückwirkend verändern - die Lohnübersicht zeigt für
+  -- abgerechnete Personen diesen Schnappschuss und warnt, falls die
+  -- Live-Neuberechnung inzwischen abweicht.
+  snapshot jsonb,
   updated_by uuid references profiles (id),
   updated_at timestamptz not null default now(),
   unique (employee_id, saison_jahr)
@@ -219,15 +226,29 @@ create table season_bonuses (
 -- öffnen.
 create or replace function saison_abrechnen(p_employee_id uuid, p_saison_jahr int)
 returns void language plpgsql security definer as $$
+declare
+  s season_summary%rowtype;
 begin
   if current_role_name() not in ('admin', 'lohnabrechnung') then
     raise exception 'Keine Berechtigung für "Jetzt Abrechnen"';
   end if;
 
-  insert into season_bonuses (employee_id, saison_jahr, abgerechnet_am, abgerechnet_von)
-  values (p_employee_id, p_saison_jahr, now(), auth.uid())
+  select * into s from season_summary
+  where employee_id = p_employee_id and saison_jahr = p_saison_jahr;
+
+  if not found then
+    raise exception 'Keine Saison-Daten für diese Person/dieses Jahr gefunden';
+  end if;
+
+  -- 'snapshot' aus s selbst entfernen, sonst würde sich bei mehrfachem
+  -- Abrechnen derselben Person der alte Schnappschuss im neuen verschachteln.
+  insert into season_bonuses (employee_id, saison_jahr, abgerechnet_am, abgerechnet_von, snapshot)
+  values (p_employee_id, p_saison_jahr, now(), auth.uid(), to_jsonb(s) - 'snapshot')
   on conflict (employee_id, saison_jahr)
-  do update set abgerechnet_am = now(), abgerechnet_von = auth.uid();
+  do update set
+    abgerechnet_am = now(),
+    abgerechnet_von = auth.uid(),
+    snapshot = excluded.snapshot;
 
   update employees set aktiv = false where id = p_employee_id;
 end;
@@ -469,6 +490,7 @@ with base as (
       + coalesce(b.spargel_praemie, 0) as bruttolohn,
     b.netto_extern,
     b.abgerechnet_am,
+    b.snapshot,
     coalesce(v.verpflegung, 0) * we.anwesenheitstage as abzug_verpflegung,
     coalesce(v.wohnen, 0) * we.anwesenheitstage as abzug_wohnen,
     coalesce((

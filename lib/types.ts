@@ -70,6 +70,10 @@ export interface SeasonSummaryRow {
   abrechnungsart: Abrechnungsart;
   aktiv: boolean;
   abgerechnet_am: string | null;
+  // Eingefrorener Stand von season_summary zum Zeitpunkt des Abrechnens
+  // (dieselben Feldnamen wie diese Zeile selbst) - null, solange nicht
+  // abgerechnet.
+  snapshot: Record<string, number | string | null> | null;
   saison_jahr: number;
   gesamt_stunden: number;
   anwesenheitstage: number;
