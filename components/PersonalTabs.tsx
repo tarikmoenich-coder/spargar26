@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 
 const tabs = [
   { href: "/mitarbeiter", label: "Personalstamm" },
+  { href: "/personal-dokumente", label: "Dokumente" },
   { href: "/personalnummern", label: "Personalnummern" },
   { href: "/personal-import", label: "Import" },
 ];

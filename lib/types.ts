@@ -43,6 +43,10 @@ export const DOKUMENT_KATEGORIEN = [
 
 export type DokumentKategorie = (typeof DOKUMENT_KATEGORIEN)[number];
 
+// Führerschein-Klassen - nur relevant bei kategorie "Führerschein Kopie".
+export const FUEHRERSCHEIN_KATEGORIEN = ['B', 'BE', 'C', 'CE'] as const;
+export type FuehrerscheinKategorie = (typeof FUEHRERSCHEIN_KATEGORIEN)[number];
+
 // Verweis auf eine im Storage-Bucket "mitarbeiter-dokumente" abgelegte
 // Datei (z.B. Hochzeitsurkunde, Ausweiskopie) - Zugriff nur admin/hr.
 export interface EmployeeDocument {
@@ -52,6 +56,16 @@ export interface EmployeeDocument {
   dateiname: string;
   storage_path: string;
   hochgeladen_von: string | null;
+  hochgeladen_am: string;
+  fuehrerschein_kategorien: string[] | null;
+}
+
+// Schmale, breit zugängliche Sicht (employee_fuehrerschein_kategorien) -
+// zeigt nur, DASS und WOFÜR jemand einen Führerschein hat, nicht das
+// Dokument selbst (das bleibt admin/hr-only).
+export interface FuehrerscheinEintrag {
+  employee_id: string;
+  fuehrerschein_kategorien: string[];
   hochgeladen_am: string;
 }
 

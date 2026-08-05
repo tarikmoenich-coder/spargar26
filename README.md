@@ -22,12 +22,20 @@ Enthalten:
 - Personalnummern-Übersicht: 10 Nummernkreise (1–999, 1000–1999, …),
   Dubletten-Erkennung, nächste freie Nummer je Kreis - Kreis-Auswahl beim
   Neuanlegen zeigt den Nummernbereich direkt mit an (z.B. "Kreis 1 (1-999)")
-- Dokumenten-Upload je Mitarbeiter (nur admin/hr, wie andere sensible
-  Personaldaten): Hochzeitsurkunde, Ausweiskopie, Führerschein-Kopie,
+- Eigene Unterseite "Personal → Dokumente" (nur admin/hr, wie andere
+  sensible Personaldaten): Tabelle wie im Personalstamm (Pers.-Nr.,
+  Herkunft, Name, Vorname, Ort), dahinter eine Spalte je Dokument-
+  Kategorie (Hochzeitsurkunde, Ausweiskopie, Führerschein Kopie,
   Arbeitsvertrag, Werks-/Mietvertrag, Formular "Doppelte
   Haushaltsführung", Formular zur Feststellung der Versicherungspflicht,
-  Sonstiges - Dateien liegen in einem privaten Supabase-Storage-Bucket,
-  Downloads laufen über zeitlich begrenzte signierte Links
+  Sonstiges) - leer, wenn noch nichts hochgeladen wurde, sonst anklickbar
+  zum Download. Dateien liegen in einem privaten Supabase-Storage-Bucket,
+  Downloads laufen über zeitlich begrenzte signierte Links.
+- Führerschein-Klassen (B, BE, C, CE) werden beim Hochladen einer
+  "Führerschein Kopie" abgefragt und wirken sich breit aus: Personal,
+  Stundenerfassung und Lohnübersicht zeigen für jede Person mit
+  hinterlegtem Führerschein die Klassen an (über eine schmale, für alle
+  Rollen lesbare Sicht - das Dokument selbst bleibt admin/hr-only)
 - Personal-Import aus Excel/CSV mit Vorschau, Spaltenerkennung und
   Fehlerprüfung (u.a. bereits vergebene Personalnummern)
 - Automatische Saison-Lohnübersicht (Stunden, Prämien, Verpflegungs-/

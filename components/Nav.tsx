@@ -20,7 +20,7 @@ const items: NavItem[] = [
     href: "/mitarbeiter",
     label: "Personal",
     roles: ["admin", "hr"],
-    auchAktivBei: ["/personalnummern", "/personal-import"],
+    auchAktivBei: ["/personalnummern", "/personal-import", "/personal-dokumente"],
   },
   {
     href: "/erfassung",

@@ -1,15 +1,14 @@
 "use client";
 
-import { Fragment, useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import { getSupabaseClient } from "@/lib/supabase/client";
 import { useProfile } from "@/lib/useProfile";
 import {
   ABRECHNUNGSART_LABELS,
-  DOKUMENT_KATEGORIEN,
   type Abrechnungsart,
   type Arbeitsgruppe,
   type Employee,
-  type EmployeeDocument,
+  type FuehrerscheinEintrag,
   type Herkunft,
   type SvPruefung,
 } from "@/lib/types";
@@ -23,7 +22,6 @@ import { formatDatumDE } from "@/lib/format";
 import PersonalTabs from "@/components/PersonalTabs";
 
 const CURRENT_YEAR = new Date().getFullYear();
-const DOKUMENTE_BUCKET = "mitarbeiter-dokumente";
 
 const emptyForm = {
   personal_nr: "",
@@ -67,21 +65,12 @@ export default function MitarbeiterPage() {
     { personal_nr: string; name: string; vorname: string }[]
   >([]);
   const [naechsteKreis, setNaechsteKreis] = useState("1");
-
-  // Dokumenten-Upload je Mitarbeiter (z.B. Hochzeitsurkunde, Ausweiskopie).
-  const [dokumenteOffenId, setDokumenteOffenId] = useState<string | null>(
-    null
-  );
-  const [dokumente, setDokumente] = useState<
-    Record<string, EmployeeDocument[]>
+  // Aus employee_fuehrerschein_kategorien (schmale, breit zugängliche
+  // Sicht) - zeigt nur, DASS und WOFÜR jemand einen Führerschein hat.
+  // Details/Upload dazu laufen über "Personal → Dokumente".
+  const [fuehrerschein, setFuehrerschein] = useState<
+    Record<string, string[]>
   >({});
-  const [dokumentKategorie, setDokumentKategorie] = useState<string>(
-    DOKUMENT_KATEGORIEN[0]
-  );
-  const [dokumentDatei, setDokumentDatei] = useState<File | null>(null);
-  const [dateiEingabeSchluessel, setDateiEingabeSchluessel] = useState(0);
-  const [dokumentLaeuft, setDokumentLaeuft] = useState(false);
-  const [dokumentFehler, setDokumentFehler] = useState<string | null>(null);
 
   const canEdit = profile?.role === "admin" || profile?.role === "hr";
   const gruppenLabel: Record<string, string> = Object.fromEntries(
@@ -118,6 +107,7 @@ export default function MitarbeiterPage() {
       { data: herkunftData },
       { data: alleNrData },
       { data: svData },
+      { data: fsData },
     ] = await Promise.all([
       query,
       supabase.from("employee_erster_arbeitstag").select("*"),
@@ -129,6 +119,7 @@ export default function MitarbeiterPage() {
         .from("employee_sv_pruefung")
         .select("*")
         .eq("saison_jahr", CURRENT_YEAR),
+      supabase.from("employee_fuehrerschein_kategorien").select("*"),
     ]);
     if (!error) setEmployees((data as Employee[]) ?? []);
     const map: Record<string, string> = {};
@@ -151,6 +142,11 @@ export default function MitarbeiterPage() {
       svMap[row.employee_id] = row;
     });
     setSvPruefung(svMap);
+    const fsMap: Record<string, string[]> = {};
+    (fsData as FuehrerscheinEintrag[] | null ?? []).forEach((row) => {
+      fsMap[row.employee_id] = row.fuehrerschein_kategorien;
+    });
+    setFuehrerschein(fsMap);
     setLoading(false);
   }
 
@@ -231,106 +227,6 @@ export default function MitarbeiterPage() {
     }
     resetForm();
     load();
-  }
-
-  async function toggleDokumente(emp: Employee) {
-    if (dokumenteOffenId === emp.id) {
-      setDokumenteOffenId(null);
-      return;
-    }
-    setDokumenteOffenId(emp.id);
-    setDokumentFehler(null);
-    if (!dokumente[emp.id]) {
-      const supabase = getSupabaseClient();
-      const { data, error } = await supabase
-        .from("employee_documents")
-        .select("*")
-        .eq("employee_id", emp.id)
-        .order("hochgeladen_am", { ascending: false });
-      if (!error) {
-        setDokumente((prev) => ({
-          ...prev,
-          [emp.id]: (data as EmployeeDocument[]) ?? [],
-        }));
-      }
-    }
-  }
-
-  async function dokumentHochladen(employeeId: string) {
-    if (!dokumentDatei) return;
-    setDokumentLaeuft(true);
-    setDokumentFehler(null);
-    const supabase = getSupabaseClient();
-    const pfad = `${employeeId}/${Date.now()}_${dokumentDatei.name}`;
-    const { error: uploadError } = await supabase.storage
-      .from(DOKUMENTE_BUCKET)
-      .upload(pfad, dokumentDatei);
-    if (uploadError) {
-      setDokumentFehler(uploadError.message);
-      setDokumentLaeuft(false);
-      return;
-    }
-    const { error: insertError } = await supabase
-      .from("employee_documents")
-      .insert({
-        employee_id: employeeId,
-        kategorie: dokumentKategorie,
-        dateiname: dokumentDatei.name,
-        storage_path: pfad,
-      });
-    if (insertError) {
-      setDokumentFehler(insertError.message);
-      // Bereits hochgeladene Datei wieder entfernen, damit keine
-      // verwaiste Datei ohne Datenbank-Eintrag im Bucket liegen bleibt.
-      await supabase.storage.from(DOKUMENTE_BUCKET).remove([pfad]);
-      setDokumentLaeuft(false);
-      return;
-    }
-    setDokumentDatei(null);
-    setDateiEingabeSchluessel((k) => k + 1);
-    setDokumentLaeuft(false);
-    const { data } = await supabase
-      .from("employee_documents")
-      .select("*")
-      .eq("employee_id", employeeId)
-      .order("hochgeladen_am", { ascending: false });
-    setDokumente((prev) => ({
-      ...prev,
-      [employeeId]: (data as EmployeeDocument[]) ?? [],
-    }));
-  }
-
-  async function dokumentHerunterladen(doc: EmployeeDocument) {
-    const supabase = getSupabaseClient();
-    const { data, error } = await supabase.storage
-      .from(DOKUMENTE_BUCKET)
-      .createSignedUrl(doc.storage_path, 60);
-    if (error || !data) {
-      window.alert(`Download fehlgeschlagen: ${error?.message ?? "unbekannter Fehler"}`);
-      return;
-    }
-    window.open(data.signedUrl, "_blank");
-  }
-
-  async function dokumentLoeschen(doc: EmployeeDocument) {
-    if (!window.confirm(`"${doc.dateiname}" (${doc.kategorie}) wirklich löschen?`)) {
-      return;
-    }
-    const supabase = getSupabaseClient();
-    const { error: storageError } = await supabase.storage
-      .from(DOKUMENTE_BUCKET)
-      .remove([doc.storage_path]);
-    if (storageError) {
-      window.alert(`Löschen fehlgeschlagen: ${storageError.message}`);
-      return;
-    }
-    await supabase.from("employee_documents").delete().eq("id", doc.id);
-    setDokumente((prev) => ({
-      ...prev,
-      [doc.employee_id]: (prev[doc.employee_id] ?? []).filter(
-        (d) => d.id !== doc.id
-      ),
-    }));
   }
 
   async function toggleActive(emp: Employee) {
@@ -577,6 +473,7 @@ export default function MitarbeiterPage() {
               <th>Rest bis 90 Tage</th>
               <th>Austrittsdatum (15 Wo.)</th>
               <th>SV-Status</th>
+              <th>Führerschein</th>
               <th>Status</th>
               {canEdit && <th></th>}
             </tr>
@@ -584,9 +481,9 @@ export default function MitarbeiterPage() {
           <tbody>
             {filtered.map((emp) => {
               const sv = svPruefung[emp.id];
+              const fs = fuehrerschein[emp.id];
               return (
-              <Fragment key={emp.id}>
-              <tr className={emp.aktiv ? "" : "opacity-50"}>
+              <tr key={emp.id} className={emp.aktiv ? "" : "opacity-50"}>
                 <td>{emp.personal_nr}</td>
                 <td>
                   {emp.gruppe_nr
@@ -618,6 +515,13 @@ export default function MitarbeiterPage() {
                     "—"
                   )}
                 </td>
+                <td>
+                  {fs && fs.length > 0 ? (
+                    <span className="text-emerald-700">{fs.join(", ")}</span>
+                  ) : (
+                    "—"
+                  )}
+                </td>
                 <td>{emp.aktiv ? "aktiv" : "inaktiv"}</td>
                 {canEdit && (
                   <td className="flex gap-2">
@@ -633,108 +537,9 @@ export default function MitarbeiterPage() {
                     >
                       {emp.aktiv ? "Deaktivieren" : "Reaktivieren"}
                     </button>
-                    <button
-                      className="btn-secondary"
-                      onClick={() => toggleDokumente(emp)}
-                    >
-                      {dokumenteOffenId === emp.id ? "Schließen" : "Dokumente"}
-                      {dokumente[emp.id] && dokumente[emp.id].length > 0
-                        ? ` (${dokumente[emp.id].length})`
-                        : ""}
-                    </button>
                   </td>
                 )}
               </tr>
-              {dokumenteOffenId === emp.id && (
-                <tr>
-                  <td colSpan={15} className="bg-neutral-50">
-                    <div className="flex flex-col gap-3 py-2">
-                      <p className="text-xs text-neutral-500">
-                        Dokumente zu {emp.name}, {emp.vorname} - nur für
-                        admin/hr sichtbar. Downloads laufen über zeitlich
-                        begrenzte Links.
-                      </p>
-                      {!dokumente[emp.id] ? (
-                        <p className="text-sm text-neutral-500">Lädt…</p>
-                      ) : dokumente[emp.id].length === 0 ? (
-                        <p className="text-sm text-neutral-500">
-                          Noch keine Dokumente hochgeladen.
-                        </p>
-                      ) : (
-                        <table>
-                          <thead>
-                            <tr>
-                              <th>Kategorie</th>
-                              <th>Dateiname</th>
-                              <th>Hochgeladen am</th>
-                              <th></th>
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {dokumente[emp.id].map((doc) => (
-                              <tr key={doc.id}>
-                                <td>{doc.kategorie}</td>
-                                <td>
-                                  <button
-                                    type="button"
-                                    className="text-emerald-700 underline"
-                                    onClick={() => dokumentHerunterladen(doc)}
-                                  >
-                                    {doc.dateiname}
-                                  </button>
-                                </td>
-                                <td>{formatDatumDE(doc.hochgeladen_am)}</td>
-                                <td>
-                                  <button
-                                    type="button"
-                                    className="btn-danger text-xs"
-                                    onClick={() => dokumentLoeschen(doc)}
-                                  >
-                                    Löschen
-                                  </button>
-                                </td>
-                              </tr>
-                            ))}
-                          </tbody>
-                        </table>
-                      )}
-                      <div className="flex flex-wrap items-center gap-2">
-                        <select
-                          value={dokumentKategorie}
-                          onChange={(e) => setDokumentKategorie(e.target.value)}
-                        >
-                          {DOKUMENT_KATEGORIEN.map((k) => (
-                            <option key={k} value={k}>
-                              {k}
-                            </option>
-                          ))}
-                        </select>
-                        <input
-                          key={dateiEingabeSchluessel}
-                          type="file"
-                          onChange={(e) =>
-                            setDokumentDatei(e.target.files?.[0] ?? null)
-                          }
-                        />
-                        <button
-                          type="button"
-                          className="btn text-xs"
-                          disabled={!dokumentDatei || dokumentLaeuft}
-                          onClick={() => dokumentHochladen(emp.id)}
-                        >
-                          Hochladen
-                        </button>
-                        {dokumentFehler && (
-                          <span className="text-sm text-red-600">
-                            {dokumentFehler}
-                          </span>
-                        )}
-                      </div>
-                    </div>
-                  </td>
-                </tr>
-              )}
-              </Fragment>
               );
             })}
           </tbody>

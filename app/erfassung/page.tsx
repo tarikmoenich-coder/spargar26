@@ -3,7 +3,12 @@
 import { useCallback, useEffect, useState } from "react";
 import { getSupabaseClient } from "@/lib/supabase/client";
 import { useProfile } from "@/lib/useProfile";
-import type { Arbeitsgruppe, Employee, WorkEntry } from "@/lib/types";
+import type {
+  Arbeitsgruppe,
+  Employee,
+  FuehrerscheinEintrag,
+  WorkEntry,
+} from "@/lib/types";
 
 const OHNE_GRUPPE_KEY = "__ohne__";
 
@@ -80,6 +85,11 @@ export default function ErfassungPage() {
   const [loading, setLoading] = useState(true);
   const [savingId, setSavingId] = useState<string | null>(null);
   const [printGroupKey, setPrintGroupKey] = useState<string | null>(null);
+  // Aus employee_fuehrerschein_kategorien (schmale, breit zugängliche
+  // Sicht) - zeigt nur, DASS und WOFÜR jemand einen Führerschein hat.
+  const [fuehrerschein, setFuehrerschein] = useState<
+    Record<string, string[]>
+  >({});
 
   const vorherigeDaten = [
     addDays(datum, -3),
@@ -121,6 +131,21 @@ export default function ErfassungPage() {
   useEffect(() => {
     loadAll(datum);
   }, [datum, loadAll]);
+
+  useEffect(() => {
+    async function ladeFuehrerschein() {
+      const supabase = getSupabaseClient();
+      const { data } = await supabase
+        .from("employee_fuehrerschein_kategorien")
+        .select("*");
+      const map: Record<string, string[]> = {};
+      ((data as FuehrerscheinEintrag[]) ?? []).forEach((row) => {
+        map[row.employee_id] = row.fuehrerschein_kategorien;
+      });
+      setFuehrerschein(map);
+    }
+    ladeFuehrerschein();
+  }, []);
 
   // Live-Sync: Änderungen anderer Nutzer an diesem Tag sofort übernehmen.
   useEffect(() => {
@@ -370,6 +395,7 @@ export default function ErfassungPage() {
                 <tr>
                   <th>Pers.-Nr.</th>
                   <th>Name</th>
+                  <th>Führerschein</th>
                   {vorherigeDaten.map((d) => (
                     <th
                       key={d}
@@ -393,6 +419,15 @@ export default function ErfassungPage() {
                       <td>{emp.personal_nr}</td>
                       <td>
                         {emp.name}, {emp.vorname}
+                      </td>
+                      <td>
+                        {fuehrerschein[emp.id] ? (
+                          <span className="text-emerald-700">
+                            {fuehrerschein[emp.id].join(", ")}
+                          </span>
+                        ) : (
+                          "—"
+                        )}
                       </td>
                       {vorherigeDaten.map((d) => {
                         const alt = vorherigeEntries[d]?.[emp.id];

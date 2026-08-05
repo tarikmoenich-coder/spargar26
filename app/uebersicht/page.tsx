@@ -6,6 +6,7 @@ import { useProfile } from "@/lib/useProfile";
 import {
   ABRECHNUNGSART_LABELS,
   type Arbeitsgruppe,
+  type FuehrerscheinEintrag,
   type SeasonSummaryRow,
 } from "@/lib/types";
 import { formatDatumDE } from "@/lib/format";
@@ -40,6 +41,11 @@ export default function UebersichtPage() {
   const [rows, setRows] = useState<SeasonSummaryRow[]>([]);
   const [gruppen, setGruppen] = useState<Arbeitsgruppe[]>([]);
   const [gruppeFilter, setGruppeFilter] = useState("");
+  // Aus employee_fuehrerschein_kategorien (schmale, breit zugängliche
+  // Sicht) - zeigt nur, DASS und WOFÜR jemand einen Führerschein hat.
+  const [fuehrerschein, setFuehrerschein] = useState<
+    Record<string, string[]>
+  >({});
   const [loading, setLoading] = useState(true);
   const [jahr, setJahr] = useState(CURRENT_YEAR);
   const [ausgewaehlt, setAusgewaehlt] = useState<Set<string>>(new Set());
@@ -82,6 +88,21 @@ export default function UebersichtPage() {
       setGruppen((data as Arbeitsgruppe[]) ?? []);
     }
     ladeGruppen();
+  }, []);
+
+  useEffect(() => {
+    async function ladeFuehrerschein() {
+      const supabase = getSupabaseClient();
+      const { data } = await supabase
+        .from("employee_fuehrerschein_kategorien")
+        .select("*");
+      const map: Record<string, string[]> = {};
+      ((data as FuehrerscheinEintrag[]) ?? []).forEach((row) => {
+        map[row.employee_id] = row.fuehrerschein_kategorien;
+      });
+      setFuehrerschein(map);
+    }
+    ladeFuehrerschein();
   }, []);
 
   const gruppenByNr = new Map(gruppen.map((g) => [g.gruppe_nr, g]));
@@ -368,6 +389,7 @@ export default function UebersichtPage() {
                 <th>Pers.-Nr.</th>
                 <th>Name</th>
                 <th>Gruppe</th>
+                <th>Führerschein</th>
                 <th>Std.</th>
                 <th>Tage</th>
                 <th>Abrechnungsart</th>
@@ -405,6 +427,15 @@ export default function UebersichtPage() {
                           gruppenByNr.get(r.gruppe_nr)?.bezeichnung ?? r.gruppe_nr
                         }`
                       : "—"}
+                  </td>
+                  <td>
+                    {fuehrerschein[r.employee_id] ? (
+                      <span className="text-emerald-700">
+                        {fuehrerschein[r.employee_id].join(", ")}
+                      </span>
+                    ) : (
+                      "—"
+                    )}
                   </td>
                   <td>{fmt(anzeige(r, "gesamt_stunden"))}</td>
                   <td>{anzeige(r, "anwesenheitstage") ?? "—"}</td>

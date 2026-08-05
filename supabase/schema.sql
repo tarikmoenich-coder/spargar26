@@ -171,7 +171,15 @@ create table employee_documents (
   -- "<employee_id>/<zeitstempel>_<dateiname>".
   storage_path text not null unique,
   hochgeladen_von uuid references profiles (id),
-  hochgeladen_am timestamptz not null default now()
+  hochgeladen_am timestamptz not null default now(),
+  -- Nur befüllt bei kategorie = 'Führerschein Kopie': welche Klassen die
+  -- hochgeladene Kopie abdeckt. Wird beim Upload abgefragt und wirkt sich
+  -- breit aus (Personal/Stundenerfassung/Lohnübersicht zeigen daraus, ob
+  -- und wofür jemand einen Führerschein hat - siehe
+  -- employee_fuehrerschein_kategorien weiter unten).
+  fuehrerschein_kategorien text[]
+    check (fuehrerschein_kategorien is null
+      or fuehrerschein_kategorien <@ array['B', 'BE', 'C', 'CE'])
 );
 
 create index idx_employee_documents_employee on employee_documents (employee_id);
@@ -833,6 +841,26 @@ from advance_recipients ar
 join advances a on a.id = ar.advance_id;
 
 grant select on employee_vorschuss_historie to authenticated;
+
+-- ---------------------------------------------------------------------------
+-- 12g. View: aktuelle Führerschein-Klassen je Mitarbeiter, aus der neuesten
+--      hochgeladenen "Führerschein Kopie" (employee_documents ist selbst
+--      admin/hr-only, siehe oben) - bewusst schmal (nur employee_id +
+--      Klassen + Datum, keine Datei/kein Dateiname/kein Uploader), damit
+--      Personal/Stundenerfassung/Lohnübersicht allen relevanten Rollen
+--      anzeigen können, dass und wofür jemand einen Führerschein hat,
+--      ohne die eigentlichen Dokumente breiter zugänglich zu machen.
+-- ---------------------------------------------------------------------------
+create or replace view employee_fuehrerschein_kategorien as
+select distinct on (employee_id)
+  employee_id,
+  fuehrerschein_kategorien,
+  hochgeladen_am
+from employee_documents
+where kategorie = 'Führerschein Kopie' and fuehrerschein_kategorien is not null
+order by employee_id, hochgeladen_am desc;
+
+grant select on employee_fuehrerschein_kategorien to authenticated;
 
 -- ---------------------------------------------------------------------------
 -- 13. Row Level Security (ADR-006: Berechtigungen serverseitig, nicht nur UI)
