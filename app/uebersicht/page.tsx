@@ -10,6 +10,7 @@ import {
   type SeasonSummaryRow,
 } from "@/lib/types";
 import { formatDatumDE } from "@/lib/format";
+import LohnTabs from "@/components/LohnTabs";
 
 const OHNE_GRUPPE_KEY = "__ohne__";
 
@@ -269,6 +270,7 @@ export default function UebersichtPage() {
 
   return (
     <div className="flex flex-col gap-4">
+      <LohnTabs />
       <div className="print:hidden">
         <h1 className="text-lg font-semibold text-emerald-800">
           Saison-Lohnübersicht

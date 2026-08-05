@@ -34,18 +34,9 @@ const items: NavItem[] = [
   },
   {
     href: "/uebersicht",
-    label: "Lohnübersicht",
-    roles: ["admin", "hr", "lohnabrechnung", "pruefer", "management"],
-  },
-  {
-    href: "/auszahlungen",
-    label: "Auszahlungen",
-    roles: ["admin", "hr", "lohnabrechnung", "pruefer", "management"],
-  },
-  {
-    href: "/vorschuesse",
-    label: "Vorschüsse",
-    roles: ["admin", "kasse", "lohnabrechnung", "pruefer", "management"],
+    label: "Lohn",
+    roles: ["admin", "hr", "kasse", "lohnabrechnung", "pruefer", "management"],
+    auchAktivBei: ["/vorschuesse", "/auszahlungen"],
   },
   {
     href: "/kasse",

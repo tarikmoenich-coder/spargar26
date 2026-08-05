@@ -38,6 +38,8 @@ Enthalten:
   Rollen lesbare Sicht - das Dokument selbst bleibt admin/hr-only)
 - Personal-Import aus Excel/CSV mit Vorschau, Spaltenerkennung und
   Fehlerprüfung (u.a. bereits vergebene Personalnummern)
+- Menüpunkt "Lohn" fasst Lohnübersicht, Vorschüsse und Auszahlungen als
+  Unterreiter zusammen (analog zu "Personal")
 - Automatische Saison-Lohnübersicht (Stunden, Prämien, Verpflegungs-/
   Unterkunft-Abzüge, Vorschüsse, pauschale Lohnsteuer bei Abrechnungsart
   "pauschal": 5,275% vom Bruttolohn), filterbar nach Arbeitsgruppe - z.B.
@@ -71,7 +73,8 @@ Enthalten:
 - Vorschussverwaltung: einzeln, gruppenweise (nach Arbeitsgruppe) oder nach
   Herkunft auswählen, Betrag pro Person individuell anpassbar, atomare
   Belegnummer, Storno statt Löschen, druckbare Auszahlungsliste mit
-  Unterschriftenfeldern
+  Unterschriftenfeldern, filterbar nach Jahr und Monat (wie bei
+  Auszahlungen)
 - Nachträgliche Korrektur eines bereits bestätigten Vorschuss-Betrags
   (admin/kasse, auch nach Storno-Sperre): Grund ist Pflichtfeld, jede
   Korrektur wird mit Anwender, Zeitstempel und Differenz in den

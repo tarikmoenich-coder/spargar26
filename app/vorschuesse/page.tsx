@@ -10,11 +10,17 @@ import type {
   Employee,
   Herkunft,
 } from "@/lib/types";
+import LohnTabs from "@/components/LohnTabs";
 
 function monatsSchluessel(d: Date) {
   const mm = String(d.getMonth() + 1).padStart(2, "0");
   return `${mm}-${d.getFullYear()}`;
 }
+
+const MONATSNAMEN = [
+  "Januar", "Februar", "März", "April", "Mai", "Juni",
+  "Juli", "August", "September", "Oktober", "November", "Dezember",
+];
 
 interface AusgewaehltePerson {
   employee_id: string;
@@ -47,6 +53,8 @@ export default function VorschuessePage() {
   const [gruppenFilter, setGruppenFilter] = useState("");
   const [herkunftFilter, setHerkunftFilter] = useState("");
   const [suche, setSuche] = useState("");
+  const [jahrFilter, setJahrFilter] = useState<number | "alle">("alle");
+  const [monatFilter, setMonatFilter] = useState<number | "alle">("alle");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -192,6 +200,17 @@ export default function VorschuessePage() {
       e.vorname.toLowerCase().includes(q) ||
       e.personal_nr.toLowerCase().includes(q)
     );
+  });
+
+  const jahreOptionen = Array.from(
+    new Set(advances.map((a) => new Date(a.datum).getFullYear()))
+  ).sort((a, b) => b - a);
+
+  const advancesGefiltert = advances.filter((a) => {
+    const d = new Date(a.datum);
+    if (jahrFilter !== "alle" && d.getFullYear() !== jahrFilter) return false;
+    if (monatFilter !== "alle" && d.getMonth() + 1 !== monatFilter) return false;
+    return true;
   });
 
   async function handleSubmit(e: React.FormEvent) {
@@ -376,6 +395,7 @@ export default function VorschuessePage() {
 
   return (
     <div className="flex flex-col gap-6">
+      <LohnTabs />
       <div className="print:hidden">
         <h1 className="text-lg font-semibold text-emerald-800">Vorschüsse</h1>
         <p className="text-sm text-neutral-500">
@@ -577,8 +597,60 @@ export default function VorschuessePage() {
         </div>
       )}
 
+      {!loading && advances.length > 0 && (
+        <div className="flex flex-wrap items-center gap-3 print:hidden">
+          <label className="text-sm">
+            Jahr{" "}
+            <select
+              value={jahrFilter}
+              onChange={(e) =>
+                setJahrFilter(
+                  e.target.value === "alle" ? "alle" : Number(e.target.value)
+                )
+              }
+            >
+              <option value="alle">Alle</option>
+              {jahreOptionen.map((j) => (
+                <option key={j} value={j}>
+                  {j}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="text-sm">
+            Monat{" "}
+            <select
+              value={monatFilter}
+              onChange={(e) =>
+                setMonatFilter(
+                  e.target.value === "alle" ? "alle" : Number(e.target.value)
+                )
+              }
+            >
+              <option value="alle">Alle</option>
+              {MONATSNAMEN.map((name, i) => (
+                <option key={name} value={i + 1}>
+                  {name}
+                </option>
+              ))}
+            </select>
+          </label>
+          <span className="text-sm text-neutral-500">
+            {advancesGefiltert.length} von {advances.length} Beleg(en)
+          </span>
+        </div>
+      )}
+
       {loading ? (
         <p className="text-neutral-500 print:hidden">Lädt…</p>
+      ) : advances.length === 0 ? (
+        <p className="text-neutral-500 print:hidden">
+          Noch keine Vorschüsse erfasst.
+        </p>
+      ) : advancesGefiltert.length === 0 ? (
+        <p className="text-neutral-500 print:hidden">
+          Keine Vorschüsse für diesen Filter.
+        </p>
       ) : (
         <table className="print:hidden">
           <thead>
@@ -594,7 +666,7 @@ export default function VorschuessePage() {
             </tr>
           </thead>
           <tbody>
-            {advances.map((a) => (
+            {advancesGefiltert.map((a) => (
               <Fragment key={a.id}>
                 <tr className={a.storniert ? "opacity-50" : ""}>
                   <td>{a.belegnummer}</td>

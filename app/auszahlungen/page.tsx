@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { getSupabaseClient } from "@/lib/supabase/client";
 import type { AuszahlungsbelegSummary, SeasonSummaryRow } from "@/lib/types";
 import { formatDatumDE } from "@/lib/format";
+import LohnTabs from "@/components/LohnTabs";
 
 function fmt(n: number | string | null | undefined) {
   return n === null || n === undefined || n === "" ? "—" : Number(n).toFixed(2);
@@ -119,6 +120,7 @@ export default function AuszahlungenPage() {
 
   return (
     <div className="flex flex-col gap-4">
+      <LohnTabs />
       <div className="print:hidden">
         <h1 className="text-lg font-semibold text-emerald-800">
           Auszahlungen
