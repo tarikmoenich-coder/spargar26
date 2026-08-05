@@ -194,6 +194,12 @@ create table season_bonuses (
   spargel_praemie numeric(10, 2) not null default 0,
   bus_hin numeric(10, 2) not null default 0,
   bus_rueck numeric(10, 2) not null default 0,
+  -- Bei abrechnungsart 'lohnsteuerklasse_1'/'sozialversicherungspflichtig'
+  -- kann/darf die App die Lohnsteuer nicht selbst berechnen (das macht ein
+  -- echtes Lohnprogramm) - entspricht Sheet "Summen", Spalte BA
+  -- ("Netto-Summe (HSC)"): Lohnbuchhaltung trägt den vom Lohnprogramm
+  -- gelieferten Netto-Betrag hier von Hand ein, die App rechnet ab da weiter.
+  netto_extern numeric(10, 2),
   updated_by uuid references profiles (id),
   updated_at timestamptz not null default now(),
   unique (employee_id, saison_jahr)
@@ -430,6 +436,7 @@ with base as (
       + coalesce(b.fahrer_zulage, 0)
       + coalesce(b.erdbeer_praemie, 0)
       + coalesce(b.spargel_praemie, 0) as bruttolohn,
+    b.netto_extern,
     coalesce(v.verpflegung, 0) * we.anwesenheitstage as abzug_verpflegung,
     coalesce(v.wohnen, 0) * we.anwesenheitstage as abzug_wohnen,
     coalesce((
@@ -459,17 +466,26 @@ with base as (
 steuer as (
   select
     base.*,
+    -- Nur bei 'pauschal' rechnet die App die Lohnsteuer selbst (fester
+    -- Satz). Bei den anderen beiden Abrechnungsarten ist das gesetzlich
+    -- nicht ohne echtes Lohnprogramm möglich - dort wird lohnsteuer_pauschal
+    -- nicht befüllt, siehe netto_extern.
     case when abrechnungsart = 'pauschal'
       then round(bruttolohn * 0.05275, 2)
       else 0
-    end as lohnsteuer_pauschal
+    end as lohnsteuer_pauschal,
+    case when abrechnungsart = 'pauschal'
+      then bruttolohn - round(bruttolohn * 0.05275, 2)
+      else netto_extern
+    end as netto
   from base
 )
 select
   steuer.*,
-  bruttolohn - lohnsteuer_pauschal as netto,
-  bruttolohn - lohnsteuer_pauschal - abzug_verpflegung - abzug_wohnen
-    - vorschuss_summe as auszahlungsbetrag
+  -- NULL, solange bei nicht-pauschalen Abrechnungsarten noch kein
+  -- netto_extern eingetragen wurde - bewusst kein Platzhalterwert.
+  netto - abzug_verpflegung - abzug_wohnen - vorschuss_summe
+    as auszahlungsbetrag
 from steuer;
 
 grant select on season_summary to authenticated;

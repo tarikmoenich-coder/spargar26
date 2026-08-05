@@ -78,10 +78,15 @@ export interface SeasonSummaryRow {
   abzug_wohnen: number;
   vorschuss_summe: number;
   lohnsteuer_pauschal: number;
-  // netto = Bruttolohn - Lohnsteuer.
+  // Nur bei abrechnungsart 'lohnsteuerklasse_1'/'sozialversicherungspflichtig'
+  // - von Hand eingetragener Netto-Betrag aus dem externen Lohnprogramm
+  // (entspricht Sheet "Summen", Spalte BA "Netto-Summe (HSC)").
+  netto_extern: number | null;
+  // netto = Bruttolohn - Lohnsteuer (bei 'pauschal') bzw. = netto_extern.
   // auszahlungsbetrag = netto - Verpflegung - Unterkunft - Vorschüsse.
-  netto: number;
-  auszahlungsbetrag: number;
+  // Beide NULL, solange netto_extern bei nicht-pauschalen Fällen fehlt.
+  netto: number | null;
+  auszahlungsbetrag: number | null;
 }
 
 export interface VerpflegungsSatz {

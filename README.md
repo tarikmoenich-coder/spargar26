@@ -109,7 +109,12 @@ nicht ohne dich bzw. eine Steuerberatung klären:
   verbindlich) für die Beschäftigungsprüfung.
 - OI-009: Exakte Brutto-/Netto-/Abzugsformeln der bisherigen Excel-Datei
   (die aktuelle `season_summary`-Berechnung ist ein Entwurf und muss
-  gegen echte, abgeschlossene Abrechnungen verifiziert werden).
+  gegen echte, abgeschlossene Abrechnungen verifiziert werden). Stand:
+  Netto/Auszahlungsbetrag-Trennung + manuelle Eingabe des externen
+  Lohnprogramm-Nettos (bei Lohnsteuerklasse 1/sozialversicherungspflichtig)
+  sind umgesetzt, offen ist noch die Verifikation mit echten Testfällen
+  sowie die Rolle der `season_bonuses`-Felder `bus_hin`/`bus_rueck`
+  (aktuell nicht in der Brutto-Berechnung berücksichtigt).
 - Migration bestehender Personal-/Saisondaten aus der `.xlsm`-Datei in
   dieses Schema (aktuell nicht automatisiert).
 - Druckvorlagen für Stundenzettel (A5/A6) als PDF-Erzeugung.
