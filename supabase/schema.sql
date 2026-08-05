@@ -552,7 +552,10 @@ with base as (
     select
       extract(year from we2.datum)::int as saison_jahr,
       sum(coalesce(we2.stunden, 0) + (case when we2.markierung = 'U' then 8 else 0 end)) as gesamt_stunden,
-      count(*) filter (where we2.stunden > 0 or we2.markierung is not null) as anwesenheitstage
+      -- Kein Eintrag = kein Abzug. Eine eingetragene "0" bedeutet: Person war
+      -- anwesend, hat aber nicht gearbeitet - zählt trotzdem als
+      -- Anwesenheitstag (Verpflegung/Unterkunft werden abgezogen).
+      count(*) filter (where we2.stunden is not null or we2.markierung is not null) as anwesenheitstage
     from work_entries we2
     where we2.employee_id = e.id
     group by extract(year from we2.datum)
@@ -626,6 +629,50 @@ left join season_summary ss
 group by ab.id, ab.belegnummer, ab.saison_jahr, ab.erstellt_am, ab.erstellt_von;
 
 grant select on auszahlungsbeleg_summary to authenticated;
+
+-- ---------------------------------------------------------------------------
+-- 12e. View: SV-Freiheit-Prüfung je Mitarbeiter/Saisonjahr (90-Tage- bzw.
+--      15-Wochen-Regel für landwirtschaftliche Saisonarbeit - OI-004).
+--      Reine Tage-/Wochen-Zählung, ersetzt NICHT die rechtliche Prüfung der
+--      Sozialversicherungsbefreiung selbst (eigenes Formular nötig).
+--      Arbeitszeitraum = 1. bis letzter Tag mit Stunden > 0 (nicht nur
+--      "anwesend" - reine Anwesenheit ohne Arbeit zählt hier nicht).
+-- ---------------------------------------------------------------------------
+create or replace view employee_sv_pruefung as
+select
+  e.id as employee_id,
+  e.personal_nr,
+  e.name,
+  e.vorname,
+  e.abrechnungsart,
+  e.aktiv,
+  w.saison_jahr,
+  w.erster_arbeitstag,
+  w.letzter_arbeitstag,
+  w.arbeitstage_ueber0,
+  greatest(0, 90 - w.arbeitstage_ueber0) as rest_bis_90_tage,
+  (w.erster_arbeitstag + 104) as austrittsdatum_15_wochen,
+  floor((w.letzter_arbeitstag - w.erster_arbeitstag) / 7.0)::int as wochen_seit_start,
+  (w.arbeitstage_ueber0 > 90) as ueberschritten_90_tage,
+  (w.letzter_arbeitstag > (w.erster_arbeitstag + 104)) as ueberschritten_15_wochen,
+  (
+    w.arbeitstage_ueber0 > 90
+    or w.letzter_arbeitstag > (w.erster_arbeitstag + 104)
+  ) as kritisch
+from employees e
+join lateral (
+  select
+    extract(year from we.datum)::int as saison_jahr,
+    min(we.datum) filter (where we.stunden > 0) as erster_arbeitstag,
+    max(we.datum) filter (where we.stunden > 0) as letzter_arbeitstag,
+    count(distinct we.datum) filter (where we.stunden > 0) as arbeitstage_ueber0
+  from work_entries we
+  where we.employee_id = e.id
+  group by extract(year from we.datum)
+) w on true
+where w.erster_arbeitstag is not null;
+
+grant select on employee_sv_pruefung to authenticated;
 
 -- ---------------------------------------------------------------------------
 -- 13. Row Level Security (ADR-006: Berechtigungen serverseitig, nicht nur UI)

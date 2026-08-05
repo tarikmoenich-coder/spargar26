@@ -9,6 +9,7 @@ import {
   type Arbeitsgruppe,
   type Employee,
   type Herkunft,
+  type SvPruefung,
 } from "@/lib/types";
 import {
   ANZAHL_PERSONALNUMMERN_KREISE,
@@ -17,6 +18,8 @@ import {
 } from "@/lib/personalnummern";
 import { formatDatumDE } from "@/lib/format";
 import PersonalTabs from "@/components/PersonalTabs";
+
+const CURRENT_YEAR = new Date().getFullYear();
 
 const emptyForm = {
   personal_nr: "",
@@ -45,6 +48,7 @@ export default function MitarbeiterPage() {
   const [letzteAbrechnung, setLetzteAbrechnung] = useState<
     Record<string, string>
   >({});
+  const [svPruefung, setSvPruefung] = useState<Record<string, SvPruefung>>({});
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [showInactive, setShowInactive] = useState(false);
@@ -94,6 +98,7 @@ export default function MitarbeiterPage() {
       { data: gruppenData },
       { data: herkunftData },
       { data: alleNrData },
+      { data: svData },
     ] = await Promise.all([
       query,
       supabase.from("employee_erster_arbeitstag").select("*"),
@@ -101,6 +106,10 @@ export default function MitarbeiterPage() {
       supabase.from("arbeitsgruppen").select("*").order("reihenfolge"),
       supabase.from("herkuenfte").select("*").order("reihenfolge"),
       supabase.from("employees").select("personal_nr, name, vorname"),
+      supabase
+        .from("employee_sv_pruefung")
+        .select("*")
+        .eq("saison_jahr", CURRENT_YEAR),
     ]);
     if (!error) setEmployees((data as Employee[]) ?? []);
     const map: Record<string, string> = {};
@@ -118,6 +127,11 @@ export default function MitarbeiterPage() {
     setGruppen((gruppenData as Arbeitsgruppe[]) ?? []);
     setHerkuenfte((herkunftData as Herkunft[]) ?? []);
     setAllePersonalNummern(alleNrData ?? []);
+    const svMap: Record<string, SvPruefung> = {};
+    (svData as SvPruefung[] | null ?? []).forEach((row) => {
+      svMap[row.employee_id] = row;
+    });
+    setSvPruefung(svMap);
     setLoading(false);
   }
 
@@ -438,12 +452,17 @@ export default function MitarbeiterPage() {
               <th>Abrechnungsart</th>
               <th>Aktiv seit</th>
               <th>Zuletzt abgerechnet am</th>
+              <th>Rest bis 90 Tage</th>
+              <th>Austrittsdatum (15 Wo.)</th>
+              <th>SV-Status</th>
               <th>Status</th>
               {canEdit && <th></th>}
             </tr>
           </thead>
           <tbody>
-            {filtered.map((emp) => (
+            {filtered.map((emp) => {
+              const sv = svPruefung[emp.id];
+              return (
               <tr key={emp.id} className={emp.aktiv ? "" : "opacity-50"}>
                 <td>{emp.personal_nr}</td>
                 <td>
@@ -461,6 +480,21 @@ export default function MitarbeiterPage() {
                 <td>{ABRECHNUNGSART_LABELS[emp.abrechnungsart]}</td>
                 <td>{formatDatumDE(aktivSeit[emp.id])}</td>
                 <td>{formatDatumDE(letzteAbrechnung[emp.id])}</td>
+                <td>{sv ? sv.rest_bis_90_tage : "—"}</td>
+                <td>{sv ? formatDatumDE(sv.austrittsdatum_15_wochen) : "—"}</td>
+                <td>
+                  {sv ? (
+                    sv.kritisch ? (
+                      <span className="font-medium text-red-600">
+                        ⚠ Überschritten
+                      </span>
+                    ) : (
+                      <span className="text-emerald-700">OK</span>
+                    )
+                  ) : (
+                    "—"
+                  )}
+                </td>
                 <td>{emp.aktiv ? "aktiv" : "inaktiv"}</td>
                 {canEdit && (
                   <td className="flex gap-2">
@@ -479,7 +513,8 @@ export default function MitarbeiterPage() {
                   </td>
                 )}
               </tr>
-            ))}
+              );
+            })}
           </tbody>
         </table>
       )}

@@ -52,14 +52,20 @@ Enthalten:
   Unterschriftenfeldern
 - Kassenbuch (Einzahlungen) mit Saldo und einfacher Kassenprüfung -
   Bar-Vorschüsse mindern automatisch den Kassenbestand, Überweisungen nicht
+- 90-Tage-/15-Wochen-Kontrolle (SV-Freiheit landwirtschaftliche
+  Saisonarbeit, OI-004): Spalten auf der Personal-Seite (Rest bis 90 Tage,
+  theoretisches Austrittsdatum, Status) sowie eine "Management"-Seite mit
+  allen kritischen Fällen. Reine Tage-/Wochen-Zählung auf Basis "1. bis
+  letzter Arbeitstag mit Stunden > 0" - ersetzt nicht die rechtliche
+  Prüfung der Sozialversicherungsbefreiung selbst (eigenes Formular nötig,
+  noch offen)
 - Rollen/Rechte serverseitig über Postgres Row Level Security
 - Append-only Audit-Log für Personal, Stunden, Vorschüsse, Kassenbuch
 
 **Nicht enthalten** (siehe "Nächste Schritte"):
 - Finalisierte Auszahlungsliste/Lohnabrechnungs-Export
-- 90-Tage-/14-Wochen-Beschäftigungsprüfung (rechtliche Regel muss vom
-  Auftraggeber/Steuerberater final freigegeben werden, siehe Open Issue
-  OI-004 im Fachkonzept)
+- Rechtliche Prüfung der SV-Befreiung selbst (eigenes Formular, siehe
+  offener Punkt OI-004 unten) - aktuell nur die reine Tage-/Wochen-Zählung
 - Druckvorlagen (Stundenzettel A5/A6 als PDF)
 - Migrations-Import aus der bestehenden Excel-Datei
 
@@ -125,8 +131,12 @@ Die App läuft dann auf http://localhost:3000.
 Diese Punkte betreffen die Datenqualität/Rechtssicherheit und lassen sich
 nicht ohne dich bzw. eine Steuerberatung klären:
 
-- OI-004: Exakte Definition der "90 Tage"/"14 Wochen"-Regel (rechtlich
-  verbindlich) für die Beschäftigungsprüfung.
+- OI-004: Die reine Tage-/Wochen-Zählung (90 Tage bzw. 15 Wochen - der
+  Excel-Text "14 Wochen" war ein Tippfehler, korrekt sind 15) ist
+  umgesetzt (Personal-Seite + Management-Seite). Offen: die eigentliche
+  rechtliche Prüfung der Voraussetzungen für Sozialversicherungsbefreiung
+  (eigenes Formular, vom Nutzer noch bereitzustellen/zu erklären) sowie
+  ob "90 Tage" oder "15 Wochen" je Person tatsächlich gilt.
 - OI-009: Exakte Brutto-/Netto-/Abzugsformeln der bisherigen Excel-Datei
   (die aktuelle `season_summary`-Berechnung ist ein Entwurf und muss
   gegen echte, abgeschlossene Abrechnungen verifiziert werden). Stand:
@@ -141,7 +151,9 @@ nicht ohne dich bzw. eine Steuerberatung klären:
   ausgewiesen. Offen: Verifikation mit weiteren echten Testfällen sowie
   eine Oberfläche für die übrigen `season_bonuses`-Felder (Akkord-,
   Ausgleichs-, Fahrer-, Erdbeer-, Spargel-Prämie) - aktuell nur über den
-  Supabase Table Editor pflegbar.
+  Supabase Table Editor pflegbar. Bugfix: eine eingetragene "0" bei den
+  Stunden zählt jetzt korrekt als Anwesenheitstag (Verpflegung/Unterkunft
+  werden abgezogen), kein Eintrag zählt weiterhin nicht.
 - Migration bestehender Personal-/Saisondaten aus der `.xlsm`-Datei in
   dieses Schema (aktuell nicht automatisiert).
 - Druckvorlagen für Stundenzettel (A5/A6) als PDF-Erzeugung.

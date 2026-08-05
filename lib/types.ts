@@ -52,6 +52,28 @@ export interface Employee {
   version?: number;
 }
 
+// 90-Tage-/15-Wochen-Prüfung (SV-Freiheit landwirtschaftliche Saisonarbeit,
+// OI-004). Reine Tage-/Wochen-Zählung - ersetzt nicht die rechtliche Prüfung
+// selbst (eigenes Formular nötig).
+export interface SvPruefung {
+  employee_id: string;
+  personal_nr: string;
+  name: string;
+  vorname: string;
+  abrechnungsart: Abrechnungsart;
+  aktiv: boolean;
+  saison_jahr: number;
+  erster_arbeitstag: string;
+  letzter_arbeitstag: string;
+  arbeitstage_ueber0: number;
+  rest_bis_90_tage: number;
+  austrittsdatum_15_wochen: string;
+  wochen_seit_start: number;
+  ueberschritten_90_tage: boolean;
+  ueberschritten_15_wochen: boolean;
+  kritisch: boolean;
+}
+
 export interface WorkEntry {
   id: number;
   employee_id: string;
