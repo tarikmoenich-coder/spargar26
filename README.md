@@ -199,6 +199,23 @@ nicht ohne dich bzw. eine Steuerberatung klären:
 - Migration bestehender Personal-/Saisondaten aus der `.xlsm`-Datei in
   dieses Schema (aktuell nicht automatisiert).
 - Druckvorlagen für Stundenzettel (A5/A6) als PDF-Erzeugung.
+- OI-010 (Datenschutz/Hosting): Alle personenbezogenen Daten (inkl.
+  Mitarbeiter-Dokumente wie Hochzeitsurkunde/Ausweiskopie) liegen
+  ausschließlich bei Supabase (Datenbank + privater Storage-Bucket).
+  GitHub enthält nur Code, keine Personendaten. Vercel liefert nur die
+  App aus - es gibt keine serverseitigen API-Routen, der Browser spricht
+  bei jeder Aktion direkt mit Supabase, sensible Inhalte laufen also
+  nicht über Vercel. Offen/zu prüfen: (1) Region des Supabase-Projekts
+  im Dashboard kontrollieren (Project Settings → General → Region) - für
+  DSGVO-Konformität sollte das eine EU-Region sein; (2) Auftrags-
+  verarbeitungsverträge (AVV) mit Supabase und Vercel abschließen.
+  Migration auf einen eigenen Server ist grundsätzlich möglich, da
+  Supabase offiziell Self-Hosting via Docker Compose anbietet (Postgres,
+  Auth, Storage, Realtime sind offene Bausteine) - `schema.sql` ist dafür
+  bereits 1:1 nutzbar, die eigentlichen Daten (inkl. hochgeladener
+  Dokumente) müssten aber separat per `pg_dump`/Storage-Kopie umgezogen
+  werden, und der laufende Betrieb (Wartung, Updates, Backups, TLS)
+  würde dann in Eigenregie liegen statt bei Supabase/Vercel.
 
 ## Architektur
 
