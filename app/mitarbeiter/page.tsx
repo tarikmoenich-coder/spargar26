@@ -15,6 +15,7 @@ import {
   naechsteFreieNummer,
   parsePersonalNrNummer,
 } from "@/lib/personalnummern";
+import { formatDatumDE } from "@/lib/format";
 
 const emptyForm = {
   personal_nr: "",
@@ -443,7 +444,7 @@ export default function MitarbeiterPage() {
                 <td>{emp.ort}</td>
                 <td>{emp.stundenlohn?.toFixed(2)}</td>
                 <td>{ABRECHNUNGSART_LABELS[emp.abrechnungsart]}</td>
-                <td>{aktivSeit[emp.id] ?? "—"}</td>
+                <td>{formatDatumDE(aktivSeit[emp.id])}</td>
                 <td>{emp.aktiv ? "aktiv" : "inaktiv"}</td>
                 {canEdit && (
                   <td className="flex gap-2">
