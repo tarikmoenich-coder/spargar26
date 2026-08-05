@@ -403,6 +403,9 @@ grant select on employee_erster_arbeitstag to authenticated;
 --     die bestehende Excel-Datei verifizieren (siehe Open Issue OI-009).
 --     Pauschale Lohnsteuer (5,275% vom Bruttolohn) nur bei
 --     abrechnungsart = 'pauschal' - Satz ebenfalls ungeprüft, siehe OI-009.
+--     Zwei Zwischenwerte, wie im bisherigen Excel-Workflow üblich:
+--       netto              = Bruttolohn - Lohnsteuer
+--       auszahlungsbetrag  = netto - Verpflegung - Unterkunft - Vorschüsse
 -- ---------------------------------------------------------------------------
 create or replace view season_summary as
 with base as (
@@ -452,19 +455,22 @@ with base as (
   ) we on true
   left join season_bonuses b on b.employee_id = e.id and b.saison_jahr = we.saison_jahr
   left join verpflegungssaetze v on v.saison_jahr = we.saison_jahr
+),
+steuer as (
+  select
+    base.*,
+    case when abrechnungsart = 'pauschal'
+      then round(bruttolohn * 0.05275, 2)
+      else 0
+    end as lohnsteuer_pauschal
+  from base
 )
 select
-  base.*,
-  case when abrechnungsart = 'pauschal'
-    then round(bruttolohn * 0.05275, 2)
-    else 0
-  end as lohnsteuer_pauschal,
-  bruttolohn
-    - (case when abrechnungsart = 'pauschal' then round(bruttolohn * 0.05275, 2) else 0 end)
-    - abzug_verpflegung
-    - abzug_wohnen
-    - vorschuss_summe as nettolohn
-from base;
+  steuer.*,
+  bruttolohn - lohnsteuer_pauschal as netto,
+  bruttolohn - lohnsteuer_pauschal - abzug_verpflegung - abzug_wohnen
+    - vorschuss_summe as auszahlungsbetrag
+from steuer;
 
 grant select on season_summary to authenticated;
 

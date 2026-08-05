@@ -78,7 +78,10 @@ export interface SeasonSummaryRow {
   abzug_wohnen: number;
   vorschuss_summe: number;
   lohnsteuer_pauschal: number;
-  nettolohn: number;
+  // netto = Bruttolohn - Lohnsteuer.
+  // auszahlungsbetrag = netto - Verpflegung - Unterkunft - Vorschüsse.
+  netto: number;
+  auszahlungsbetrag: number;
 }
 
 export interface VerpflegungsSatz {

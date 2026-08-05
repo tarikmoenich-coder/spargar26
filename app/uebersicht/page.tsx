@@ -64,9 +64,10 @@ export default function UebersichtPage() {
                 <th>Abrechnungsart</th>
                 <th>Brutto €</th>
                 <th>Lohnsteuer (pauschal) €</th>
+                <th>Netto €</th>
                 <th>Verpfl./Unterkunft €</th>
                 <th>Vorschüsse €</th>
-                <th>≈ Netto nach Abzügen €</th>
+                <th>Auszahlungsbetrag €</th>
               </tr>
             </thead>
             <tbody>
@@ -81,6 +82,7 @@ export default function UebersichtPage() {
                   <td>{ABRECHNUNGSART_LABELS[r.abrechnungsart]}</td>
                   <td>{Number(r.bruttolohn).toFixed(2)}</td>
                   <td>{Number(r.lohnsteuer_pauschal).toFixed(2)}</td>
+                  <td>{Number(r.netto).toFixed(2)}</td>
                   <td>
                     {(
                       Number(r.abzug_verpflegung) + Number(r.abzug_wohnen)
@@ -88,7 +90,7 @@ export default function UebersichtPage() {
                   </td>
                   <td>{Number(r.vorschuss_summe).toFixed(2)}</td>
                   <td className="font-medium">
-                    {Number(r.nettolohn).toFixed(2)}
+                    {Number(r.auszahlungsbetrag).toFixed(2)}
                   </td>
                 </tr>
               ))}
