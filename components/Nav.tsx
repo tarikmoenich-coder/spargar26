@@ -35,6 +35,11 @@ const items: NavItem[] = [
     roles: ["admin", "hr", "lohnabrechnung", "pruefer", "management"],
   },
   {
+    href: "/auszahlungen",
+    label: "Auszahlungen",
+    roles: ["admin", "hr", "lohnabrechnung", "pruefer", "management"],
+  },
+  {
     href: "/vorschuesse",
     label: "Vorschüsse",
     roles: ["admin", "kasse", "lohnabrechnung", "pruefer", "management"],

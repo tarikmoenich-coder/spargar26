@@ -83,6 +83,10 @@ export interface SeasonSummaryRow {
   abzug_verpflegung: number;
   abzug_wohnen: number;
   vorschuss_summe: number;
+  // Vorfinanzierte Heimreise (bus_hin + bus_rueck aus season_bonuses) -
+  // wird wie ein Vorschuss abgezogen, aber separat ausgewiesen.
+  bus_kosten: number;
+  auszahlungsbeleg_id: number | null;
   lohnsteuer_pauschal: number;
   // Nur bei abrechnungsart 'lohnsteuerklasse_1'/'sozialversicherungspflichtig'
   // - von Hand eingetragener Netto-Betrag aus dem externen Lohnprogramm
@@ -93,6 +97,17 @@ export interface SeasonSummaryRow {
   // Beide NULL, solange netto_extern bei nicht-pauschalen Fällen fehlt.
   netto: number | null;
   auszahlungsbetrag: number | null;
+}
+
+export interface AuszahlungsbelegSummary {
+  id: number;
+  belegnummer: string;
+  saison_jahr: number;
+  erstellt_am: string;
+  erstellt_von: string | null;
+  anzahl_personen: number;
+  summe_auszahlungsbetrag: number | null;
+  weicht_ab: boolean;
 }
 
 export interface VerpflegungsSatz {

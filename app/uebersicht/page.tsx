@@ -40,6 +40,7 @@ export default function UebersichtPage() {
   const [auszahlungslisteZeilen, setAuszahlungslisteZeilen] = useState<
     SeasonSummaryRow[] | null
   >(null);
+  const [letzterBeleg, setLetzterBeleg] = useState<string | null>(null);
 
   const canEdit =
     profile?.role === "admin" || profile?.role === "lohnabrechnung";
@@ -109,15 +110,11 @@ export default function UebersichtPage() {
     setAbrechnenFehler(null);
     const supabase = getSupabaseClient();
     const ids = Array.from(ausgewaehlt);
-    const ergebnisse = await Promise.all(
-      ids.map((employee_id) =>
-        supabase.rpc("saison_abrechnen", {
-          p_employee_id: employee_id,
-          p_saison_jahr: jahr,
-        })
-      )
+    // Eine Belegnummer für die ganze Aktion, egal wie viele Personen.
+    const { data: belegnummer, error: fehler } = await supabase.rpc(
+      "saison_abrechnen_batch",
+      { p_employee_ids: ids, p_saison_jahr: jahr }
     );
-    const fehler = ergebnisse.find((r) => r.error)?.error;
     if (fehler) setAbrechnenFehler(fehler.message);
 
     // Frisch geladene Daten (mit Schnappschuss) direkt für den Ausdruck
@@ -129,6 +126,9 @@ export default function UebersichtPage() {
       .eq("saison_jahr", jahr);
     if (frisch && frisch.length > 0) {
       setAuszahlungslisteZeilen(frisch as SeasonSummaryRow[]);
+    }
+    if (belegnummer && !fehler) {
+      setLetzterBeleg(belegnummer);
     }
 
     setAusgewaehlt(new Set());
@@ -152,6 +152,22 @@ export default function UebersichtPage() {
         employee_id: row.employee_id,
         saison_jahr: row.saison_jahr,
         netto_extern,
+      },
+      { onConflict: "employee_id,saison_jahr" }
+    );
+    load();
+  }
+
+  // Vorfinanzierte Heimreise (Hin+Rück) - als eine gemeinsame Summe erfasst,
+  // da die App die beiden Richtungen aktuell nicht getrennt auswertet.
+  async function busKostenSpeichern(row: SeasonSummaryRow, wert: string) {
+    const supabase = getSupabaseClient();
+    const bus_hin = wert.trim() === "" ? 0 : Number(wert);
+    await supabase.from("season_bonuses").upsert(
+      {
+        employee_id: row.employee_id,
+        saison_jahr: row.saison_jahr,
+        bus_hin,
       },
       { onConflict: "employee_id,saison_jahr" }
     );
@@ -228,6 +244,12 @@ export default function UebersichtPage() {
         )}
       </div>
 
+      {letzterBeleg && (
+        <p className="text-sm text-emerald-800 print:hidden">
+          Beleg {letzterBeleg} erstellt - Details unter „Auszahlungen".
+        </p>
+      )}
+
       {loading ? (
         <p className="text-neutral-500 print:hidden">Lädt…</p>
       ) : (
@@ -257,6 +279,7 @@ export default function UebersichtPage() {
                 <th>Netto €</th>
                 <th>Verpfl./Unterkunft €</th>
                 <th>Vorschüsse €</th>
+                <th>Buskosten €</th>
                 <th>Auszahlungsbetrag €</th>
                 <th>Status</th>
               </tr>
@@ -306,6 +329,21 @@ export default function UebersichtPage() {
                     ).toFixed(2)}
                   </td>
                   <td>{fmt(anzeige(r, "vorschuss_summe"))}</td>
+                  <td>
+                    {!canEdit || r.abgerechnet_am ? (
+                      fmt(anzeige(r, "bus_kosten"))
+                    ) : (
+                      <input
+                        type="number"
+                        step="0.01"
+                        className="w-20"
+                        defaultValue={r.bus_kosten || ""}
+                        placeholder="0,00"
+                        key={`${r.employee_id}-bus-${r.bus_kosten}`}
+                        onBlur={(e) => busKostenSpeichern(r, e.target.value)}
+                      />
+                    )}
+                  </td>
                   <td className="font-medium">
                     {fmt(anzeige(r, "auszahlungsbetrag"))}
                     {weichtAb(r) && (
@@ -353,11 +391,13 @@ export default function UebersichtPage() {
                 <th>Pers.-Nr.</th>
                 <th>Name</th>
                 <th>Std.</th>
+                <th>Tage</th>
                 <th>Brutto €</th>
                 <th>Steuer €</th>
                 <th>Netto €</th>
                 <th>Verpfl./Unterk. €</th>
                 <th>Vorschüsse €</th>
+                <th>Buskosten €</th>
                 <th>Auszahlung €</th>
                 <th>Unterschrift</th>
               </tr>
@@ -370,6 +410,7 @@ export default function UebersichtPage() {
                     {r.name}, {r.vorname}
                   </td>
                   <td>{fmt(anzeige(r, "gesamt_stunden"))}</td>
+                  <td>{anzeige(r, "anwesenheitstage") ?? "—"}</td>
                   <td>{fmt(anzeige(r, "bruttolohn"))}</td>
                   <td>{fmt(anzeige(r, "lohnsteuer_pauschal"))}</td>
                   <td>{fmt(anzeige(r, "netto"))}</td>
@@ -380,6 +421,7 @@ export default function UebersichtPage() {
                     ).toFixed(2)}
                   </td>
                   <td>{fmt(anzeige(r, "vorschuss_summe"))}</td>
+                  <td>{fmt(anzeige(r, "bus_kosten"))}</td>
                   <td className="font-semibold">
                     {fmt(anzeige(r, "auszahlungsbetrag"))}
                   </td>
@@ -389,7 +431,7 @@ export default function UebersichtPage() {
             </tbody>
             <tfoot>
               <tr>
-                <td colSpan={8} className="text-right font-semibold">
+                <td colSpan={10} className="text-right font-semibold">
                   Summe Auszahlung
                 </td>
                 <td className="font-semibold">

@@ -33,6 +33,14 @@ Enthalten:
   rückwirkend; Lohnübersicht warnt mit „⚠", falls die Live-Berechnung
   seither abweicht) und erzeugt eine druckbare Auszahlungsliste (mehrere
   Personen, eine Zeile pro Person, mit Unterschriftenspalte)
+- "Auszahlungen"-Seite: ein Beleg je "Jetzt Abrechnen"-Aktion (analog zu
+  Vorschüssen/Kassenbuch), aufklappbar mit Personalnummer, Name, Stunden,
+  Anwesenheitstage, Brutto, Steuer, Netto, Verpflegung/Unterkunft,
+  Vorschüsse, Buskosten und Auszahlungsbetrag je Person, mit
+  Abweichungs-Warnung und eigener Druckfunktion je Beleg
+- Buskosten (vorfinanzierte Heimreise) als eigene, sichtbare
+  Abzugsposition im Auszahlungsbetrag (getrennt von Kassen-Vorschüssen,
+  "damit es zu keinen Missverständnissen kommen kann")
 - Bei Abrechnungsart "Lohnsteuerklasse 1"/"sozialversicherungspflichtig":
   Eingabefeld für den vom externen Lohnprogramm gelieferten Netto-Betrag
   (App berechnet hier bewusst keine eigene Lohnsteuer)
@@ -125,14 +133,15 @@ nicht ohne dich bzw. eine Steuerberatung klären:
   Netto/Auszahlungsbetrag-Trennung + manuelle Eingabe des externen
   Lohnprogramm-Nettos (bei Lohnsteuerklasse 1/sozialversicherungspflichtig)
   sind umgesetzt. Die Formel (Brutto → 5,275% Steuer bei "pauschal" →
-  Netto → − Verpflegung/Unterkunft − Vorschüsse → Auszahlungsbetrag)
-  wurde gegen das Blatt "Auszahlungsbeleg" der Original-Excel-Datei
-  geprüft (Testperson Pers.-Nr. 3036) und stimmt exakt überein. Offen:
-  Verifikation mit weiteren echten Testfällen sowie die Rolle der
-  `season_bonuses`-Felder `bus_hin`/`bus_rueck` (aktuell nicht in der
-  Brutto-Berechnung berücksichtigt, im Excel-Blatt "Ausz.Liste" aber
-  offenbar relevant - dieses Blatt selbst ist allerdings sehr
-  unübersichtlich/teilweise defekt und nicht direkt auswertbar).
+  Netto → − Verpflegung/Unterkunft − Vorschüsse − Buskosten →
+  Auszahlungsbetrag) wurde gegen das Blatt "Auszahlungsbeleg" der
+  Original-Excel-Datei geprüft (Testperson Pers.-Nr. 3036) und stimmt
+  exakt überein. Buskosten (`bus_hin`/`bus_rueck`, vorfinanzierte
+  Heimreise) werden jetzt als eigene Abzugsposition erfasst und
+  ausgewiesen. Offen: Verifikation mit weiteren echten Testfällen sowie
+  eine Oberfläche für die übrigen `season_bonuses`-Felder (Akkord-,
+  Ausgleichs-, Fahrer-, Erdbeer-, Spargel-Prämie) - aktuell nur über den
+  Supabase Table Editor pflegbar.
 - Migration bestehender Personal-/Saisondaten aus der `.xlsm`-Datei in
   dieses Schema (aktuell nicht automatisiert).
 - Druckvorlagen für Stundenzettel (A5/A6) als PDF-Erzeugung.

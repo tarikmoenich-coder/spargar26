@@ -181,6 +181,19 @@ create table periods (
 );
 
 -- ---------------------------------------------------------------------------
+-- 4a. Auszahlungsbelege: eine Belegnummer je "Jetzt Abrechnen"-Aktion,
+--     unabhängig davon wie viele Personen dabei gleichzeitig abgerechnet
+--     wurden (analog zu Vorschüssen/Kassenbuch).
+-- ---------------------------------------------------------------------------
+create table auszahlungsbelege (
+  id bigint generated always as identity primary key,
+  belegnummer text not null unique,
+  saison_jahr int not null,
+  erstellt_am timestamptz not null default now(),
+  erstellt_von uuid references profiles (id)
+);
+
+-- ---------------------------------------------------------------------------
 -- 5. Saison-Boni & Zulagen (aus Sheet "Summen": Akkord, Prämien, Fahrer, Bus)
 -- ---------------------------------------------------------------------------
 create table season_bonuses (
@@ -205,6 +218,7 @@ create table season_bonuses (
   -- dieser Markierung kollidiert).
   abgerechnet_am timestamptz,
   abgerechnet_von uuid references profiles (id),
+  auszahlungsbeleg_id bigint references auszahlungsbelege (id),
   -- Eingefrorener Stand von season_summary zum Zeitpunkt des Abrechnens
   -- (Stunden, Brutto, Abzüge, Netto, Auszahlungsbetrag, ...). Spätere
   -- Änderungen an Sätzen/Vorschüssen dürfen eine bereits ausgezahlte
@@ -217,44 +231,67 @@ create table season_bonuses (
   unique (employee_id, saison_jahr)
 );
 
--- "Jetzt Abrechnen" auf der Lohnübersicht: markiert die Saison für diese
--- Person als abgerechnet UND setzt employees.aktiv = false (sichtbarer
--- Status), atomar in einer Transaktion. security definer, weil die Rolle
--- lohnabrechnung season_bonuses pflegen darf, aber employees.aktiv laut
--- RLS eigentlich nur admin/hr ändern dürfen - diese Funktion ist der eine
--- kontrollierte Ausnahmeweg dafür, ohne die employees-Policy generell zu
--- öffnen.
-create or replace function saison_abrechnen(p_employee_id uuid, p_saison_jahr int)
-returns void language plpgsql security definer as $$
+-- "Jetzt Abrechnen" auf der Lohnübersicht (Mehrfachauswahl): erstellt EINEN
+-- Auszahlungsbeleg für die ganze Aktion (analog zu Vorschüssen/Kassenbuch),
+-- markiert jede übergebene Person als abgerechnet, friert ihren Stand als
+-- Schnappschuss ein und setzt employees.aktiv = false, alles atomar in
+-- einer Transaktion. security definer, weil die Rolle lohnabrechnung
+-- season_bonuses pflegen darf, aber employees.aktiv laut RLS eigentlich
+-- nur admin/hr ändern dürfen - diese Funktion ist der eine kontrollierte
+-- Ausnahmeweg dafür, ohne die employees-Policy generell zu öffnen.
+create or replace function saison_abrechnen_batch(
+  p_employee_ids uuid[],
+  p_saison_jahr int
+)
+returns text language plpgsql security definer as $$
 declare
   s season_summary%rowtype;
+  neuer_beleg_id bigint;
+  neue_belegnummer text;
+  emp_id uuid;
 begin
   if current_role_name() not in ('admin', 'lohnabrechnung') then
     raise exception 'Keine Berechtigung für "Jetzt Abrechnen"';
   end if;
 
-  select * into s from season_summary
-  where employee_id = p_employee_id and saison_jahr = p_saison_jahr;
+  neue_belegnummer := naechste_belegnummer('AZ-' || to_char(now(), 'MM-YYYY'));
 
-  if not found then
-    raise exception 'Keine Saison-Daten für diese Person/dieses Jahr gefunden';
-  end if;
+  insert into auszahlungsbelege (belegnummer, saison_jahr, erstellt_von)
+  values (neue_belegnummer, p_saison_jahr, auth.uid())
+  returning id into neuer_beleg_id;
 
-  -- 'snapshot' aus s selbst entfernen, sonst würde sich bei mehrfachem
-  -- Abrechnen derselben Person der alte Schnappschuss im neuen verschachteln.
-  insert into season_bonuses (employee_id, saison_jahr, abgerechnet_am, abgerechnet_von, snapshot)
-  values (p_employee_id, p_saison_jahr, now(), auth.uid(), to_jsonb(s) - 'snapshot')
-  on conflict (employee_id, saison_jahr)
-  do update set
-    abgerechnet_am = now(),
-    abgerechnet_von = auth.uid(),
-    snapshot = excluded.snapshot;
+  foreach emp_id in array p_employee_ids loop
+    select * into s from season_summary
+    where employee_id = emp_id and saison_jahr = p_saison_jahr;
 
-  update employees set aktiv = false where id = p_employee_id;
+    if found then
+      -- 'snapshot' aus s selbst entfernen, sonst würde sich bei mehrfachem
+      -- Abrechnen derselben Person der alte Schnappschuss im neuen
+      -- verschachteln.
+      insert into season_bonuses (
+        employee_id, saison_jahr, abgerechnet_am, abgerechnet_von,
+        snapshot, auszahlungsbeleg_id
+      )
+      values (
+        emp_id, p_saison_jahr, now(), auth.uid(),
+        to_jsonb(s) - 'snapshot', neuer_beleg_id
+      )
+      on conflict (employee_id, saison_jahr)
+      do update set
+        abgerechnet_am = now(),
+        abgerechnet_von = auth.uid(),
+        snapshot = excluded.snapshot,
+        auszahlungsbeleg_id = neuer_beleg_id;
+
+      update employees set aktiv = false where id = emp_id;
+    end if;
+  end loop;
+
+  return neue_belegnummer;
 end;
 $$;
 
-grant execute on function saison_abrechnen(uuid, int) to authenticated;
+grant execute on function saison_abrechnen_batch(uuid[], int) to authenticated;
 
 -- ---------------------------------------------------------------------------
 -- 6. Verpflegungs-/Wohnen-Sätze (ADR-007: versioniert je Saisonjahr, über
@@ -463,6 +500,10 @@ grant select on employee_erster_arbeitstag to authenticated;
 --     Zwei Zwischenwerte, wie im bisherigen Excel-Workflow üblich:
 --       netto              = Bruttolohn - Lohnsteuer
 --       auszahlungsbetrag  = netto - Verpflegung - Unterkunft - Vorschüsse
+--                            - Buskosten
+--     Buskosten (bus_hin/bus_rueck): vorfinanzierte Heimreise, wird wie ein
+--     Vorschuss abgezogen, aber separat ausgewiesen ("damit es zu keinen
+--     Missverständnissen kommen kann").
 -- ---------------------------------------------------------------------------
 create or replace view season_summary as
 with base as (
@@ -491,6 +532,8 @@ with base as (
     b.netto_extern,
     b.abgerechnet_am,
     b.snapshot,
+    b.auszahlungsbeleg_id,
+    coalesce(b.bus_hin, 0) + coalesce(b.bus_rueck, 0) as bus_kosten,
     coalesce(v.verpflegung, 0) * we.anwesenheitstage as abzug_verpflegung,
     coalesce(v.wohnen, 0) * we.anwesenheitstage as abzug_wohnen,
     coalesce((
@@ -538,7 +581,7 @@ select
   steuer.*,
   -- NULL, solange bei nicht-pauschalen Abrechnungsarten noch kein
   -- netto_extern eingetragen wurde - bewusst kein Platzhalterwert.
-  netto - abzug_verpflegung - abzug_wohnen - vorschuss_summe
+  netto - abzug_verpflegung - abzug_wohnen - vorschuss_summe - bus_kosten
     as auszahlungsbetrag
 from steuer;
 
@@ -559,6 +602,32 @@ group by employee_id;
 grant select on employee_letzte_abrechnung to authenticated;
 
 -- ---------------------------------------------------------------------------
+-- 12d. View: Auszahlungsbeleg-Übersicht für die "Auszahlungen"-Seite -
+--      Belegnummer, Anzahl Personen, Summe, und ob sich der eingefrorene
+--      Stand einer enthaltenen Person seither von der Live-Berechnung
+--      unterscheidet (z.B. weil danach ein Satz/Vorschuss geändert wurde).
+-- ---------------------------------------------------------------------------
+create or replace view auszahlungsbeleg_summary as
+select
+  ab.id,
+  ab.belegnummer,
+  ab.saison_jahr,
+  ab.erstellt_am,
+  ab.erstellt_von,
+  count(sb.employee_id) as anzahl_personen,
+  sum((sb.snapshot ->> 'auszahlungsbetrag')::numeric) as summe_auszahlungsbetrag,
+  bool_or(
+    (sb.snapshot ->> 'auszahlungsbetrag')::numeric is distinct from ss.auszahlungsbetrag
+  ) as weicht_ab
+from auszahlungsbelege ab
+join season_bonuses sb on sb.auszahlungsbeleg_id = ab.id
+left join season_summary ss
+  on ss.employee_id = sb.employee_id and ss.saison_jahr = sb.saison_jahr
+group by ab.id, ab.belegnummer, ab.saison_jahr, ab.erstellt_am, ab.erstellt_von;
+
+grant select on auszahlungsbeleg_summary to authenticated;
+
+-- ---------------------------------------------------------------------------
 -- 13. Row Level Security (ADR-006: Berechtigungen serverseitig, nicht nur UI)
 -- ---------------------------------------------------------------------------
 alter table profiles enable row level security;
@@ -568,6 +637,7 @@ alter table employees enable row level security;
 alter table work_entries enable row level security;
 alter table periods enable row level security;
 alter table season_bonuses enable row level security;
+alter table auszahlungsbelege enable row level security;
 alter table verpflegungssaetze enable row level security;
 alter table advances enable row level security;
 alter table advance_recipients enable row level security;
@@ -627,6 +697,10 @@ create policy "periods_admin_write" on periods for all
 create policy "season_bonuses_rw" on season_bonuses for all
   using (current_role_name() in ('admin', 'lohnabrechnung'))
   with check (current_role_name() in ('admin', 'lohnabrechnung'));
+-- auszahlungsbelege: nur lesend per Policy - Schreiben ausschließlich über
+-- die security-definer Funktion saison_abrechnen_batch (wie Audit-Log).
+create policy "auszahlungsbelege_select" on auszahlungsbelege for select
+  using (auth.uid() is not null);
 create policy "verpflegungssaetze_rw" on verpflegungssaetze for all
   using (is_admin()) with check (is_admin());
 create policy "advances_select" on advances for select
