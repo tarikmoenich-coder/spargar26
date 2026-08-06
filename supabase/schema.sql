@@ -60,6 +60,17 @@ returns boolean language sql stable as $$
   select current_role_name() = 'admin';
 $$;
 
+-- Schmale, breit zugängliche Sicht (nur id + full_name, kein role/aktiv) -
+-- "profiles_select" lässt jeden nur die eigene Zeile lesen, wodurch z.B.
+-- der Bearbeiter-Name bei Kassenbewegungen für alle außer admin/die
+-- handelnde Person selbst als "—" erschien. Namen sind nicht sensibel
+-- genug, um das zu rechtfertigen - anders als role/aktiv, die bewusst
+-- eingeschränkt bleiben.
+create or replace view profile_namen as
+select id, full_name from profiles;
+
+grant select on profile_namen to authenticated;
+
 -- ---------------------------------------------------------------------------
 -- 1a. Arbeitsgruppen (z.B. "Sortierer", "Träger", "Schälmannschaft") - dient
 --     der übersichtlichen Gruppierung/Sortierung auf der Stundenerfassung

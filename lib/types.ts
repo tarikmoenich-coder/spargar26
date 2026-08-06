@@ -194,6 +194,14 @@ export interface Kassenbewegung {
   hinweis: string | null;
 }
 
+// Aus der schmalen, breit zugänglichen Sicht "profile_namen" - zeigt nur
+// den Namen, nicht role/aktiv (profiles selbst lässt jeden nur die eigene
+// Zeile lesen).
+export interface ProfilName {
+  id: string;
+  full_name: string;
+}
+
 // Ein Vorschuss-Eintrag für die "Suche"-Seite (schmale, breit zugängliche
 // Sicht - kein Bearbeiter/keine Belegnummer wie in der vollen
 // advances-Tabelle, Begründung aber bewusst mit dabei).

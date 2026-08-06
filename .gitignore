@@ -1,3 +1,6 @@
 node_modules/
 .next/
 .env.local
+
+# Office-Sperrdateien (entstehen, wenn z.B. README.md gerade in Word offen ist)
+~$*

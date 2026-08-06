@@ -3,7 +3,12 @@
 import { useEffect, useState } from "react";
 import { getSupabaseClient } from "@/lib/supabase/client";
 import { useProfile } from "@/lib/useProfile";
-import type { Advance, CashDeposit, Kassenbewegung } from "@/lib/types";
+import type {
+  Advance,
+  CashDeposit,
+  Kassenbewegung,
+  ProfilName,
+} from "@/lib/types";
 
 interface CashCheckRow {
   id: number;
@@ -29,9 +34,8 @@ export default function KassePage() {
   const { profile } = useProfile();
   const [deposits, setDeposits] = useState<CashDeposit[]>([]);
   const [barVorschuesse, setBarVorschuesse] = useState<Advance[]>([]);
-  const [bewegungen, setBewegungen] = useState<
-    (Kassenbewegung & { profiles?: { full_name: string } | null })[]
-  >([]);
+  const [bewegungen, setBewegungen] = useState<Kassenbewegung[]>([]);
+  const [namenVon, setNamenVon] = useState<Record<string, string>>({});
   const [checks, setChecks] = useState<CashCheckRow[]>([]);
   const [toleranz, setToleranz] = useState(50);
   const [loading, setLoading] = useState(true);
@@ -54,6 +58,7 @@ export default function KassePage() {
       { data: bew },
       { data: chk },
       { data: settings },
+      { data: namen },
     ] = await Promise.all([
       supabase
         .from("cash_deposits")
@@ -70,7 +75,7 @@ export default function KassePage() {
         .limit(200),
       supabase
         .from("kassenbewegungen")
-        .select("*, profiles(full_name)")
+        .select("*")
         .order("zeitstempel", { ascending: false })
         .limit(100),
       supabase
@@ -82,12 +87,21 @@ export default function KassePage() {
         .from("kassenpruefung_einstellungen")
         .select("toleranz_euro")
         .single(),
+      // Schmale, breit zugängliche Sicht - profiles selbst lässt jeden nur
+      // die eigene Zeile lesen, damit der Bearbeiter-Name unten trotzdem
+      // für alle sichtbaren Rollen korrekt angezeigt wird.
+      supabase.from("profile_namen").select("*"),
     ]);
     setDeposits((dep as CashDeposit[]) ?? []);
     setBarVorschuesse((adv as Advance[]) ?? []);
-    setBewegungen(bew ?? []);
+    setBewegungen((bew as Kassenbewegung[]) ?? []);
     setChecks((chk as CashCheckRow[]) ?? []);
     if (settings) setToleranz(Number(settings.toleranz_euro));
+    const namenMap: Record<string, string> = {};
+    ((namen as ProfilName[]) ?? []).forEach((p) => {
+      namenMap[p.id] = p.full_name;
+    });
+    setNamenVon(namenMap);
     setLoading(false);
   }
 
@@ -266,7 +280,11 @@ export default function KassePage() {
                         {Number(b.delta).toFixed(2)}
                       </td>
                       <td>{b.zahlungsart}</td>
-                      <td>{b.profiles?.full_name ?? "—"}</td>
+                      <td>
+                        {b.bearbeiter_id
+                          ? namenVon[b.bearbeiter_id] ?? "—"
+                          : "—"}
+                      </td>
                       <td>{b.hinweis}</td>
                     </tr>
                   ))}
