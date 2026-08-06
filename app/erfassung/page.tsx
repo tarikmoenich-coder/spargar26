@@ -1,6 +1,7 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { Suspense, useCallback, useEffect, useRef, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { getSupabaseClient } from "@/lib/supabase/client";
 import { useProfile } from "@/lib/useProfile";
 import type {
@@ -14,15 +15,6 @@ const OHNE_GRUPPE_KEY = "__ohne__";
 
 function todayIso() {
   return new Date().toISOString().slice(0, 10);
-}
-
-// Liest einen URL-Parameter (z.B. von einem Sprung-Link aus dem
-// Management, "?datum=...&employee=..."), clientseitig - kein
-// useSearchParams()/Suspense nötig, da diese App komplett clientseitig
-// rendert.
-function urlParam(name: string): string | null {
-  if (typeof window === "undefined") return null;
-  return new URLSearchParams(window.location.search).get(name);
 }
 
 // Reine Kalendertag-Arithmetik auf Basis von "YYYY-MM-DD" - bewusst über
@@ -78,15 +70,20 @@ function gruppiere(
   }));
 }
 
-export default function ErfassungPage() {
+function ErfassungInner() {
   const { profile } = useProfile();
   const canGruppeAendern =
     profile?.role === "admin" || profile?.role === "hr";
+  // useSearchParams() statt window.location.search: reagiert zuverlässig
+  // auch auf clientseitige <Link>-Navigation, bei der Next.js diese Route
+  // wiederverwendet statt sie neu zu mounten (sonst würde ein Sprung-Link
+  // von "?datum=...&employee=..." nur nach einem harten Reload wirken).
+  const searchParams = useSearchParams();
   // Standardmäßig gestern vorausgewählt (Nutzer trägt meist die Stunden
   // des Vortages nach), nicht heute - außer ein Sprung-Link (z.B. vom
   // Stundenmonitoring im Management) gibt ein konkretes Datum vor.
   const [datum, setDatum] = useState(() => {
-    const p = urlParam("datum");
+    const p = searchParams.get("datum");
     return p && /^\d{4}-\d{2}-\d{2}$/.test(p) ? p : addDays(todayIso(), -1);
   });
   const [employees, setEmployees] = useState<Employee[]>([]);
@@ -154,7 +151,9 @@ export default function ErfassungPage() {
   // durch die kurze "Lädt…"-Anzeige nach ganz oben. Anfangswert kommt vom
   // "employee"-URL-Parameter eines Sprung-Links (z.B. Stundenmonitoring im
   // Management) - dieselbe Restore-Logik springt dann direkt zur Person.
-  const fokusEmployeeIdRef = useRef<string | null>(urlParam("employee"));
+  const fokusEmployeeIdRef = useRef<string | null>(
+    searchParams.get("employee")
+  );
   const scrollYRef = useRef<number | null>(null);
 
   function merkeFokusUndScroll() {
@@ -167,6 +166,20 @@ export default function ErfassungPage() {
     merkeFokusUndScroll();
     setDatum(neuesDatum);
   }
+
+  // Falls Next.js diese Seite bei einer erneuten Navigation von einem
+  // Sprung-Link aus wiederverwendet (kein Neu-Mount, siehe Kommentar oben),
+  // greift der Anfangswert von useState()/useRef() nicht mehr - deshalb
+  // zusätzlich auf Änderungen der URL-Parameter selbst reagieren.
+  useEffect(() => {
+    const datumParam = searchParams.get("datum");
+    const employeeParam = searchParams.get("employee");
+    if (datumParam && /^\d{4}-\d{2}-\d{2}$/.test(datumParam)) {
+      fokusEmployeeIdRef.current = employeeParam;
+      setDatum(datumParam);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams.toString()]);
 
   useEffect(() => {
     if (loading) return;
@@ -593,5 +606,14 @@ export default function ErfassungPage() {
         ))
       )}
     </div>
+  );
+}
+
+export default function ErfassungPage() {
+  // useSearchParams() erfordert eine Suspense-Grenze (Next.js App Router).
+  return (
+    <Suspense fallback={<p className="text-neutral-500">Lädt…</p>}>
+      <ErfassungInner />
+    </Suspense>
   );
 }
