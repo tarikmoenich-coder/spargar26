@@ -146,6 +146,16 @@ create table employees (
   saison_ende date,
   -- ADR-011: kein Löschen von Personen mit Historie - stattdessen deaktivieren
   aktiv boolean not null default true,
+  -- Schwarze Liste: dauerhaftes "nicht mehr erwünscht"-Flag, unabhängig vom
+  -- aktiv-Status. Wird bei der Personalplanung geprüft, sobald ein
+  -- Kandidat mit dieser (auch inaktiven) Person verknüpft wird - siehe
+  -- personal_kandidaten.verknuepfter_employee_id weiter unten. Absichtlich
+  -- NICHT im eingeschränkten "grant select" für Nicht-admin/hr-Rollen
+  -- enthalten (wie IBAN/SV-Nr.).
+  schwarze_liste boolean not null default false,
+  schwarze_liste_grund text,
+  schwarze_liste_von uuid references profiles (id),
+  schwarze_liste_am timestamptz,
   notiz text,
   -- Optimistische Nebenläufigkeit (ADR-010): Version wird bei jedem Update
   -- hochgezählt; das Frontend muss die zuletzt gelesene Version mitschicken.
@@ -208,6 +218,55 @@ create index idx_employee_documents_employee on employee_documents (employee_id)
 insert into storage.buckets (id, name, public)
 values ('mitarbeiter-dokumente', 'mitarbeiter-dokumente', false)
 on conflict (id) do nothing;
+
+-- ---------------------------------------------------------------------------
+-- 2b. Personalplanung: Kandidaten vor der Aktivierung
+--     Getrennt von employees, damit Zu-/Absagen in der Planungsphase nicht
+--     ständig echte employees-Datensätze/Personalnummern verbrauchen.
+--     Personalnummern werden hier schon RESERVIERT (die App zählt beim
+--     Vorschlagen der nächsten freien Nummer employees UND nicht-stornierte
+--     Kandidaten als "belegt", siehe lib/personalnummern.ts), aber erst bei
+--     Aktivierung final an employees vergeben. Anders als employees
+--     (ADR-011: kein Löschen) dürfen Kandidaten storniert werden, ohne
+--     Historie zu haben - der Datensatz bleibt zur Nachvollziehbarkeit
+--     erhalten (status = 'storniert'), die Nummer wird dadurch aber sofort
+--     wieder frei, weil stornierte Kandidaten beim "belegt"-Zählen nicht
+--     mitzählen.
+-- ---------------------------------------------------------------------------
+create table personal_kandidaten (
+  id uuid primary key default gen_random_uuid(),
+  personal_nr text not null unique,
+  name text not null,
+  vorname text not null,
+  geburtsdatum date,
+  nationalitaet text,
+  herkunft text references herkuenfte (wert)
+    on update cascade on delete set null,
+  -- Falls diese Person schon einmal hier war (eigene, ggf. inaktive
+  -- employees-Zeile): Verknüpfung macht die Schwarze-Liste-Prüfung möglich
+  -- und wird bei der Aktivierung genutzt, um die bestehende Person zu
+  -- reaktivieren statt eine zweite anzulegen (Historie bleibt an einer ID).
+  verknuepfter_employee_id uuid references employees (id) on delete set null,
+  -- Individueller Vertragszeitraum - bewusst NICHT aus employees.saison_
+  -- beginn/-ende übernommen, da der tatsächliche Arbeitsvertrag oft davon
+  -- abweicht (Nutzer-Vorgabe 2026-08-06).
+  arbeitsbeginn_datum date,
+  arbeitsende_datum date,
+  geplante_ankunft date,
+  status text not null default 'geplant'
+    check (status in ('geplant', 'angereist', 'storniert')),
+  storniert_grund text,
+  notiz text,
+  -- Bei Aktivierung ("Anreise vorbereiten") befüllt: welcher employees-
+  -- Datensatz daraus entstanden ist bzw. reaktiviert wurde.
+  aktivierter_employee_id uuid references employees (id) on delete set null,
+  erstellt_von uuid references profiles (id) default auth.uid(),
+  erstellt_am timestamptz not null default now(),
+  version int not null default 1,
+  updated_at timestamptz not null default now()
+);
+
+create index idx_personal_kandidaten_status on personal_kandidaten (status);
 
 -- ---------------------------------------------------------------------------
 -- 3. Tageserfassung (ersetzt Sheets "Jan" bis "August")
@@ -636,6 +695,12 @@ create trigger trg_audit_employee_documents
 create trigger trg_audit_periods
   after insert or update on periods
   for each row execute function write_audit_log();
+-- Personalplanung: Anlage/Änderung/Stornierung/Aktivierung eines
+-- Kandidaten mitloggen (enthält u.a. Geburtsdatum/Staatsangehörigkeit,
+-- daher wie employees behandelt).
+create trigger trg_audit_personal_kandidaten
+  after insert or update on personal_kandidaten
+  for each row execute function write_audit_log();
 
 -- ---------------------------------------------------------------------------
 -- Trigger: updated_at + version automatisch pflegen (optimistische Sperre)
@@ -652,6 +717,8 @@ $$;
 create trigger trg_employees_updated_at before update on employees
   for each row execute function set_updated_at_and_version();
 create trigger trg_work_entries_updated_at before update on work_entries
+  for each row execute function set_updated_at_and_version();
+create trigger trg_personal_kandidaten_updated_at before update on personal_kandidaten
   for each row execute function set_updated_at_and_version();
 
 -- ---------------------------------------------------------------------------
@@ -964,6 +1031,7 @@ alter table cash_checks enable row level security;
 alter table kassenpruefung_einstellungen enable row level security;
 alter table audit_log enable row level security;
 alter table employee_documents enable row level security;
+alter table personal_kandidaten enable row level security;
 
 -- profiles
 create policy "profiles_select" on profiles for select
@@ -985,6 +1053,12 @@ create policy "herkuenfte_admin_write" on herkuenfte for all
 
 -- employees: volle Sicht/Bearbeitung für admin und hr
 create policy "employees_admin_hr_all" on employees for all
+  using (current_role_name() in ('admin', 'hr'))
+  with check (current_role_name() in ('admin', 'hr'));
+
+-- Personalplanung: wie employees nur admin/hr (Personalplanung-Frage
+-- vom Nutzer 2026-08-06 explizit so festgelegt).
+create policy "personal_kandidaten_admin_hr_all" on personal_kandidaten for all
   using (current_role_name() in ('admin', 'hr'))
   with check (current_role_name() in ('admin', 'hr'));
 

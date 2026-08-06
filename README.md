@@ -30,6 +30,20 @@ Enthalten:
 - Personalnummern-Übersicht: 10 Nummernkreise (1–999, 1000–1999, …),
   Dubletten-Erkennung, nächste freie Nummer je Kreis - Kreis-Auswahl beim
   Neuanlegen zeigt den Nummernbereich direkt mit an (z.B. "Kreis 1 (1-999)")
+- Eigene Unterseite "Personal → Planung" (nur admin/hr): Kandidaten für
+  die kommende Saison vorab anlegen, bevor sie tatsächlich anreisen -
+  gruppiert nach Herkunft. Personalnummern werden dabei nur reserviert
+  (nicht final vergeben); sagt ein Kandidat ab, wird seine Nummer sofort
+  wieder frei. Beim Anlegen kann eine bereits bekannte (auch inaktive)
+  Person verknüpft werden - warnt automatisch, falls diese auf der
+  Schwarzen Liste steht. Über "Anreise vorbereiten" (Mehrfachauswahl)
+  wird aus einem Kandidaten ein echter Mitarbeiter unter "Personal":
+  verknüpfte Personen werden reaktiviert (Historie bleibt an einer ID),
+  neue Personen werden mit ihrer reservierten Nummer angelegt
+- "Schwarze Liste"-Flag im Personalstamm (nur admin/hr sichtbar, wie
+  IBAN/SV-Nr.): dauerhaftes "nicht mehr erwünscht"-Markierung je Person,
+  unabhängig vom Aktiv-Status - wird bei der Personalplanung automatisch
+  geprüft
 - Eigene Unterseite "Personal → Dokumente" (nur admin/hr, wie andere
   sensible Personaldaten): Tabelle wie im Personalstamm (Pers.-Nr.,
   Herkunft, Name, Vorname, Ort), dahinter eine Spalte je Dokument-
@@ -188,7 +202,7 @@ nicht nur im Menü versteckt.
 | Rolle | Sichtbare Menüpunkte | Kernrechte |
 |---|---|---|
 | `admin` | Alle | Voller Zugriff auf alles, inkl. Einstellungen, Kassenprüfungen freigeben |
-| `hr` | Personal, Stundenerfassung, Suche, Lohn, Management | Personalstamm + Dokumente voll pflegen (inkl. SV-Nr./IBAN/Ausweiskopien), Stunden erfassen, Lohnübersicht/Vorschüsse nur ansehen (nicht bearbeiten), Monatsabschluss sperren/öffnen |
+| `hr` | Personal, Stundenerfassung, Suche, Lohn, Management | Personalstamm + Dokumente voll pflegen (inkl. SV-Nr./IBAN/Ausweiskopien), Personalplanung (Kandidaten, Schwarze Liste) verwalten, Stunden erfassen, Lohnübersicht/Vorschüsse nur ansehen (nicht bearbeiten), Monatsabschluss sperren/öffnen |
 | `zeiterfassung` | Stundenerfassung, Suche | Nur Stunden eintragen/ändern; sieht Personal nur mit eingeschränkten Feldern (keine SV-Nr./IBAN etc.) |
 | `kasse` | Suche, Lohn, Kassenbuch | Vorschüsse erfassen/stornieren/korrigieren, Kassenbuch führen, Kassenprüfung durchführen |
 | `lohnabrechnung` | Suche, Lohn | Lohnübersicht ansehen **und bearbeiten** (Buskosten, Kautionen, "Jetzt Abrechnen"), Vorschüsse einsehen |

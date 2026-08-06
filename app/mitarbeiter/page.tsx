@@ -39,6 +39,8 @@ const emptyForm = {
   iban: "",
   bic: "",
   zahlungsempfaenger: "",
+  schwarze_liste: false,
+  schwarze_liste_grund: "",
 };
 
 export default function MitarbeiterPage() {
@@ -185,6 +187,8 @@ export default function MitarbeiterPage() {
       iban: emp.iban ?? "",
       bic: emp.bic ?? "",
       zahlungsempfaenger: emp.zahlungsempfaenger ?? "",
+      schwarze_liste: emp.schwarze_liste ?? false,
+      schwarze_liste_grund: emp.schwarze_liste_grund ?? "",
     });
   }
 
@@ -214,6 +218,18 @@ export default function MitarbeiterPage() {
       iban: form.iban || null,
       bic: form.bic || null,
       zahlungsempfaenger: form.zahlungsempfaenger || null,
+      schwarze_liste: form.schwarze_liste,
+      schwarze_liste_grund: form.schwarze_liste ? form.schwarze_liste_grund || null : null,
+      // Wer/wann gesetzt hat, nur bei tatsächlicher Änderung mitschreiben -
+      // gleiches Muster wie gesperrt_von/entsperrt_von beim Monatsabschluss.
+      ...(form.schwarze_liste !== (editingId
+        ? employees.find((e) => e.id === editingId)?.schwarze_liste ?? false
+        : false)
+        ? {
+            schwarze_liste_von: profile?.id ?? null,
+            schwarze_liste_am: new Date().toISOString(),
+          }
+        : {}),
     };
 
     const { error } = editingId
@@ -415,6 +431,27 @@ export default function MitarbeiterPage() {
               setForm({ ...form, zahlungsempfaenger: e.target.value })
             }
           />
+          <div className="col-span-full flex flex-col gap-1 rounded border border-red-200 bg-red-50 p-2">
+            <label className="flex items-center gap-2 text-sm font-medium text-red-800">
+              <input
+                type="checkbox"
+                checked={form.schwarze_liste}
+                onChange={(e) =>
+                  setForm({ ...form, schwarze_liste: e.target.checked })
+                }
+              />
+              Schwarze Liste – nicht mehr erwünscht
+            </label>
+            {form.schwarze_liste && (
+              <input
+                placeholder="Grund (wird bei Verknüpfung in der Personalplanung angezeigt)"
+                value={form.schwarze_liste_grund}
+                onChange={(e) =>
+                  setForm({ ...form, schwarze_liste_grund: e.target.value })
+                }
+              />
+            )}
+          </div>
           <div className="col-span-full flex gap-2">
             <button
               type="submit"
@@ -475,6 +512,7 @@ export default function MitarbeiterPage() {
               <th>SV-Status</th>
               <th>Führerschein</th>
               <th>Status</th>
+              <th>Schwarze Liste</th>
               {canEdit && <th></th>}
             </tr>
           </thead>
@@ -523,6 +561,18 @@ export default function MitarbeiterPage() {
                   )}
                 </td>
                 <td>{emp.aktiv ? "aktiv" : "inaktiv"}</td>
+                <td>
+                  {emp.schwarze_liste ? (
+                    <span
+                      className="font-medium text-red-600"
+                      title={emp.schwarze_liste_grund ?? undefined}
+                    >
+                      ⚠ Ja
+                    </span>
+                  ) : (
+                    "—"
+                  )}
+                </td>
                 {canEdit && (
                   <td className="flex gap-2">
                     <button

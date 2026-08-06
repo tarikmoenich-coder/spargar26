@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 import { useEffect, useRef } from "react";
 
 const tabs = [
+  { href: "/personalplanung", label: "Planung" },
   { href: "/mitarbeiter", label: "Personalstamm" },
   { href: "/personal-dokumente", label: "Dokumente" },
   { href: "/personalnummern", label: "Personalnummern" },

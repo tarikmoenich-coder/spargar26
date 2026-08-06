@@ -90,6 +90,13 @@ export interface Employee {
   saison_beginn: string | null;
   saison_ende: string | null;
   aktiv: boolean;
+  // Schwarze Liste: dauerhaftes "nicht mehr erwünscht"-Flag, unabhängig vom
+  // aktiv-Status. Nur admin/hr sehen diese Felder (siehe grant select in
+  // schema.sql).
+  schwarze_liste?: boolean;
+  schwarze_liste_grund?: string | null;
+  schwarze_liste_von?: string | null;
+  schwarze_liste_am?: string | null;
   version?: number;
 }
 
@@ -293,6 +300,35 @@ export interface AdvanceRecipientDetail {
   name: string;
   vorname: string;
   anteil: number;
+}
+
+// Personalplanung: eine Person VOR der Aktivierung (Anreise). Getrennt von
+// Employee, damit Zu-/Absagen in der Planungsphase nicht ständig echte
+// Mitarbeiter-Datensätze/Personalnummern verbrauchen - siehe Kommentar bei
+// personal_kandidaten in schema.sql.
+export type KandidatStatus = 'geplant' | 'angereist' | 'storniert';
+
+export interface PersonalKandidat {
+  id: string;
+  personal_nr: string;
+  name: string;
+  vorname: string;
+  geburtsdatum: string | null;
+  nationalitaet: string | null;
+  herkunft: string | null;
+  // Falls diese Person schon einmal hier war (eigene, ggf. inaktive
+  // Employee-Zeile) - macht die Schwarze-Liste-Prüfung möglich.
+  verknuepfter_employee_id: string | null;
+  arbeitsbeginn_datum: string | null;
+  arbeitsende_datum: string | null;
+  geplante_ankunft: string | null;
+  status: KandidatStatus;
+  storniert_grund: string | null;
+  notiz: string | null;
+  aktivierter_employee_id: string | null;
+  erstellt_von: string | null;
+  erstellt_am: string;
+  version: number;
 }
 
 export interface CashDeposit {
