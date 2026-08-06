@@ -23,19 +23,24 @@ alter table personal_kandidaten
 
 -- 2) status-Constraint erweitern ---------------------------------------------
 -- Der bisherige Status 'angereist' (= "fertig") wird durch die neu live
--- berechnete Vollständigkeits-Prüfung ersetzt. WICHTIG: erst den alten
--- Constraint (Standard-Postgres-Name für einen unbenannten Check auf der
--- status-Spalte) durch den neuen ersetzen, DANACH bestehende 'angereist'-
--- Zeilen auf 'anreiseliste' ummappen - andersherum (wie in einer früheren
--- Version dieser Datei) schlägt das UPDATE fehl, weil der alte Constraint
--- den neuen Wert 'anreiseliste' zu dem Zeitpunkt noch nicht erlaubt.
+-- berechnete Vollständigkeits-Prüfung ersetzt. Henne-Ei-Problem: der neue
+-- Constraint erlaubt 'angereist' nicht mehr (also schlägt er beim Hinzufügen
+-- an bestehenden 'angereist'-Zeilen fehl), der alte Constraint erlaubt aber
+-- 'anreiseliste' noch nicht (also schlägt das Ummappen vorher fehl). Lösung:
+-- den neuen Constraint zunächst mit NOT VALID hinzufügen (überspringt die
+-- Prüfung bestehender Zeilen, gilt aber schon für neue Schreibvorgänge -
+-- die folgende Ummappung wird also bereits korrekt durchgesetzt), dann
+-- ummappen, dann den Constraint nachträglich validieren.
 
 alter table personal_kandidaten drop constraint if exists personal_kandidaten_status_check;
 alter table personal_kandidaten
   add constraint personal_kandidaten_status_check
-  check (status in ('geplant', 'anreiseliste', 'storniert'));
+  check (status in ('geplant', 'anreiseliste', 'storniert'))
+  not valid;
 
 update personal_kandidaten set status = 'anreiseliste' where status = 'angereist';
+
+alter table personal_kandidaten validate constraint personal_kandidaten_status_check;
 
 -- 3) Neue View: Vollständigkeits-Prüfung für die Anreiseliste ---------------
 
