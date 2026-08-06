@@ -44,6 +44,16 @@ Enthalten:
   Rollen lesbare Sicht - das Dokument selbst bleibt admin/hr-only)
 - Personal-Import aus Excel/CSV mit Vorschau, Spaltenerkennung und
   Fehlerprüfung (u.a. bereits vergebene Personalnummern)
+- Monatsabschluss: Monatsfilter auf der Lohnübersicht zeigt je Mitarbeiter
+  Stunden, Anwesenheitstage, Basis-Brutto (nur Stunden × Stundenlohn,
+  ohne Saison-Prämien - die bleiben ein Saison-Gesamtbetrag) sowie
+  Verpflegung/Unterkunft in € für genau diesen Monat (z.B. für die
+  monatliche Abführung an die Vermietungsgesellschaft). „⚠" markiert
+  Personen, deren letzter Eintrag vor dem erwarteten Monatsende liegt,
+  aktive Personen ganz ohne Eintrag im Monat werden separat aufgeführt.
+  admin/hr können den Monat abschließen (sperrt die Stundenerfassung für
+  diesen Monat serverseitig, nicht nur im Menü) und mit Pflichtgrund
+  wieder öffnen, um vergessene Stunden nachzutragen
 - Menüpunkt "Lohn" fasst Lohnübersicht, Vorschüsse und Auszahlungen als
   Unterreiter zusammen (analog zu "Personal")
 - Automatische Saison-Lohnübersicht (Stunden, Prämien, Verpflegungs-/
@@ -176,7 +186,7 @@ nicht nur im Menü versteckt.
 | Rolle | Sichtbare Menüpunkte | Kernrechte |
 |---|---|---|
 | `admin` | Alle | Voller Zugriff auf alles, inkl. Einstellungen, Kassenprüfungen freigeben |
-| `hr` | Personal, Stundenerfassung, Suche, Lohn, Management | Personalstamm + Dokumente voll pflegen (inkl. SV-Nr./IBAN/Ausweiskopien), Stunden erfassen, Lohnübersicht/Vorschüsse nur ansehen (nicht bearbeiten) |
+| `hr` | Personal, Stundenerfassung, Suche, Lohn, Management | Personalstamm + Dokumente voll pflegen (inkl. SV-Nr./IBAN/Ausweiskopien), Stunden erfassen, Lohnübersicht/Vorschüsse nur ansehen (nicht bearbeiten), Monatsabschluss sperren/öffnen |
 | `zeiterfassung` | Stundenerfassung, Suche | Nur Stunden eintragen/ändern; sieht Personal nur mit eingeschränkten Feldern (keine SV-Nr./IBAN etc.) |
 | `kasse` | Suche, Lohn, Kassenbuch | Vorschüsse erfassen/stornieren/korrigieren, Kassenbuch führen, Kassenprüfung durchführen |
 | `lohnabrechnung` | Suche, Lohn | Lohnübersicht ansehen **und bearbeiten** (Buskosten, Kautionen, "Jetzt Abrechnen"), Vorschüsse einsehen |

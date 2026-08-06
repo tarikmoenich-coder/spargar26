@@ -8,6 +8,7 @@ import type {
   Arbeitsgruppe,
   Employee,
   FuehrerscheinEintrag,
+  Period,
   WorkEntry,
 } from "@/lib/types";
 
@@ -102,6 +103,13 @@ function ErfassungInner() {
   const [fuehrerschein, setFuehrerschein] = useState<
     Record<string, string[]>
   >({});
+  // Monatsabschluss: ist der Monat des gewählten Datums gesperrt? Wird
+  // serverseitig ohnehin über RLS durchgesetzt (siehe work_entries_write/
+  // -update in schema.sql) - hier nur für die Anzeige/zum Sperren der
+  // Eingabefelder, damit man nicht erst beim Speichern auf einen Fehler
+  // läuft.
+  const [periode, setPeriode] = useState<Period | null>(null);
+  const gesperrt = periode?.gesperrt ?? false;
 
   const vorherigeDaten = [
     addDays(datum, -3),
@@ -143,6 +151,21 @@ function ErfassungInner() {
   useEffect(() => {
     loadAll(datum);
   }, [datum, loadAll]);
+
+  useEffect(() => {
+    async function ladePeriode() {
+      const [jahrStr, monatStr] = datum.split("-");
+      const supabase = getSupabaseClient();
+      const { data } = await supabase
+        .from("periods")
+        .select("*")
+        .eq("saison_jahr", Number(jahrStr))
+        .eq("monat", Number(monatStr))
+        .maybeSingle();
+      setPeriode((data as Period) ?? null);
+    }
+    ladePeriode();
+  }, [datum]);
 
   // Beim Tageswechsel (Pfeil-Buttons oder Datumsfeld) bleibt man an
   // derselben Stelle: Merkt sich vor dem Wechsel, welches Stunden-Feld
@@ -411,6 +434,15 @@ function ErfassungInner() {
           </span>
         </div>
 
+        {gesperrt && (
+          <p className="rounded border border-amber-300 bg-amber-50 px-3 py-2 text-sm font-medium text-amber-800">
+            🔒 Dieser Monat ist im Rahmen des Monatsabschlusses gesperrt -
+            die Stunden für diesen Tag können nicht mehr geändert werden.
+            Zum Nachtragen muss der Monat auf der Lohnübersicht bewusst
+            wieder geöffnet werden.
+          </p>
+        )}
+
         {!loading && gruppierungen.length > 1 && (
           <div className="flex flex-wrap gap-2">
             {gruppierungen.map((g) => (
@@ -521,7 +553,7 @@ function ErfassungInner() {
                           data-employee-id={emp.id}
                           onBlur={(e) => saveHours(emp.id, e.target.value)}
                           onKeyDown={handleStundenKeyDown}
-                          disabled={savingId === emp.id}
+                          disabled={gesperrt || savingId === emp.id}
                         />
                       </td>
                       <td>
@@ -531,6 +563,7 @@ function ErfassungInner() {
                           onChange={(e) =>
                             saveMarkierung(emp.id, e.target.value)
                           }
+                          disabled={gesperrt}
                         >
                           <option value="">—</option>
                           <option value="U">U (Urlaub/Feiertag)</option>
@@ -544,6 +577,7 @@ function ErfassungInner() {
                           defaultValue={entry?.notiz ?? ""}
                           key={`n-${emp.id}-${entry?.version ?? 0}`}
                           onBlur={(e) => saveNotiz(emp.id, e.target.value)}
+                          disabled={gesperrt}
                         />
                       </td>
                       {canGruppeAendern && (

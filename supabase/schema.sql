@@ -239,8 +239,17 @@ create table periods (
   saison_jahr int not null,
   monat int not null check (monat between 1 and 12),
   gesperrt boolean not null default false,
-  gesperrt_von uuid references profiles (id),
+  -- default auth.uid() statt vom Client übergeben - fälschungssicherer,
+  -- da RLS ohnehin nur admin/hr das Schreiben erlaubt.
+  gesperrt_von uuid references profiles (id) default auth.uid(),
   gesperrt_am timestamptz,
+  -- Beim Wiederöffnen eines abgeschlossenen Monats (z.B. um vergessene
+  -- Stunden nachzutragen) - Grund ist Pflichtfeld, wie bei Storno/
+  -- Vorschuss-Korrektur, damit eine nachträgliche Änderung sichtbar und
+  -- nachvollziehbar bleibt statt unbemerkt durchzurutschen.
+  entsperrt_von uuid references profiles (id) default auth.uid(),
+  entsperrt_am timestamptz,
+  entsperrt_grund text,
   primary key (saison_jahr, monat)
 );
 
@@ -622,6 +631,11 @@ create trigger trg_audit_cash_checks
 create trigger trg_audit_employee_documents
   after insert or update or delete on employee_documents
   for each row execute function write_audit_log();
+-- Monatsabschluss (Sperren/Wiederöffnen) - vollständige Historie im
+-- Audit-Log, zusätzlich zum Pflichtgrund direkt in periods.entsperrt_grund.
+create trigger trg_audit_periods
+  after insert or update on periods
+  for each row execute function write_audit_log();
 
 -- ---------------------------------------------------------------------------
 -- Trigger: updated_at + version automatisch pflegen (optimistische Sperre)
@@ -756,6 +770,50 @@ select
 from steuer;
 
 grant select on season_summary to authenticated;
+
+-- ---------------------------------------------------------------------------
+-- 12b2. View: Monats-Stunden/-Brutto/-Verpflegung je Mitarbeiter, für den
+--       Monatsfilter auf der Lohnübersicht (Monatsabschluss-Kontrolle).
+--       Bewusst getrennt von season_summary (bleibt unverändert Saison-
+--       Basis für "Jetzt Abrechnen"): Akkord-/Prämien-/Fahrer-/Erdbeer-/
+--       Spargel-Beträge werden weiterhin nur EINMAL PRO SAISON erfasst
+--       (nicht pro Monat), fließen deshalb hier bewusst NICHT ein -
+--       basis_brutto ist nur Stunden × Stundenlohn für den Monat. Nur
+--       Zeilen mit mindestens einem Eintrag in dem Monat (kein
+--       generate_series über alle denkbaren Monate) - Personen ganz ohne
+--       Eintrag im Monat werden im Frontend separat über die volle
+--       Mitarbeiterliste erkannt.
+-- ---------------------------------------------------------------------------
+create or replace view season_summary_monat as
+select
+  e.id as employee_id,
+  e.personal_nr,
+  e.name,
+  e.vorname,
+  e.gruppe_nr,
+  e.aktiv,
+  extract(year from we.datum)::int as saison_jahr,
+  extract(month from we.datum)::int as monat,
+  sum(coalesce(we.stunden, 0) + (case when we.markierung = 'U' then 8 else 0 end)) as gesamt_stunden,
+  count(*) filter (where we.stunden is not null or we.markierung is not null) as anwesenheitstage,
+  max(we.datum) filter (where we.stunden is not null or we.markierung is not null) as letzter_eintrag,
+  (sum(coalesce(we.stunden, 0) + (case when we.markierung = 'U' then 8 else 0 end))
+    * coalesce(e.stundenlohn, 0)) as basis_brutto,
+  coalesce(v.verpflegung, 0)
+    * count(*) filter (where we.stunden is not null or we.markierung is not null)
+    as abzug_verpflegung,
+  coalesce(v.wohnen, 0)
+    * count(*) filter (where we.stunden is not null or we.markierung is not null)
+    as abzug_wohnen
+from employees e
+join work_entries we on we.employee_id = e.id
+left join verpflegungssaetze v on v.saison_jahr = extract(year from we.datum)::int
+group by
+  e.id, e.personal_nr, e.name, e.vorname, e.gruppe_nr, e.aktiv,
+  extract(year from we.datum), extract(month from we.datum),
+  v.verpflegung, v.wohnen;
+
+grant select on season_summary_monat to authenticated;
 
 -- ---------------------------------------------------------------------------
 -- 12c. View: letztes Abrechnungsdatum je Mitarbeiter, für die Personal-Seite
@@ -951,18 +1009,38 @@ create policy "mitarbeiter_dokumente_storage_admin_hr" on storage.objects for al
   with check (bucket_id = 'mitarbeiter-dokumente' and current_role_name() in ('admin', 'hr'));
 
 -- work_entries: zeiterfassung/admin/hr/lohnabrechnung dürfen schreiben,
--- alle eingeloggten Rollen dürfen lesen.
+-- alle eingeloggten Rollen dürfen lesen. Zusätzlich: kein Schreiben in
+-- einem per Monatsabschluss gesperrten Monat (periods.gesperrt) - gilt
+-- ausnahmslos für alle Rollen inkl. admin; ein gesperrter Monat muss erst
+-- bewusst (mit Pflichtgrund) wieder geöffnet werden, siehe periods_write.
 create policy "work_entries_select" on work_entries for select
   using (auth.uid() is not null);
 create policy "work_entries_write" on work_entries for insert
-  with check (current_role_name() in ('admin', 'zeiterfassung', 'hr'));
+  with check (
+    current_role_name() in ('admin', 'zeiterfassung', 'hr')
+    and not exists (
+      select 1 from periods p
+      where p.saison_jahr = extract(year from datum)::int
+        and p.monat = extract(month from datum)::int
+        and p.gesperrt = true
+    )
+  );
 create policy "work_entries_update" on work_entries for update
-  using (current_role_name() in ('admin', 'zeiterfassung', 'hr'));
+  using (
+    current_role_name() in ('admin', 'zeiterfassung', 'hr')
+    and not exists (
+      select 1 from periods p
+      where p.saison_jahr = extract(year from datum)::int
+        and p.monat = extract(month from datum)::int
+        and p.gesperrt = true
+    )
+  );
 
--- periods: nur admin sperrt/entsperrt, alle lesen
+-- periods (Monatsabschluss): admin/hr sperren/entsperren, alle lesen.
 create policy "periods_select" on periods for select using (auth.uid() is not null);
-create policy "periods_admin_write" on periods for all
-  using (is_admin()) with check (is_admin());
+create policy "periods_write" on periods for all
+  using (current_role_name() in ('admin', 'hr'))
+  with check (current_role_name() in ('admin', 'hr'));
 
 -- Finanzielle/Compliance-Tabellen: admin, kasse, lohnabrechnung, pruefer
 create policy "season_bonuses_rw" on season_bonuses for all

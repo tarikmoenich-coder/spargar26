@@ -168,6 +168,44 @@ export interface SeasonSummaryRow {
   auszahlungsbetrag: number | null;
 }
 
+// Monats-Ansicht für den Monatsfilter auf der Lohnübersicht (Monats-
+// abschluss-Kontrolle) - bewusst getrennt von SeasonSummaryRow: enthält
+// KEINE Saison-Prämien (Akkord/Fahrer-Zulage/Erdbeer-/Spargel-Prämie), da
+// diese nur einmal pro Saison erfasst werden, nicht pro Monat.
+// basis_brutto = nur Stunden × Stundenlohn für den jeweiligen Monat.
+export interface SeasonSummaryMonatRow {
+  employee_id: string;
+  personal_nr: string;
+  name: string;
+  vorname: string;
+  gruppe_nr: string | null;
+  aktiv: boolean;
+  saison_jahr: number;
+  monat: number;
+  gesamt_stunden: number;
+  anwesenheitstage: number;
+  // Letzter Tag im Monat mit Eintrag (Stunden oder Markierung) - für die
+  // "möglicherweise unvollständig"-Warnung.
+  letzter_eintrag: string;
+  basis_brutto: number;
+  abzug_verpflegung: number;
+  abzug_wohnen: number;
+}
+
+// Monatsabschluss (periods-Tabelle): sperrt/entsperrt die Stundenerfassung
+// für einen Saison-Monat. Wiederöffnen braucht einen Pflichtgrund (wie
+// Storno/Vorschuss-Korrektur).
+export interface Period {
+  saison_jahr: number;
+  monat: number;
+  gesperrt: boolean;
+  gesperrt_von: string | null;
+  gesperrt_am: string | null;
+  entsperrt_von: string | null;
+  entsperrt_am: string | null;
+  entsperrt_grund: string | null;
+}
+
 export interface AuszahlungsbelegSummary {
   id: number;
   belegnummer: string;

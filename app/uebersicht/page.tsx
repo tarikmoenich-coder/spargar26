@@ -7,6 +7,9 @@ import {
   ABRECHNUNGSART_LABELS,
   type Arbeitsgruppe,
   type FuehrerscheinEintrag,
+  type Period,
+  type ProfilName,
+  type SeasonSummaryMonatRow,
   type SeasonSummaryRow,
 } from "@/lib/types";
 import { formatDatumDE } from "@/lib/format";
@@ -15,6 +18,17 @@ import LohnTabs from "@/components/LohnTabs";
 const OHNE_GRUPPE_KEY = "__ohne__";
 
 const CURRENT_YEAR = new Date().getFullYear();
+
+const MONATSNAMEN = [
+  "Januar", "Februar", "März", "April", "Mai", "Juni",
+  "Juli", "August", "September", "Oktober", "November", "Dezember",
+];
+
+// Letzter Kalendertag eines Monats, z.B. (2026, 4) -> "2026-04-30".
+function letzterTagDesMonats(jahr: number, monat: number): string {
+  const letzterTag = new Date(Date.UTC(jahr, monat, 0)).getUTCDate();
+  return `${jahr}-${String(monat).padStart(2, "0")}-${String(letzterTag).padStart(2, "0")}`;
+}
 
 function fmt(n: number | string | null | undefined) {
   return n === null || n === undefined || n === "" ? "—" : Number(n).toFixed(2);
@@ -58,8 +72,30 @@ export default function UebersichtPage() {
   const [letzterBeleg, setLetzterBeleg] = useState<string | null>(null);
   const [abrechnenZahlungsart, setAbrechnenZahlungsart] = useState("BAR");
 
+  // Monatsfilter (0 = "Alle", d.h. die normale Saison-Ansicht oben) - für
+  // die Monatsabschluss-Kontrolle: eigene Sicht mit Monats-Stunden/-Brutto/
+  // -Verpflegung statt der Saison-Summen, siehe season_summary_monat.
+  const [monatFilter, setMonatFilter] = useState(0);
+  const [monatsRows, setMonatsRows] = useState<SeasonSummaryMonatRow[]>([]);
+  const [loadingMonat, setLoadingMonat] = useState(false);
+  const [alleAktiven, setAlleAktiven] = useState<
+    {
+      id: string;
+      personal_nr: string;
+      name: string;
+      vorname: string;
+      gruppe_nr: string | null;
+    }[]
+  >([]);
+  const [periode, setPeriode] = useState<Period | null>(null);
+  const [periodeLaeuft, setPeriodeLaeuft] = useState(false);
+  const [namenVon, setNamenVon] = useState<Record<string, string>>({});
+
   const canEdit =
     profile?.role === "admin" || profile?.role === "lohnabrechnung";
+  // Monatsabschluss: eigene Berechtigung, deckt sich mit der RLS-Policy
+  // "periods_write" (nicht mit canEdit/lohnabrechnung).
+  const canCloseMonth = profile?.role === "admin" || profile?.role === "hr";
 
   async function load() {
     setLoading(true);
@@ -90,6 +126,111 @@ export default function UebersichtPage() {
     }
     ladeGruppen();
   }, []);
+
+  useEffect(() => {
+    async function ladeAktive() {
+      const supabase = getSupabaseClient();
+      const { data } = await supabase
+        .from("employees")
+        .select("id, personal_nr, name, vorname, gruppe_nr")
+        .eq("aktiv", true)
+        .order("name");
+      setAlleAktiven(data ?? []);
+    }
+    async function ladeNamen() {
+      const supabase = getSupabaseClient();
+      const { data } = await supabase.from("profile_namen").select("*");
+      const map: Record<string, string> = {};
+      ((data as ProfilName[]) ?? []).forEach((p) => {
+        map[p.id] = p.full_name;
+      });
+      setNamenVon(map);
+    }
+    ladeAktive();
+    ladeNamen();
+  }, []);
+
+  async function ladeMonat() {
+    if (monatFilter === 0) return;
+    setLoadingMonat(true);
+    const supabase = getSupabaseClient();
+    const [{ data: mRows }, { data: pRow }] = await Promise.all([
+      supabase
+        .from("season_summary_monat")
+        .select("*")
+        .eq("saison_jahr", jahr)
+        .eq("monat", monatFilter),
+      supabase
+        .from("periods")
+        .select("*")
+        .eq("saison_jahr", jahr)
+        .eq("monat", monatFilter)
+        .maybeSingle(),
+    ]);
+    setMonatsRows((mRows as SeasonSummaryMonatRow[]) ?? []);
+    setPeriode((pRow as Period) ?? null);
+    setLoadingMonat(false);
+  }
+
+  useEffect(() => {
+    ladeMonat();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [jahr, monatFilter]);
+
+  async function monatAbschliessen() {
+    if (!profile) return;
+    const bestaetigt = window.confirm(
+      `${MONATSNAMEN[monatFilter - 1]} ${jahr} abschließen? Die ` +
+        `Stundenerfassung ist für diesen Monat danach gesperrt, bis er ` +
+        `bewusst wieder geöffnet wird.`
+    );
+    if (!bestaetigt) return;
+    setPeriodeLaeuft(true);
+    const supabase = getSupabaseClient();
+    const { error } = await supabase.from("periods").upsert(
+      {
+        saison_jahr: jahr,
+        monat: monatFilter,
+        gesperrt: true,
+        gesperrt_von: profile.id,
+        gesperrt_am: new Date().toISOString(),
+      },
+      { onConflict: "saison_jahr,monat" }
+    );
+    setPeriodeLaeuft(false);
+    if (error) {
+      window.alert(`Fehler: ${error.message}`);
+      return;
+    }
+    ladeMonat();
+  }
+
+  async function monatOeffnen() {
+    if (!profile) return;
+    const grund = window.prompt(
+      "Grund für das Wiederöffnen (Pflichtfeld, wird protokolliert):"
+    );
+    if (!grund) return;
+    setPeriodeLaeuft(true);
+    const supabase = getSupabaseClient();
+    const { error } = await supabase.from("periods").upsert(
+      {
+        saison_jahr: jahr,
+        monat: monatFilter,
+        gesperrt: false,
+        entsperrt_von: profile.id,
+        entsperrt_am: new Date().toISOString(),
+        entsperrt_grund: grund,
+      },
+      { onConflict: "saison_jahr,monat" }
+    );
+    setPeriodeLaeuft(false);
+    if (error) {
+      window.alert(`Fehler: ${error.message}`);
+      return;
+    }
+    ladeMonat();
+  }
 
   useEffect(() => {
     async function ladeFuehrerschein() {
@@ -268,6 +409,29 @@ export default function UebersichtPage() {
     (r) => ausgewaehlt.has(r.employee_id) && r.abgerechnet_am
   ).length;
 
+  // Wer "erwartungsgemäß" bis wann Einträge im gewählten Monat haben
+  // sollte: bis heute (falls der Monat noch läuft) oder bis zum Monatsende
+  // (falls er schon vorbei ist).
+  const heuteIso = new Date().toISOString().slice(0, 10);
+  const monatsEnde = monatFilter ? letzterTagDesMonats(jahr, monatFilter) : "";
+  const erwartetesEnde = monatFilter
+    ? heuteIso < monatsEnde
+      ? heuteIso
+      : monatsEnde
+    : "";
+
+  // Aktive Personen ganz ohne Eintrag im gewählten Monat (season_summary_
+  // monat hat für sie schlicht keine Zeile) - separat markiert, damit sie
+  // nicht unbemerkt durchrutschen.
+  const monatsRowsById = new Map(monatsRows.map((r) => [r.employee_id, r]));
+  const passtZurGruppe = (gruppe_nr: string | null) =>
+    !gruppeFilter ||
+    (gruppeFilter === OHNE_GRUPPE_KEY ? !gruppe_nr : gruppe_nr === gruppeFilter);
+  const gefilterteMonatsRows = monatsRows.filter((r) => passtZurGruppe(r.gruppe_nr));
+  const fehlendeImMonat = alleAktiven.filter(
+    (m) => !monatsRowsById.has(m.id) && passtZurGruppe(m.gruppe_nr)
+  );
+
   return (
     <div className="flex flex-col gap-4">
       <LohnTabs />
@@ -322,7 +486,21 @@ export default function UebersichtPage() {
             <option value={OHNE_GRUPPE_KEY}>Ohne Gruppe</option>
           </select>
         </label>
-        {canEdit && (
+        <label className="text-sm">
+          Monat{" "}
+          <select
+            value={monatFilter}
+            onChange={(e) => setMonatFilter(Number(e.target.value))}
+          >
+            <option value={0}>Alle (Saison-Summe)</option>
+            {MONATSNAMEN.map((name, i) => (
+              <option key={name} value={i + 1}>
+                {name}
+              </option>
+            ))}
+          </select>
+        </label>
+        {canEdit && monatFilter === 0 && (
           <label className="text-sm">
             Zahlungsart{" "}
             <select
@@ -334,7 +512,7 @@ export default function UebersichtPage() {
             </select>
           </label>
         )}
-        {canEdit && (
+        {canEdit && monatFilter === 0 && (
           <button
             type="button"
             className="btn"
@@ -346,7 +524,7 @@ export default function UebersichtPage() {
               : "Jetzt Abrechnen"}
           </button>
         )}
-        {canEdit && (
+        {canEdit && monatFilter === 0 && (
           <button
             type="button"
             className="btn-secondary"
@@ -357,18 +535,18 @@ export default function UebersichtPage() {
             {auswahlAnzahlAbgerechnet > 0 ? ` (${auswahlAnzahlAbgerechnet})` : ""}
           </button>
         )}
-        {abrechnenFehler && (
+        {monatFilter === 0 && abrechnenFehler && (
           <span className="text-sm text-red-600">{abrechnenFehler}</span>
         )}
       </div>
 
-      {letzterBeleg && (
+      {monatFilter === 0 && letzterBeleg && (
         <p className="text-sm text-emerald-800 print:hidden">
           Beleg {letzterBeleg} erstellt - Details unter „Auszahlungen".
         </p>
       )}
 
-      {loading ? (
+      {monatFilter === 0 && (loading ? (
         <p className="text-neutral-500 print:hidden">Lädt…</p>
       ) : (
         <div className="overflow-x-auto print:hidden">
@@ -545,6 +723,183 @@ export default function UebersichtPage() {
               ))}
             </tbody>
           </table>
+        </div>
+      ))}
+
+      {monatFilter !== 0 && (
+        <div className="flex flex-col gap-4 print:hidden">
+          <div
+            className={`flex flex-wrap items-center gap-3 rounded border p-3 ${
+              periode?.gesperrt
+                ? "border-amber-300 bg-amber-50"
+                : "border-neutral-200 bg-white"
+            }`}
+          >
+            {periode?.gesperrt ? (
+              <>
+                <span className="text-sm font-medium text-amber-800">
+                  🔒 {MONATSNAMEN[monatFilter - 1]} {jahr} ist abgeschlossen
+                  {periode.gesperrt_am && (
+                    <>
+                      {" "}
+                      (am {formatDatumDE(periode.gesperrt_am)}
+                      {periode.gesperrt_von && namenVon[periode.gesperrt_von]
+                        ? ` von ${namenVon[periode.gesperrt_von]}`
+                        : ""}
+                      )
+                    </>
+                  )}
+                  . Die Stundenerfassung ist für diesen Monat gesperrt.
+                </span>
+                {canCloseMonth && (
+                  <button
+                    type="button"
+                    className="btn-secondary text-xs"
+                    disabled={periodeLaeuft}
+                    onClick={monatOeffnen}
+                  >
+                    Monat wieder öffnen
+                  </button>
+                )}
+              </>
+            ) : (
+              <>
+                <span className="text-sm text-neutral-600">
+                  🔓 {MONATSNAMEN[monatFilter - 1]} {jahr} ist offen.
+                  {periode?.entsperrt_am && (
+                    <>
+                      {" "}
+                      Zuletzt wiedergeöffnet am{" "}
+                      {formatDatumDE(periode.entsperrt_am)}
+                      {periode.entsperrt_von && namenVon[periode.entsperrt_von]
+                        ? ` von ${namenVon[periode.entsperrt_von]}`
+                        : ""}
+                      {periode.entsperrt_grund
+                        ? ` (${periode.entsperrt_grund})`
+                        : ""}
+                      .
+                    </>
+                  )}
+                </span>
+                {canCloseMonth && (
+                  <button
+                    type="button"
+                    className="btn text-xs"
+                    disabled={periodeLaeuft}
+                    onClick={monatAbschliessen}
+                  >
+                    Monat abschließen
+                  </button>
+                )}
+              </>
+            )}
+          </div>
+
+          <p className="text-sm text-neutral-500">
+            Reine Monats-Kontrolle: Stunden, Anwesenheitstage, Basis-Brutto
+            (nur Stunden × Stundenlohn, <strong>ohne</strong> Saison-Prämien
+            wie Akkord/Fahrer-Zulage/Erdbeer-/Spargel-Prämie - die werden
+            weiterhin nur einmal pro Saison erfasst) sowie Verpflegung/
+            Unterkunft als monatlicher Durchlaufposten. Die eigentliche
+            Auszahlung bleibt ein Saison-Vorgang ("Jetzt Abrechnen" oben bei
+            "Alle"). „⚠" bedeutet: letzter Eintrag liegt vor dem erwarteten
+            Ende ({formatDatumDE(erwartetesEnde)}) - möglicherweise fehlen
+            noch Stunden.
+          </p>
+
+          {loadingMonat ? (
+            <p className="text-neutral-500">Lädt…</p>
+          ) : (
+            <div className="overflow-x-auto">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Pers.-Nr.</th>
+                    <th>Name</th>
+                    <th>Gruppe</th>
+                    <th>Std.</th>
+                    <th>Tage</th>
+                    <th>Basis-Brutto €</th>
+                    <th>Verpflegung €</th>
+                    <th>Unterkunft €</th>
+                    <th>Letzter Eintrag</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {gefilterteMonatsRows.map((r) => {
+                    const warnung = r.letzter_eintrag < erwartetesEnde;
+                    return (
+                      <tr
+                        key={r.employee_id}
+                        className={r.aktiv ? "" : "opacity-60"}
+                      >
+                        <td>{r.personal_nr}</td>
+                        <td>
+                          {r.name}, {r.vorname}
+                        </td>
+                        <td className="text-sm text-neutral-500">
+                          {r.gruppe_nr
+                            ? `${r.gruppe_nr} – ${
+                                gruppenByNr.get(r.gruppe_nr)?.bezeichnung ??
+                                r.gruppe_nr
+                              }`
+                            : "—"}
+                        </td>
+                        <td>{fmt(r.gesamt_stunden)}</td>
+                        <td>{r.anwesenheitstage}</td>
+                        <td>{fmt(r.basis_brutto)}</td>
+                        <td>{fmt(r.abzug_verpflegung)}</td>
+                        <td>{fmt(r.abzug_wohnen)}</td>
+                        <td>
+                          {formatDatumDE(r.letzter_eintrag)}
+                          {warnung && (
+                            <span
+                              className="ml-1 text-amber-600"
+                              title={`Möglicherweise unvollständig - letzter Eintrag vor dem erwarteten Ende (${formatDatumDE(erwartetesEnde)})`}
+                            >
+                              ⚠
+                            </span>
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                  {fehlendeImMonat.map((m) => (
+                    <tr key={m.id} className="bg-red-50">
+                      <td>{m.personal_nr}</td>
+                      <td>
+                        {m.name}, {m.vorname}
+                      </td>
+                      <td className="text-sm text-neutral-500">
+                        {m.gruppe_nr
+                          ? `${m.gruppe_nr} – ${
+                              gruppenByNr.get(m.gruppe_nr)?.bezeichnung ??
+                              m.gruppe_nr
+                            }`
+                          : "—"}
+                      </td>
+                      <td>—</td>
+                      <td>—</td>
+                      <td>—</td>
+                      <td>—</td>
+                      <td>—</td>
+                      <td className="font-medium text-red-600">
+                        ⚠ Keine Einträge
+                      </td>
+                    </tr>
+                  ))}
+                  {gefilterteMonatsRows.length === 0 &&
+                    fehlendeImMonat.length === 0 && (
+                      <tr>
+                        <td colSpan={9} className="text-neutral-500">
+                          Keine Daten für diesen Monat.
+                        </td>
+                      </tr>
+                    )}
+                </tbody>
+              </table>
+            </div>
+          )}
         </div>
       )}
 
