@@ -68,8 +68,8 @@ export default function Nav() {
   }
 
   return (
-    <nav className="border-b border-neutral-200 bg-white print:hidden">
-      <div className="mx-auto flex max-w-[1800px] items-center justify-between px-4 py-3">
+    <nav className="sticky top-0 z-50 h-14 border-b border-neutral-200 bg-white print:hidden">
+      <div className="mx-auto flex h-full max-w-[1800px] items-center justify-between px-4">
         <div className="flex items-center gap-4">
           <span className="font-semibold text-emerald-800">Spargar</span>
           {items

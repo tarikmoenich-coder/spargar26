@@ -208,12 +208,14 @@ export default function PersonalDokumentePage() {
         </p>
       </div>
 
-      <input
-        placeholder="Suche nach Name oder Personalnummer…"
-        value={search}
-        onChange={(e) => setSearch(e.target.value)}
-        className="w-72"
-      />
+      <div className="sticky top-[100px] z-30 bg-neutral-50 py-2">
+        <input
+          placeholder="Suche nach Name oder Personalnummer…"
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          className="w-72"
+        />
+      </div>
 
       {loading ? (
         <p className="text-neutral-500">Lädt…</p>

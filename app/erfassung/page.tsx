@@ -309,47 +309,49 @@ export default function ErfassungPage() {
         </p>
       </div>
 
-      <div className="flex items-center gap-3 print:hidden">
-        <label className="text-sm">
-          Datum{" "}
-          <span className="inline-flex items-center gap-1">
-            <button
-              type="button"
-              className="btn-secondary px-2 text-xs"
-              onClick={() => setDatum((d) => addDays(d, -1))}
-              title="Ein Tag zurück"
-            >
-              ←
-            </button>
-            <input
-              type="date"
-              value={datum}
-              onChange={(e) => setDatum(e.target.value)}
-            />
-            <button
-              type="button"
-              className="btn-secondary px-2 text-xs"
-              onClick={() => setDatum((d) => addDays(d, 1))}
-              title="Ein Tag vor"
-            >
-              →
-            </button>
+      <div className="sticky top-14 z-30 flex flex-col gap-2 bg-neutral-50 py-2 print:hidden">
+        <div className="flex items-center gap-3">
+          <label className="text-sm">
+            Datum{" "}
+            <span className="inline-flex items-center gap-1">
+              <button
+                type="button"
+                className="btn-secondary px-2 text-xs"
+                onClick={() => setDatum((d) => addDays(d, -1))}
+                title="Ein Tag zurück"
+              >
+                ←
+              </button>
+              <input
+                type="date"
+                value={datum}
+                onChange={(e) => setDatum(e.target.value)}
+              />
+              <button
+                type="button"
+                className="btn-secondary px-2 text-xs"
+                onClick={() => setDatum((d) => addDays(d, 1))}
+                title="Ein Tag vor"
+              >
+                →
+              </button>
+            </span>
+          </label>
+          <span className="text-sm text-neutral-500">
+            Tagessumme: {gesamtStunden.toFixed(2)} Std.
           </span>
-        </label>
-        <span className="text-sm text-neutral-500">
-          Tagessumme: {gesamtStunden.toFixed(2)} Std.
-        </span>
-      </div>
-
-      {!loading && gruppierungen.length > 1 && (
-        <div className="flex flex-wrap gap-2 print:hidden">
-          {gruppierungen.map((g) => (
-            <a key={g.key} href={`#gruppe-${g.key}`} className="btn-secondary text-xs">
-              {g.anzeige} ({g.employees.length})
-            </a>
-          ))}
         </div>
-      )}
+
+        {!loading && gruppierungen.length > 1 && (
+          <div className="flex flex-wrap gap-2">
+            {gruppierungen.map((g) => (
+              <a key={g.key} href={`#gruppe-${g.key}`} className="btn-secondary text-xs">
+                {g.anzeige} ({g.employees.length})
+              </a>
+            ))}
+          </div>
+        )}
+      </div>
 
       {loading ? (
         <p className="text-neutral-500">Lädt…</p>

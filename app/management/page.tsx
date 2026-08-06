@@ -152,7 +152,7 @@ export default function ManagementPage() {
         </p>
       </div>
 
-      <label className="text-sm">
+      <label className="sticky top-14 z-30 block bg-neutral-50 py-2 text-sm">
         Saison-Jahr{" "}
         <input
           type="number"

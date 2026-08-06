@@ -7,6 +7,9 @@ Nutzer können gleichzeitig arbeiten, Änderungen werden live synchronisiert
 ## Umfang dieser Version (MVP)
 
 Enthalten:
+- Navigation, Unterreiter (Personal/Lohn) und die wichtigste Werkzeugleiste
+  je Seite (Datum, Filter, Suche) bleiben beim Scrollen durch lange Listen
+  sichtbar (fixiert/"sticky")
 - Personalstamm (anlegen/bearbeiten/deaktivieren, keine Löschung), inkl.
   Abrechnungsart (pauschal/Lohnsteuerklasse 1/sozialversicherungspflichtig)
   und automatisch berechnetem "Aktiv seit" (erster Arbeitstag mit Stunden > 0)
