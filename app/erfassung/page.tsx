@@ -347,7 +347,22 @@ function ErfassungInner() {
   // Pfeiltasten hoch/runter im Stunden-Feld springen direkt zum selben
   // Feld der vorherigen/nächsten Person, ohne erst Markierung/Notiz/Gruppe
   // dieser Zeile durchlaufen zu müssen (schnellere Eingabe als mit Tab).
+  // Umschalt+Pfeil runter/hoch springt stattdessen beim GLEICHEN
+  // Mitarbeiter einen Tag vor/zurück - praktisch zum Nacherfassen mehrerer
+  // Tage in Folge, ohne die Maus zu benutzen. Nutzt dieselbe Fokus-Restore-
+  // Logik wie die Datums-Pfeiltasten oben, nur dass hier gezielt DIESES
+  // Feld gemerkt wird statt document.activeElement (das nach .blur()
+  // schon nichts mehr wäre).
   function handleStundenKeyDown(e: React.KeyboardEvent<HTMLInputElement>) {
+    if (e.shiftKey && (e.key === "ArrowDown" || e.key === "ArrowUp")) {
+      e.preventDefault();
+      const empId = e.currentTarget.getAttribute("data-employee-id");
+      fokusEmployeeIdRef.current = empId;
+      scrollYRef.current = window.scrollY;
+      e.currentTarget.blur(); // löst das Speichern über onBlur aus
+      setDatum((d) => addDays(d, e.key === "ArrowDown" ? 1 : -1));
+      return;
+    }
     if (e.key !== "ArrowUp" && e.key !== "ArrowDown") return;
     e.preventDefault();
     const felder = Array.from(
@@ -554,6 +569,7 @@ function ErfassungInner() {
                           onBlur={(e) => saveHours(emp.id, e.target.value)}
                           onKeyDown={handleStundenKeyDown}
                           disabled={gesperrt || savingId === emp.id}
+                          title="↑/↓: vorherige/nächste Person · Umschalt+↑/↓: Vortag/Folgetag derselben Person"
                         />
                       </td>
                       <td>
