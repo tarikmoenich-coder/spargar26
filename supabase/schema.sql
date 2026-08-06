@@ -42,8 +42,16 @@ create table profiles (
   created_at timestamptz not null default now()
 );
 
+-- security definer + fester search_path: OHNE das würde diese Funktion
+-- beim Lesen von profiles wieder die RLS-Policy "profiles_select" auslösen
+-- (die selbst is_admin() -> current_role_name() aufruft) - eine
+-- Endlosschleife, die Postgres irgendwann mit "stack depth limit exceeded"
+-- abbricht. Sicher, da die Funktion ausschließlich die eigene Zeile
+-- (auth.uid()) liest, nichts Fremdes und nichts Schreibendes.
 create or replace function current_role_name()
-returns user_role language sql stable as $$
+returns user_role language sql stable security definer
+set search_path = public
+as $$
   select role from profiles where id = auth.uid();
 $$;
 
