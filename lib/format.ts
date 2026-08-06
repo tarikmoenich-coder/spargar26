@@ -10,3 +10,9 @@ export function formatDatumDE(iso: string | null | undefined): string {
   const [, jahr, monat, tag] = match;
   return `${tag}.${monat}.${jahr}`;
 }
+
+// "13.9" -> "13,90" (deutsches Format, z.B. für generierte Vertragsdokumente).
+export function formatEuro(wert: number | null | undefined): string {
+  if (wert === null || wert === undefined) return "";
+  return wert.toFixed(2).replace(".", ",");
+}

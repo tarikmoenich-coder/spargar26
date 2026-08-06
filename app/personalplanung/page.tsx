@@ -11,15 +11,11 @@ import {
 } from "@/lib/personalnummern";
 import { formatDatumDE } from "@/lib/format";
 import {
-  generiereDokument,
-  generiereKombiniertesDokument,
-  type DokumentSpezifikation,
-} from "@/lib/dokumentGenerator";
-import type {
-  Employee,
-  Herkunft,
-  PersonalKandidat,
-  VerpflegungsSatz,
+  FUEHRERSCHEIN_KATEGORIEN,
+  type Employee,
+  type Herkunft,
+  type PersonalKandidat,
+  type VerpflegungsSatz,
 } from "@/lib/types";
 import PersonalTabs from "@/components/PersonalTabs";
 
@@ -30,18 +26,11 @@ const emptyForm = {
   geburtsdatum: "",
   nationalitaet: "",
   herkunft: "",
-  arbeitsbeginn_datum: "",
-  arbeitsende_datum: "",
   stundenlohn: "",
   geplante_ankunft: "",
+  fuehrerschein: [] as string[],
   notiz: "",
 };
-
-// "13.9" -> "13,90" (deutsches Format für die generierten Dokumente).
-function formatEuro(wert: number | null | undefined): string {
-  if (wert === null || wert === undefined) return "";
-  return wert.toFixed(2).replace(".", ",");
-}
 
 export default function PersonalplanungPage() {
   const { profile } = useProfile();
@@ -63,11 +52,10 @@ export default function PersonalplanungPage() {
   const [ausgewaehlt, setAusgewaehlt] = useState<string[]>([]);
   const [aktivierenLaufend, setAktivierenLaufend] = useState(false);
   const [showStorniert, setShowStorniert] = useState(false);
-  // Für den Werkmietvertrag-Platzhalter «TagessatzWohnen»/
-  // «TagessatzVerpflegung» - neuester Satz (siehe Einstellungen-Seite).
+  // Für die Vorbelegung des Stundenlohns mit dem Mindestlohn (siehe
+  // Einstellungen-Seite).
   const [verpflegungssatz, setVerpflegungssatz] =
     useState<VerpflegungsSatz | null>(null);
-  const [dokumentFehler, setDokumentFehler] = useState<string | null>(null);
 
   async function load() {
     setLoading(true);
@@ -90,9 +78,7 @@ export default function PersonalplanungPage() {
     setKandidaten((kData as PersonalKandidat[]) ?? []);
     setEmployees((eData as Employee[]) ?? []);
     setHerkuenfte((hData as Herkunft[]) ?? []);
-    setVerpflegungssatz(
-      ((vData as VerpflegungsSatz[]) ?? [])[0] ?? null
-    );
+    setVerpflegungssatz(((vData as VerpflegungsSatz[]) ?? [])[0] ?? null);
     setLoading(false);
   }
 
@@ -196,6 +182,15 @@ export default function PersonalplanungPage() {
     setForm(emptyForm);
   }
 
+  function toggleFuehrerschein(kategorie: string) {
+    setForm((f) => ({
+      ...f,
+      fuehrerschein: f.fuehrerschein.includes(kategorie)
+        ? f.fuehrerschein.filter((k) => k !== kategorie)
+        : [...f.fuehrerschein, kategorie],
+    }));
+  }
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (personalNrKonflikt) return;
@@ -210,10 +205,10 @@ export default function PersonalplanungPage() {
       nationalitaet: form.nationalitaet || null,
       herkunft: form.herkunft || null,
       verknuepfter_employee_id: verknuepfterId,
-      arbeitsbeginn_datum: form.arbeitsbeginn_datum || null,
-      arbeitsende_datum: form.arbeitsende_datum || null,
       stundenlohn: form.stundenlohn ? Number(form.stundenlohn) : null,
       geplante_ankunft: form.geplante_ankunft || null,
+      fuehrerschein_kategorien:
+        form.fuehrerschein.length > 0 ? form.fuehrerschein : null,
       notiz: form.notiz || null,
     });
     setSaving(false);
@@ -233,14 +228,16 @@ export default function PersonalplanungPage() {
   }
 
   // Erzeugt aus jedem ausgewählten Kandidaten einen echten employees-
-  // Datensatz: bei einer Verknüpfung wird die bestehende (ggf. inaktive)
-  // Person reaktiviert (Historie bleibt an einer ID - ADR-011), sonst neu
-  // angelegt mit der reservierten Personalnummer.
+  // Datensatz (bei einer Verknüpfung wird die bestehende, ggf. inaktive
+  // Person reaktiviert - Historie bleibt an einer ID, ADR-011; sonst neu
+  // angelegt mit der reservierten Personalnummer) und verschiebt ihn in die
+  // Anreiseliste (Personal → Anreiseliste), wo Vertragszeitraum, Dokumente
+  // und die weiteren Unterlagen erfasst werden.
   async function anreiseVorbereiten() {
     if (ausgewaehlt.length === 0) return;
     if (
       !window.confirm(
-        `${ausgewaehlt.length} Kandidat(en) jetzt aktivieren? Sie erscheinen danach unter "Personal".`
+        `${ausgewaehlt.length} Kandidat(en) jetzt aktivieren und in die Anreiseliste verschieben?`
       )
     ) {
       return;
@@ -296,7 +293,7 @@ export default function PersonalplanungPage() {
       }
       await supabase
         .from("personal_kandidaten")
-        .update({ status: "angereist", aktivierter_employee_id: employeeId })
+        .update({ status: "anreiseliste", aktivierter_employee_id: employeeId })
         .eq("id", k.id);
     }
     setAktivierenLaufend(false);
@@ -316,115 +313,6 @@ export default function PersonalplanungPage() {
       .update({ status: "storniert", storniert_grund: grund })
       .eq("id", k.id);
     load();
-  }
-
-  // Baut die drei Dokument-Spezifikationen (Vorlage + Werte) für einen
-  // Kandidaten - gemeinsam genutzt vom Einzel-Download je Dokumentart und
-  // vom kombinierten Sammel-Dokument für mehrere Personen weiter unten.
-  function dokumentSpezifikationenFuer(
-    k: PersonalKandidat
-  ): Record<
-    "arbeitsvertrag" | "werkmietvertrag" | "bankverbindung",
-    DokumentSpezifikation
-  > {
-    const verknuepft = k.verknuepfter_employee_id
-      ? employees.find((e) => e.id === k.verknuepfter_employee_id) ?? null
-      : null;
-    const gemeinsam = {
-      Name: k.name,
-      Vorname: k.vorname,
-      Geburtsdatum: formatDatumDE(k.geburtsdatum),
-      Staatsangehoerigkeit: k.nationalitaet ?? "",
-      Personalnummer: k.personal_nr,
-    };
-    return {
-      arbeitsvertrag: {
-        vorlage: "Arbeitsvertrag_Vorlage.docx",
-        werte: {
-          ...gemeinsam,
-          ArbeitsbeginnDatum: formatDatumDE(k.arbeitsbeginn_datum),
-          ArbeitsendeDatum: formatDatumDE(k.arbeitsende_datum),
-          Stundenlohn: formatEuro(k.stundenlohn),
-        },
-      },
-      werkmietvertrag: {
-        vorlage: "Werkmietvertrag_Vorlage.docx",
-        werte: {
-          ...gemeinsam,
-          TagessatzWohnen: formatEuro(verpflegungssatz?.wohnen),
-          TagessatzVerpflegung: formatEuro(verpflegungssatz?.verpflegung),
-        },
-      },
-      bankverbindung: {
-        vorlage: "Bankverbindung_Vorlage.docx",
-        werte: {
-          Vorname: k.vorname,
-          Name: k.name,
-          Personalnummer: k.personal_nr,
-          // Bei neuen (nicht verknüpften) Kandidaten noch unbekannt - bleibt
-          // dann bewusst leer, statt "«IBAN»" auszudrucken.
-          Kontoinhaber: verknuepft?.zahlungsempfaenger ?? "",
-          IBAN: verknuepft?.iban ?? "",
-          BIC: verknuepft?.bic ?? "",
-        },
-      },
-    };
-  }
-
-  // Generiert eines der drei Dokumente für EINEN Kandidaten und stößt den
-  // Download an. Funktioniert schon VOR "Anreise vorbereiten" - praktisch,
-  // um Papiere vorzubereiten, bevor die Person überhaupt da ist.
-  async function dokument(
-    art: "arbeitsvertrag" | "werkmietvertrag" | "bankverbindung",
-    k: PersonalKandidat
-  ) {
-    setDokumentFehler(null);
-    const dateiPrefix = `${k.name}_${k.vorname}`.replace(/\s+/g, "_");
-    const spec = dokumentSpezifikationenFuer(k)[art];
-    const artLabel =
-      art === "arbeitsvertrag"
-        ? "Arbeitsvertrag"
-        : art === "werkmietvertrag"
-          ? "Werkmietvertrag"
-          : "Bankverbindung";
-    try {
-      await generiereDokument(
-        spec.vorlage,
-        spec.werte,
-        `${artLabel}_${dateiPrefix}.docx`
-      );
-    } catch (err) {
-      setDokumentFehler(err instanceof Error ? err.message : String(err));
-    }
-  }
-
-  // Alle drei Dokumente für ALLE aktuell ausgewählten (angehakten)
-  // Kandidaten in EINEM druckbaren Word-Dokument zusammenfassen (mit
-  // Seitenumbruch je Dokument) - dieselbe Auswahl wie bei
-  // "Anreise vorbereiten", aber unabhängig davon nutzbar.
-  async function kombinierteDokumente() {
-    if (ausgewaehlt.length === 0) return;
-    setDokumentFehler(null);
-    try {
-      const dokumente: DokumentSpezifikation[] = [];
-      for (const id of ausgewaehlt) {
-        const k = kandidaten.find((x) => x.id === id);
-        if (!k) continue;
-        const spec = dokumentSpezifikationenFuer(k);
-        dokumente.push(spec.arbeitsvertrag, spec.werkmietvertrag, spec.bankverbindung);
-      }
-      const ersterKandidat = kandidaten.find((k) => k.id === ausgewaehlt[0]);
-      const dateiname =
-        ausgewaehlt.length === 1 && ersterKandidat
-          ? `Unterlagen_${ersterKandidat.name}_${ersterKandidat.vorname}.docx`.replace(
-              /\s+/g,
-              "_"
-            )
-          : `Unterlagen_${ausgewaehlt.length}_Personen.docx`;
-      await generiereKombiniertesDokument(dokumente, dateiname);
-    } catch (err) {
-      setDokumentFehler(err instanceof Error ? err.message : String(err));
-    }
   }
 
   const geplante = kandidaten.filter((k) => k.status === "geplant");
@@ -467,8 +355,12 @@ export default function PersonalplanungPage() {
           Kandidaten für die kommende Saison vorab anlegen, bevor sie
           tatsächlich anreisen. Personalnummern werden dabei nur reserviert,
           nicht final vergeben – bei einer Absage wird die Nummer sofort
-          wieder frei. Erst über „Anreise vorbereiten" wird aus einem
-          Kandidaten ein echter Mitarbeiter unter „Personal".
+          wieder frei. Über „Anreise vorbereiten" wird aus einem Kandidaten
+          ein echter Mitarbeiter unter „Personal" und er wandert in die{" "}
+          <a href="/personal-anreiseliste" className="underline">
+            Anreiseliste
+          </a>{" "}
+          weiter, wo Vertragszeitraum und Unterlagen erfasst werden.
         </p>
       </div>
 
@@ -634,26 +526,6 @@ export default function PersonalplanungPage() {
               />
             </label>
             <label className="flex flex-col gap-0.5 text-xs text-neutral-500">
-              Vertragsbeginn
-              <input
-                type="date"
-                value={form.arbeitsbeginn_datum}
-                onChange={(e) =>
-                  setForm({ ...form, arbeitsbeginn_datum: e.target.value })
-                }
-              />
-            </label>
-            <label className="flex flex-col gap-0.5 text-xs text-neutral-500">
-              Vertragsende
-              <input
-                type="date"
-                value={form.arbeitsende_datum}
-                onChange={(e) =>
-                  setForm({ ...form, arbeitsende_datum: e.target.value })
-                }
-              />
-            </label>
-            <label className="flex flex-col gap-0.5 text-xs text-neutral-500">
               Stundenlohn € (für Arbeitsvertrag)
               <input
                 type="number"
@@ -664,6 +536,23 @@ export default function PersonalplanungPage() {
                 }
               />
             </label>
+            <div className="col-span-2 flex flex-col gap-1">
+              <span className="text-xs text-neutral-500">
+                Führerschein (Selbstauskunft)
+              </span>
+              <div className="flex flex-wrap gap-3">
+                {FUEHRERSCHEIN_KATEGORIEN.map((kategorie) => (
+                  <label key={kategorie} className="flex items-center gap-1 text-sm">
+                    <input
+                      type="checkbox"
+                      checked={form.fuehrerschein.includes(kategorie)}
+                      onChange={() => toggleFuehrerschein(kategorie)}
+                    />
+                    {kategorie}
+                  </label>
+                ))}
+              </div>
+            </div>
             <input
               placeholder="Notiz"
               className="col-span-2"
@@ -692,14 +581,6 @@ export default function PersonalplanungPage() {
           </span>
           <button
             type="button"
-            className="btn-secondary"
-            onClick={kombinierteDokumente}
-            title="Arbeitsvertrag, Werkmietvertrag und Bankverbindung aller ausgewählten Personen in einem druckbaren Dokument"
-          >
-            Alle Dokumente drucken
-          </button>
-          <button
-            type="button"
             className="btn"
             disabled={aktivierenLaufend}
             onClick={anreiseVorbereiten}
@@ -707,12 +588,6 @@ export default function PersonalplanungPage() {
             Anreise vorbereiten
           </button>
         </div>
-      )}
-
-      {dokumentFehler && (
-        <p className="rounded border border-red-300 bg-red-50 px-3 py-2 text-sm font-medium text-red-800">
-          Dokument konnte nicht erstellt werden: {dokumentFehler}
-        </p>
       )}
 
       {loading ? (
@@ -736,10 +611,9 @@ export default function PersonalplanungPage() {
                   <th>Vorname</th>
                   <th>Geburtsdatum</th>
                   <th>Geplante Ankunft</th>
-                  <th>Vertragszeitraum</th>
+                  <th>Führerschein</th>
                   <th>Verknüpft</th>
                   <th>Notiz</th>
-                  {canEdit && <th>Dokumente</th>}
                   {canEdit && <th></th>}
                 </tr>
               </thead>
@@ -765,10 +639,9 @@ export default function PersonalplanungPage() {
                       <td>{formatDatumDE(k.geburtsdatum)}</td>
                       <td>{formatDatumDE(k.geplante_ankunft)}</td>
                       <td>
-                        {k.arbeitsbeginn_datum || k.arbeitsende_datum
-                          ? `${formatDatumDE(
-                              k.arbeitsbeginn_datum
-                            )} – ${formatDatumDE(k.arbeitsende_datum)}`
+                        {k.fuehrerschein_kategorien &&
+                        k.fuehrerschein_kategorien.length > 0
+                          ? k.fuehrerschein_kategorien.join(", ")
                           : "—"}
                       </td>
                       <td>
@@ -788,34 +661,6 @@ export default function PersonalplanungPage() {
                         )}
                       </td>
                       <td>{k.notiz ?? "—"}</td>
-                      {canEdit && (
-                        <td className="flex gap-1">
-                          <button
-                            type="button"
-                            className="btn-secondary text-xs"
-                            onClick={() => dokument("arbeitsvertrag", k)}
-                            title="Arbeitsvertrag herunterladen"
-                          >
-                            AV
-                          </button>
-                          <button
-                            type="button"
-                            className="btn-secondary text-xs"
-                            onClick={() => dokument("werkmietvertrag", k)}
-                            title="Werkmiet- und Bewirtungsvertrag herunterladen"
-                          >
-                            Miete
-                          </button>
-                          <button
-                            type="button"
-                            className="btn-secondary text-xs"
-                            onClick={() => dokument("bankverbindung", k)}
-                            title="Bankverbindungs-Erfassungsbogen herunterladen"
-                          >
-                            Bank
-                          </button>
-                        </td>
-                      )}
                       {canEdit && (
                         <td>
                           <button

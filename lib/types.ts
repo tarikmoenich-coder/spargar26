@@ -307,7 +307,10 @@ export interface AdvanceRecipientDetail {
 // Employee, damit Zu-/Absagen in der Planungsphase nicht ständig echte
 // Mitarbeiter-Datensätze/Personalnummern verbrauchen - siehe Kommentar bei
 // personal_kandidaten in schema.sql.
-export type KandidatStatus = 'geplant' | 'angereist' | 'storniert';
+// 'anreiseliste' deckt sowohl "Offen" als auch "Vollständig" ab - das wird
+// NICHT gespeichert, sondern live aus PersonalKandidatChecklisteRow
+// berechnet (siehe dort), damit es nie veraltet/falsch stehen bleiben kann.
+export type KandidatStatus = 'geplant' | 'anreiseliste' | 'storniert';
 
 export interface PersonalKandidat {
   id: string;
@@ -324,13 +327,42 @@ export interface PersonalKandidat {
   arbeitsende_datum: string | null;
   stundenlohn: number | null;
   geplante_ankunft: string | null;
+  // Selbstauskunft beim Anlegen - unabhängig von der hochgeladenen,
+  // geprüften Kopie in employee_documents (siehe employee_fuehrerschein_
+  // kategorien/FuehrerscheinEintrag).
+  fuehrerschein_kategorien: string[] | null;
   status: KandidatStatus;
   storniert_grund: string | null;
   notiz: string | null;
   aktivierter_employee_id: string | null;
+  // Ab hier: Felder für die Anreiseliste (erst relevant bei status =
+  // 'anreiseliste').
+  gedruckt: boolean;
+  gedruckt_am: string | null;
+  fragebogen_erfasst: boolean;
+  verheiratet_laut_fragebogen: boolean | null;
+  lohnsteuerabzug_antrag_gewuenscht: boolean;
+  buskosten_erfasst: boolean;
   erstellt_von: string | null;
   erstellt_am: string;
   version: number;
+}
+
+// Aus der View personal_kandidaten_checkliste - live berechnete
+// Vollständigkeits-Prüfung für die Anreiseliste (gemeinsam mit den
+// gedruckt/fragebogen_erfasst/buskosten_erfasst-Feldern oben ergibt das die
+// "Offen"/"Vollständig"-Anzeige, siehe VOLLSTAENDIG_HELFER in
+// app/personal-anreiseliste/page.tsx).
+export interface PersonalKandidatChecklisteRow {
+  kandidat_id: string;
+  employee_id: string | null;
+  gedruckt: boolean;
+  fragebogen_erfasst: boolean;
+  buskosten_erfasst: boolean;
+  ausweiskopie_vorhanden: boolean;
+  fuehrerschein_erfuellt: boolean;
+  hochzeitsurkunde_erfuellt: boolean;
+  lohnsteuerabzug_erfuellt: boolean;
 }
 
 export interface CashDeposit {

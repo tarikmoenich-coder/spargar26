@@ -10,6 +10,7 @@ import {
   type Employee,
   type FuehrerscheinEintrag,
   type Herkunft,
+  type PersonalKandidatChecklisteRow,
   type SvPruefung,
   type VerpflegungsSatz,
 } from "@/lib/types";
@@ -78,6 +79,12 @@ export default function MitarbeiterPage() {
   // siehe Kommentar bei der Vorbelegungs-useEffect weiter unten.
   const [verpflegungssatz, setVerpflegungssatz] =
     useState<VerpflegungsSatz | null>(null);
+  // Dokumente-Status (Offen/Vollständig) aus der Anreiseliste gespiegelt -
+  // nur befüllt für Personen, die aktuell dort durchlaufen (Personal →
+  // Anreiseliste). "—" für alle anderen.
+  const [anreiselisteStatus, setAnreiselisteStatus] = useState<
+    Record<string, "offen" | "vollstaendig">
+  >({});
 
   const canEdit = profile?.role === "admin" || profile?.role === "hr";
   const gruppenLabel: Record<string, string> = Object.fromEntries(
@@ -116,6 +123,7 @@ export default function MitarbeiterPage() {
       { data: svData },
       { data: fsData },
       { data: vSatzData },
+      { data: checklisteData },
     ] = await Promise.all([
       query,
       supabase.from("employee_erster_arbeitstag").select("*"),
@@ -133,6 +141,10 @@ export default function MitarbeiterPage() {
         .select("*")
         .order("saison_jahr", { ascending: false })
         .limit(1),
+      // Dokumente-Status aus der Anreiseliste gespiegelt (siehe Personal →
+      // Anreiseliste) - live berechnet, damit hier nie ein veralteter Stand
+      // stehen bleibt.
+      supabase.from("personal_kandidaten_checkliste").select("*"),
     ]);
     if (!error) setEmployees((data as Employee[]) ?? []);
     const map: Record<string, string> = {};
@@ -161,6 +173,19 @@ export default function MitarbeiterPage() {
     });
     setFuehrerschein(fsMap);
     setVerpflegungssatz(((vSatzData as VerpflegungsSatz[]) ?? [])[0] ?? null);
+    const anreiseMap: Record<string, "offen" | "vollstaendig"> = {};
+    ((checklisteData as PersonalKandidatChecklisteRow[]) ?? []).forEach((c) => {
+      if (!c.employee_id) return;
+      const vollstaendig =
+        c.fragebogen_erfasst &&
+        c.buskosten_erfasst &&
+        c.ausweiskopie_vorhanden &&
+        c.fuehrerschein_erfuellt &&
+        c.hochzeitsurkunde_erfuellt &&
+        c.lohnsteuerabzug_erfuellt;
+      anreiseMap[c.employee_id] = vollstaendig ? "vollstaendig" : "offen";
+    });
+    setAnreiselisteStatus(anreiseMap);
     setLoading(false);
   }
 
@@ -536,6 +561,7 @@ export default function MitarbeiterPage() {
               <th>SV-Status</th>
               <th>Führerschein</th>
               <th>Status</th>
+              <th>Dokumente</th>
               <th>Schwarze Liste</th>
               {canEdit && <th></th>}
             </tr>
@@ -585,6 +611,17 @@ export default function MitarbeiterPage() {
                   )}
                 </td>
                 <td>{emp.aktiv ? "aktiv" : "inaktiv"}</td>
+                <td>
+                  {anreiselisteStatus[emp.id] === "vollstaendig" ? (
+                    <span className="font-medium text-emerald-700">
+                      Vollständig
+                    </span>
+                  ) : anreiselisteStatus[emp.id] === "offen" ? (
+                    <span className="font-medium text-amber-700">Offen</span>
+                  ) : (
+                    "—"
+                  )}
+                </td>
                 <td>
                   {emp.schwarze_liste ? (
                     <span

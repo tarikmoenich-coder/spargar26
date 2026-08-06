@@ -25,6 +25,7 @@ const items: NavItem[] = [
       "/personal-import",
       "/personal-dokumente",
       "/personalplanung",
+      "/personal-anreiseliste",
     ],
   },
   {

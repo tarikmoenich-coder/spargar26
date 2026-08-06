@@ -256,13 +256,48 @@ create table personal_kandidaten (
   -- gibt es noch keinen employees.stundenlohn, den man ziehen könnte.
   stundenlohn numeric(10, 2),
   geplante_ankunft date,
+  -- Selbstauskunft beim Anlegen des Kandidaten (unabhängig von der
+  -- hochgeladenen, geprüften Kopie in employee_documents/Personal →
+  -- Dokumente - zwei getrennte Signale: "gibt an zu haben" vs.
+  -- "haben wir schriftlich geprüft").
+  fuehrerschein_kategorien text[]
+    check (fuehrerschein_kategorien is null
+      or fuehrerschein_kategorien <@ array['B', 'BE', 'C', 'CE']),
+  -- 'geplant': in der Kandidatenliste, noch nicht angereist.
+  -- 'anreiseliste': per "Anreise vorbereiten" aktiviert (echter employees-
+  --   Datensatz existiert bereits, siehe aktivierter_employee_id) und in
+  --   der Anreiseliste - ob die Unterlagen schon vollständig sind, wird
+  --   NICHT hier gespeichert, sondern live aus den Feldern unten +
+  --   employee_documents berechnet (siehe View personal_kandidaten_checkliste
+  --   weiter unten), damit das nie veraltet/falsch stehen bleiben kann.
+  -- 'storniert': Absage vor der Anreise, Personalnummer wird wieder frei.
   status text not null default 'geplant'
-    check (status in ('geplant', 'angereist', 'storniert')),
+    check (status in ('geplant', 'anreiseliste', 'storniert')),
   storniert_grund text,
   notiz text,
   -- Bei Aktivierung ("Anreise vorbereiten") befüllt: welcher employees-
   -- Datensatz daraus entstanden ist bzw. reaktiviert wurde.
   aktivierter_employee_id uuid references employees (id) on delete set null,
+  -- Ab hier: Felder für die Anreiseliste (erst relevant, wenn status =
+  -- 'anreiseliste'). gedruckt wird automatisch gesetzt, sobald irgendeines
+  -- der drei Dokumente für diese Person erzeugt wurde (einzeln oder im
+  -- Sammel-Ausdruck der Anreisegruppe).
+  gedruckt boolean not null default false,
+  gedruckt_am timestamptz,
+  -- Fragebogen zur Feststellung der Versicherungspflicht: WAS genau davon
+  -- zu erfassen ist, wird noch im Detail geklärt (Stand 2026-08-06) - erstmal
+  -- nur ein Ja/Nein, ob er erfasst wurde, plus die eine Angabe daraus, die
+  -- wir schon kennen (verheiratet -> Hochzeitsurkunde nötig).
+  fragebogen_erfasst boolean not null default false,
+  verheiratet_laut_fragebogen boolean,
+  -- Steuert, ob das Formular "Doppelte Haushaltsführung" für die
+  -- Vollständigkeits-Prüfung nötig ist. Der Antrag auf Lohnsteuerabzug
+  -- selbst wird noch im Detail geklärt (Stand 2026-08-06).
+  lohnsteuerabzug_antrag_gewuenscht boolean not null default false,
+  -- Buskosten (Hinfahrt) werden direkt in season_bonuses.bus_hin erfasst
+  -- (fließt automatisch in die Lohnübersicht ein) - dieses Feld markiert nur,
+  -- dass der Wert bewusst eingetragen wurde (auch 0 zählt als "erfasst").
+  buskosten_erfasst boolean not null default false,
   erstellt_von uuid references profiles (id) default auth.uid(),
   erstellt_am timestamptz not null default now(),
   version int not null default 1,
@@ -270,6 +305,56 @@ create table personal_kandidaten (
 );
 
 create index idx_personal_kandidaten_status on personal_kandidaten (status);
+
+-- Live berechnete Vollständigkeits-Prüfung für die Anreiseliste (und die
+-- gespiegelte Anzeige im Personalstamm) - bewusst nicht gespeichert, damit
+-- sie nie veraltet/falsch stehen bleiben kann, wenn z.B. anderswo (Personal
+-- → Dokumente) eine fehlende Kopie nachträglich hochgeladen wird.
+-- security_invoker = true (siehe unten): läuft mit den Rechten des
+-- aufrufenden Nutzers, damit die RLS-Policies von personal_kandidaten UND
+-- employee_documents (beide admin/hr-only) tatsächlich greifen.
+create view personal_kandidaten_checkliste as
+select
+  k.id as kandidat_id,
+  k.aktivierter_employee_id as employee_id,
+  k.gedruckt,
+  k.fragebogen_erfasst,
+  k.buskosten_erfasst,
+  exists (
+    select 1 from employee_documents d
+    where d.employee_id = k.aktivierter_employee_id
+      and d.kategorie = 'Ausweiskopie'
+  ) as ausweiskopie_vorhanden,
+  (
+    k.fuehrerschein_kategorien is null
+    or array_length(k.fuehrerschein_kategorien, 1) is null
+    or exists (
+      select 1 from employee_documents d
+      where d.employee_id = k.aktivierter_employee_id
+        and d.kategorie = 'Führerschein Kopie'
+    )
+  ) as fuehrerschein_erfuellt,
+  (
+    coalesce(k.verheiratet_laut_fragebogen, false) = false
+    or exists (
+      select 1 from employee_documents d
+      where d.employee_id = k.aktivierter_employee_id
+        and d.kategorie = 'Hochzeitsurkunde'
+    )
+  ) as hochzeitsurkunde_erfuellt,
+  (
+    k.lohnsteuerabzug_antrag_gewuenscht = false
+    or exists (
+      select 1 from employee_documents d
+      where d.employee_id = k.aktivierter_employee_id
+        and d.kategorie = 'Formular "Doppelte Haushaltsführung"'
+    )
+  ) as lohnsteuerabzug_erfuellt
+from personal_kandidaten k
+where k.status = 'anreiseliste';
+
+alter view personal_kandidaten_checkliste set (security_invoker = true);
+grant select on personal_kandidaten_checkliste to authenticated;
 
 -- ---------------------------------------------------------------------------
 -- 3. Tageserfassung (ersetzt Sheets "Jan" bis "August")
@@ -441,6 +526,46 @@ end;
 $$;
 
 grant execute on function saison_abrechnen_batch(uuid[], int, text) to authenticated;
+
+-- Anreiseliste: Buskosten (Hinfahrt) für einen Kandidaten setzen. Landet in
+-- season_bonuses.bus_hin (fließt automatisch in die Lohnübersicht ein), ist
+-- dort aber laut season_bonuses_rw nur admin/lohnabrechnung erlaubt - die
+-- Anreiseliste braucht das aber auch für hr. Statt season_bonuses generell
+-- für hr zu öffnen (die dann auch Akkord/Prämien/Kautionen ändern könnten,
+-- was nicht Teil der Anreiseliste-Aufgabe ist), dieser eine kontrollierte
+-- Ausnahmeweg - gleiches Muster wie saison_abrechnen_batch oben.
+create or replace function kandidat_buskosten_setzen(
+  p_kandidat_id uuid,
+  p_bus_hin numeric
+)
+returns void language plpgsql security definer as $$
+declare
+  v_employee_id uuid;
+  v_saison_jahr int;
+begin
+  if current_role_name() not in ('admin', 'hr') then
+    raise exception 'Keine Berechtigung für die Anreiseliste';
+  end if;
+
+  select aktivierter_employee_id, coalesce(extract(year from geplante_ankunft)::int, extract(year from current_date)::int)
+    into v_employee_id, v_saison_jahr
+  from personal_kandidaten
+  where id = p_kandidat_id;
+
+  if v_employee_id is null then
+    raise exception 'Kandidat hat noch keinen aktivierten Mitarbeiter';
+  end if;
+
+  insert into season_bonuses (employee_id, saison_jahr, bus_hin)
+  values (v_employee_id, v_saison_jahr, p_bus_hin)
+  on conflict (employee_id, saison_jahr)
+  do update set bus_hin = excluded.bus_hin;
+
+  update personal_kandidaten set buskosten_erfasst = true where id = p_kandidat_id;
+end;
+$$;
+
+grant execute on function kandidat_buskosten_setzen(uuid, numeric) to authenticated;
 
 -- ---------------------------------------------------------------------------
 -- 6. Verpflegungs-/Wohnen-Sätze (ADR-007: versioniert je Saisonjahr, über

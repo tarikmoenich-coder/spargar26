@@ -36,10 +36,31 @@ Enthalten:
   (nicht final vergeben); sagt ein Kandidat ab, wird seine Nummer sofort
   wieder frei. Beim Anlegen kann eine bereits bekannte (auch inaktive)
   Person verknüpft werden - warnt automatisch, falls diese auf der
-  Schwarzen Liste steht. Über "Anreise vorbereiten" (Mehrfachauswahl)
-  wird aus einem Kandidaten ein echter Mitarbeiter unter "Personal":
-  verknüpfte Personen werden reaktiviert (Historie bleibt an einer ID),
-  neue Personen werden mit ihrer reservierten Nummer angelegt
+  Schwarzen Liste steht. Führerschein-Selbstauskunft (B/BE/C/CE) kann direkt
+  am Kandidaten vermerkt werden, unabhängig von der hochgeladenen, geprüften
+  Kopie im Personalstamm. Über "Anreise vorbereiten" (Mehrfachauswahl) wird
+  aus einem Kandidaten ein echter Mitarbeiter unter "Personal" (verknüpfte
+  Personen werden reaktiviert - Historie bleibt an einer ID, neue Personen
+  mit ihrer reservierten Nummer angelegt) und er wandert weiter in die
+  Anreiseliste
+- Eigene Unterseite "Personal → Anreiseliste" (nur admin/hr): Personen aus
+  der Planung, gruppiert nach geplantem Ankunftsdatum ("Anreisegruppe").
+  Vor dem Drucken müssen Vertragsbeginn/-ende erfasst werden. Danach können
+  Arbeitsvertrag, Werks-/Mietvertrag und Bankverbindungs-Erfassungsbogen
+  einzeln oder für die ganze Anreisegruppe in einem druckbaren Dokument
+  erzeugt werden (Word-Vorlagen aus public/vertragsvorlagen mit
+  «Platzhalter»-Feldern, direkt im Browser mit jszip befüllt, keine
+  kommerzielle Templating-Bibliothek) - das erfolgte Drucken wird pro
+  Person markiert. Nach der tatsächlichen Anreise werden weitere Punkte
+  abgehakt (Fragebogen zur Feststellung der Versicherungspflicht erfasst,
+  ggf. verheiratet, ggf. Lohnsteuerabzug-Antrag gewünscht) und Buskosten
+  (Hinfahrt) eingetragen (fließt automatisch in season_bonuses/die
+  Lohnübersicht ein). Ob Ausweiskopie/Führerscheinkopie/Hochzeitsurkunde/
+  Formular "Doppelte Haushaltsführung" hochgeladen sind, wird live gegen
+  "Personal → Dokumente" geprüft (nicht doppelt gepflegt). Erst wenn alles
+  erfüllt ist, springt der Status von "Offen" auf "Vollständig" - auch als
+  Spalte im Personalstamm sichtbar, live berechnet statt gespeichert, damit
+  nichts veraltet stehen bleiben kann
 - "Schwarze Liste"-Flag im Personalstamm (nur admin/hr sichtbar, wie
   IBAN/SV-Nr.): dauerhaftes "nicht mehr erwünscht"-Markierung je Person,
   unabhängig vom Aktiv-Status - wird bei der Personalplanung automatisch
@@ -77,8 +98,11 @@ Enthalten:
   "pauschal": 5,275% vom Bruttolohn), filterbar nach Arbeitsgruppe - z.B.
   um alle zur Abrechnung vorgesehenen Personen vorab in eine Gruppe wie
   "101 - Abrechnen" zu packen und dort gesammelt zu markieren
-- Einstellungen-Seite (nur admin): Verpflegungs-/Unterkunft-Satz pro Tag,
-  versioniert je Saisonjahr, Default 10€/10€
+- Einstellungen-Seite (nur admin): Verpflegungs-/Unterkunft-Satz pro Tag
+  sowie Mindestlohn, versioniert je Saisonjahr, Default 10€/10€. Der
+  Mindestlohn wird beim Neuanlegen einer Person (Personalstamm oder
+  Personalplanung) automatisch als Stundenlohn vorbelegt, bleibt dort aber
+  frei änderbar
 - "Jetzt Abrechnen" auf der Lohnübersicht (admin/lohnabrechnung, auch
   mehrere Personen gleichzeitig): markiert die Saison für die Person als
   abgerechnet und setzt sie auf inaktiv - reversibel über "Reaktivieren"
@@ -202,7 +226,7 @@ nicht nur im Menü versteckt.
 | Rolle | Sichtbare Menüpunkte | Kernrechte |
 |---|---|---|
 | `admin` | Alle | Voller Zugriff auf alles, inkl. Einstellungen, Kassenprüfungen freigeben |
-| `hr` | Personal, Stundenerfassung, Suche, Lohn, Management | Personalstamm + Dokumente voll pflegen (inkl. SV-Nr./IBAN/Ausweiskopien), Personalplanung (Kandidaten, Schwarze Liste) verwalten, Stunden erfassen, Lohnübersicht/Vorschüsse nur ansehen (nicht bearbeiten), Monatsabschluss sperren/öffnen |
+| `hr` | Personal, Stundenerfassung, Suche, Lohn, Management | Personalstamm + Dokumente voll pflegen (inkl. SV-Nr./IBAN/Ausweiskopien), Personalplanung + Anreiseliste (Kandidaten, Schwarze Liste, Buskosten) verwalten, Stunden erfassen, Lohnübersicht/Vorschüsse nur ansehen (nicht bearbeiten), Monatsabschluss sperren/öffnen |
 | `zeiterfassung` | Stundenerfassung, Suche | Nur Stunden eintragen/ändern; sieht Personal nur mit eingeschränkten Feldern (keine SV-Nr./IBAN etc.) |
 | `kasse` | Suche, Lohn, Kassenbuch | Vorschüsse erfassen/stornieren/korrigieren, Kassenbuch führen, Kassenprüfung durchführen |
 | `lohnabrechnung` | Suche, Lohn | Lohnübersicht ansehen **und bearbeiten** (Buskosten, Kautionen, "Jetzt Abrechnen"), Vorschüsse einsehen |
