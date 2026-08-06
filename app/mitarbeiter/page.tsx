@@ -11,6 +11,7 @@ import {
   type FuehrerscheinEintrag,
   type Herkunft,
   type SvPruefung,
+  type VerpflegungsSatz,
 } from "@/lib/types";
 import {
   ANZAHL_PERSONALNUMMERN_KREISE,
@@ -73,6 +74,10 @@ export default function MitarbeiterPage() {
   const [fuehrerschein, setFuehrerschein] = useState<
     Record<string, string[]>
   >({});
+  // Für die Vorbelegung des Stundenlohns bei neu angelegten Personen -
+  // siehe Kommentar bei der Vorbelegungs-useEffect weiter unten.
+  const [verpflegungssatz, setVerpflegungssatz] =
+    useState<VerpflegungsSatz | null>(null);
 
   const canEdit = profile?.role === "admin" || profile?.role === "hr";
   const gruppenLabel: Record<string, string> = Object.fromEntries(
@@ -110,6 +115,7 @@ export default function MitarbeiterPage() {
       { data: alleNrData },
       { data: svData },
       { data: fsData },
+      { data: vSatzData },
     ] = await Promise.all([
       query,
       supabase.from("employee_erster_arbeitstag").select("*"),
@@ -122,6 +128,11 @@ export default function MitarbeiterPage() {
         .select("*")
         .eq("saison_jahr", CURRENT_YEAR),
       supabase.from("employee_fuehrerschein_kategorien").select("*"),
+      supabase
+        .from("verpflegungssaetze")
+        .select("*")
+        .order("saison_jahr", { ascending: false })
+        .limit(1),
     ]);
     if (!error) setEmployees((data as Employee[]) ?? []);
     const map: Record<string, string> = {};
@@ -149,8 +160,21 @@ export default function MitarbeiterPage() {
       fsMap[row.employee_id] = row.fuehrerschein_kategorien;
     });
     setFuehrerschein(fsMap);
+    setVerpflegungssatz(((vSatzData as VerpflegungsSatz[]) ?? [])[0] ?? null);
     setLoading(false);
   }
+
+  // Vorbelegt den Stundenlohn beim NEUANLEGEN (nicht beim Bearbeiten) mit
+  // dem aktuell gültigen Mindestlohn aus den Einstellungen - bleibt weiter
+  // frei änderbar. Läuft absichtlich bei jedem load() erneut (z.B. nach dem
+  // Zurücksetzen des Formulars nach dem Anlegen), nicht nur beim ersten Mal.
+  useEffect(() => {
+    if (editingId) return;
+    if (form.stundenlohn !== "") return;
+    if (verpflegungssatz?.mindestlohn == null) return;
+    setForm((f) => ({ ...f, stundenlohn: String(verpflegungssatz.mindestlohn) }));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [verpflegungssatz]);
 
   function naechsteFreieUebernehmen() {
     const belegt = new Set<number>();

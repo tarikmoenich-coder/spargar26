@@ -263,6 +263,7 @@ export interface VerpflegungsSatz {
   saison_jahr: number;
   verpflegung: number;
   wohnen: number;
+  mindestlohn: number | null;
 }
 
 export interface Arbeitsgruppe {

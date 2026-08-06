@@ -449,7 +449,13 @@ grant execute on function saison_abrechnen_batch(uuid[], int, text) to authentic
 create table verpflegungssaetze (
   saison_jahr int primary key,
   verpflegung numeric(6, 2) not null default 10.00, -- € pro Anwesenheitstag
-  wohnen numeric(6, 2) not null default 10.00        -- € pro Anwesenheitstag
+  wohnen numeric(6, 2) not null default 10.00,       -- € pro Anwesenheitstag
+  -- Gesetzlicher Mindestlohn für dieses Saisonjahr - kein Default (muss
+  -- bewusst vom admin eingetragen werden, siehe Einstellungen-Seite).
+  -- Dient als Vorbelegung für den Stundenlohn neu angelegter/geplanter
+  -- Personen (personal_kandidaten.stundenlohn, employees.stundenlohn beim
+  -- direkten Neuanlegen) - bleibt dort weiterhin frei änderbar.
+  mindestlohn numeric(6, 2)
 );
 
 insert into verpflegungssaetze (saison_jahr, verpflegung, wohnen)

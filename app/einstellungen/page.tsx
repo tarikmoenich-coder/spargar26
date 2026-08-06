@@ -19,6 +19,7 @@ export default function EinstellungenPage() {
     saison_jahr: CURRENT_YEAR.toString(),
     verpflegung: "10.00",
     wohnen: "10.00",
+    mindestlohn: "",
   });
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -65,6 +66,7 @@ export default function EinstellungenPage() {
       saison_jahr: satz.saison_jahr.toString(),
       verpflegung: satz.verpflegung.toString(),
       wohnen: satz.wohnen.toString(),
+      mindestlohn: satz.mindestlohn?.toString() ?? "",
     });
   }
 
@@ -77,6 +79,7 @@ export default function EinstellungenPage() {
       saison_jahr: Number(form.saison_jahr),
       verpflegung: Number(form.verpflegung),
       wohnen: Number(form.wohnen),
+      mindestlohn: form.mindestlohn ? Number(form.mindestlohn) : null,
     });
     setSaving(false);
     if (error) {
@@ -154,10 +157,13 @@ export default function EinstellungenPage() {
           Einstellungen
         </h1>
         <p className="text-sm text-neutral-500">
-          Verpflegungs- und Unterkunft-Abzüge pro Anwesenheitstag, je
-          Saisonjahr. Änderungen wirken sich nur auf das jeweilige Saisonjahr
-          aus (ADR-007: versionierte Sätze) - bereits berechnete andere Jahre
-          bleiben unverändert.
+          Verpflegungs- und Unterkunft-Abzüge pro Anwesenheitstag sowie der
+          gesetzliche Mindestlohn, je Saisonjahr. Änderungen wirken sich nur
+          auf das jeweilige Saisonjahr aus (ADR-007: versionierte Sätze) -
+          bereits berechnete andere Jahre bleiben unverändert. Der
+          Mindestlohn wird beim Neuanlegen einer Person (Personalstamm oder
+          Personalplanung) automatisch als Stundenlohn vorbelegt, bleibt dort
+          aber frei änderbar.
         </p>
       </div>
 
@@ -189,6 +195,13 @@ export default function EinstellungenPage() {
             value={form.wohnen}
             onChange={(e) => setForm({ ...form, wohnen: e.target.value })}
           />
+          <input
+            type="number"
+            step="0.01"
+            placeholder="Mindestlohn €/Std."
+            value={form.mindestlohn}
+            onChange={(e) => setForm({ ...form, mindestlohn: e.target.value })}
+          />
           <div className="col-span-full flex items-center gap-2">
             <button type="submit" className="btn" disabled={saving}>
               Speichern
@@ -211,6 +224,7 @@ export default function EinstellungenPage() {
               <th>Saison-Jahr</th>
               <th>Verpflegung €/Tag</th>
               <th>Unterkunft €/Tag</th>
+              <th>Mindestlohn €/Std.</th>
               {isAdmin && <th></th>}
             </tr>
           </thead>
@@ -220,6 +234,7 @@ export default function EinstellungenPage() {
                 <td>{s.saison_jahr}</td>
                 <td>{Number(s.verpflegung).toFixed(2)}</td>
                 <td>{Number(s.wohnen).toFixed(2)}</td>
+                <td>{s.mindestlohn != null ? Number(s.mindestlohn).toFixed(2) : "—"}</td>
                 {isAdmin && (
                   <td>
                     <button

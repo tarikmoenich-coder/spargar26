@@ -10,7 +10,11 @@ import {
   parsePersonalNrNummer,
 } from "@/lib/personalnummern";
 import { formatDatumDE } from "@/lib/format";
-import { generiereDokument } from "@/lib/dokumentGenerator";
+import {
+  generiereDokument,
+  generiereKombiniertesDokument,
+  type DokumentSpezifikation,
+} from "@/lib/dokumentGenerator";
 import type {
   Employee,
   Herkunft,
@@ -113,6 +117,18 @@ export default function PersonalplanungPage() {
       });
     return belegt;
   }, [employees, kandidaten]);
+
+  // Vorbelegt den Stundenlohn für NEUE (nicht verknüpfte) Kandidaten mit dem
+  // aktuell gültigen Mindestlohn aus den Einstellungen - bleibt weiterhin
+  // frei änderbar. Läuft absichtlich bei jedem load() erneut (z.B. nach dem
+  // Zurücksetzen des Formulars nach dem Anlegen), nicht nur beim ersten Mal.
+  useEffect(() => {
+    if (verknuepfterId) return;
+    if (form.stundenlohn !== "") return;
+    if (verpflegungssatz?.mindestlohn == null) return;
+    setForm((f) => ({ ...f, stundenlohn: String(verpflegungssatz.mindestlohn) }));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [verpflegungssatz]);
 
   function naechsteFreieUebernehmen() {
     const frei = naechsteFreieNummer(belegteNummern, Number(naechsteKreis));
@@ -302,15 +318,15 @@ export default function PersonalplanungPage() {
     load();
   }
 
-  // Generiert eines der drei Dokumente aus public/vertragsvorlagen mit den
-  // Daten dieses Kandidaten und stößt den Download an. Funktioniert schon
-  // VOR "Anreise vorbereiten" - praktisch, um Papiere vorzubereiten, bevor
-  // die Person überhaupt da ist.
-  async function dokument(
-    art: "arbeitsvertrag" | "werkmietvertrag" | "bankverbindung",
+  // Baut die drei Dokument-Spezifikationen (Vorlage + Werte) für einen
+  // Kandidaten - gemeinsam genutzt vom Einzel-Download je Dokumentart und
+  // vom kombinierten Sammel-Dokument für mehrere Personen weiter unten.
+  function dokumentSpezifikationenFuer(
     k: PersonalKandidat
-  ) {
-    setDokumentFehler(null);
+  ): Record<
+    "arbeitsvertrag" | "werkmietvertrag" | "bankverbindung",
+    DokumentSpezifikation
+  > {
     const verknuepft = k.verknuepfter_employee_id
       ? employees.find((e) => e.id === k.verknuepfter_employee_id) ?? null
       : null;
@@ -321,45 +337,91 @@ export default function PersonalplanungPage() {
       Staatsangehoerigkeit: k.nationalitaet ?? "",
       Personalnummer: k.personal_nr,
     };
+    return {
+      arbeitsvertrag: {
+        vorlage: "Arbeitsvertrag_Vorlage.docx",
+        werte: {
+          ...gemeinsam,
+          ArbeitsbeginnDatum: formatDatumDE(k.arbeitsbeginn_datum),
+          ArbeitsendeDatum: formatDatumDE(k.arbeitsende_datum),
+          Stundenlohn: formatEuro(k.stundenlohn),
+        },
+      },
+      werkmietvertrag: {
+        vorlage: "Werkmietvertrag_Vorlage.docx",
+        werte: {
+          ...gemeinsam,
+          TagessatzWohnen: formatEuro(verpflegungssatz?.wohnen),
+          TagessatzVerpflegung: formatEuro(verpflegungssatz?.verpflegung),
+        },
+      },
+      bankverbindung: {
+        vorlage: "Bankverbindung_Vorlage.docx",
+        werte: {
+          Vorname: k.vorname,
+          Name: k.name,
+          Personalnummer: k.personal_nr,
+          // Bei neuen (nicht verknüpften) Kandidaten noch unbekannt - bleibt
+          // dann bewusst leer, statt "«IBAN»" auszudrucken.
+          Kontoinhaber: verknuepft?.zahlungsempfaenger ?? "",
+          IBAN: verknuepft?.iban ?? "",
+          BIC: verknuepft?.bic ?? "",
+        },
+      },
+    };
+  }
+
+  // Generiert eines der drei Dokumente für EINEN Kandidaten und stößt den
+  // Download an. Funktioniert schon VOR "Anreise vorbereiten" - praktisch,
+  // um Papiere vorzubereiten, bevor die Person überhaupt da ist.
+  async function dokument(
+    art: "arbeitsvertrag" | "werkmietvertrag" | "bankverbindung",
+    k: PersonalKandidat
+  ) {
+    setDokumentFehler(null);
     const dateiPrefix = `${k.name}_${k.vorname}`.replace(/\s+/g, "_");
+    const spec = dokumentSpezifikationenFuer(k)[art];
+    const artLabel =
+      art === "arbeitsvertrag"
+        ? "Arbeitsvertrag"
+        : art === "werkmietvertrag"
+          ? "Werkmietvertrag"
+          : "Bankverbindung";
     try {
-      if (art === "arbeitsvertrag") {
-        await generiereDokument(
-          "Arbeitsvertrag_Vorlage.docx",
-          {
-            ...gemeinsam,
-            ArbeitsbeginnDatum: formatDatumDE(k.arbeitsbeginn_datum),
-            ArbeitsendeDatum: formatDatumDE(k.arbeitsende_datum),
-            Stundenlohn: formatEuro(k.stundenlohn),
-          },
-          `Arbeitsvertrag_${dateiPrefix}.docx`
-        );
-      } else if (art === "werkmietvertrag") {
-        await generiereDokument(
-          "Werkmietvertrag_Vorlage.docx",
-          {
-            ...gemeinsam,
-            TagessatzWohnen: formatEuro(verpflegungssatz?.wohnen),
-            TagessatzVerpflegung: formatEuro(verpflegungssatz?.verpflegung),
-          },
-          `Werkmietvertrag_${dateiPrefix}.docx`
-        );
-      } else {
-        await generiereDokument(
-          "Bankverbindung_Vorlage.docx",
-          {
-            Vorname: k.vorname,
-            Name: k.name,
-            Personalnummer: k.personal_nr,
-            // Bei neuen (nicht verknüpften) Kandidaten noch unbekannt -
-            // bleibt dann bewusst leer, statt "«IBAN»" auszudrucken.
-            Kontoinhaber: verknuepft?.zahlungsempfaenger ?? "",
-            IBAN: verknuepft?.iban ?? "",
-            BIC: verknuepft?.bic ?? "",
-          },
-          `Bankverbindung_${dateiPrefix}.docx`
-        );
+      await generiereDokument(
+        spec.vorlage,
+        spec.werte,
+        `${artLabel}_${dateiPrefix}.docx`
+      );
+    } catch (err) {
+      setDokumentFehler(err instanceof Error ? err.message : String(err));
+    }
+  }
+
+  // Alle drei Dokumente für ALLE aktuell ausgewählten (angehakten)
+  // Kandidaten in EINEM druckbaren Word-Dokument zusammenfassen (mit
+  // Seitenumbruch je Dokument) - dieselbe Auswahl wie bei
+  // "Anreise vorbereiten", aber unabhängig davon nutzbar.
+  async function kombinierteDokumente() {
+    if (ausgewaehlt.length === 0) return;
+    setDokumentFehler(null);
+    try {
+      const dokumente: DokumentSpezifikation[] = [];
+      for (const id of ausgewaehlt) {
+        const k = kandidaten.find((x) => x.id === id);
+        if (!k) continue;
+        const spec = dokumentSpezifikationenFuer(k);
+        dokumente.push(spec.arbeitsvertrag, spec.werkmietvertrag, spec.bankverbindung);
       }
+      const ersterKandidat = kandidaten.find((k) => k.id === ausgewaehlt[0]);
+      const dateiname =
+        ausgewaehlt.length === 1 && ersterKandidat
+          ? `Unterlagen_${ersterKandidat.name}_${ersterKandidat.vorname}.docx`.replace(
+              /\s+/g,
+              "_"
+            )
+          : `Unterlagen_${ausgewaehlt.length}_Personen.docx`;
+      await generiereKombiniertesDokument(dokumente, dateiname);
     } catch (err) {
       setDokumentFehler(err instanceof Error ? err.message : String(err));
     }
@@ -628,6 +690,14 @@ export default function PersonalplanungPage() {
           <span className="text-sm font-medium text-emerald-800">
             {ausgewaehlt.length} ausgewählt
           </span>
+          <button
+            type="button"
+            className="btn-secondary"
+            onClick={kombinierteDokumente}
+            title="Arbeitsvertrag, Werkmietvertrag und Bankverbindung aller ausgewählten Personen in einem druckbaren Dokument"
+          >
+            Alle Dokumente drucken
+          </button>
           <button
             type="button"
             className="btn"
