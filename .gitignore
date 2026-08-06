@@ -1,6 +1,8 @@
 node_modules/
 .next/
 .env.local
+# tsc-Inkrementell-Cache, entsteht lokal bei jedem "npx tsc --noEmit"
+tsconfig.tsbuildinfo
 
 # Office-Sperrdateien (entstehen, wenn z.B. README.md gerade in Word offen ist)
 ~$*

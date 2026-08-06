@@ -10,7 +10,13 @@ import {
   parsePersonalNrNummer,
 } from "@/lib/personalnummern";
 import { formatDatumDE } from "@/lib/format";
-import type { Employee, Herkunft, PersonalKandidat } from "@/lib/types";
+import { generiereDokument } from "@/lib/dokumentGenerator";
+import type {
+  Employee,
+  Herkunft,
+  PersonalKandidat,
+  VerpflegungsSatz,
+} from "@/lib/types";
 import PersonalTabs from "@/components/PersonalTabs";
 
 const emptyForm = {
@@ -22,9 +28,16 @@ const emptyForm = {
   herkunft: "",
   arbeitsbeginn_datum: "",
   arbeitsende_datum: "",
+  stundenlohn: "",
   geplante_ankunft: "",
   notiz: "",
 };
+
+// "13.9" -> "13,90" (deutsches Format für die generierten Dokumente).
+function formatEuro(wert: number | null | undefined): string {
+  if (wert === null || wert === undefined) return "";
+  return wert.toFixed(2).replace(".", ",");
+}
 
 export default function PersonalplanungPage() {
   const { profile } = useProfile();
@@ -46,11 +59,16 @@ export default function PersonalplanungPage() {
   const [ausgewaehlt, setAusgewaehlt] = useState<string[]>([]);
   const [aktivierenLaufend, setAktivierenLaufend] = useState(false);
   const [showStorniert, setShowStorniert] = useState(false);
+  // Für den Werkmietvertrag-Platzhalter «TagessatzWohnen»/
+  // «TagessatzVerpflegung» - neuester Satz (siehe Einstellungen-Seite).
+  const [verpflegungssatz, setVerpflegungssatz] =
+    useState<VerpflegungsSatz | null>(null);
+  const [dokumentFehler, setDokumentFehler] = useState<string | null>(null);
 
   async function load() {
     setLoading(true);
     const supabase = getSupabaseClient();
-    const [{ data: kData }, { data: eData }, { data: hData }] =
+    const [{ data: kData }, { data: eData }, { data: hData }, { data: vData }] =
       await Promise.all([
         supabase
           .from("personal_kandidaten")
@@ -59,10 +77,18 @@ export default function PersonalplanungPage() {
           .order("name"),
         supabase.from("employees").select("*").order("name"),
         supabase.from("herkuenfte").select("*").order("reihenfolge"),
+        supabase
+          .from("verpflegungssaetze")
+          .select("*")
+          .order("saison_jahr", { ascending: false })
+          .limit(1),
       ]);
     setKandidaten((kData as PersonalKandidat[]) ?? []);
     setEmployees((eData as Employee[]) ?? []);
     setHerkuenfte((hData as Herkunft[]) ?? []);
+    setVerpflegungssatz(
+      ((vData as VerpflegungsSatz[]) ?? [])[0] ?? null
+    );
     setLoading(false);
   }
 
@@ -142,6 +168,9 @@ export default function PersonalplanungPage() {
       geburtsdatum: emp.geburtsdatum ?? "",
       nationalitaet: emp.nationalitaet ?? "",
       herkunft: emp.herkunft ?? "",
+      // Vorbelegt aus dem letzten Einsatz, aber bewusst editierbar - der
+      // Lohn kann sich zur neuen Saison geändert haben.
+      stundenlohn: emp.stundenlohn?.toString() ?? "",
     }));
     setEmployeeSuche("");
   }
@@ -167,6 +196,7 @@ export default function PersonalplanungPage() {
       verknuepfter_employee_id: verknuepfterId,
       arbeitsbeginn_datum: form.arbeitsbeginn_datum || null,
       arbeitsende_datum: form.arbeitsende_datum || null,
+      stundenlohn: form.stundenlohn ? Number(form.stundenlohn) : null,
       geplante_ankunft: form.geplante_ankunft || null,
       notiz: form.notiz || null,
     });
@@ -217,6 +247,7 @@ export default function PersonalplanungPage() {
             geburtsdatum: k.geburtsdatum,
             nationalitaet: k.nationalitaet,
             herkunft: k.herkunft,
+            ...(k.stundenlohn !== null ? { stundenlohn: k.stundenlohn } : {}),
           })
           .eq("id", k.verknuepfter_employee_id);
         if (error) {
@@ -234,6 +265,7 @@ export default function PersonalplanungPage() {
             geburtsdatum: k.geburtsdatum,
             nationalitaet: k.nationalitaet,
             herkunft: k.herkunft,
+            stundenlohn: k.stundenlohn,
             aktiv: true,
           })
           .select("id")
@@ -268,6 +300,69 @@ export default function PersonalplanungPage() {
       .update({ status: "storniert", storniert_grund: grund })
       .eq("id", k.id);
     load();
+  }
+
+  // Generiert eines der drei Dokumente aus public/vertragsvorlagen mit den
+  // Daten dieses Kandidaten und stößt den Download an. Funktioniert schon
+  // VOR "Anreise vorbereiten" - praktisch, um Papiere vorzubereiten, bevor
+  // die Person überhaupt da ist.
+  async function dokument(
+    art: "arbeitsvertrag" | "werkmietvertrag" | "bankverbindung",
+    k: PersonalKandidat
+  ) {
+    setDokumentFehler(null);
+    const verknuepft = k.verknuepfter_employee_id
+      ? employees.find((e) => e.id === k.verknuepfter_employee_id) ?? null
+      : null;
+    const gemeinsam = {
+      Name: k.name,
+      Vorname: k.vorname,
+      Geburtsdatum: formatDatumDE(k.geburtsdatum),
+      Staatsangehoerigkeit: k.nationalitaet ?? "",
+      Personalnummer: k.personal_nr,
+    };
+    const dateiPrefix = `${k.name}_${k.vorname}`.replace(/\s+/g, "_");
+    try {
+      if (art === "arbeitsvertrag") {
+        await generiereDokument(
+          "Arbeitsvertrag_Vorlage.docx",
+          {
+            ...gemeinsam,
+            ArbeitsbeginnDatum: formatDatumDE(k.arbeitsbeginn_datum),
+            ArbeitsendeDatum: formatDatumDE(k.arbeitsende_datum),
+            Stundenlohn: formatEuro(k.stundenlohn),
+          },
+          `Arbeitsvertrag_${dateiPrefix}.docx`
+        );
+      } else if (art === "werkmietvertrag") {
+        await generiereDokument(
+          "Werkmietvertrag_Vorlage.docx",
+          {
+            ...gemeinsam,
+            TagessatzWohnen: formatEuro(verpflegungssatz?.wohnen),
+            TagessatzVerpflegung: formatEuro(verpflegungssatz?.verpflegung),
+          },
+          `Werkmietvertrag_${dateiPrefix}.docx`
+        );
+      } else {
+        await generiereDokument(
+          "Bankverbindung_Vorlage.docx",
+          {
+            Vorname: k.vorname,
+            Name: k.name,
+            Personalnummer: k.personal_nr,
+            // Bei neuen (nicht verknüpften) Kandidaten noch unbekannt -
+            // bleibt dann bewusst leer, statt "«IBAN»" auszudrucken.
+            Kontoinhaber: verknuepft?.zahlungsempfaenger ?? "",
+            IBAN: verknuepft?.iban ?? "",
+            BIC: verknuepft?.bic ?? "",
+          },
+          `Bankverbindung_${dateiPrefix}.docx`
+        );
+      }
+    } catch (err) {
+      setDokumentFehler(err instanceof Error ? err.message : String(err));
+    }
   }
 
   const geplante = kandidaten.filter((k) => k.status === "geplant");
@@ -496,6 +591,17 @@ export default function PersonalplanungPage() {
                 }
               />
             </label>
+            <label className="flex flex-col gap-0.5 text-xs text-neutral-500">
+              Stundenlohn € (für Arbeitsvertrag)
+              <input
+                type="number"
+                step="0.01"
+                value={form.stundenlohn}
+                onChange={(e) =>
+                  setForm({ ...form, stundenlohn: e.target.value })
+                }
+              />
+            </label>
             <input
               placeholder="Notiz"
               className="col-span-2"
@@ -533,6 +639,12 @@ export default function PersonalplanungPage() {
         </div>
       )}
 
+      {dokumentFehler && (
+        <p className="rounded border border-red-300 bg-red-50 px-3 py-2 text-sm font-medium text-red-800">
+          Dokument konnte nicht erstellt werden: {dokumentFehler}
+        </p>
+      )}
+
       {loading ? (
         <p className="text-neutral-500">Lädt…</p>
       ) : geplante.length === 0 ? (
@@ -557,6 +669,7 @@ export default function PersonalplanungPage() {
                   <th>Vertragszeitraum</th>
                   <th>Verknüpft</th>
                   <th>Notiz</th>
+                  {canEdit && <th>Dokumente</th>}
                   {canEdit && <th></th>}
                 </tr>
               </thead>
@@ -605,6 +718,34 @@ export default function PersonalplanungPage() {
                         )}
                       </td>
                       <td>{k.notiz ?? "—"}</td>
+                      {canEdit && (
+                        <td className="flex gap-1">
+                          <button
+                            type="button"
+                            className="btn-secondary text-xs"
+                            onClick={() => dokument("arbeitsvertrag", k)}
+                            title="Arbeitsvertrag herunterladen"
+                          >
+                            AV
+                          </button>
+                          <button
+                            type="button"
+                            className="btn-secondary text-xs"
+                            onClick={() => dokument("werkmietvertrag", k)}
+                            title="Werkmiet- und Bewirtungsvertrag herunterladen"
+                          >
+                            Miete
+                          </button>
+                          <button
+                            type="button"
+                            className="btn-secondary text-xs"
+                            onClick={() => dokument("bankverbindung", k)}
+                            title="Bankverbindungs-Erfassungsbogen herunterladen"
+                          >
+                            Bank
+                          </button>
+                        </td>
+                      )}
                       {canEdit && (
                         <td>
                           <button

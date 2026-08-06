@@ -321,6 +321,7 @@ export interface PersonalKandidat {
   verknuepfter_employee_id: string | null;
   arbeitsbeginn_datum: string | null;
   arbeitsende_datum: string | null;
+  stundenlohn: number | null;
   geplante_ankunft: string | null;
   status: KandidatStatus;
   storniert_grund: string | null;

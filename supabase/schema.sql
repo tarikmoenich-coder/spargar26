@@ -252,6 +252,9 @@ create table personal_kandidaten (
   -- abweicht (Nutzer-Vorgabe 2026-08-06).
   arbeitsbeginn_datum date,
   arbeitsende_datum date,
+  -- Für den Arbeitsvertrag-Platzhalter «Stundenlohn» - vor der Aktivierung
+  -- gibt es noch keinen employees.stundenlohn, den man ziehen könnte.
+  stundenlohn numeric(10, 2),
   geplante_ankunft date,
   status text not null default 'geplant'
     check (status in ('geplant', 'angereist', 'storniert')),
