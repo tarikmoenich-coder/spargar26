@@ -16,6 +16,15 @@ function todayIso() {
   return new Date().toISOString().slice(0, 10);
 }
 
+// Liest einen URL-Parameter (z.B. von einem Sprung-Link aus dem
+// Management, "?datum=...&employee=..."), clientseitig - kein
+// useSearchParams()/Suspense nötig, da diese App komplett clientseitig
+// rendert.
+function urlParam(name: string): string | null {
+  if (typeof window === "undefined") return null;
+  return new URLSearchParams(window.location.search).get(name);
+}
+
 // Reine Kalendertag-Arithmetik auf Basis von "YYYY-MM-DD" - bewusst über
 // UTC-Millisekunden statt lokaler Zeitzone, damit ein Tagessprung nicht je
 // nach Zeitzone/Sommerzeit auf den falschen Tag landen kann.
@@ -74,8 +83,12 @@ export default function ErfassungPage() {
   const canGruppeAendern =
     profile?.role === "admin" || profile?.role === "hr";
   // Standardmäßig gestern vorausgewählt (Nutzer trägt meist die Stunden
-  // des Vortages nach), nicht heute.
-  const [datum, setDatum] = useState(() => addDays(todayIso(), -1));
+  // des Vortages nach), nicht heute - außer ein Sprung-Link (z.B. vom
+  // Stundenmonitoring im Management) gibt ein konkretes Datum vor.
+  const [datum, setDatum] = useState(() => {
+    const p = urlParam("datum");
+    return p && /^\d{4}-\d{2}-\d{2}$/.test(p) ? p : addDays(todayIso(), -1);
+  });
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [gruppen, setGruppen] = useState<Arbeitsgruppe[]>([]);
   const [entries, setEntries] = useState<Record<string, WorkEntry>>({});
@@ -138,8 +151,10 @@ export default function ErfassungPage() {
   // derselben Stelle: Merkt sich vor dem Wechsel, welches Stunden-Feld
   // fokussiert war (bzw. ersatzweise die Scroll-Position), und stellt das
   // nach dem Laden der neuen Daten wieder her - sonst springt die Ansicht
-  // durch die kurze "Lädt…"-Anzeige nach ganz oben.
-  const fokusEmployeeIdRef = useRef<string | null>(null);
+  // durch die kurze "Lädt…"-Anzeige nach ganz oben. Anfangswert kommt vom
+  // "employee"-URL-Parameter eines Sprung-Links (z.B. Stundenmonitoring im
+  // Management) - dieselbe Restore-Logik springt dann direkt zur Person.
+  const fokusEmployeeIdRef = useRef<string | null>(urlParam("employee"));
   const scrollYRef = useRef<number | null>(null);
 
   function merkeFokusUndScroll() {

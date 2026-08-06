@@ -1,6 +1,7 @@
 "use client";
 
 import { Fragment, useEffect, useState } from "react";
+import Link from "next/link";
 import { getSupabaseClient } from "@/lib/supabase/client";
 import {
   ABRECHNUNGSART_LABELS,
@@ -348,6 +349,7 @@ export default function ManagementPage() {
                                 <tr>
                                   <th>Datum</th>
                                   <th>Stunden</th>
+                                  <th></th>
                                 </tr>
                               </thead>
                               <tbody>
@@ -358,6 +360,14 @@ export default function ManagementPage() {
                                       <td>{formatDatumDE(t.datum)}</td>
                                       <td className="font-medium text-amber-600">
                                         {t.stunden.toFixed(2)}
+                                      </td>
+                                      <td>
+                                        <Link
+                                          href={`/erfassung?datum=${t.datum}&employee=${u.employee_id}`}
+                                          className="btn-secondary text-xs"
+                                        >
+                                          In Stundenerfassung öffnen
+                                        </Link>
                                       </td>
                                     </tr>
                                   ))}
