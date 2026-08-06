@@ -19,7 +19,10 @@ Enthalten:
   die Stunden der letzten 3 Tage schreibgeschützt links neben dem
   bearbeitbaren Tag; Pfeil-Buttons neben der Datumsauswahl springen einen
   Tag vor/zurück, Pfeiltasten hoch/runter im Stunden-Feld springen direkt
-  zur nächsten/vorherigen Person
+  zur nächsten/vorherigen Person. Datum ist standardmäßig auf gestern
+  vorausgewählt. Beim Wechsel des Tages (Pfeil-Buttons oder Datumsfeld)
+  bleibt die Ansicht an derselben Stelle (Fokus/Scroll-Position), statt
+  nach oben zu springen
 - Arbeitsgruppen-Verwaltung unter Einstellungen (nur admin): Bezeichnung und
   Anzeige-/Druckreihenfolge je Gruppe
 - Personalnummern-Übersicht: 10 Nummernkreise (1–999, 1000–1999, …),

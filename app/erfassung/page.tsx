@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { getSupabaseClient } from "@/lib/supabase/client";
 import { useProfile } from "@/lib/useProfile";
 import type {
@@ -73,7 +73,9 @@ export default function ErfassungPage() {
   const { profile } = useProfile();
   const canGruppeAendern =
     profile?.role === "admin" || profile?.role === "hr";
-  const [datum, setDatum] = useState(todayIso());
+  // Standardmäßig gestern vorausgewählt (Nutzer trägt meist die Stunden
+  // des Vortages nach), nicht heute.
+  const [datum, setDatum] = useState(() => addDays(todayIso(), -1));
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [gruppen, setGruppen] = useState<Arbeitsgruppe[]>([]);
   const [entries, setEntries] = useState<Record<string, WorkEntry>>({});
@@ -131,6 +133,45 @@ export default function ErfassungPage() {
   useEffect(() => {
     loadAll(datum);
   }, [datum, loadAll]);
+
+  // Beim Tageswechsel (Pfeil-Buttons oder Datumsfeld) bleibt man an
+  // derselben Stelle: Merkt sich vor dem Wechsel, welches Stunden-Feld
+  // fokussiert war (bzw. ersatzweise die Scroll-Position), und stellt das
+  // nach dem Laden der neuen Daten wieder her - sonst springt die Ansicht
+  // durch die kurze "Lädt…"-Anzeige nach ganz oben.
+  const fokusEmployeeIdRef = useRef<string | null>(null);
+  const scrollYRef = useRef<number | null>(null);
+
+  function merkeFokusUndScroll() {
+    const aktiv = document.activeElement as HTMLElement | null;
+    fokusEmployeeIdRef.current = aktiv?.getAttribute("data-employee-id") ?? null;
+    scrollYRef.current = window.scrollY;
+  }
+
+  function datumWechseln(neuesDatum: string) {
+    merkeFokusUndScroll();
+    setDatum(neuesDatum);
+  }
+
+  useEffect(() => {
+    if (loading) return;
+    const empId = fokusEmployeeIdRef.current;
+    const scrollY = scrollYRef.current;
+    fokusEmployeeIdRef.current = null;
+    scrollYRef.current = null;
+    if (empId) {
+      const el = document.querySelector<HTMLInputElement>(
+        `input[data-stunden-feld="true"][data-employee-id="${empId}"]`
+      );
+      if (el) {
+        el.focus();
+        el.select();
+        el.scrollIntoView({ block: "center" });
+        return;
+      }
+    }
+    if (scrollY !== null) window.scrollTo({ top: scrollY });
+  }, [loading]);
 
   useEffect(() => {
     async function ladeFuehrerschein() {
@@ -317,7 +358,7 @@ export default function ErfassungPage() {
               <button
                 type="button"
                 className="btn-secondary px-2 text-xs"
-                onClick={() => setDatum((d) => addDays(d, -1))}
+                onClick={() => datumWechseln(addDays(datum, -1))}
                 title="Ein Tag zurück"
               >
                 ←
@@ -325,12 +366,12 @@ export default function ErfassungPage() {
               <input
                 type="date"
                 value={datum}
-                onChange={(e) => setDatum(e.target.value)}
+                onChange={(e) => datumWechseln(e.target.value)}
               />
               <button
                 type="button"
                 className="btn-secondary px-2 text-xs"
-                onClick={() => setDatum((d) => addDays(d, 1))}
+                onClick={() => datumWechseln(addDays(datum, 1))}
                 title="Ein Tag vor"
               >
                 →
@@ -449,6 +490,7 @@ export default function ErfassungPage() {
                           defaultValue={entry?.stunden ?? ""}
                           key={`${emp.id}-${entry?.version ?? 0}`}
                           data-stunden-feld="true"
+                          data-employee-id={emp.id}
                           onBlur={(e) => saveHours(emp.id, e.target.value)}
                           onKeyDown={handleStundenKeyDown}
                           disabled={savingId === emp.id}

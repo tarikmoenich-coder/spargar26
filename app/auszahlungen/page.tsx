@@ -134,7 +134,7 @@ export default function AuszahlungenPage() {
       </div>
 
       {!loading && belege.length > 0 && (
-        <div className="sticky top-[100px] z-30 flex flex-wrap items-center gap-3 bg-neutral-50 py-2 print:hidden">
+        <div className="sticky top-[calc(3.5rem+var(--subtabs-h,2.5rem))] z-30 flex flex-wrap items-center gap-3 bg-neutral-50 py-2 print:hidden">
           <label className="text-sm">
             Saison-Jahr{" "}
             <select

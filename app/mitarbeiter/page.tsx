@@ -437,7 +437,7 @@ export default function MitarbeiterPage() {
         </form>
       )}
 
-      <div className="sticky top-[100px] z-30 flex items-center gap-3 bg-neutral-50 py-2">
+      <div className="sticky top-[calc(3.5rem+var(--subtabs-h,2.5rem))] z-30 flex items-center gap-3 bg-neutral-50 py-2">
         <input
           placeholder="Suche nach Name oder Personalnummer…"
           value={search}

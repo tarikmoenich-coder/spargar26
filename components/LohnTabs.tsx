@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { useEffect, useRef } from "react";
 
 const tabs = [
   { href: "/uebersicht", label: "Lohnübersicht" },
@@ -11,9 +12,32 @@ const tabs = [
 
 export default function LohnTabs() {
   const pathname = usePathname();
+  const ref = useRef<HTMLDivElement>(null);
+
+  // Schreibt die tatsächliche Höhe dieser Reiter-Leiste in eine CSS-Variable,
+  // damit darunterliegende Werkzeugleisten (Filter) ihren sticky-Versatz
+  // exakt danach ausrichten können - statt einen festen Pixelwert zu raten,
+  // der bei jeder Design-Änderung wieder eine Lücke reißen würde.
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const setzeHoehe = () => {
+      document.documentElement.style.setProperty(
+        "--subtabs-h",
+        `${el.offsetHeight}px`
+      );
+    };
+    setzeHoehe();
+    const observer = new ResizeObserver(setzeHoehe);
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, []);
 
   return (
-    <div className="sticky top-14 z-40 -mt-6 flex gap-4 border-b border-neutral-200 bg-neutral-50 print:hidden">
+    <div
+      ref={ref}
+      className="sticky top-14 z-40 -mt-6 flex gap-4 border-b border-neutral-200 bg-neutral-50 print:hidden"
+    >
       {tabs.map((tab) => (
         <Link
           key={tab.href}
