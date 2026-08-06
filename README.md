@@ -19,8 +19,8 @@ Enthalten:
   die Stunden der letzten 3 Tage schreibgeschützt links neben dem
   bearbeitbaren Tag; Pfeil-Buttons neben der Datumsauswahl springen einen
   Tag vor/zurück, Pfeiltasten hoch/runter im Stunden-Feld springen direkt
-  zur nächsten/vorherigen Person, Umschalt+Pfeil hoch/runter springt beim
-  gleichen Mitarbeiter zum Vortag/Folgetag (praktisch zum Nacherfassen
+  zur nächsten/vorherigen Person, Umschalt+Pfeil rechts/links springt beim
+  gleichen Mitarbeiter zum Folgetag/Vortag (praktisch zum Nacherfassen
   mehrerer Tage in Folge ohne Maus). Datum ist standardmäßig auf gestern
   vorausgewählt. Beim Wechsel des Tages (Pfeil-Buttons, Datumsfeld oder
   Umschalt+Pfeil) bleibt die Ansicht an derselben Stelle (Fokus/Scroll-

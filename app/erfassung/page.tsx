@@ -96,7 +96,6 @@ function ErfassungInner() {
     Record<string, Record<string, WorkEntry>>
   >({});
   const [loading, setLoading] = useState(true);
-  const [savingId, setSavingId] = useState<string | null>(null);
   const [printGroupKey, setPrintGroupKey] = useState<string | null>(null);
   // Aus employee_fuehrerschein_kategorien (schmale, breit zugängliche
   // Sicht) - zeigt nur, DASS und WOFÜR jemand einen Führerschein hat.
@@ -110,6 +109,18 @@ function ErfassungInner() {
   // läuft.
   const [periode, setPeriode] = useState<Period | null>(null);
   const gesperrt = periode?.gesperrt ?? false;
+
+  // Für den Live-Sync-Handler: der jeweils AKTUELLE Tag, nicht der zum
+  // Zeitpunkt des Abonnierens eingefangene - beim schnellen Tageswechsel
+  // (z.B. Umschalt+Pfeil) kann eine Nachricht vom vorherigen Kanal noch
+  // eintreffen, nachdem schon der neue Tag geladen ist. Ohne diesen Check
+  // würde sie fälschlich in die Ansicht des neuen Tages einsickern (beide
+  // sind nur nach employee_id indiziert) und dabei mitten in der Eingabe
+  // den Fokus rauswerfen.
+  const datumRef = useRef(datum);
+  useEffect(() => {
+    datumRef.current = datum;
+  }, [datum]);
 
   const vorherigeDaten = [
     addDays(datum, -3),
@@ -210,18 +221,23 @@ function ErfassungInner() {
     const scrollY = scrollYRef.current;
     fokusEmployeeIdRef.current = null;
     scrollYRef.current = null;
-    if (empId) {
-      const el = document.querySelector<HTMLInputElement>(
-        `input[data-stunden-feld="true"][data-employee-id="${empId}"]`
-      );
-      if (el) {
-        el.focus();
-        el.select();
-        el.scrollIntoView({ block: "center" });
-        return;
+    // Einen Frame warten, bis der Browser die neuen Zeilen wirklich
+    // gemalt hat, statt mitten in der React-Commit-Phase zu fokussieren -
+    // macht das Fokussieren zuverlässiger.
+    requestAnimationFrame(() => {
+      if (empId) {
+        const el = document.querySelector<HTMLInputElement>(
+          `input[data-stunden-feld="true"][data-employee-id="${empId}"]`
+        );
+        if (el) {
+          el.focus();
+          el.select();
+          el.scrollIntoView({ block: "center" });
+          return;
+        }
       }
-    }
-    if (scrollY !== null) window.scrollTo({ top: scrollY });
+      if (scrollY !== null) window.scrollTo({ top: scrollY });
+    });
   }, [loading]);
 
   useEffect(() => {
@@ -253,13 +269,25 @@ function ErfassungInner() {
           filter: `datum=eq.${datum}`,
         },
         (payload) => {
+          const row = (payload.new ?? payload.old) as WorkEntry;
+          // Veraltete Nachricht vom vorherigen Tag (Kanal noch nicht
+          // abgemeldet) ignorieren - siehe Kommentar bei datumRef oben.
+          if (row.datum !== datumRef.current) return;
+          // Gerade aktiv in Bearbeitung (Feld hat den Fokus) - nicht durch
+          // Live-Sync mitten in der Eingabe überschreiben/den Fokus rauben.
+          const aktiv = document.activeElement;
+          if (
+            aktiv instanceof HTMLElement &&
+            aktiv.getAttribute("data-stunden-feld") === "true" &&
+            aktiv.getAttribute("data-employee-id") === row.employee_id
+          ) {
+            return;
+          }
           setEntries((prev) => {
             const next = { ...prev };
             if (payload.eventType === "DELETE") {
-              const oldRow = payload.old as WorkEntry;
-              delete next[oldRow.employee_id];
+              delete next[row.employee_id];
             } else {
-              const row = payload.new as WorkEntry;
               next[row.employee_id] = row;
             }
             return next;
@@ -289,7 +317,6 @@ function ErfassungInner() {
   }, [printGroupKey]);
 
   async function saveHours(employeeId: string, value: string) {
-    setSavingId(employeeId);
     const supabase = getSupabaseClient();
     const stunden = value === "" ? null : Number(value);
     const existing = entries[employeeId];
@@ -307,7 +334,6 @@ function ErfassungInner() {
         stunden,
       });
     }
-    setSavingId(null);
   }
 
   async function saveMarkierung(employeeId: string, markierung: string) {
@@ -347,20 +373,20 @@ function ErfassungInner() {
   // Pfeiltasten hoch/runter im Stunden-Feld springen direkt zum selben
   // Feld der vorherigen/nächsten Person, ohne erst Markierung/Notiz/Gruppe
   // dieser Zeile durchlaufen zu müssen (schnellere Eingabe als mit Tab).
-  // Umschalt+Pfeil runter/hoch springt stattdessen beim GLEICHEN
+  // Umschalt+Pfeil rechts/links springt stattdessen beim GLEICHEN
   // Mitarbeiter einen Tag vor/zurück - praktisch zum Nacherfassen mehrerer
   // Tage in Folge, ohne die Maus zu benutzen. Nutzt dieselbe Fokus-Restore-
   // Logik wie die Datums-Pfeiltasten oben, nur dass hier gezielt DIESES
   // Feld gemerkt wird statt document.activeElement (das nach .blur()
   // schon nichts mehr wäre).
   function handleStundenKeyDown(e: React.KeyboardEvent<HTMLInputElement>) {
-    if (e.shiftKey && (e.key === "ArrowDown" || e.key === "ArrowUp")) {
+    if (e.shiftKey && (e.key === "ArrowRight" || e.key === "ArrowLeft")) {
       e.preventDefault();
       const empId = e.currentTarget.getAttribute("data-employee-id");
       fokusEmployeeIdRef.current = empId;
       scrollYRef.current = window.scrollY;
       e.currentTarget.blur(); // löst das Speichern über onBlur aus
-      setDatum((d) => addDays(d, e.key === "ArrowDown" ? 1 : -1));
+      setDatum((d) => addDays(d, e.key === "ArrowRight" ? 1 : -1));
       return;
     }
     if (e.key !== "ArrowUp" && e.key !== "ArrowDown") return;
@@ -568,8 +594,8 @@ function ErfassungInner() {
                           data-employee-id={emp.id}
                           onBlur={(e) => saveHours(emp.id, e.target.value)}
                           onKeyDown={handleStundenKeyDown}
-                          disabled={gesperrt || savingId === emp.id}
-                          title="↑/↓: vorherige/nächste Person · Umschalt+↑/↓: Vortag/Folgetag derselben Person"
+                          disabled={gesperrt}
+                          title="↑/↓: vorherige/nächste Person · Umschalt+←/→: Vortag/Folgetag derselben Person"
                         />
                       </td>
                       <td>
