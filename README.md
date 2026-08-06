@@ -118,9 +118,12 @@ Enthalten:
   letzter Arbeitstag mit Stunden > 0" - ersetzt nicht die rechtliche
   Prüfung der Sozialversicherungsbefreiung selbst (eigenes Formular nötig,
   noch offen)
-- "Management"-Seite, zweiter Abschnitt "Abweichungen bei Auszahlungen":
-  listet alle bereits abgerechneten Personen, deren Live-Berechnung
-  inzwischen vom eingefrorenen Schnappschuss abweicht (das „⚠" von der
+- "Management"-Seite, Abschnitt "Stundenmonitoring": listet alle Personen
+  mit mindestens einem Tag über 12,00 Stunden in der Stundenerfassung
+  (Saison-Jahr-Filter), aufklappbar je Person mit allen betroffenen Tagen
+- "Management"-Seite, Abschnitt "Abweichungen bei Auszahlungen": listet
+  alle bereits abgerechneten Personen, deren Live-Berechnung inzwischen
+  vom eingefrorenen Schnappschuss abweicht (das „⚠" von der
   Auszahlungen-Seite), mit konkreter Angabe je Feld (alt → neu) statt nur
   des Warnzeichens
 - Rollen/Rechte serverseitig über Postgres Row Level Security

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { Fragment, useEffect, useState } from "react";
 import { getSupabaseClient } from "@/lib/supabase/client";
 import {
   ABRECHNUNGSART_LABELS,
@@ -40,6 +40,23 @@ interface Abweichung {
   feld: string;
   alt: string;
   neu: string;
+}
+
+// Maximale Arbeitsstunden pro Tag, ab deren Überschreitung eine Person im
+// Stundenmonitoring auftaucht.
+const MAX_STUNDEN_PRO_TAG = 12;
+
+interface UeberstundenTag {
+  datum: string;
+  stunden: number;
+}
+
+interface UeberstundenEintrag {
+  employee_id: string;
+  personal_nr: string;
+  name: string;
+  vorname: string;
+  tage: UeberstundenTag[];
 }
 
 function formatWert(v: unknown, eur: boolean): string {
@@ -85,6 +102,12 @@ export default function ManagementPage() {
     { row: SeasonSummaryRow; belegnummer: string; diffs: Abweichung[] }[]
   >([]);
   const [loadingAbw, setLoadingAbw] = useState(true);
+
+  const [ueberstunden, setUeberstunden] = useState<UeberstundenEintrag[]>([]);
+  const [loadingUeberstunden, setLoadingUeberstunden] = useState(true);
+  const [offenUeberstundenId, setOffenUeberstundenId] = useState<
+    string | null
+  >(null);
 
   useEffect(() => {
     async function load() {
@@ -136,6 +159,44 @@ export default function ManagementPage() {
       setLoadingAbw(false);
     }
     loadAbweichungen();
+  }, [jahr]);
+
+  useEffect(() => {
+    async function loadUeberstunden() {
+      setLoadingUeberstunden(true);
+      const supabase = getSupabaseClient();
+      const { data, error } = await supabase
+        .from("work_entries")
+        .select("employee_id, datum, stunden, employees(personal_nr, name, vorname)")
+        .gt("stunden", MAX_STUNDEN_PRO_TAG)
+        .gte("datum", `${jahr}-01-01`)
+        .lte("datum", `${jahr}-12-31`)
+        .order("datum");
+      if (!error && data) {
+        const proMitarbeiter = new Map<string, UeberstundenEintrag>();
+        (data as any[]).forEach((row) => {
+          if (!proMitarbeiter.has(row.employee_id)) {
+            proMitarbeiter.set(row.employee_id, {
+              employee_id: row.employee_id,
+              personal_nr: row.employees?.personal_nr ?? "",
+              name: row.employees?.name ?? "",
+              vorname: row.employees?.vorname ?? "",
+              tage: [],
+            });
+          }
+          proMitarbeiter.get(row.employee_id)!.tage.push({
+            datum: row.datum,
+            stunden: Number(row.stunden),
+          });
+        });
+        const ergebnis = Array.from(proMitarbeiter.values()).sort(
+          (a, b) => b.tage.length - a.tage.length
+        );
+        setUeberstunden(ergebnis);
+      }
+      setLoadingUeberstunden(false);
+    }
+    loadUeberstunden();
   }, [jahr]);
 
   return (
@@ -218,6 +279,96 @@ export default function ManagementPage() {
                     <td className="font-medium text-red-600">⚠ Überschritten</td>
                   </tr>
                 ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+
+      <div>
+        <h2 className="mb-2 text-base font-semibold text-emerald-800">
+          Stundenmonitoring
+        </h2>
+        <p className="mb-2 text-sm text-neutral-500">
+          Personen mit mindestens einem Tag über {MAX_STUNDEN_PRO_TAG.toFixed(2)}{" "}
+          Stunden in der Stundenerfassung. Aufklappen zeigt die betroffenen
+          Tage.
+        </p>
+        {loadingUeberstunden ? (
+          <p className="text-neutral-500">Lädt…</p>
+        ) : ueberstunden.length === 0 ? (
+          <p className="text-neutral-500">
+            Keine Tage über {MAX_STUNDEN_PRO_TAG.toFixed(2)} Stunden für{" "}
+            {jahr}.
+          </p>
+        ) : (
+          <div className="overflow-x-auto">
+            <table>
+              <thead>
+                <tr>
+                  <th>Pers.-Nr.</th>
+                  <th>Name</th>
+                  <th>Anzahl Tage &gt; {MAX_STUNDEN_PRO_TAG.toFixed(0)} Std.</th>
+                  <th>Höchstwert Std.</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody>
+                {ueberstunden.map((u) => {
+                  const offen = offenUeberstundenId === u.employee_id;
+                  const hoechstwert = Math.max(...u.tage.map((t) => t.stunden));
+                  return (
+                    <Fragment key={u.employee_id}>
+                      <tr>
+                        <td>{u.personal_nr}</td>
+                        <td>
+                          {u.name}, {u.vorname}
+                        </td>
+                        <td className="font-medium text-amber-600">
+                          {u.tage.length}
+                        </td>
+                        <td>{hoechstwert.toFixed(2)}</td>
+                        <td>
+                          <button
+                            type="button"
+                            className="btn-secondary text-xs"
+                            onClick={() =>
+                              setOffenUeberstundenId(offen ? null : u.employee_id)
+                            }
+                          >
+                            {offen ? "Schließen" : "Anzeigen"}
+                          </button>
+                        </td>
+                      </tr>
+                      {offen && (
+                        <tr>
+                          <td colSpan={5} className="bg-neutral-50">
+                            <table>
+                              <thead>
+                                <tr>
+                                  <th>Datum</th>
+                                  <th>Stunden</th>
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {[...u.tage]
+                                  .sort((a, b) => a.datum.localeCompare(b.datum))
+                                  .map((t) => (
+                                    <tr key={t.datum}>
+                                      <td>{formatDatumDE(t.datum)}</td>
+                                      <td className="font-medium text-amber-600">
+                                        {t.stunden.toFixed(2)}
+                                      </td>
+                                    </tr>
+                                  ))}
+                              </tbody>
+                            </table>
+                          </td>
+                        </tr>
+                      )}
+                    </Fragment>
+                  );
+                })}
               </tbody>
             </table>
           </div>
