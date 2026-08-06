@@ -168,6 +168,26 @@ schlägt daher auf einer bestehenden Datenbank fehl. Führe stattdessen nur
 neue Migrations-Dateien aus `supabase/migration_*.sql` (in Dateinamen-
 Reihenfolge, jede nur einmal) im SQL Editor aus.
 
+### Rollen & Berechtigungen
+
+Rechte sind serverseitig in der Datenbank festgelegt (Row Level Security),
+nicht nur im Menü versteckt.
+
+| Rolle | Sichtbare Menüpunkte | Kernrechte |
+|---|---|---|
+| `admin` | Alle | Voller Zugriff auf alles, inkl. Einstellungen, Kassenprüfungen freigeben |
+| `hr` | Personal, Stundenerfassung, Suche, Lohn, Management | Personalstamm + Dokumente voll pflegen (inkl. SV-Nr./IBAN/Ausweiskopien), Stunden erfassen, Lohnübersicht/Vorschüsse nur ansehen (nicht bearbeiten) |
+| `zeiterfassung` | Stundenerfassung, Suche | Nur Stunden eintragen/ändern; sieht Personal nur mit eingeschränkten Feldern (keine SV-Nr./IBAN etc.) |
+| `kasse` | Suche, Lohn, Kassenbuch | Vorschüsse erfassen/stornieren/korrigieren, Kassenbuch führen, Kassenprüfung durchführen |
+| `lohnabrechnung` | Suche, Lohn | Lohnübersicht ansehen **und bearbeiten** (Buskosten, Kautionen, "Jetzt Abrechnen"), Vorschüsse einsehen |
+| `pruefer` | Suche, Lohn, Kassenbuch | Nur lesen, außer: Kassenprüfungen freigeben; einzige Nicht-Admin-Rolle mit Audit-Log-Einsicht |
+| `management` | Suche, Lohn, Kassenbuch, Management | Nur lesende/aggregierte Sicht |
+
+Neuen Benutzer anlegen: Supabase-Dashboard → Authentication → Users →
+"Add user" (E-Mail + Passwort) → User UID kopieren → Table Editor →
+Tabelle `profiles` → neue Zeile mit `id` = User UID, `full_name`, `role`
+(eine der obigen), `aktiv` = `true`.
+
 ## 2. Lokale Konfiguration
 
 ```

@@ -964,13 +964,13 @@ create policy "auszahlungsbelege_select" on auszahlungsbelege for select
 create policy "verpflegungssaetze_rw" on verpflegungssaetze for all
   using (is_admin()) with check (is_admin());
 create policy "advances_select" on advances for select
-  using (current_role_name() in ('admin', 'kasse', 'lohnabrechnung', 'pruefer', 'management'));
+  using (current_role_name() in ('admin', 'hr', 'kasse', 'lohnabrechnung', 'pruefer', 'management'));
 create policy "advances_write" on advances for insert
   with check (current_role_name() in ('admin', 'kasse'));
 create policy "advances_update" on advances for update
   using (current_role_name() in ('admin', 'kasse'));
 create policy "advance_recipients_rw" on advance_recipients for all
-  using (current_role_name() in ('admin', 'kasse', 'lohnabrechnung', 'pruefer'))
+  using (current_role_name() in ('admin', 'hr', 'kasse', 'lohnabrechnung', 'pruefer'))
   with check (current_role_name() in ('admin', 'kasse'));
 -- kassenbewegungen: nur lesend per Policy - Schreiben ausschließlich über
 -- die security-definer Funktion vorschuss_korrigieren.

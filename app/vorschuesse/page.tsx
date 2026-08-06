@@ -83,6 +83,7 @@ export default function VorschuessePage() {
   // zwar die Vorschuss-Liste, aber keine Empfänger-Details.
   const canSeeDetails =
     profile?.role === "admin" ||
+    profile?.role === "hr" ||
     profile?.role === "kasse" ||
     profile?.role === "lohnabrechnung" ||
     profile?.role === "pruefer";
