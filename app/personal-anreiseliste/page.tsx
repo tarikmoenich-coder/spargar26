@@ -184,6 +184,30 @@ export default function AnreiselistePage() {
     load();
   }
 
+  // Person reist doch nicht an (z.B. im letzten Moment abgesprungen) -
+  // deaktiviert den inzwischen angelegten Mitarbeiter wieder (wie
+  // "Deaktivieren" im Personalstamm - ADR-011: kein Löschen, die Historie
+  // und die Personalnummer bleiben ihr dauerhaft zugeordnet) und entfernt
+  // die Person aus der Anreiseliste.
+  async function zurueckziehen(k: PersonalKandidat) {
+    const grund = window.prompt(
+      "Grund, warum die Person doch nicht anreist (Pflichtfeld, wird protokolliert):"
+    );
+    if (!grund) return;
+    const supabase = getSupabaseClient();
+    if (k.aktivierter_employee_id) {
+      await supabase
+        .from("employees")
+        .update({ aktiv: false })
+        .eq("id", k.aktivierter_employee_id);
+    }
+    await supabase
+      .from("personal_kandidaten")
+      .update({ status: "storniert", storniert_grund: grund })
+      .eq("id", k.id);
+    load();
+  }
+
   async function markiereGedruckt(k: PersonalKandidat) {
     if (k.gedruckt) return;
     const supabase = getSupabaseClient();
@@ -406,6 +430,7 @@ export default function AnreiselistePage() {
                   <th>Buskosten Hinfahrt €</th>
                   <th>Checkliste</th>
                   <th>Status</th>
+                  {canEdit && <th></th>}
                 </tr>
               </thead>
               <tbody>
@@ -617,6 +642,18 @@ export default function AnreiselistePage() {
                           </span>
                         )}
                       </td>
+                      {canEdit && (
+                        <td>
+                          <button
+                            type="button"
+                            className="btn-danger text-xs"
+                            onClick={() => zurueckziehen(k)}
+                            title="Person reist doch nicht an - deaktiviert den Mitarbeiter wieder und entfernt sie aus der Anreiseliste"
+                          >
+                            Zurückziehen
+                          </button>
+                        </td>
+                      )}
                     </tr>
                   );
                 })}
@@ -645,6 +682,7 @@ export default function AnreiselistePage() {
                   <th>Geplante Ankunft</th>
                   <th>Vertragszeitraum</th>
                   <th>Status</th>
+                  {canEdit && <th></th>}
                 </tr>
               </thead>
               <tbody>
@@ -661,6 +699,18 @@ export default function AnreiselistePage() {
                     <td className="font-medium text-emerald-700">
                       Vollständig
                     </td>
+                    {canEdit && (
+                      <td>
+                        <button
+                          type="button"
+                          className="btn-danger text-xs"
+                          onClick={() => zurueckziehen(k)}
+                          title="Person reist doch nicht an - deaktiviert den Mitarbeiter wieder und entfernt sie aus der Anreiseliste"
+                        >
+                          Zurückziehen
+                        </button>
+                      </td>
+                    )}
                   </tr>
                 ))}
               </tbody>
