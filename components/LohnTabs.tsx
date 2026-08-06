@@ -13,7 +13,7 @@ export default function LohnTabs() {
   const pathname = usePathname();
 
   return (
-    <div className="sticky top-14 z-40 flex gap-4 border-b border-neutral-200 bg-neutral-50 print:hidden">
+    <div className="sticky top-14 z-40 -mt-6 flex gap-4 border-b border-neutral-200 bg-neutral-50 print:hidden">
       {tabs.map((tab) => (
         <Link
           key={tab.href}
