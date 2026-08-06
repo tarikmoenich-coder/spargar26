@@ -7,33 +7,39 @@
 
 -- 1) Neue Spalten auf personal_kandidaten -----------------------------------
 
+-- "if not exists" je Spalte: macht das Skript gefahrlos erneut ausführbar,
+-- falls ein vorheriger Versuch (z.B. wegen des Fehlers unten bei Schritt 2)
+-- teilweise durchgelaufen sein sollte.
 alter table personal_kandidaten
-  add column fuehrerschein_kategorien text[]
+  add column if not exists fuehrerschein_kategorien text[]
     check (fuehrerschein_kategorien is null
       or fuehrerschein_kategorien <@ array['B', 'BE', 'C', 'CE']),
-  add column gedruckt boolean not null default false,
-  add column gedruckt_am timestamptz,
-  add column fragebogen_erfasst boolean not null default false,
-  add column verheiratet_laut_fragebogen boolean,
-  add column lohnsteuerabzug_antrag_gewuenscht boolean not null default false,
-  add column buskosten_erfasst boolean not null default false;
+  add column if not exists gedruckt boolean not null default false,
+  add column if not exists gedruckt_am timestamptz,
+  add column if not exists fragebogen_erfasst boolean not null default false,
+  add column if not exists verheiratet_laut_fragebogen boolean,
+  add column if not exists lohnsteuerabzug_antrag_gewuenscht boolean not null default false,
+  add column if not exists buskosten_erfasst boolean not null default false;
 
 -- 2) status-Constraint erweitern ---------------------------------------------
 -- Der bisherige Status 'angereist' (= "fertig") wird durch die neu live
--- berechnete Vollständigkeits-Prüfung ersetzt - bestehende 'angereist'-Zeilen
--- zunächst auf 'anreiseliste' ummappen, dann den alten Constraint (Standard-
--- Postgres-Name für einen unbenannten Check auf der status-Spalte) durch den
--- neuen ersetzen.
+-- berechnete Vollständigkeits-Prüfung ersetzt. WICHTIG: erst den alten
+-- Constraint (Standard-Postgres-Name für einen unbenannten Check auf der
+-- status-Spalte) durch den neuen ersetzen, DANACH bestehende 'angereist'-
+-- Zeilen auf 'anreiseliste' ummappen - andersherum (wie in einer früheren
+-- Version dieser Datei) schlägt das UPDATE fehl, weil der alte Constraint
+-- den neuen Wert 'anreiseliste' zu dem Zeitpunkt noch nicht erlaubt.
 
-update personal_kandidaten set status = 'anreiseliste' where status = 'angereist';
-
-alter table personal_kandidaten drop constraint personal_kandidaten_status_check;
+alter table personal_kandidaten drop constraint if exists personal_kandidaten_status_check;
 alter table personal_kandidaten
   add constraint personal_kandidaten_status_check
   check (status in ('geplant', 'anreiseliste', 'storniert'));
 
+update personal_kandidaten set status = 'anreiseliste' where status = 'angereist';
+
 -- 3) Neue View: Vollständigkeits-Prüfung für die Anreiseliste ---------------
 
+drop view if exists personal_kandidaten_checkliste;
 create view personal_kandidaten_checkliste as
 select
   k.id as kandidat_id,
