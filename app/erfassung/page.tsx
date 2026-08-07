@@ -22,10 +22,22 @@ function todayIso() {
 // Reine Kalendertag-Arithmetik auf Basis von "YYYY-MM-DD" - bewusst über
 // UTC-Millisekunden statt lokaler Zeitzone, damit ein Tagessprung nicht je
 // nach Zeitzone/Sommerzeit auf den falschen Tag landen kann.
+//
+// Robust gegen ungültige/unvollständige Eingaben: ein <input type="date">
+// liefert beim Tippen per Tastatur (statt über den Picker) zwischenzeitlich
+// einen LEEREN String, solange das Datum noch nicht vollständig eingegeben
+// ist - ohne diese Prüfung würde new Date(NaN).toISOString() eine
+// RangeError werfen und die ganze Seite mit "Application error" abstürzen
+// lassen (passiert hier in der Render-Phase, nicht in einem try/catch
+// abfangbar). Bei ungültiger Eingabe wird einfach der unveränderte Wert
+// zurückgegeben, bis ein vollständiges Datum eingetippt ist.
 function addDays(iso: string, delta: number): string {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(iso)) return iso;
   const [j, m, t] = iso.split("-").map(Number);
   const ms = Date.UTC(j, m - 1, t) + delta * 86400000;
-  return new Date(ms).toISOString().slice(0, 10);
+  const ergebnis = new Date(ms);
+  if (Number.isNaN(ergebnis.getTime())) return iso;
+  return ergebnis.toISOString().slice(0, 10);
 }
 
 // Kurzform "Mo 04.08." für die Spaltenköpfe der vorherigen Tage.
@@ -198,6 +210,11 @@ function ErfassungInner() {
   }
 
   function datumWechseln(neuesDatum: string) {
+    // <input type="date"> liefert beim Tippen per Tastatur zwischenzeitlich
+    // einen leeren String, solange das Datum noch unvollständig ist -
+    // ignorieren, statt einen ungültigen Zwischenstand zu übernehmen (siehe
+    // ausführlicher Kommentar bei addDays oben).
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(neuesDatum)) return;
     merkeFokusUndScroll();
     setDatum(neuesDatum);
   }
