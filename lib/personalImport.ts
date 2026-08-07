@@ -73,6 +73,22 @@ export function erkenneSpalten(
   return map;
 }
 
+// Wandelt eine von XLSX gelesene Zelle (String, Zahl, Date, Bool) in Text
+// um. Echte Datumszellen werden als TT.MM.JJJJ ausgegeben (UTC-Werte, wie
+// sie die cellDates-Option liefert - nicht mit lokalen Getter-Methoden
+// lesen, sonst kann es je nach Zeitzone zu einer Verschiebung um einen Tag
+// kommen). Wird sowohl beim Personal- als auch beim Stunden-Import genutzt.
+export function zellwertZuText(wert: unknown): string {
+  if (wert instanceof Date) {
+    const tag = String(wert.getUTCDate()).padStart(2, "0");
+    const monat = String(wert.getUTCMonth() + 1).padStart(2, "0");
+    const jahr = wert.getUTCFullYear();
+    return `${tag}.${monat}.${jahr}`;
+  }
+  if (wert === null || wert === undefined) return "";
+  return String(wert).trim();
+}
+
 // "23.4.2026" oder "2026-04-23" -> "2026-04-23"; sonst null.
 export function parseDatum(wert: string): string | null {
   const v = wert.trim();

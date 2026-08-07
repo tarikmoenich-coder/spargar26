@@ -32,6 +32,7 @@ const items: NavItem[] = [
     href: "/erfassung",
     label: "Stundenerfassung",
     roles: ["admin", "hr", "zeiterfassung"],
+    auchAktivBei: ["/erfassung-import"],
   },
   {
     href: "/suche",

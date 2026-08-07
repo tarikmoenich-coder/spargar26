@@ -11,6 +11,7 @@ import type {
   Period,
   WorkEntry,
 } from "@/lib/types";
+import ErfassungTabs from "@/components/ErfassungTabs";
 
 const OHNE_GRUPPE_KEY = "__ohne__";
 
@@ -432,6 +433,7 @@ function ErfassungInner() {
 
   return (
     <div className="flex flex-col gap-4">
+      <ErfassungTabs />
       <div className="print:hidden">
         <h1 className="text-lg font-semibold text-emerald-800">
           Stundenerfassung
@@ -442,7 +444,7 @@ function ErfassungInner() {
         </p>
       </div>
 
-      <div className="sticky top-14 z-30 flex flex-col gap-2 bg-neutral-50 py-2 print:hidden">
+      <div className="sticky top-[calc(3.5rem+var(--subtabs-h,2.5rem))] z-30 flex flex-col gap-2 bg-neutral-50 py-2 print:hidden">
         <div className="flex items-center gap-3">
           <label className="text-sm">
             Datum{" "}

@@ -25,6 +25,15 @@ Enthalten:
   vorausgewählt. Beim Wechsel des Tages (Pfeil-Buttons, Datumsfeld oder
   Umschalt+Pfeil) bleibt die Ansicht an derselben Stelle (Fokus/Scroll-
   Position), statt nach oben zu springen
+- "Stundenerfassung → Import" (admin/hr/zeiterfassung): Excel-/CSV-Import
+  zum Nacherfassen mehrerer Tage/Personen auf einmal - anderes Format als
+  der Personal-Import: Spalte 1 = Personalnummer, ab Spalte 2 je eine
+  Spalte pro Datum (Kopfzeile = Datum). Existieren für eine Person und ein
+  Datum bereits Stunden, hat der bestehende Eintrag Vorrang (Zelle wird
+  übersprungen, nicht überschrieben); ebenso übersprungen werden Zellen in
+  einem per Monatsabschluss gesperrten Monat. Vorschau zeigt vorab, was
+  importiert/übersprungen wird bzw. wo Personalnummer oder Datumsspalte
+  nicht erkannt wurden
 - Arbeitsgruppen-Verwaltung unter Einstellungen (nur admin): Bezeichnung und
   Anzeige-/Druckreihenfolge je Gruppe
 - Personalnummern-Übersicht: 10 Nummernkreise (1–999, 1000–1999, …),
