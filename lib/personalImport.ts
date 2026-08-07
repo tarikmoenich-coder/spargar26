@@ -130,12 +130,19 @@ export function parseZahl(wert: string): number | null {
   return Number.isFinite(n) ? n : null;
 }
 
+// Erkennt sowohl ausgeschriebene Werte als auch die Kurzformen wie im
+// Altsystem (siehe ABRECHNUNGSART_LABELS in lib/types.ts) - "PA" ->
+// normalisiereHeader() -> "pa" usw.
 const ABRECHNUNGSART_ALIASE: Record<string, Abrechnungsart> = {
   pauschal: "pauschal",
+  pa: "pauschal",
   lohnsteuerklasse1: "lohnsteuerklasse_1",
   lohnsteuerklassei: "lohnsteuerklasse_1",
+  stkl1: "lohnsteuerklasse_1",
+  stklassei: "lohnsteuerklasse_1",
   sozialversicherungspflichtig: "sozialversicherungspflichtig",
   svpflichtig: "sozialversicherungspflichtig",
+  svpfl: "sozialversicherungspflichtig",
 };
 
 export function parseAbrechnungsart(wert: string): {

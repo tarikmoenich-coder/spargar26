@@ -45,7 +45,7 @@ function ladeVorlage() {
     "Zagreb",
     "Kroatien",
     "13,50",
-    "Sozialversicherungspflichtig",
+    "SV-Pfl.",
     "",
     "",
     "",
