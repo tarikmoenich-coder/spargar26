@@ -89,7 +89,12 @@ Enthalten:
   hinterlegtem Führerschein die Klassen an (über eine schmale, für alle
   Rollen lesbare Sicht - das Dokument selbst bleibt admin/hr-only)
 - Personal-Import aus Excel/CSV mit Vorschau, Spaltenerkennung und
-  Fehlerprüfung (u.a. bereits vergebene Personalnummern)
+  Fehlerprüfung (u.a. bereits vergebene Personalnummern). Endet die
+  Personalnummer einer Zeile auf "a" (Statuswechsel-Konvention, siehe
+  "Statuswechsel" im Personalstamm), wird automatisch nach einer
+  Vorgänger-Person mit der Nummer ohne "a" gesucht (auch innerhalb
+  derselben Import-Datei) und die Verknüpfung gesetzt - fehlt der
+  Vorgänger, wird trotzdem ganz normal importiert, nur ohne Verknüpfung
 - Monatsabschluss: Monatsfilter auf der Lohnübersicht zeigt je Mitarbeiter
   Stunden, Anwesenheitstage, Basis-Brutto (nur Stunden × Stundenlohn,
   ohne Saison-Prämien - die bleiben ein Saison-Gesamtbetrag) sowie

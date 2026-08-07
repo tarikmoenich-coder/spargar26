@@ -152,9 +152,25 @@ export function parseAbrechnungsart(wert: string): {
   };
 }
 
+// "342a" -> "342" (Statuswechsel-Konvention, siehe Personalstamm-Button
+// "Statuswechsel": ein "a" am Ende der Personalnummer markiert eine mit
+// einer Vorgänger-Person verknüpfte Nummer, z.B. bei SV-frei -> -pflichtig).
+// null, wenn die Nummer nicht auf "a" endet oder nur aus "a" besteht.
+export function vorgaengerNrAus(personal_nr: string): string | null {
+  const v = personal_nr.trim();
+  if (v.length < 2) return null;
+  if (!v.toLowerCase().endsWith("a")) return null;
+  return v.slice(0, -1);
+}
+
 export interface ImportZeile {
   zeile: number;
   personal_nr: string;
+  // Aus der Personalnummer abgeleitet (siehe vorgaengerNrAus) - die
+  // eigentliche Verknüpfung (zu einer employee_id) wird erst beim Import
+  // in der Seite aufgelöst, da die Vorgänger-Person ggf. erst in
+  // DIESEM Import mit angelegt wird.
+  vorgaenger_personal_nr: string | null;
   name: string;
   vorname: string;
   gruppe_nr: string | null;
@@ -234,6 +250,7 @@ export function baueZeile(
   return {
     zeile,
     personal_nr,
+    vorgaenger_personal_nr: personal_nr ? vorgaengerNrAus(personal_nr) : null,
     name,
     vorname,
     gruppe_nr,

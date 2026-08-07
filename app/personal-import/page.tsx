@@ -141,6 +141,7 @@ export default function PersonalImportPage() {
       if (!z.personal_nr) return z;
       const key = z.personal_nr.toLowerCase();
       const fehler = [...z.fehler];
+      const warnungen = [...z.warnungen];
       if ((zaehler.get(key) ?? 0) > 1) {
         fehler.push("Personalnummer kommt mehrfach in dieser Datei vor");
       }
@@ -148,45 +149,118 @@ export default function PersonalImportPage() {
       if (bestehenderName) {
         fehler.push(`Personalnummer bereits vergeben an ${bestehenderName}`);
       }
-      return { ...z, fehler };
+      // Statuswechsel-Verknüpfung ("342a" -> Vorgänger "342") - nur ein
+      // Hinweis, kein Fehler: fehlt der Vorgänger, wird die Zeile trotzdem
+      // ganz normal importiert, nur ohne Verknüpfung.
+      if (z.vorgaenger_personal_nr) {
+        const vKey = z.vorgaenger_personal_nr.toLowerCase();
+        if (bestehendeNummern.has(vKey) || zaehler.has(vKey)) {
+          warnungen.push(
+            `wird mit Vorgänger-Person "${z.vorgaenger_personal_nr}" verknüpft`
+          );
+        } else {
+          warnungen.push(
+            `Vorgänger-Person "${z.vorgaenger_personal_nr}" nicht gefunden - wird ohne Verknüpfung importiert`
+          );
+        }
+      }
+      return { ...z, fehler, warnungen };
     });
 
     setZeilen(geprueft);
     setParsing(false);
   }
 
+  function insertPayload(
+    z: ImportZeile,
+    vorgaenger_employee_id: string | null
+  ) {
+    return {
+      personal_nr: z.personal_nr,
+      gruppe_nr: z.gruppe_nr,
+      name: z.name,
+      vorname: z.vorname,
+      herkunft: z.herkunft,
+      nationalitaet: z.nationalitaet,
+      geburtsdatum: z.geburtsdatum,
+      ort: z.ort,
+      land: z.land,
+      stundenlohn: z.stundenlohn,
+      abrechnungsart: z.abrechnungsart,
+      sozialversicherungsnummer: z.sozialversicherungsnummer,
+      steuer_id: z.steuer_id,
+      iban: z.iban,
+      bic: z.bic,
+      zahlungsempfaenger: z.zahlungsempfaenger,
+      vorgaenger_employee_id,
+    };
+  }
+
   async function handleImport() {
     setImporting(true);
     const supabase = getSupabaseClient();
     const importierbar = zeilen.filter((z) => z.fehler.length === 0);
+    const fehlgeschlagen: { zeile: number; grund: string }[] = [];
+    let erfolgreich = 0;
 
-    const ergebnisse = await Promise.allSettled(
-      importierbar.map((z) =>
-        supabase.from("employees").insert({
-          personal_nr: z.personal_nr,
-          gruppe_nr: z.gruppe_nr,
-          name: z.name,
-          vorname: z.vorname,
-          herkunft: z.herkunft,
-          nationalitaet: z.nationalitaet,
-          geburtsdatum: z.geburtsdatum,
-          ort: z.ort,
-          land: z.land,
-          stundenlohn: z.stundenlohn,
-          abrechnungsart: z.abrechnungsart,
-          sozialversicherungsnummer: z.sozialversicherungsnummer,
-          steuer_id: z.steuer_id,
-          iban: z.iban,
-          bic: z.bic,
-          zahlungsempfaenger: z.zahlungsempfaenger,
-        })
+    // Zwei Phasen wegen der Statuswechsel-Verknüpfung ("342a" -> Vorgänger
+    // "342"): eine Vorgänger-Person kann in DIESER SELBEN Datei mit
+    // importiert werden, ihre employee_id existiert also erst NACH Phase 1.
+    const basisZeilen = importierbar.filter((z) => !z.vorgaenger_personal_nr);
+    const aZeilen = importierbar.filter((z) => z.vorgaenger_personal_nr);
+
+    const basisErgebnisse = await Promise.allSettled(
+      basisZeilen.map((z) =>
+        supabase
+          .from("employees")
+          .insert(insertPayload(z, null))
+          .select("id, personal_nr")
+          .single()
       )
     );
 
-    const fehlgeschlagen: { zeile: number; grund: string }[] = [];
-    let erfolgreich = 0;
-    ergebnisse.forEach((r, i) => {
-      const zeile = importierbar[i].zeile;
+    // Personalnummer (klein geschrieben) -> employee_id, für die Auflösung
+    // der Vorgänger-Verknüpfung in Phase 2 - bereits bestehende Personen
+    // (aus einem früheren Import/manuell angelegt) plus die gerade in
+    // Phase 1 neu angelegten.
+    const idNachPersonalNr = new Map<string, string>();
+    const { data: bestehendeIds } = await supabase
+      .from("employees")
+      .select("id, personal_nr");
+    (
+      (bestehendeIds as { id: string; personal_nr: string }[] | null) ?? []
+    ).forEach((r) => {
+      idNachPersonalNr.set(r.personal_nr.trim().toLowerCase(), r.id);
+    });
+
+    basisErgebnisse.forEach((r, i) => {
+      const zeile = basisZeilen[i].zeile;
+      if (r.status === "fulfilled" && !r.value.error && r.value.data) {
+        erfolgreich++;
+        idNachPersonalNr.set(
+          r.value.data.personal_nr.trim().toLowerCase(),
+          r.value.data.id
+        );
+      } else {
+        const grund =
+          r.status === "fulfilled"
+            ? r.value.error?.message ?? "unbekannter Fehler"
+            : String(r.reason);
+        fehlgeschlagen.push({ zeile, grund });
+      }
+    });
+
+    const aErgebnisse = await Promise.allSettled(
+      aZeilen.map((z) => {
+        const vorgaengerId = z.vorgaenger_personal_nr
+          ? idNachPersonalNr.get(z.vorgaenger_personal_nr.toLowerCase()) ??
+            null
+          : null;
+        return supabase.from("employees").insert(insertPayload(z, vorgaengerId));
+      })
+    );
+    aErgebnisse.forEach((r, i) => {
+      const zeile = aZeilen[i].zeile;
       if (r.status === "fulfilled" && !r.value.error) {
         erfolgreich++;
       } else {
