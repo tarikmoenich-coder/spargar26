@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { Fragment, useEffect, useState } from "react";
 import { getSupabaseClient } from "@/lib/supabase/client";
 import { useProfile } from "@/lib/useProfile";
 import {
@@ -442,10 +442,6 @@ export default function MitarbeiterPage() {
     if (e.vorgaenger_employee_id) nachfolgerMap[e.vorgaenger_employee_id] = e;
   });
 
-  const statuswechselPerson = statuswechselId
-    ? employees.find((e) => e.id === statuswechselId) ?? null
-    : null;
-
   const filtered = employees.filter((e) => {
     const q = search.toLowerCase();
     return (
@@ -456,22 +452,16 @@ export default function MitarbeiterPage() {
     );
   });
 
-  return (
-    <div className="flex flex-col gap-6">
-      <PersonalTabs />
-      <div>
-        <h1 className="text-lg font-semibold text-emerald-800">Personal</h1>
-        <p className="text-sm text-neutral-500">
-          Stammdaten der Mitarbeiter. Löschen ist nicht möglich - Personen
-          werden bei Bedarf deaktiviert, die Historie bleibt erhalten.
-        </p>
-      </div>
-
-      {canEdit && (
-        <form
-          onSubmit={handleSubmit}
-          className="grid grid-cols-2 gap-3 rounded border border-neutral-200 bg-white p-4 sm:grid-cols-4"
-        >
+  // Ausgelagert, damit dasselbe Formular sowohl oben (Neuanlegen) als auch
+  // - beim Bearbeiten - direkt unter der betroffenen Zeile in der Tabelle
+  // gerendert werden kann (Nutzer-Wunsch: nicht mehr nach oben scrollen
+  // müssen, um die eigene Bearbeitung zu sehen).
+  function mitarbeiterFormular() {
+    return (
+      <form
+        onSubmit={handleSubmit}
+        className="grid grid-cols-2 gap-3 rounded border border-neutral-200 bg-white p-4 sm:grid-cols-4"
+      >
           <div className="col-span-2 flex flex-col gap-1">
             <div className="flex gap-2">
               <input
@@ -662,11 +652,15 @@ export default function MitarbeiterPage() {
             )}
             {error && <span className="text-sm text-red-600">{error}</span>}
           </div>
-        </form>
-      )}
+      </form>
+    );
+  }
 
-      {statuswechselPerson && (
-        <div className="flex flex-col gap-3 rounded border border-emerald-300 bg-emerald-50 p-4">
+  // Ebenfalls ausgelagert - wird direkt unter der betroffenen Zeile
+  // gerendert (siehe Kommentar bei mitarbeiterFormular oben).
+  function statuswechselFormular(statuswechselPerson: Employee) {
+    return (
+      <div className="flex flex-col gap-3 rounded border border-emerald-300 bg-emerald-50 p-4">
           <h2 className="text-sm font-semibold text-emerald-800">
             Statuswechsel für {statuswechselPerson.name},{" "}
             {statuswechselPerson.vorname} ({statuswechselPerson.personal_nr})
@@ -724,8 +718,22 @@ export default function MitarbeiterPage() {
               </span>
             )}
           </div>
-        </div>
-      )}
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex flex-col gap-6">
+      <PersonalTabs />
+      <div>
+        <h1 className="text-lg font-semibold text-emerald-800">Personal</h1>
+        <p className="text-sm text-neutral-500">
+          Stammdaten der Mitarbeiter. Löschen ist nicht möglich - Personen
+          werden bei Bedarf deaktiviert, die Historie bleibt erhalten.
+        </p>
+      </div>
+
+      {canEdit && !editingId && mitarbeiterFormular()}
 
       <div className="sticky top-[calc(3.5rem+var(--subtabs-h,2.5rem))] z-30 flex items-center gap-3 bg-neutral-50 py-2">
         <input
@@ -776,7 +784,8 @@ export default function MitarbeiterPage() {
               const sv = svPruefung[emp.id];
               const fs = fuehrerschein[emp.id];
               return (
-              <tr key={emp.id} className={emp.aktiv ? "" : "opacity-50"}>
+              <Fragment key={emp.id}>
+              <tr className={emp.aktiv ? "" : "opacity-50"}>
                 <td>{emp.personal_nr}</td>
                 <td>
                   {emp.gruppe_nr
@@ -865,17 +874,29 @@ export default function MitarbeiterPage() {
                     >
                       {emp.aktiv ? "Deaktivieren" : "Reaktivieren"}
                     </button>
-                    {emp.aktiv && (
-                      <button
-                        className="btn-secondary"
-                        onClick={() => statuswechselStarten(emp)}
-                      >
-                        Statuswechsel
-                      </button>
-                    )}
+                    {emp.aktiv &&
+                      emp.abrechnungsart !== "sozialversicherungspflichtig" && (
+                        <button
+                          className="btn-secondary"
+                          onClick={() => statuswechselStarten(emp)}
+                        >
+                          Statuswechsel
+                        </button>
+                      )}
                   </td>
                 )}
               </tr>
+              {editingId === emp.id && (
+                <tr>
+                  <td colSpan={20}>{mitarbeiterFormular()}</td>
+                </tr>
+              )}
+              {statuswechselId === emp.id && (
+                <tr>
+                  <td colSpan={20}>{statuswechselFormular(emp)}</td>
+                </tr>
+              )}
+              </Fragment>
               );
             })}
           </tbody>
