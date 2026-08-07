@@ -200,7 +200,13 @@ Enthalten:
   aktuell sichtbaren Personen der Auswahl hinzu, zusätzlich einzeln per
   Checkbox - dann "Alle Deaktivieren"/"Alle Reaktivieren" auf einmal (z.B.
   praktisch direkt nach einem Reimport, bei dem alle Personen erstmal
-  aktiv sind)
+  aktiv sind), außerdem "Auswahl zu Gruppe hinzufügen" um mehreren
+  ausgewählten Personen auf einmal eine Gruppe zuzuweisen
+- "Dokumente"-Button im Personalstamm (nur admin/hr, für jede aktive
+  Person jederzeit verfügbar): Arbeitsvertrag/Werkmietvertrag/
+  Bankverbindungs-Nachweis aus der Vorlage neu erzeugen und herunterladen,
+  z.B. für einen Nachdruck. Bisher war die Dokumenterzeugung nur einmalig
+  über "Anreise vorbereiten" in der Anreiseliste erreichbar
 - "Management"-Seite, Abschnitt "Stundenmonitoring": listet alle Personen
   mit mindestens einem Tag über 12,00 Stunden in der Stundenerfassung
   (Saison-Jahr-Filter), aufklappbar je Person mit allen betroffenen Tagen

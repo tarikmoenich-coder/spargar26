@@ -20,7 +20,8 @@ import {
   naechsteFreieNummer,
   parsePersonalNrNummer,
 } from "@/lib/personalnummern";
-import { formatDatumDE } from "@/lib/format";
+import { formatDatumDE, formatEuro } from "@/lib/format";
+import { generiereDokument } from "@/lib/dokumentGenerator";
 import PersonalTabs from "@/components/PersonalTabs";
 
 const CURRENT_YEAR = new Date().getFullYear();
@@ -121,6 +122,16 @@ export default function MitarbeiterPage() {
   // zugeordnet werden soll - z.B. um gruppenlose Personen oder mehrere
   // Leute auf einmal einer Gruppe zuzuordnen.
   const [bulkZielGruppe, setBulkZielGruppe] = useState("");
+  // Dokumente (Arbeitsvertrag/Werkmietvertrag/Bankverbindung) direkt aus
+  // dem Personalstamm generieren/(neu) drucken - unabhängig von der
+  // Anreiseliste, die das nur für dort noch offen laufende Personen
+  // anbietet (Nutzer-Vorgabe 2026-08-06: Nachdrucken war sonst nicht mehr
+  // möglich, sobald jemand "Vollständig" ist oder nie über die
+  // Personalplanung angelegt wurde).
+  const [dokumenteId, setDokumenteId] = useState<string | null>(null);
+  const [dokumenteVertragsbeginn, setDokumenteVertragsbeginn] = useState("");
+  const [dokumenteVertragsende, setDokumenteVertragsende] = useState("");
+  const [dokumenteFehler, setDokumenteFehler] = useState<string | null>(null);
 
   const canEdit = profile?.role === "admin" || profile?.role === "hr";
   const gruppenLabel: Record<string, string> = Object.fromEntries(
@@ -412,6 +423,72 @@ export default function MitarbeiterPage() {
     setBulkLaufend(false);
     setBulkAusgewaehlt([]);
     load();
+  }
+
+  function dokumenteStarten(emp: Employee) {
+    setDokumenteId(emp.id);
+    setDokumenteVertragsbeginn(emp.saison_beginn ?? "");
+    setDokumenteVertragsende(emp.saison_ende ?? "");
+    setDokumenteFehler(null);
+  }
+
+  function dokumenteAbbrechen() {
+    setDokumenteId(null);
+    setDokumenteFehler(null);
+  }
+
+  async function dokument(
+    art: "arbeitsvertrag" | "werkmietvertrag" | "bankverbindung",
+    emp: Employee
+  ) {
+    setDokumenteFehler(null);
+    const dateiPrefix = `${emp.name}_${emp.vorname}`.replace(/\s+/g, "_");
+    const gemeinsam = {
+      Name: emp.name,
+      Vorname: emp.vorname,
+      Geburtsdatum: formatDatumDE(emp.geburtsdatum),
+      Staatsangehoerigkeit: emp.nationalitaet ?? "",
+      Personalnummer: emp.personal_nr,
+    };
+    try {
+      if (art === "arbeitsvertrag") {
+        await generiereDokument(
+          "Arbeitsvertrag_Vorlage.docx",
+          {
+            ...gemeinsam,
+            ArbeitsbeginnDatum: formatDatumDE(dokumenteVertragsbeginn),
+            ArbeitsendeDatum: formatDatumDE(dokumenteVertragsende),
+            Stundenlohn: formatEuro(emp.stundenlohn),
+          },
+          `Arbeitsvertrag_${dateiPrefix}.docx`
+        );
+      } else if (art === "werkmietvertrag") {
+        await generiereDokument(
+          "Werkmietvertrag_Vorlage.docx",
+          {
+            ...gemeinsam,
+            TagessatzWohnen: formatEuro(verpflegungssatz?.wohnen),
+            TagessatzVerpflegung: formatEuro(verpflegungssatz?.verpflegung),
+          },
+          `Werkmietvertrag_${dateiPrefix}.docx`
+        );
+      } else {
+        await generiereDokument(
+          "Bankverbindung_Vorlage.docx",
+          {
+            Vorname: emp.vorname,
+            Name: emp.name,
+            Personalnummer: emp.personal_nr,
+            Kontoinhaber: emp.zahlungsempfaenger ?? "",
+            IBAN: emp.iban ?? "",
+            BIC: emp.bic ?? "",
+          },
+          `Bankverbindung_${dateiPrefix}.docx`
+        );
+      }
+    } catch (err) {
+      setDokumenteFehler(err instanceof Error ? err.message : String(err));
+    }
   }
 
   function statuswechselStarten(emp: Employee) {
@@ -793,6 +870,68 @@ export default function MitarbeiterPage() {
     );
   }
 
+  // Ebenfalls ausgelagert - Dokumente (Neu-)Drucken direkt aus dem
+  // Personalstamm, unabhängig von der Anreiseliste (siehe Kommentar bei
+  // dokumenteId oben).
+  function dokumenteFormular(emp: Employee) {
+    return (
+      <div className="flex flex-col gap-3 rounded border border-neutral-300 bg-neutral-50 p-4">
+        <h2 className="text-sm font-semibold text-emerald-800">
+          Dokumente für {emp.name}, {emp.vorname} ({emp.personal_nr})
+        </h2>
+        <div className="flex flex-wrap items-end gap-3">
+          <label className="flex flex-col gap-0.5 text-xs text-neutral-500">
+            Vertragsbeginn (für Arbeitsvertrag)
+            <input
+              type="date"
+              value={dokumenteVertragsbeginn}
+              onChange={(e) => setDokumenteVertragsbeginn(e.target.value)}
+            />
+          </label>
+          <label className="flex flex-col gap-0.5 text-xs text-neutral-500">
+            Vertragsende (für Arbeitsvertrag)
+            <input
+              type="date"
+              value={dokumenteVertragsende}
+              onChange={(e) => setDokumenteVertragsende(e.target.value)}
+            />
+          </label>
+          <button
+            type="button"
+            className="btn-secondary text-xs"
+            onClick={() => dokument("arbeitsvertrag", emp)}
+          >
+            Arbeitsvertrag
+          </button>
+          <button
+            type="button"
+            className="btn-secondary text-xs"
+            onClick={() => dokument("werkmietvertrag", emp)}
+          >
+            Werkmietvertrag
+          </button>
+          <button
+            type="button"
+            className="btn-secondary text-xs"
+            onClick={() => dokument("bankverbindung", emp)}
+          >
+            Bankverbindung
+          </button>
+          <button
+            type="button"
+            className="btn-secondary text-xs"
+            onClick={dokumenteAbbrechen}
+          >
+            Schließen
+          </button>
+        </div>
+        {dokumenteFehler && (
+          <span className="text-sm text-red-600">{dokumenteFehler}</span>
+        )}
+      </div>
+    );
+  }
+
   return (
     <div className="flex flex-col gap-6">
       <PersonalTabs />
@@ -1060,6 +1199,12 @@ export default function MitarbeiterPage() {
                           Statuswechsel
                         </button>
                       )}
+                    <button
+                      className="btn-secondary"
+                      onClick={() => dokumenteStarten(emp)}
+                    >
+                      Dokumente
+                    </button>
                   </td>
                 )}
               </tr>
@@ -1071,6 +1216,11 @@ export default function MitarbeiterPage() {
               {statuswechselId === emp.id && (
                 <tr>
                   <td colSpan={22}>{statuswechselFormular(emp)}</td>
+                </tr>
+              )}
+              {dokumenteId === emp.id && (
+                <tr>
+                  <td colSpan={22}>{dokumenteFormular(emp)}</td>
                 </tr>
               )}
               </Fragment>
