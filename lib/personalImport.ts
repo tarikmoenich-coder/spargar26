@@ -74,15 +74,22 @@ export function erkenneSpalten(
 }
 
 // Wandelt eine von XLSX gelesene Zelle (String, Zahl, Date, Bool) in Text
-// um. Echte Datumszellen werden als TT.MM.JJJJ ausgegeben (UTC-Werte, wie
-// sie die cellDates-Option liefert - nicht mit lokalen Getter-Methoden
-// lesen, sonst kann es je nach Zeitzone zu einer Verschiebung um einen Tag
-// kommen). Wird sowohl beim Personal- als auch beim Stunden-Import genutzt.
+// um. Echte Datumszellen werden als TT.MM.JJJJ ausgegeben.
+//
+// WICHTIG (per Test verifiziert, 2026-08-06 - siehe Bugfix-Commit "Datum
+// beim Stunden-Import um einen Tag verschoben"): die xlsx-Bibliothek
+// liefert bei cellDates:true für eine echte Excel-Datumszelle ein
+// Date-Objekt, das LOKALE Mitternacht des Kalendertags repräsentiert
+// (nicht UTC-Mitternacht, wie ein früherer Kommentar hier fälschlich
+// annahm). Für Nutzer östlich von UTC (z.B. Deutschland, UTC+1/+2) liegt
+// der zugrundeliegende UTC-Zeitstempel dadurch noch auf dem VORTAG - mit
+// UTC-Gettern gelesen ergäbe das systematisch ein um einen Tag zu frühes
+// Datum. Deshalb hier bewusst LOKALE Getter, nicht UTC-Getter.
 export function zellwertZuText(wert: unknown): string {
   if (wert instanceof Date) {
-    const tag = String(wert.getUTCDate()).padStart(2, "0");
-    const monat = String(wert.getUTCMonth() + 1).padStart(2, "0");
-    const jahr = wert.getUTCFullYear();
+    const tag = String(wert.getDate()).padStart(2, "0");
+    const monat = String(wert.getMonth() + 1).padStart(2, "0");
+    const jahr = wert.getFullYear();
     return `${tag}.${monat}.${jahr}`;
   }
   if (wert === null || wert === undefined) return "";
