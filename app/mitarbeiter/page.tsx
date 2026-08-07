@@ -117,6 +117,10 @@ export default function MitarbeiterPage() {
   const [bulkGruppenFilter, setBulkGruppenFilter] = useState("");
   const [bulkHerkunftFilter, setBulkHerkunftFilter] = useState("");
   const [bulkLaufend, setBulkLaufend] = useState(false);
+  // Ziel-Gruppe, der die aktuelle Auswahl per "Auswahl zu Gruppe hinzufügen"
+  // zugeordnet werden soll - z.B. um gruppenlose Personen oder mehrere
+  // Leute auf einmal einer Gruppe zuzuordnen.
+  const [bulkZielGruppe, setBulkZielGruppe] = useState("");
 
   const canEdit = profile?.role === "admin" || profile?.role === "hr";
   const gruppenLabel: Record<string, string> = Object.fromEntries(
@@ -392,6 +396,19 @@ export default function MitarbeiterPage() {
     setBulkLaufend(true);
     const supabase = getSupabaseClient();
     await supabase.from("employees").update({ aktiv }).in("id", bulkAusgewaehlt);
+    setBulkLaufend(false);
+    setBulkAusgewaehlt([]);
+    load();
+  }
+
+  async function bulkGruppeZuweisen() {
+    if (bulkAusgewaehlt.length === 0) return;
+    setBulkLaufend(true);
+    const supabase = getSupabaseClient();
+    await supabase
+      .from("employees")
+      .update({ gruppe_nr: bulkZielGruppe || null })
+      .in("id", bulkAusgewaehlt);
     setBulkLaufend(false);
     setBulkAusgewaehlt([]);
     load();
@@ -870,6 +887,25 @@ export default function MitarbeiterPage() {
                 onClick={() => bulkStatusSetzen(true)}
               >
                 Alle Reaktivieren
+              </button>
+              <select
+                value={bulkZielGruppe}
+                onChange={(e) => setBulkZielGruppe(e.target.value)}
+              >
+                <option value="">— keine Gruppe —</option>
+                {gruppen.map((g) => (
+                  <option key={g.gruppe_nr} value={g.gruppe_nr}>
+                    {g.gruppe_nr} – {g.bezeichnung}
+                  </option>
+                ))}
+              </select>
+              <button
+                type="button"
+                className="btn-secondary text-xs"
+                disabled={bulkLaufend}
+                onClick={bulkGruppeZuweisen}
+              >
+                Auswahl zu Gruppe hinzufügen
               </button>
               <button
                 type="button"
