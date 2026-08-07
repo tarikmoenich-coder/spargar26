@@ -168,7 +168,16 @@ Enthalten:
   "Ausstehend/Abgereist" als Merkposten dafür)
 - Kassenbuch (Einzahlungen) mit Saldo, einfacher Kassenprüfung und Log der
   nachträglichen Vorschuss-Korrekturen ("Kassenbewegungen") - Bar-Vorschüsse
-  mindern automatisch den Kassenbestand, Überweisungen nicht
+  und Bar-Auszahlungen (aus "Jetzt Abrechnen") mindern automatisch den
+  Kassenbestand, Überweisungen nicht. Unter "Prüfung durchführen" steht
+  zusätzlich eine Liste aller Bewegungen (Vorschuss, Vorschuss-Korrektur,
+  Auszahlung) seit der letzten Prüfung, mit Datum, Belegnummer und
+  Anwender, zur Durchsicht vor dem Zählen der Kasse. Nach Freigabe einer
+  Prüfung (nur admin/pruefer, zweistufig - kasse führt die Prüfung durch,
+  pruefer gibt frei) werden alle Belege im geprüften Zeitraum gesperrt
+  (Storno/Korrektur nicht mehr möglich) - analog zur Monatsabschluss-Sperre
+  bei den Stunden. Wiedereröffnung mit Pflichtgrund hebt die Sperre wieder
+  auf
 - "Suche"-Seite (alle Rollen): nach Name oder Personalnummer suchen und
   Arbeitsstunden (inkl. Notiz je Tag) sowie Vorschuss-Historie (inkl.
   Begründung) einer Person einsehen und als Übersicht für den Mitarbeiter

@@ -5,6 +5,7 @@ import { getSupabaseClient } from "@/lib/supabase/client";
 import { useProfile } from "@/lib/useProfile";
 import type {
   Advance,
+  AuszahlungsbelegSummary,
   CashDeposit,
   Kassenbewegung,
   ProfilName,
@@ -23,6 +24,25 @@ interface CashCheckRow {
   differenz: number;
   innerhalb_toleranz: boolean;
   status: string;
+  freigegeben: boolean;
+  freigegeben_von: string | null;
+  freigegeben_am: string | null;
+  wiedereroeffnet_von: string | null;
+  wiedereroeffnet_am: string | null;
+  wiedereroeffnung_grund: string | null;
+}
+
+// Eine Zeile in der Liste "Bewegungen seit letzter Prüfung" - vereinheitlicht
+// Vorschüsse, Vorschuss-Korrekturen und Bar-Auszahlungen, damit sie vor
+// einer Kassenprüfung gemeinsam durchgesehen werden können. Betrag ist
+// vorzeichenbehaftet (negativ = Geld hat die Kasse verlassen).
+interface BewegungAnzeige {
+  key: string;
+  datum: string;
+  art: string;
+  belegnummer: string;
+  betrag: number;
+  bearbeiter_id: string | null;
 }
 
 function monatsSchluessel(d: Date) {
@@ -34,6 +54,9 @@ export default function KassePage() {
   const { profile } = useProfile();
   const [deposits, setDeposits] = useState<CashDeposit[]>([]);
   const [barVorschuesse, setBarVorschuesse] = useState<Advance[]>([]);
+  const [auszahlungenBar, setAuszahlungenBar] = useState<
+    AuszahlungsbelegSummary[]
+  >([]);
   const [bewegungen, setBewegungen] = useState<Kassenbewegung[]>([]);
   const [namenVon, setNamenVon] = useState<Record<string, string>>({});
   const [checks, setChecks] = useState<CashCheckRow[]>([]);
@@ -48,6 +71,8 @@ export default function KassePage() {
   const [error, setError] = useState<string | null>(null);
 
   const canWrite = profile?.role === "admin" || profile?.role === "kasse";
+  const canFreigeben =
+    profile?.role === "admin" || profile?.role === "pruefer";
 
   async function load() {
     setLoading(true);
@@ -55,6 +80,7 @@ export default function KassePage() {
     const [
       { data: dep },
       { data: adv },
+      { data: az },
       { data: bew },
       { data: chk },
       { data: settings },
@@ -72,6 +98,15 @@ export default function KassePage() {
         .select("*")
         .eq("zahlungsart", "BAR")
         .order("datum", { ascending: false })
+        .limit(200),
+      // Ebenso: nur Bar-Auszahlungen ("Jetzt Abrechnen") verlassen die Kasse
+      // physisch - Überweisungen nicht. Schmale Sicht, da season_bonuses
+      // selbst für kasse/pruefer nicht lesbar ist.
+      supabase
+        .from("auszahlungsbeleg_summary")
+        .select("*")
+        .eq("zahlungsart", "BAR")
+        .order("erstellt_am", { ascending: false })
         .limit(200),
       supabase
         .from("kassenbewegungen")
@@ -94,6 +129,7 @@ export default function KassePage() {
     ]);
     setDeposits((dep as CashDeposit[]) ?? []);
     setBarVorschuesse((adv as Advance[]) ?? []);
+    setAuszahlungenBar((az as AuszahlungsbelegSummary[]) ?? []);
     setBewegungen((bew as Kassenbewegung[]) ?? []);
     setChecks((chk as CashCheckRow[]) ?? []);
     if (settings) setToleranz(Number(settings.toleranz_euro));
@@ -115,7 +151,56 @@ export default function KassePage() {
   const vorschuesseSumme = barVorschuesse
     .filter((a) => !a.storniert)
     .reduce((sum, a) => sum + Number(a.betrag), 0);
-  const saldo = einzahlungenSumme - vorschuesseSumme;
+  const auszahlungenSumme = auszahlungenBar.reduce(
+    (sum, a) => sum + Number(a.summe_auszahlungsbetrag ?? 0),
+    0
+  );
+  const saldo = einzahlungenSumme - vorschuesseSumme - auszahlungenSumme;
+
+  // Bewegungen seit der letzten Kassenprüfung, für die Durchsicht vor einer
+  // neuen Prüfung - vereinheitlicht Vorschüsse, Vorschuss-Korrekturen (nur
+  // Bar) und Bar-Auszahlungen, neueste zuerst.
+  const letzterCheckZeit = checks[0]?.check_zeit ?? null;
+  const bewegungenSeitPruefung: BewegungAnzeige[] = [
+    ...barVorschuesse
+      .filter(
+        (a) => !a.storniert && (!letzterCheckZeit || a.datum > letzterCheckZeit)
+      )
+      .map((a) => ({
+        key: `vorschuss-${a.id}`,
+        datum: a.datum,
+        art: "Vorschuss",
+        belegnummer: a.belegnummer,
+        betrag: -Number(a.betrag),
+        bearbeiter_id: a.bearbeiter_id,
+      })),
+    ...bewegungen
+      .filter(
+        (b) =>
+          b.zahlungsart === "BAR" &&
+          (!letzterCheckZeit || b.zeitstempel > letzterCheckZeit)
+      )
+      .map((b) => ({
+        key: `korrektur-${b.id}`,
+        datum: b.zeitstempel,
+        art: "Vorschuss-Korrektur",
+        belegnummer: b.belegnummer,
+        betrag: -Number(b.delta),
+        bearbeiter_id: b.bearbeiter_id,
+      })),
+    ...auszahlungenBar
+      .filter(
+        (ab) => !letzterCheckZeit || ab.erstellt_am > letzterCheckZeit
+      )
+      .map((ab) => ({
+        key: `auszahlung-${ab.id}`,
+        datum: ab.erstellt_am,
+        art: "Auszahlung",
+        belegnummer: ab.belegnummer,
+        betrag: -Number(ab.summe_auszahlungsbetrag ?? 0),
+        bearbeiter_id: ab.erstellt_von,
+      })),
+  ].sort((a, b) => (a.datum < b.datum ? 1 : -1));
 
   async function addDeposit(e: React.FormEvent) {
     e.preventDefault();
@@ -173,6 +258,46 @@ export default function KassePage() {
     load();
   }
 
+  // Sperrt alle Belege (Vorschüsse, Einzahlungen, Korrekturen) im geprüften
+  // Zeitraum gegen nachträgliche Änderung (siehe ist_kassenpruefung_gesperrt
+  // in schema.sql) - analog zur Monatsabschluss-Sperre.
+  async function freigeben(c: CashCheckRow) {
+    if (!profile) return;
+    const supabase = getSupabaseClient();
+    const { error: freigabeError } = await supabase
+      .from("cash_checks")
+      .update({
+        freigegeben: true,
+        freigegeben_von: profile.id,
+        freigegeben_am: new Date().toISOString(),
+        status: "Freigegeben",
+      })
+      .eq("id", c.id);
+    if (freigabeError) setError(freigabeError.message);
+    load();
+  }
+
+  async function wiedereroeffnen(c: CashCheckRow) {
+    const grund = window.prompt(
+      "Grund für die Wiedereröffnung dieser Kassenprüfung (Pflichtfeld, wird protokolliert):"
+    );
+    if (!grund) return;
+    if (!profile) return;
+    const supabase = getSupabaseClient();
+    const { error: reopenError } = await supabase
+      .from("cash_checks")
+      .update({
+        freigegeben: false,
+        status: c.innerhalb_toleranz ? "Bestanden" : "Kassendifferenz",
+        wiedereroeffnet_von: profile.id,
+        wiedereroeffnet_am: new Date().toISOString(),
+        wiedereroeffnung_grund: grund,
+      })
+      .eq("id", c.id);
+    if (reopenError) setError(reopenError.message);
+    load();
+  }
+
   return (
     <div className="flex flex-col gap-6">
       <div>
@@ -190,7 +315,8 @@ export default function KassePage() {
         </p>
         <p className="mt-1 text-xs text-neutral-500">
           Einzahlungen {einzahlungenSumme.toFixed(2)} € − Bar-Vorschüsse{" "}
-          {vorschuesseSumme.toFixed(2)} € (Überweisungen zählen nicht zum
+          {vorschuesseSumme.toFixed(2)} € − Bar-Auszahlungen{" "}
+          {auszahlungenSumme.toFixed(2)} € (Überweisungen zählen nicht zum
           Kassenbestand)
         </p>
       </div>
@@ -313,6 +439,65 @@ export default function KassePage() {
                 {error && <span className="text-sm text-red-600">{error}</span>}
               </form>
             )}
+
+            <div className="mb-4">
+              <h3 className="mb-1 text-sm font-semibold text-neutral-700">
+                Bewegungen seit letzter Prüfung
+                {checks[0] &&
+                  ` (seit ${new Date(checks[0].check_zeit).toLocaleString(
+                    "de-DE"
+                  )})`}
+              </h3>
+              {bewegungenSeitPruefung.length === 0 ? (
+                <p className="text-sm text-neutral-500">
+                  Keine Bewegungen seit der letzten Prüfung.
+                </p>
+              ) : (
+                <table>
+                  <thead>
+                    <tr>
+                      <th>Datum</th>
+                      <th>Art</th>
+                      <th>Beleg-Nr.</th>
+                      <th>Betrag €</th>
+                      <th>Anwender</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {bewegungenSeitPruefung.map((b) => (
+                      <tr key={b.key}>
+                        <td>{new Date(b.datum).toLocaleString("de-DE")}</td>
+                        <td>{b.art}</td>
+                        <td>{b.belegnummer}</td>
+                        <td className={b.betrag < 0 ? "text-red-600" : ""}>
+                          {b.betrag > 0 ? "+" : ""}
+                          {b.betrag.toFixed(2)}
+                        </td>
+                        <td>
+                          {b.bearbeiter_id
+                            ? namenVon[b.bearbeiter_id] ?? "—"
+                            : "—"}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                  <tfoot>
+                    <tr>
+                      <td colSpan={3} className="text-right font-semibold">
+                        Summe
+                      </td>
+                      <td className="font-semibold">
+                        {bewegungenSeitPruefung
+                          .reduce((s, b) => s + b.betrag, 0)
+                          .toFixed(2)}
+                      </td>
+                      <td></td>
+                    </tr>
+                  </tfoot>
+                </table>
+              )}
+            </div>
+
             <table>
               <thead>
                 <tr>
@@ -321,6 +506,7 @@ export default function KassePage() {
                   <th>Ist €</th>
                   <th>Differenz €</th>
                   <th>Status</th>
+                  <th>Freigabe</th>
                 </tr>
               </thead>
               <tbody>
@@ -331,6 +517,53 @@ export default function KassePage() {
                     <td>{Number(c.ist).toFixed(2)}</td>
                     <td>{Number(c.differenz).toFixed(2)}</td>
                     <td>{c.status}</td>
+                    <td>
+                      {c.freigegeben ? (
+                        <div className="flex items-center gap-2">
+                          <span className="text-emerald-700">
+                            ✓ Freigegeben
+                            {c.freigegeben_am &&
+                              ` am ${new Date(
+                                c.freigegeben_am
+                              ).toLocaleDateString("de-DE")}`}
+                            {c.freigegeben_von && namenVon[c.freigegeben_von]
+                              ? ` von ${namenVon[c.freigegeben_von]}`
+                              : ""}
+                          </span>
+                          {canFreigeben && (
+                            <button
+                              className="btn-secondary text-xs"
+                              onClick={() => wiedereroeffnen(c)}
+                            >
+                              Wiedereröffnen
+                            </button>
+                          )}
+                        </div>
+                      ) : canFreigeben ? (
+                        <button
+                          className="btn-secondary text-xs"
+                          onClick={() => freigeben(c)}
+                        >
+                          Freigeben
+                        </button>
+                      ) : (
+                        <span className="text-neutral-400">offen</span>
+                      )}
+                      {!c.freigegeben && c.wiedereroeffnet_am && (
+                        <p className="mt-1 text-xs text-neutral-500">
+                          Wiedereröffnet am{" "}
+                          {new Date(c.wiedereroeffnet_am).toLocaleDateString(
+                            "de-DE"
+                          )}
+                          {c.wiedereroeffnet_von &&
+                          namenVon[c.wiedereroeffnet_von]
+                            ? ` von ${namenVon[c.wiedereroeffnet_von]}`
+                            : ""}
+                          {c.wiedereroeffnung_grund &&
+                            ` – Grund: ${c.wiedereroeffnung_grund}`}
+                        </p>
+                      )}
+                    </td>
                   </tr>
                 ))}
               </tbody>

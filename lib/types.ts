@@ -292,6 +292,7 @@ export interface Advance {
   datum_kassenbuch: string;
   betrag: number;
   empfaenger_text: string | null;
+  bearbeiter_id: string | null;
   begruendung: string | null;
   // Person (z.B. Gruppenleiter), der das Geld zur Verteilung übergeben
   // wird - erscheint auf dem separaten Übergabe-Beleg beim Drucken.

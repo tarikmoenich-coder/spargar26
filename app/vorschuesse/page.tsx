@@ -311,14 +311,26 @@ export default function VorschuessePage() {
     );
     if (!grund) return;
     const supabase = getSupabaseClient();
-    await supabase
+    const { data, error: stornoError } = await supabase
       .from("advances")
       .update({
         storniert: true,
         storno_grund: grund,
         storniert_am: new Date().toISOString(),
       })
-      .eq("id", adv.id);
+      .eq("id", adv.id)
+      .select("id");
+    if (stornoError) {
+      setError(stornoError.message);
+    } else if (!data || data.length === 0) {
+      // RLS lässt die Zeile still ungeändert, wenn sie zu einer bereits
+      // freigegebenen Kassenprüfung gehört (siehe ist_kassenpruefung_gesperrt
+      // in schema.sql) - ohne diese Prüfung würde der Button scheinbar
+      // wirkungslos bleiben.
+      setError(
+        "Dieser Beleg gehört zu einer bereits freigegebenen Kassenprüfung und kann nicht mehr storniert werden. Bitte zunächst die Kassenprüfung im Kassenbuch wiedereröffnen."
+      );
+    }
     load();
   }
 

@@ -687,6 +687,7 @@ declare
   alter_betrag numeric;
   v_belegnummer text;
   v_zahlungsart text;
+  v_datum timestamptz;
   v_delta numeric;
 begin
   if current_role_name() not in ('admin', 'kasse') then
@@ -705,8 +706,12 @@ begin
     raise exception 'Empfänger nicht in diesem Beleg gefunden';
   end if;
 
-  select belegnummer, zahlungsart into v_belegnummer, v_zahlungsart
+  select belegnummer, zahlungsart, datum into v_belegnummer, v_zahlungsart, v_datum
   from advances where id = p_advance_id;
+
+  if ist_kassenpruefung_gesperrt(v_datum) then
+    raise exception 'Dieser Beleg gehört zu einer bereits freigegebenen Kassenprüfung und kann nicht mehr geändert werden. Bitte zunächst die Kassenprüfung im Kassenbuch wiedereröffnen.';
+  end if;
 
   v_delta := p_neuer_betrag - coalesce(alter_betrag, 0);
 
@@ -780,6 +785,23 @@ create table cash_checks (
   wiedereroeffnet_am timestamptz,
   wiedereroeffnung_grund text
 );
+
+-- Prüft, ob ein Datum in den Zeitraum einer bereits freigegebenen
+-- Kassenprüfung fällt (period_from/period_to) - genutzt, um Belege
+-- (Vorschüsse, Einzahlungen, Vorschuss-Korrekturen), die bereits geprüft
+-- und freigegeben wurden, vor nachträglicher Änderung zu sperren (analog
+-- zu periods.gesperrt beim Monatsabschluss). Erst eine Wiedereröffnung
+-- der betroffenen Kassenprüfung (nur admin/pruefer, siehe cash_checks_update)
+-- hebt die Sperre für diesen Zeitraum wieder auf.
+create or replace function ist_kassenpruefung_gesperrt(p_datum timestamptz)
+returns boolean language sql stable security definer as $$
+  select exists (
+    select 1 from cash_checks
+    where freigegeben = true
+      and p_datum >= period_from
+      and p_datum <= period_to
+  );
+$$;
 
 -- ---------------------------------------------------------------------------
 -- 11. Append-only Audit-Log (ADR-005) - erfasst alle relevanten Änderungen
@@ -1277,7 +1299,10 @@ create policy "advances_select" on advances for select
 create policy "advances_write" on advances for insert
   with check (current_role_name() in ('admin', 'kasse'));
 create policy "advances_update" on advances for update
-  using (current_role_name() in ('admin', 'kasse'));
+  using (
+    current_role_name() in ('admin', 'kasse')
+    and not ist_kassenpruefung_gesperrt(datum)
+  );
 create policy "advance_recipients_rw" on advance_recipients for all
   using (current_role_name() in ('admin', 'hr', 'kasse', 'lohnabrechnung', 'pruefer'))
   with check (current_role_name() in ('admin', 'kasse'));
@@ -1290,7 +1315,10 @@ create policy "cash_deposits_select" on cash_deposits for select
 create policy "cash_deposits_write" on cash_deposits for insert
   with check (current_role_name() in ('admin', 'kasse'));
 create policy "cash_deposits_update" on cash_deposits for update
-  using (current_role_name() in ('admin', 'kasse'));
+  using (
+    current_role_name() in ('admin', 'kasse')
+    and not ist_kassenpruefung_gesperrt(datum)
+  );
 create policy "cash_checks_select" on cash_checks for select
   using (current_role_name() in ('admin', 'kasse', 'pruefer', 'management'));
 create policy "cash_checks_write" on cash_checks for insert
