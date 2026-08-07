@@ -15,10 +15,14 @@ export type Abrechnungsart =
   | 'lohnsteuerklasse_1'
   | 'sozialversicherungspflichtig';
 
+// Kurzform wie im Altsystem (Nutzer-Vorgabe 2026-08-06) - wirkt sich
+// automatisch überall aus, wo diese Labels genutzt werden (Auswahl-Listen,
+// Tabellen). Der interne Wert (Abrechnungsart) bleibt unverändert, nur die
+// Anzeige wird kürzer.
 export const ABRECHNUNGSART_LABELS: Record<Abrechnungsart, string> = {
-  pauschal: 'Pauschal',
-  lohnsteuerklasse_1: 'Lohnsteuerklasse 1',
-  sozialversicherungspflichtig: 'Sozialversicherungspflichtig',
+  pauschal: 'PA',
+  lohnsteuerklasse_1: 'StKl 1',
+  sozialversicherungspflichtig: 'SV-Pfl.',
 };
 
 export interface Profile {
