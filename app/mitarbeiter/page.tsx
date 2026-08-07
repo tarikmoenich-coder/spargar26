@@ -108,6 +108,15 @@ export default function MitarbeiterPage() {
   const [statuswechselFehler, setStatuswechselFehler] = useState<
     string | null
   >(null);
+  // Mehrfachauswahl für "Alle Deaktivieren/Reaktivieren" - z.B. nach einem
+  // Reimport, bei dem alle Personen erstmal aktiv sind (Nutzer-Vorgabe
+  // 2026-08-06). Gleiches Muster wie bei den Vorschüssen: Gruppe/Herkunft
+  // als Filter fügt alle passenden (aktuell sichtbaren) Personen der
+  // Auswahl hinzu, zusätzlich einzeln per Checkbox in der Tabelle.
+  const [bulkAusgewaehlt, setBulkAusgewaehlt] = useState<string[]>([]);
+  const [bulkGruppenFilter, setBulkGruppenFilter] = useState("");
+  const [bulkHerkunftFilter, setBulkHerkunftFilter] = useState("");
+  const [bulkLaufend, setBulkLaufend] = useState(false);
 
   const canEdit = profile?.role === "admin" || profile?.role === "hr";
   const gruppenLabel: Record<string, string> = Object.fromEntries(
@@ -340,6 +349,51 @@ export default function MitarbeiterPage() {
       .from("employees")
       .update({ aktiv: !emp.aktiv })
       .eq("id", emp.id);
+    load();
+  }
+
+  function bulkToggle(id: string) {
+    setBulkAusgewaehlt((prev) =>
+      prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]
+    );
+  }
+
+  function bulkGruppeHinzufuegen() {
+    if (!bulkGruppenFilter) return;
+    const ids = filtered
+      .filter((e) => e.gruppe_nr === bulkGruppenFilter)
+      .map((e) => e.id);
+    setBulkAusgewaehlt((prev) => Array.from(new Set([...prev, ...ids])));
+  }
+
+  function bulkHerkunftHinzufuegen() {
+    if (!bulkHerkunftFilter) return;
+    const ids = filtered
+      .filter((e) => e.herkunft === bulkHerkunftFilter)
+      .map((e) => e.id);
+    setBulkAusgewaehlt((prev) => Array.from(new Set([...prev, ...ids])));
+  }
+
+  function bulkAuswahlLeeren() {
+    setBulkAusgewaehlt([]);
+  }
+
+  async function bulkStatusSetzen(aktiv: boolean) {
+    if (bulkAusgewaehlt.length === 0) return;
+    if (
+      !window.confirm(
+        `${bulkAusgewaehlt.length} Person(en) wirklich ${
+          aktiv ? "reaktivieren" : "deaktivieren"
+        }?`
+      )
+    ) {
+      return;
+    }
+    setBulkLaufend(true);
+    const supabase = getSupabaseClient();
+    await supabase.from("employees").update({ aktiv }).in("id", bulkAusgewaehlt);
+    setBulkLaufend(false);
+    setBulkAusgewaehlt([]);
     load();
   }
 
@@ -752,12 +806,90 @@ export default function MitarbeiterPage() {
         </label>
       </div>
 
+      {canEdit && (
+        <div className="flex flex-col gap-2 rounded border border-neutral-200 bg-white p-3">
+          <p className="text-sm font-medium">
+            Mehrfachauswahl (z.B. für "Alle Deaktivieren" nach einem
+            Reimport):
+          </p>
+          <div className="flex flex-wrap gap-2">
+            <select
+              value={bulkGruppenFilter}
+              onChange={(e) => setBulkGruppenFilter(e.target.value)}
+            >
+              <option value="">Gruppe wählen…</option>
+              {gruppen.map((g) => (
+                <option key={g.gruppe_nr} value={g.gruppe_nr}>
+                  {g.gruppe_nr} – {g.bezeichnung}
+                </option>
+              ))}
+            </select>
+            <button
+              type="button"
+              className="btn-secondary whitespace-nowrap text-xs"
+              onClick={bulkGruppeHinzufuegen}
+            >
+              Gruppe zur Auswahl hinzufügen
+            </button>
+            <select
+              value={bulkHerkunftFilter}
+              onChange={(e) => setBulkHerkunftFilter(e.target.value)}
+            >
+              <option value="">Herkunft wählen…</option>
+              {herkuenfte.map((h) => (
+                <option key={h.wert} value={h.wert}>
+                  {h.wert}
+                </option>
+              ))}
+            </select>
+            <button
+              type="button"
+              className="btn-secondary whitespace-nowrap text-xs"
+              onClick={bulkHerkunftHinzufuegen}
+            >
+              Herkunft zur Auswahl hinzufügen
+            </button>
+          </div>
+          {bulkAusgewaehlt.length > 0 && (
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="text-sm font-medium text-emerald-800">
+                {bulkAusgewaehlt.length} ausgewählt
+              </span>
+              <button
+                type="button"
+                className="btn-danger text-xs"
+                disabled={bulkLaufend}
+                onClick={() => bulkStatusSetzen(false)}
+              >
+                Alle Deaktivieren
+              </button>
+              <button
+                type="button"
+                className="btn-secondary text-xs"
+                disabled={bulkLaufend}
+                onClick={() => bulkStatusSetzen(true)}
+              >
+                Alle Reaktivieren
+              </button>
+              <button
+                type="button"
+                className="btn-secondary text-xs"
+                onClick={bulkAuswahlLeeren}
+              >
+                Auswahl leeren
+              </button>
+            </div>
+          )}
+        </div>
+      )}
+
       {loading ? (
         <p className="text-neutral-500">Lädt…</p>
       ) : (
         <table>
           <thead>
             <tr>
+              {canEdit && <th></th>}
               <th>Pers.-Nr.</th>
               <th>Gruppe</th>
               <th>Herkunft</th>
@@ -786,6 +918,15 @@ export default function MitarbeiterPage() {
               return (
               <Fragment key={emp.id}>
               <tr className={emp.aktiv ? "" : "opacity-50"}>
+                {canEdit && (
+                  <td>
+                    <input
+                      type="checkbox"
+                      checked={bulkAusgewaehlt.includes(emp.id)}
+                      onChange={() => bulkToggle(emp.id)}
+                    />
+                  </td>
+                )}
                 <td>{emp.personal_nr}</td>
                 <td>
                   {emp.gruppe_nr
@@ -888,12 +1029,12 @@ export default function MitarbeiterPage() {
               </tr>
               {editingId === emp.id && (
                 <tr>
-                  <td colSpan={20}>{mitarbeiterFormular()}</td>
+                  <td colSpan={22}>{mitarbeiterFormular()}</td>
                 </tr>
               )}
               {statuswechselId === emp.id && (
                 <tr>
-                  <td colSpan={20}>{statuswechselFormular(emp)}</td>
+                  <td colSpan={22}>{statuswechselFormular(emp)}</td>
                 </tr>
               )}
               </Fragment>

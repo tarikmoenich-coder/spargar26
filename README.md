@@ -192,7 +192,15 @@ Enthalten:
   Nummer um. Stunden/Vorschüsse/Boni bleiben dadurch strikt getrennt (zwei
   eigene Zeilen in der Lohnübersicht, je eigene Netto-Berechnung passend
   zur jeweiligen Abrechnungsart) - beide Nummern bleiben über eine
-  "Verknüpfung"-Spalte im Personalstamm als dieselbe Person erkennbar
+  "Verknüpfung"-Spalte im Personalstamm als dieselbe Person erkennbar.
+  Nur verfügbar, solange die Person noch nicht sozialversicherungspflichtig
+  ist (ein Wechsel weg davon ist nicht möglich/sinnvoll)
+- Mehrfachauswahl im Personalstamm (nur admin/hr, gleiches Muster wie bei
+  den Vorschüssen): Gruppe oder Herkunft als Filter fügt alle passenden,
+  aktuell sichtbaren Personen der Auswahl hinzu, zusätzlich einzeln per
+  Checkbox - dann "Alle Deaktivieren"/"Alle Reaktivieren" auf einmal (z.B.
+  praktisch direkt nach einem Reimport, bei dem alle Personen erstmal
+  aktiv sind)
 - "Management"-Seite, Abschnitt "Stundenmonitoring": listet alle Personen
   mit mindestens einem Tag über 12,00 Stunden in der Stundenerfassung
   (Saison-Jahr-Filter), aufklappbar je Person mit allen betroffenen Tagen
