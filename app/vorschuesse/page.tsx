@@ -35,6 +35,7 @@ interface Beleg {
   datum: string;
   zahlungsart: string;
   storniert: boolean;
+  begruendung: string | null;
   uebergeben_an: string | null;
   empfaenger: AdvanceRecipientDetail[];
 }
@@ -285,6 +286,7 @@ export default function VorschuessePage() {
       datum: inserted.datum,
       zahlungsart,
       storniert: false,
+      begruendung: begruendung || null,
       uebergeben_an: uebergebenAn || null,
       empfaenger: ausgewaehlt.map((p) => ({
         employee_id: p.employee_id,
@@ -339,6 +341,7 @@ export default function VorschuessePage() {
       datum: adv.datum,
       zahlungsart: adv.zahlungsart,
       storniert: adv.storniert,
+      begruendung: adv.begruendung,
       uebergeben_an: adv.uebergeben_an,
       empfaenger,
     });
@@ -805,6 +808,10 @@ export default function VorschuessePage() {
             {new Date(anzeigeBeleg.datum).toLocaleDateString("de-DE")} ·{" "}
             {anzeigeBeleg.zahlungsart === "BAR" ? "Bar" : "Überweisung"}
           </p>
+          <p className="text-base">
+            Begründung: {anzeigeBeleg.begruendung || "-"} · Übergeben an:{" "}
+            {anzeigeBeleg.uebergeben_an || "-"}
+          </p>
           <table className="mt-4 print-form-table">
             <thead>
               <tr>
@@ -834,6 +841,10 @@ export default function VorschuessePage() {
               Belegnummer: {anzeigeBeleg.belegnummer} · Datum:{" "}
               {new Date(anzeigeBeleg.datum).toLocaleDateString("de-DE")} ·{" "}
               {anzeigeBeleg.zahlungsart === "BAR" ? "Bar" : "Überweisung"}
+            </p>
+            <p className="text-base">
+              Begründung: {anzeigeBeleg.begruendung || "-"} · Übergeben an:{" "}
+              {anzeigeBeleg.uebergeben_an || "-"}
             </p>
             <table className="mt-4 print-form-table">
               <thead>

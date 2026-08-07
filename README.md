@@ -149,7 +149,8 @@ Enthalten:
   Übergabe-Beleg für die Person, die das Geld zur Verteilung bekommt
   (z.B. Gruppenleiter) - mit Summe, optionalem Feld "Übergeben an" (wie
   Begründung beim Erfassen abfragbar) und einem einzigen
-  Unterschriftenfeld für diese eine Person
+  Unterschriftenfeld für diese eine Person. Begründung und "Übergeben an"
+  stehen auf beiden Blättern direkt unter der Belegnummer
 - Nachträgliche Korrektur eines bereits bestätigten Vorschuss-Betrags
   (admin/kasse, auch nach Storno-Sperre): Grund ist Pflichtfeld, jede
   Korrektur wird mit Anwender, Zeitstempel und Differenz in den
