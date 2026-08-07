@@ -25,6 +25,10 @@ import PersonalTabs from "@/components/PersonalTabs";
 
 const CURRENT_YEAR = new Date().getFullYear();
 
+function todayIso() {
+  return new Date().toISOString().slice(0, 10);
+}
+
 const emptyForm = {
   personal_nr: "",
   gruppe_nr: "",
@@ -85,6 +89,25 @@ export default function MitarbeiterPage() {
   const [anreiselisteStatus, setAnreiselisteStatus] = useState<
     Record<string, "offen" | "vollstaendig">
   >({});
+  // Alle Mitarbeiter (auch inaktive, unabhängig vom showInactive-Filter) nur
+  // mit Personalnummer - für die Verknüpfungs-Anzeige bei einem
+  // Statuswechsel: die "Vorgänger"-Person ist danach inaktiv und wäre sonst
+  // ggf. nicht in der aktuell gefilterten Liste enthalten.
+  const [alleEmployeesById, setAlleEmployeesById] = useState<
+    Record<string, { personal_nr: string; name: string; vorname: string }>
+  >({});
+  // Statuswechsel (z.B. sozialversicherungsfrei -> -pflichtig bei Erreichen
+  // der 90-Tage-/15-Wochen-Grenze): legt eine neue, verknüpfte Person mit
+  // "a" an der Personalnummer an und deaktiviert die alte - siehe
+  // statuswechselDurchfuehren() weiter unten.
+  const [statuswechselId, setStatuswechselId] = useState<string | null>(null);
+  const [statuswechselStichtag, setStatuswechselStichtag] = useState("");
+  const [statuswechselAbrechnungsart, setStatuswechselAbrechnungsart] =
+    useState<Abrechnungsart>("sozialversicherungspflichtig");
+  const [statuswechselLaufend, setStatuswechselLaufend] = useState(false);
+  const [statuswechselFehler, setStatuswechselFehler] = useState<
+    string | null
+  >(null);
 
   const canEdit = profile?.role === "admin" || profile?.role === "hr";
   const gruppenLabel: Record<string, string> = Object.fromEntries(
@@ -130,7 +153,7 @@ export default function MitarbeiterPage() {
       supabase.from("employee_letzte_abrechnung").select("*"),
       supabase.from("arbeitsgruppen").select("*").order("reihenfolge"),
       supabase.from("herkuenfte").select("*").order("reihenfolge"),
-      supabase.from("employees").select("personal_nr, name, vorname"),
+      supabase.from("employees").select("id, personal_nr, name, vorname"),
       supabase
         .from("employee_sv_pruefung")
         .select("*")
@@ -162,6 +185,22 @@ export default function MitarbeiterPage() {
     setGruppen((gruppenData as Arbeitsgruppe[]) ?? []);
     setHerkuenfte((herkunftData as Herkunft[]) ?? []);
     setAllePersonalNummern(alleNrData ?? []);
+    const byIdMap: Record<
+      string,
+      { personal_nr: string; name: string; vorname: string }
+    > = {};
+    (
+      (alleNrData as
+        | { id: string; personal_nr: string; name: string; vorname: string }[]
+        | null) ?? []
+    ).forEach((r) => {
+      byIdMap[r.id] = {
+        personal_nr: r.personal_nr,
+        name: r.name,
+        vorname: r.vorname,
+      };
+    });
+    setAlleEmployeesById(byIdMap);
     const svMap: Record<string, SvPruefung> = {};
     (svData as SvPruefung[] | null ?? []).forEach((row) => {
       svMap[row.employee_id] = row;
@@ -303,6 +342,109 @@ export default function MitarbeiterPage() {
       .eq("id", emp.id);
     load();
   }
+
+  function statuswechselStarten(emp: Employee) {
+    setStatuswechselId(emp.id);
+    setStatuswechselStichtag(todayIso());
+    setStatuswechselAbrechnungsart("sozialversicherungspflichtig");
+    setStatuswechselFehler(null);
+  }
+
+  function statuswechselAbbrechen() {
+    setStatuswechselId(null);
+    setStatuswechselFehler(null);
+  }
+
+  // Legt eine neue, mit der bestehenden Person verknüpfte Person mit "a" an
+  // der Personalnummer an (z.B. bei Erreichen der 90-Tage-/15-Wochen-
+  // Grenze: sozialversicherungsfrei -> -pflichtig). Stunden/Boni/Vorschüsse
+  // bleiben strikt getrennt, weil sie technisch an die jeweilige
+  // Personalnummer hängen - ergibt zwei komplett getrennte Zeilen in der
+  // Lohnübersicht mit je eigener Netto-Berechnung passend zur jeweiligen
+  // Abrechnungsart. Hochgeladene Dokumente wandern zur neuen Nummer mit
+  // (dieselben Dokumente derselben Person), die alte Nummer wird wie bei
+  // "Deaktivieren" nur deaktiviert, nicht gelöscht (ADR-011).
+  async function statuswechselDurchfuehren() {
+    const alt = employees.find((e) => e.id === statuswechselId);
+    if (!alt) return;
+    const neuePersonalNr = `${alt.personal_nr}a`;
+    const konflikt = allePersonalNummern.find(
+      (r) => r.personal_nr.trim().toLowerCase() === neuePersonalNr.toLowerCase()
+    );
+    if (konflikt) {
+      setStatuswechselFehler(
+        `Personalnummer "${neuePersonalNr}" ist bereits vergeben an ${konflikt.name}, ${konflikt.vorname}`
+      );
+      return;
+    }
+    setStatuswechselLaufend(true);
+    setStatuswechselFehler(null);
+    const supabase = getSupabaseClient();
+
+    const { data: neu, error: insertError } = await supabase
+      .from("employees")
+      .insert({
+        personal_nr: neuePersonalNr,
+        gruppe_nr: alt.gruppe_nr,
+        herkunft: alt.herkunft,
+        nationalitaet: alt.nationalitaet,
+        name: alt.name,
+        vorname: alt.vorname,
+        geburtsdatum: alt.geburtsdatum,
+        ort: alt.ort,
+        land: alt.land,
+        sozialversicherungsnummer: alt.sozialversicherungsnummer,
+        steuer_id: alt.steuer_id,
+        iban: alt.iban,
+        bic: alt.bic,
+        zahlungsempfaenger: alt.zahlungsempfaenger,
+        stundenlohn: alt.stundenlohn,
+        abrechnungsart: statuswechselAbrechnungsart,
+        saison_beginn: statuswechselStichtag || null,
+        saison_ende: alt.saison_ende,
+        schwarze_liste: alt.schwarze_liste ?? false,
+        schwarze_liste_grund: alt.schwarze_liste_grund ?? null,
+        vorgaenger_employee_id: alt.id,
+        aktiv: true,
+      })
+      .select("id")
+      .single();
+
+    if (insertError || !neu) {
+      setStatuswechselFehler(insertError?.message ?? "unbekannter Fehler");
+      setStatuswechselLaufend(false);
+      return;
+    }
+
+    // Hochgeladene Dokumente (Ausweiskopie etc.) auf die neue Nummer
+    // umhängen - dieselben Dokumente derselben Person, kein Duplizieren.
+    await supabase
+      .from("employee_documents")
+      .update({ employee_id: neu.id })
+      .eq("employee_id", alt.id);
+
+    await supabase.from("employees").update({ aktiv: false }).eq("id", alt.id);
+
+    setStatuswechselLaufend(false);
+    setStatuswechselId(null);
+    load();
+  }
+
+  // Rückwärts-Suche: welche Person hat DIESE Person als Vorgänger (also:
+  // wer ist die "Nachfolge"-Nummer)? Aus der aktuell geladenen Liste
+  // berechnet - reicht aus, da eine frisch angelegte Nachfolge-Person immer
+  // aktiv ist und damit unabhängig vom showInactive-Filter geladen wird.
+  const nachfolgerMap: Record<
+    string,
+    { personal_nr: string; name: string; vorname: string }
+  > = {};
+  employees.forEach((e) => {
+    if (e.vorgaenger_employee_id) nachfolgerMap[e.vorgaenger_employee_id] = e;
+  });
+
+  const statuswechselPerson = statuswechselId
+    ? employees.find((e) => e.id === statuswechselId) ?? null
+    : null;
 
   const filtered = employees.filter((e) => {
     const q = search.toLowerCase();
@@ -523,6 +665,68 @@ export default function MitarbeiterPage() {
         </form>
       )}
 
+      {statuswechselPerson && (
+        <div className="flex flex-col gap-3 rounded border border-emerald-300 bg-emerald-50 p-4">
+          <h2 className="text-sm font-semibold text-emerald-800">
+            Statuswechsel für {statuswechselPerson.name},{" "}
+            {statuswechselPerson.vorname} ({statuswechselPerson.personal_nr})
+          </h2>
+          <p className="text-xs text-neutral-600">
+            Legt eine neue, verknüpfte Person mit der Personalnummer „
+            {statuswechselPerson.personal_nr}a" an und deaktiviert{" "}
+            {statuswechselPerson.personal_nr}. Stunden/Vorschüsse/Boni davor
+            und danach bleiben strikt getrennt.
+          </p>
+          <div className="flex flex-wrap items-end gap-3">
+            <label className="flex flex-col gap-0.5 text-xs text-neutral-500">
+              Stichtag (ab wann die neue Nummer gilt)
+              <input
+                type="date"
+                value={statuswechselStichtag}
+                onChange={(e) => setStatuswechselStichtag(e.target.value)}
+              />
+            </label>
+            <label className="flex flex-col gap-0.5 text-xs text-neutral-500">
+              Neue Abrechnungsart
+              <select
+                value={statuswechselAbrechnungsart}
+                onChange={(e) =>
+                  setStatuswechselAbrechnungsart(
+                    e.target.value as Abrechnungsart
+                  )
+                }
+              >
+                {Object.entries(ABRECHNUNGSART_LABELS).map(([value, label]) => (
+                  <option key={value} value={value}>
+                    {label}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <button
+              type="button"
+              className="btn"
+              disabled={statuswechselLaufend}
+              onClick={statuswechselDurchfuehren}
+            >
+              Statuswechsel durchführen
+            </button>
+            <button
+              type="button"
+              className="btn-secondary"
+              onClick={statuswechselAbbrechen}
+            >
+              Abbrechen
+            </button>
+            {statuswechselFehler && (
+              <span className="text-sm text-red-600">
+                {statuswechselFehler}
+              </span>
+            )}
+          </div>
+        </div>
+      )}
+
       <div className="sticky top-[calc(3.5rem+var(--subtabs-h,2.5rem))] z-30 flex items-center gap-3 bg-neutral-50 py-2">
         <input
           placeholder="Suche nach Name oder Personalnummer…"
@@ -562,6 +766,7 @@ export default function MitarbeiterPage() {
               <th>Führerschein</th>
               <th>Status</th>
               <th>Dokumente</th>
+              <th>Verknüpfung</th>
               <th>Schwarze Liste</th>
               {canEdit && <th></th>}
             </tr>
@@ -622,6 +827,18 @@ export default function MitarbeiterPage() {
                     "—"
                   )}
                 </td>
+                <td className="text-xs">
+                  {emp.vorgaenger_employee_id &&
+                    alleEmployeesById[emp.vorgaenger_employee_id] && (
+                      <div>
+                        ← {alleEmployeesById[emp.vorgaenger_employee_id].personal_nr}
+                      </div>
+                    )}
+                  {nachfolgerMap[emp.id] && (
+                    <div>→ {nachfolgerMap[emp.id].personal_nr}</div>
+                  )}
+                  {!emp.vorgaenger_employee_id && !nachfolgerMap[emp.id] && "—"}
+                </td>
                 <td>
                   {emp.schwarze_liste ? (
                     <span
@@ -648,6 +865,14 @@ export default function MitarbeiterPage() {
                     >
                       {emp.aktiv ? "Deaktivieren" : "Reaktivieren"}
                     </button>
+                    {emp.aktiv && (
+                      <button
+                        className="btn-secondary"
+                        onClick={() => statuswechselStarten(emp)}
+                      >
+                        Statuswechsel
+                      </button>
+                    )}
                   </td>
                 )}
               </tr>

@@ -156,6 +156,14 @@ create table employees (
   schwarze_liste_grund text,
   schwarze_liste_von uuid references profiles (id),
   schwarze_liste_am timestamptz,
+  -- Statuswechsel (z.B. sozialversicherungsfrei -> sozialversicherungs-
+  -- pflichtig, wenn die 90-Tage-/15-Wochen-Grenze erreicht wird): verweist
+  -- auf die "Vorgänger"-Person (alte Personalnummer), aus der diese Zeile
+  -- per Statuswechsel entstanden ist. Bewusst eine eigene, komplett neue
+  -- Person (statt die Personalnummer der bestehenden Zeile umzubenennen),
+  -- damit Stunden/Boni davor und danach strikt getrennt bleiben und mit
+  -- unterschiedlicher Abrechnungsart korrekt abgerechnet werden können.
+  vorgaenger_employee_id uuid references employees (id) on delete set null,
   notiz text,
   -- Optimistische Nebenläufigkeit (ADR-010): Version wird bei jedem Update
   -- hochgezählt; das Frontend muss die zuletzt gelesene Version mitschicken.
@@ -1097,7 +1105,11 @@ join lateral (
   where we.employee_id = e.id
   group by extract(year from we.datum)
 ) w on true
-where w.erster_arbeitstag is not null;
+where w.erster_arbeitstag is not null
+  -- Die 90-Tage-/15-Wochen-Regel ist die Obergrenze für SOZIALVERSICHERUNGS-
+  -- FREIE Beschäftigung - für bereits sozialversicherungspflichtige Personen
+  -- ist diese Prüfung gegenstandslos (Nutzer-Hinweis 2026-08-06).
+  and e.abrechnungsart <> 'sozialversicherungspflichtig';
 
 grant select on employee_sv_pruefung to authenticated;
 

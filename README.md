@@ -176,7 +176,18 @@ Enthalten:
   allen kritischen Fällen. Reine Tage-/Wochen-Zählung auf Basis "1. bis
   letzter Arbeitstag mit Stunden > 0" - ersetzt nicht die rechtliche
   Prüfung der Sozialversicherungsbefreiung selbst (eigenes Formular nötig,
-  noch offen)
+  noch offen). Gilt nur für Personen, die noch NICHT sozialversicherungs-
+  pflichtig sind (die Grenze ist die Obergrenze für sozialversicherungs-
+  FREIE Beschäftigung, für bereits Pflichtige gegenstandslos)
+- "Statuswechsel" im Personalstamm (nur admin/hr, z.B. beim Erreichen der
+  90-Tage-/15-Wochen-Grenze): legt eine neue, verknüpfte Person mit "a" an
+  der Personalnummer an (z.B. "342" → "342a") mit wählbarer neuer
+  Abrechnungsart und Stichtag, deaktiviert die alte Nummer (keine
+  Löschung, ADR-011) und hängt deren hochgeladene Dokumente auf die neue
+  Nummer um. Stunden/Vorschüsse/Boni bleiben dadurch strikt getrennt (zwei
+  eigene Zeilen in der Lohnübersicht, je eigene Netto-Berechnung passend
+  zur jeweiligen Abrechnungsart) - beide Nummern bleiben über eine
+  "Verknüpfung"-Spalte im Personalstamm als dieselbe Person erkennbar
 - "Management"-Seite, Abschnitt "Stundenmonitoring": listet alle Personen
   mit mindestens einem Tag über 12,00 Stunden in der Stundenerfassung
   (Saison-Jahr-Filter), aufklappbar je Person mit allen betroffenen Tagen

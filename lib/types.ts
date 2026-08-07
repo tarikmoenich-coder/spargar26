@@ -97,6 +97,10 @@ export interface Employee {
   schwarze_liste_grund?: string | null;
   schwarze_liste_von?: string | null;
   schwarze_liste_am?: string | null;
+  // Bei einem Statuswechsel (z.B. sozialversicherungsfrei ->
+  // sozialversicherungspflichtig): Verweis auf die "Vorgänger"-Person
+  // (alte Personalnummer), aus der diese Zeile entstanden ist.
+  vorgaenger_employee_id?: string | null;
   version?: number;
 }
 
