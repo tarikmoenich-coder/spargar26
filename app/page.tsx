@@ -6,12 +6,19 @@ import { useProfile } from "@/lib/useProfile";
 
 export default function Home() {
   const router = useRouter();
-  const { loading, userId } = useProfile();
+  const { loading, profile, userId } = useProfile();
 
   useEffect(() => {
     if (loading) return;
-    router.replace(userId ? "/erfassung" : "/login");
-  }, [loading, userId, router]);
+    if (!userId) {
+      router.replace("/login");
+      return;
+    }
+    // zeiterfassung hat kein eigenes Dashboard (Stundenerfassung ist schon
+    // ihr einziger Arbeitsbereich) - alle anderen Rollen landen auf ihrem
+    // rollenabhängigen Dashboard, siehe app/dashboard/page.tsx.
+    router.replace(profile?.role === "zeiterfassung" ? "/erfassung" : "/dashboard");
+  }, [loading, profile, userId, router]);
 
   return <p className="text-neutral-500">Lädt…</p>;
 }

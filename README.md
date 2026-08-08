@@ -10,6 +10,17 @@ Enthalten:
 - Navigation, Unterreiter (Personal/Lohn) und die wichtigste Werkzeugleiste
   je Seite (Datum, Filter, Suche) bleiben beim Scrollen durch lange Listen
   sichtbar (fixiert/"sticky")
+- Rollenabhängiges Dashboard ("Start", auch neue Startseite nach dem
+  Login): kompakte, klickbare Kacheln mit dem, was gerade Aufmerksamkeit
+  braucht - hr sieht offene Anreiseliste-Punkte und die 90-Tage-/
+  15-Wochen-Kontrolle, kasse den aktuellen Kassensaldo, Stand der letzten
+  Kassenprüfung und Bewegungen seit der letzten Prüfung, lohnabrechnung
+  Abweichungen bei Auszahlungen und die Anzahl aktiver Personen, pruefer
+  offene Kassenprüfungs-Freigaben und die letzten Audit-Log-Einträge,
+  management eine kompakte Fassung der Management-Seite. admin sieht alle
+  Kacheln kombiniert. zeiterfassung hat kein eigenes Dashboard und landet
+  weiterhin direkt auf der Stundenerfassung, da das schon ihr einziger
+  Arbeitsbereich ist
 - Personalstamm (anlegen/bearbeiten/deaktivieren, keine Löschung), inkl.
   Abrechnungsart (pauschal/Lohnsteuerklasse 1/sozialversicherungspflichtig)
   und automatisch berechnetem "Aktiv seit" (erster Arbeitstag mit Stunden > 0)
