@@ -38,7 +38,15 @@ Enthalten:
   Position), statt nach oben zu springen. Zahlenfelder (Stunden, aber auch
   Beträge/Sätze an anderer Stelle) haben keine Hoch-/Runter-Pfeile und
   ändern ihren Wert nicht mehr versehentlich durchs Scrollen mit der Maus,
-  wenn sie gerade fokussiert sind - ein häufiger Browser-Stolperstein
+  wenn sie gerade fokussiert sind - ein häufiger Browser-Stolperstein.
+  Felder sind für Rollen ohne Schreibrecht (nur admin/hr/zeiterfassung
+  dürfen Stunden eintragen) jetzt clientseitig gesperrt mit erklärendem
+  Hinweis, statt normal bearbeitbar auszusehen, aber die Eingabe lautlos
+  von der Datenbank abzulehnen (Bugfix 2026-08-08, betraf z.B. den
+  Sprung-Link von der Management-Seite ins Stundenmonitoring). Ein
+  fehlgeschlagener Speicherversuch (z.B. weil jemand anders denselben
+  Eintrag zwischenzeitlich geändert hat) zeigt jetzt ebenfalls einen
+  Hinweis, statt die Eingabe kommentarlos zu verwerfen
 - "Stundenerfassung → Import" (admin/hr/zeiterfassung): Excel-/CSV-Import
   zum Nacherfassen mehrerer Tage/Personen auf einmal - anderes Format als
   der Personal-Import: Spalte 1 = Personalnummer, ab Spalte 2 je eine

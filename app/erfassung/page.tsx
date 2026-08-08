@@ -88,6 +88,15 @@ function ErfassungInner() {
   const { profile } = useProfile();
   const canGruppeAendern =
     profile?.role === "admin" || profile?.role === "hr";
+  // Muss exakt zu work_entries_write/-update in schema.sql passen (RLS).
+  // Ohne diese clientseitige Sperre sahen Rollen ohne Schreibrecht (z.B.
+  // "management") ganz normal editierbar wirkende Felder, deren Eingabe
+  // aber lautlos von der Datenbank abgelehnt wurde - Nutzer-Bugreport
+  // 2026-08-08 ("eingetippte Stunden nach Neuladen wieder weg").
+  const canEditStunden =
+    profile?.role === "admin" ||
+    profile?.role === "hr" ||
+    profile?.role === "zeiterfassung";
   // useSearchParams() statt window.location.search: reagiert zuverlässig
   // auch auf clientseitige <Link>-Navigation, bei der Next.js diese Route
   // wiederverwendet statt sie neu zu mounten (sonst würde ein Sprung-Link
@@ -122,6 +131,12 @@ function ErfassungInner() {
   // läuft.
   const [periode, setPeriode] = useState<Period | null>(null);
   const gesperrt = periode?.gesperrt ?? false;
+  // Zeigt an, wenn ein Speicherversuch nicht ankam (z.B. weil ein anderer
+  // Nutzer den Eintrag zwischenzeitlich geändert hat - optimistische
+  // Sperre schlägt fehl - oder weil die Berechtigung fehlt). Vorher wurde
+  // das lautlos verschluckt: die Eingabe verschwand beim nächsten Laden
+  // spurlos, ohne dass sichtbar war, warum (Nutzer-Bugreport 2026-08-08).
+  const [speicherFehler, setSpeicherFehler] = useState<string | null>(null);
 
   // Für den Live-Sync-Handler: der jeweils AKTUELLE Tag, nicht der zum
   // Zeitpunkt des Abonnierens eingefangene - beim schnellen Tageswechsel
@@ -334,58 +349,106 @@ function ErfassungInner() {
     return () => clearTimeout(id);
   }, [printGroupKey]);
 
-  async function saveHours(employeeId: string, value: string) {
+  // Lädt den tatsächlichen aktuellen Stand aus der Datenbank neu, wenn ein
+  // Speicherversuch fehlgeschlagen ist (Konflikt oder fehlende
+  // Berechtigung) - damit die Eingabefelder nie einen Wert zeigen, der in
+  // Wahrheit gar nicht gespeichert wurde.
+  async function ladeEintragNeu(employeeId: string) {
     const supabase = getSupabaseClient();
-    const stunden = value === "" ? null : Number(value);
+    const { data } = await supabase
+      .from("work_entries")
+      .select("*")
+      .eq("employee_id", employeeId)
+      .eq("datum", datum)
+      .maybeSingle();
+    setEntries((prev) => {
+      const next = { ...prev };
+      if (data) next[employeeId] = data as WorkEntry;
+      else delete next[employeeId];
+      return next;
+    });
+  }
+
+  function empfaengerName(employeeId: string): string {
+    const e = employees.find((emp) => emp.id === employeeId);
+    return e ? `${e.name}, ${e.vorname}` : "diese Person";
+  }
+
+  // Gemeinsame Speicherlogik für Stunden/Markierung/Notiz - alle drei
+  // teilen sich dasselbe Muster: bei bestehendem Eintrag per optimistischer
+  // Sperre (version) aktualisieren, sonst neu anlegen. WICHTIG: Anders als
+  // zuvor wird das Ergebnis jetzt geprüft - weder ein RLS-Fehler (z.B.
+  // fehlende Berechtigung, gesperrter Monat) noch ein Versionskonflikt
+  // (0 betroffene Zeilen, wenn zwischenzeitlich jemand anders gespeichert
+  // hat) dürfen mehr lautlos verschluckt werden, siehe Bugreport
+  // 2026-08-08 ("eingetippte Stunden nach Neuladen wieder weg").
+  async function speichereFeld(
+    employeeId: string,
+    patch: Partial<Pick<WorkEntry, "stunden" | "markierung" | "notiz">>,
+    feldLabel: string
+  ): Promise<boolean> {
+    const supabase = getSupabaseClient();
     const existing = entries[employeeId];
+    let konflikt = false;
+    let fehlerText: string | null = null;
 
     if (existing) {
-      await supabase
+      const { data, error } = await supabase
         .from("work_entries")
-        .update({ stunden })
+        .update(patch)
         .eq("id", existing.id)
-        .eq("version", existing.version); // optimistische Sperre (ADR-010)
+        .eq("version", existing.version) // optimistische Sperre (ADR-010)
+        .select("id");
+      if (error) fehlerText = error.message;
+      else if (!data || data.length === 0) konflikt = true;
     } else {
-      await supabase.from("work_entries").insert({
-        employee_id: employeeId,
-        datum,
-        stunden,
-      });
+      const { error } = await supabase
+        .from("work_entries")
+        .insert({ employee_id: employeeId, datum, ...patch });
+      if (error) {
+        // Eindeutigkeitsverletzung (employee_id, datum) = jemand anders
+        // war zwischenzeitlich schneller - auch das ist ein Konflikt, kein
+        // "echter" Fehler.
+        if (error.code === "23505") konflikt = true;
+        else fehlerText = error.message;
+      }
     }
+
+    if (konflikt) {
+      setSpeicherFehler(
+        `${feldLabel} für ${empfaengerName(employeeId)} konnte nicht gespeichert werden - ` +
+          `eine andere Person hat diesen Eintrag zwischenzeitlich geändert. ` +
+          `Der aktuelle Stand wurde neu geladen, bitte bei Bedarf erneut eingeben.`
+      );
+      await ladeEintragNeu(employeeId);
+      return false;
+    }
+    if (fehlerText) {
+      setSpeicherFehler(
+        `${feldLabel} für ${empfaengerName(employeeId)} konnte nicht gespeichert werden: ${fehlerText}`
+      );
+      await ladeEintragNeu(employeeId);
+      return false;
+    }
+    setSpeicherFehler(null);
+    return true;
+  }
+
+  async function saveHours(employeeId: string, value: string) {
+    const stunden = value === "" ? null : Number(value);
+    await speichereFeld(employeeId, { stunden }, "Stunden");
   }
 
   async function saveMarkierung(employeeId: string, markierung: string) {
-    const supabase = getSupabaseClient();
-    const existing = entries[employeeId];
     const value = markierung === "" ? null : markierung;
-    if (existing) {
-      await supabase
-        .from("work_entries")
-        .update({ markierung: value })
-        .eq("id", existing.id);
-    } else {
-      await supabase
-        .from("work_entries")
-        .insert({ employee_id: employeeId, datum, markierung: value });
-    }
+    await speichereFeld(employeeId, { markierung: value }, "Markierung");
   }
 
   // Freitext-Vermerk zum Tag (z.B. "krank", "zu spät") - erscheint auch in
   // der "Suche"-Seite bei den Arbeitsstunden der Person.
   async function saveNotiz(employeeId: string, notiz: string) {
-    const supabase = getSupabaseClient();
-    const existing = entries[employeeId];
     const value = notiz.trim() === "" ? null : notiz;
-    if (existing) {
-      await supabase
-        .from("work_entries")
-        .update({ notiz: value })
-        .eq("id", existing.id);
-    } else {
-      await supabase
-        .from("work_entries")
-        .insert({ employee_id: employeeId, datum, notiz: value });
-    }
+    await speichereFeld(employeeId, { notiz: value }, "Notiz");
   }
 
   // Pfeiltasten hoch/runter im Stunden-Feld springen direkt zum selben
@@ -494,12 +557,32 @@ function ErfassungInner() {
           </span>
         </div>
 
+        {!canEditStunden && (
+          <p className="rounded border border-amber-300 bg-amber-50 px-3 py-2 text-sm font-medium text-amber-800">
+            🔒 Deine Rolle ({profile?.role}) darf hier nur lesen, keine
+            Stunden eintragen - die Felder sind deshalb gesperrt.
+          </p>
+        )}
+
         {gesperrt && (
           <p className="rounded border border-amber-300 bg-amber-50 px-3 py-2 text-sm font-medium text-amber-800">
             🔒 Dieser Monat ist im Rahmen des Monatsabschlusses gesperrt -
             die Stunden für diesen Tag können nicht mehr geändert werden.
             Zum Nachtragen muss der Monat auf der Lohnübersicht bewusst
             wieder geöffnet werden.
+          </p>
+        )}
+
+        {speicherFehler && (
+          <p className="flex items-center justify-between gap-3 rounded border border-red-300 bg-red-50 px-3 py-2 text-sm font-medium text-red-800">
+            <span>⚠ {speicherFehler}</span>
+            <button
+              type="button"
+              className="btn-secondary shrink-0 text-xs"
+              onClick={() => setSpeicherFehler(null)}
+            >
+              Ausblenden
+            </button>
           </p>
         )}
 
@@ -613,7 +696,7 @@ function ErfassungInner() {
                           data-employee-id={emp.id}
                           onBlur={(e) => saveHours(emp.id, e.target.value)}
                           onKeyDown={handleStundenKeyDown}
-                          disabled={gesperrt}
+                          disabled={gesperrt || !canEditStunden}
                           title="↑/↓: vorherige/nächste Person · Umschalt+←/→: Vortag/Folgetag derselben Person"
                         />
                       </td>
@@ -624,7 +707,7 @@ function ErfassungInner() {
                           onChange={(e) =>
                             saveMarkierung(emp.id, e.target.value)
                           }
-                          disabled={gesperrt}
+                          disabled={gesperrt || !canEditStunden}
                         >
                           <option value="">—</option>
                           <option value="U">U (Urlaub/Feiertag)</option>
@@ -638,7 +721,7 @@ function ErfassungInner() {
                           defaultValue={entry?.notiz ?? ""}
                           key={`n-${emp.id}-${entry?.version ?? 0}`}
                           onBlur={(e) => saveNotiz(emp.id, e.target.value)}
-                          disabled={gesperrt}
+                          disabled={gesperrt || !canEditStunden}
                         />
                       </td>
                       {canGruppeAendern && (
