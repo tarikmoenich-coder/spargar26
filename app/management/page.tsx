@@ -244,8 +244,12 @@ export default function ManagementPage() {
                   <th>Abrechnungsart</th>
                   <th>1. Arbeitstag</th>
                   <th>Letzter Arbeitstag</th>
-                  <th>Arbeitstage &gt; 0</th>
-                  <th>Rest bis 90 Tage</th>
+                  <th>Arbeitstage &gt; 0 (bei uns)</th>
+                  <th title="Bisherige Arbeitstage in Deutschland bei anderen Arbeitgebern laut SV-Fragebogen (Personal → Sozialversicherung)">
+                    Vorbeschäftigung Deutschland
+                  </th>
+                  <th>Kombinierte Tage</th>
+                  <th>Rest bis 90 Tage (kombiniert)</th>
                   <th>Austrittsdatum (15 Wo.)</th>
                   <th>Grund</th>
                   <th>Status</th>
@@ -267,12 +271,17 @@ export default function ManagementPage() {
                     <td>{formatDatumDE(f.erster_arbeitstag)}</td>
                     <td>{formatDatumDE(f.letzter_arbeitstag)}</td>
                     <td>{f.arbeitstage_ueber0}</td>
-                    <td>{f.rest_bis_90_tage}</td>
+                    <td>{f.vorbeschaeftigung_deutschland_tage}</td>
+                    <td>{f.kombinierte_tage}</td>
+                    <td>{f.rest_bis_90_tage_kombiniert}</td>
                     <td>{formatDatumDE(f.austrittsdatum_15_wochen)}</td>
                     <td className="text-sm">
                       {[
-                        f.ueberschritten_90_tage ? "90-Tage-Grenze" : null,
+                        f.arbeitstage_ueber0 > 90 ? "90-Tage-Grenze" : null,
                         f.ueberschritten_15_wochen ? "15-Wochen-Grenze" : null,
+                        f.arbeitstage_ueber0 <= 90 && f.kombinierte_tage > 90
+                          ? "90-Tage-Grenze (mit Vorbeschäftigung)"
+                          : null,
                       ]
                         .filter(Boolean)
                         .join(" + ")}

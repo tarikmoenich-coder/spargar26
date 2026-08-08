@@ -292,10 +292,13 @@ create table personal_kandidaten (
   -- Sammel-Ausdruck der Anreisegruppe).
   gedruckt boolean not null default false,
   gedruckt_am timestamptz,
-  -- Fragebogen zur Feststellung der Versicherungspflicht: WAS genau davon
-  -- zu erfassen ist, wird noch im Detail geklärt (Stand 2026-08-06) - erstmal
-  -- nur ein Ja/Nein, ob er erfasst wurde, plus die eine Angabe daraus, die
-  -- wir schon kennen (verheiratet -> Hochzeitsurkunde nötig).
+  -- Fragebogen zur Feststellung der Versicherungspflicht: nur ein Ja/Nein,
+  -- ob er erfasst wurde (für die Anreiseliste-Checkliste), plus die eine
+  -- Angabe daraus, die schon länger gebraucht wird (verheiratet ->
+  -- Hochzeitsurkunde nötig). Die eigentlichen Antworten stehen seit
+  -- 2026-08-08 in der eigenen Tabelle sv_fragebogen (ein Datensatz je
+  -- Person UND Saison-Jahr, siehe "Personal → Sozialversicherung") - diese
+  -- beiden Häkchen sind bewusst (noch) nicht damit verknüpft.
   fragebogen_erfasst boolean not null default false,
   verheiratet_laut_fragebogen boolean,
   -- Steuert, ob das Formular "Doppelte Haushaltsführung" für die
@@ -363,6 +366,149 @@ where k.status = 'anreiseliste';
 
 alter view personal_kandidaten_checkliste set (security_invoker = true);
 grant select on personal_kandidaten_checkliste to authenticated;
+
+-- ---------------------------------------------------------------------------
+-- 2a. SV-Fragebogen ("Fragebogen zur Feststellung der Versicherungspflicht/
+--     Versicherungsfreiheit rumänischer Saisonarbeitnehmer") - ein Datensatz
+--     je Person UND Saison-Jahr (nicht nur einmal je Person!), damit im
+--     Folgejahr geprüft werden kann, ob sich die Angaben (z.B. Hausfrau/
+--     Hausmann, Selbstständigkeit) verändert haben (Nutzer-Vorgabe
+--     2026-08-08). Manuell abgetippt vom ausgefüllten/gestempelten
+--     Papierformular - KEIN automatisches Auslesen (Handschrift/Kästchen/
+--     rumänische Behördenstempel sind dafür nicht verlässlich genug bei
+--     einem Formular mit sozialversicherungsrechtlicher Bedeutung).
+-- ---------------------------------------------------------------------------
+create table sv_fragebogen (
+  id bigint generated always as identity primary key,
+  employee_id uuid not null references employees (id) on delete restrict,
+  saison_jahr int not null,
+
+  -- 1. Beschäftigung im Heimatland
+  beschaeftigt_heimatland boolean,
+  beschaeftigt_firma text,
+  beschaeftigt_taetigkeit text,
+  bezahlter_urlaub boolean,
+  bezahlter_urlaub_von date,
+  bezahlter_urlaub_bis date,
+  unbezahlter_urlaub boolean,
+  unbezahlter_urlaub_von date,
+  unbezahlter_urlaub_bis date,
+  freistellung boolean,
+  freistellung_von date,
+  freistellung_bis date,
+  freistellung_grund text,
+
+  -- 2. Selbstständigkeit im Heimatland
+  selbststaendig boolean,
+  selbststaendig_seit date,
+  selbststaendig_taetigkeit text,
+
+  -- 3. Arbeitslosigkeit im Heimatland
+  arbeitslos boolean,
+  arbeitslos_seit date,
+  arbeitsamt_name text,
+  arbeitsamt_aktenzeichen text,
+
+  -- 4. Schulbesuch/Studium im Heimatland
+  schule_studium boolean,
+  schule_seit date,
+  schule_name text,
+  schule_ende date,
+  schulferien_waehrend_beschaeftigung boolean,
+  schulferien_von date,
+  schulferien_bis date,
+
+  -- 5. Rentenbezug im Heimatland
+  rente boolean,
+  rente_seit date,
+  rente_art text,
+  rente_traeger text,
+
+  -- 6. Hausfrau/Hausmann im Heimatland
+  hausmann boolean,
+  hausmann_seit date,
+
+  -- 7. Sonstiges - nur relevant, wenn 1/2/3/4/5/6 alle "nein" sind
+  lebensunterhalt_sonstiges text,
+
+  -- Kern der 90-Tage-Regel (Nutzer-Korrektur 2026-08-08): entscheidend ist
+  -- die Gesamtzahl der Arbeitstage in DEUTSCHLAND im Kalenderjahr über
+  -- ALLE Arbeitgeber, nicht nur bei uns - NICHT die Beschäftigung im
+  -- Ausland (die zählt für die Berufsmäßigkeits-Frage oben, Blöcke 1-7,
+  -- aber nicht für die Tage-Grenze). Oft meldet das Lohnprogramm, dass
+  -- eine Person schon einmal in Deutschland beschäftigt war - dann wird
+  -- gezielt nachgefragt und hier dokumentiert, worauf wir uns bei der
+  -- wahrheitsgemäßen (rechtlich bindenden) Angabe der Person verlassen.
+  -- Fließt direkt in die kombinierte 90-Tage-Kontrolle ein (siehe
+  -- employee_sv_pruefung weiter unten).
+  vorbeschaeftigung_deutschland_tage int,
+  vorbeschaeftigung_deutschland_arbeitgeber text,
+  -- Dokumentiert, falls diese Nachfrage gezielt durch eine Rückmeldung des
+  -- Lohnprogramms ausgelöst wurde (statt nur beim regulären Erstantritt) -
+  -- als Nachweis, dass dem nachgegangen wurde.
+  ausgeloest_durch_lohnprogramm_hinweis boolean not null default false,
+
+  -- Erklärung/Unterschrift auf dem Papierformular
+  ausgefuellt_am date,
+
+  erfasst_von uuid references profiles (id) default auth.uid(),
+  erfasst_am timestamptz not null default now(),
+  updated_by uuid references profiles (id),
+  updated_at timestamptz not null default now(),
+
+  unique (employee_id, saison_jahr)
+);
+
+-- 8. Bisherige Beschäftigungen im laufenden Kalenderjahr (vor dieser
+--    Beschäftigung, im In- oder Ausland) - mehrere Zeilen möglich, wie auf
+--    dem Papierformular. Rein informativ/dokumentierend (Kontext für die
+--    Berufsmäßigkeits-Einschätzung oben) - zählt NICHT in die 90-Tage-
+--    Kontrolle hinein, das macht sv_fragebogen.vorbeschaeftigung_
+--    deutschland_tage (nur Deutschland zählt für die Tage-Grenze, siehe
+--    dort).
+create table sv_fragebogen_vorbeschaeftigung (
+  id bigint generated always as identity primary key,
+  fragebogen_id bigint not null references sv_fragebogen (id) on delete cascade,
+  von date not null,
+  bis date not null,
+  wochenstunden numeric(5, 2),
+  taetigkeit text,
+  arbeitgeber text
+);
+
+create index idx_sv_fragebogen_vorbeschaeftigung_fragebogen
+  on sv_fragebogen_vorbeschaeftigung (fragebogen_id);
+
+-- Live berechnete Auswertung: "bestanden" = sozialversicherungsfreie
+-- Beschäftigung anhand der Angaben plausibel möglich. WICHTIG: dies ist
+-- eine reine Ja/Nein-Fragen-Auswertung nach der allgemeinen Regel zur
+-- "Berufsmäßigkeit" (kurzfristige Beschäftigung ist nur SV-frei, wenn sie
+-- NICHT die Haupt-Existenzgrundlage der Person ist) - ersetzt nicht die
+-- rechtliche Prüfung im Einzelfall und wurde nicht steuerberaterlich
+-- geprüft (Nutzer-Vorgabe 2026-08-08: als Warnung gedacht, manuell vom
+-- Nutzer übersteuerbar, kein harter Block).
+-- Ein unbeantwortetes (NULL) Feld zählt hier bewusst wie "nein" (coalesce
+-- ... false) - ein unvollständig ausgefüllter Fragebogen soll nicht
+-- versehentlich als "bestanden" durchgehen.
+create or replace view sv_fragebogen_auswertung as
+select
+  f.*,
+  (
+    coalesce(f.beschaeftigt_heimatland, false)
+    or coalesce(f.selbststaendig, false)
+    or coalesce(f.schule_studium, false)
+    or coalesce(f.rente, false)
+    or coalesce(f.hausmann, false)
+  )
+  and not coalesce(f.arbeitslos, false) as bestanden
+from sv_fragebogen f;
+
+-- security_invoker = true: die Rohantworten sind so sensibel wie andere
+-- Personaldaten (SV-Nr./IBAN) - läuft mit den Rechten des aufrufenden
+-- Nutzers, damit die admin/hr-only-Policy von sv_fragebogen tatsächlich
+-- greift (siehe RLS weiter unten).
+alter view sv_fragebogen_auswertung set (security_invoker = true);
+grant select on sv_fragebogen_auswertung to authenticated;
 
 -- ---------------------------------------------------------------------------
 -- 3. Tageserfassung (ersetzt Sheets "Jan" bis "August")
@@ -1112,9 +1258,23 @@ select
   floor((w.letzter_arbeitstag - w.erster_arbeitstag) / 7.0)::int as wochen_seit_start,
   (w.arbeitstage_ueber0 > 90) as ueberschritten_90_tage,
   (w.letzter_arbeitstag > (w.erster_arbeitstag + 104)) as ueberschritten_15_wochen,
+  -- Bisherige Arbeitstage in DEUTSCHLAND im Kalenderjahr laut SV-Fragebogen
+  -- (nicht Ausland - das zählt nicht für die Tage-Grenze, siehe Kommentar
+  -- bei sv_fragebogen.vorbeschaeftigung_deutschland_tage). Rechtlich zählt
+  -- das Kalenderjahr über ALLE deutschen Arbeitgeber zusammen, nicht nur
+  -- die Tage bei uns (Nutzer-Korrektur 2026-08-08).
+  coalesce(fb.vorbeschaeftigung_deutschland_tage, 0)
+    as vorbeschaeftigung_deutschland_tage,
+  w.arbeitstage_ueber0 + coalesce(fb.vorbeschaeftigung_deutschland_tage, 0)
+    as kombinierte_tage,
+  greatest(
+    0,
+    90 - (w.arbeitstage_ueber0 + coalesce(fb.vorbeschaeftigung_deutschland_tage, 0))
+  ) as rest_bis_90_tage_kombiniert,
   (
     w.arbeitstage_ueber0 > 90
     or w.letzter_arbeitstag > (w.erster_arbeitstag + 104)
+    or (w.arbeitstage_ueber0 + coalesce(fb.vorbeschaeftigung_deutschland_tage, 0)) > 90
   ) as kritisch
 from employees e
 join lateral (
@@ -1127,6 +1287,16 @@ join lateral (
   where we.employee_id = e.id
   group by extract(year from we.datum)
 ) w on true
+-- Bewusst direkt gegen die Rohtabelle (nicht über die security_invoker-
+-- Sicht sv_fragebogen_auswertung), damit hier eindeutig mit den Rechten
+-- des Sicht-Eigentümers gelesen wird, unabhängig von der Rolle des
+-- aufrufenden Nutzers - exakt wie beim Lesen von work_entries/employees
+-- oben in dieser Sicht.
+left join lateral (
+  select f.vorbeschaeftigung_deutschland_tage
+  from sv_fragebogen f
+  where f.employee_id = e.id and f.saison_jahr = w.saison_jahr
+) fb on true
 where w.erster_arbeitstag is not null
   -- Die 90-Tage-/15-Wochen-Regel ist die Obergrenze für SOZIALVERSICHERUNGS-
   -- FREIE Beschäftigung - für bereits sozialversicherungspflichtige Personen
@@ -1200,6 +1370,8 @@ alter table kassenpruefung_einstellungen enable row level security;
 alter table audit_log enable row level security;
 alter table employee_documents enable row level security;
 alter table personal_kandidaten enable row level security;
+alter table sv_fragebogen enable row level security;
+alter table sv_fragebogen_vorbeschaeftigung enable row level security;
 
 -- profiles
 create policy "profiles_select" on profiles for select
@@ -1227,6 +1399,16 @@ create policy "employees_admin_hr_all" on employees for all
 -- Personalplanung: wie employees nur admin/hr (Personalplanung-Frage
 -- vom Nutzer 2026-08-06 explizit so festgelegt).
 create policy "personal_kandidaten_admin_hr_all" on personal_kandidaten for all
+  using (current_role_name() in ('admin', 'hr'))
+  with check (current_role_name() in ('admin', 'hr'));
+
+-- SV-Fragebogen: so sensibel wie andere Personaldaten (SV-Nr./IBAN), nur
+-- admin/hr.
+create policy "sv_fragebogen_admin_hr_all" on sv_fragebogen for all
+  using (current_role_name() in ('admin', 'hr'))
+  with check (current_role_name() in ('admin', 'hr'));
+create policy "sv_fragebogen_vorbeschaeftigung_admin_hr_all"
+  on sv_fragebogen_vorbeschaeftigung for all
   using (current_role_name() in ('admin', 'hr'))
   with check (current_role_name() in ('admin', 'hr'));
 

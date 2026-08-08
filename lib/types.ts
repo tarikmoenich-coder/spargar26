@@ -127,7 +127,88 @@ export interface SvPruefung {
   wochen_seit_start: number;
   ueberschritten_90_tage: boolean;
   ueberschritten_15_wochen: boolean;
+  // Bisherige Arbeitstage in Deutschland laut SV-Fragebogen (bei anderen
+  // Arbeitgebern, dieses Kalenderjahr) - fließt in kombinierte_tage/
+  // rest_bis_90_tage_kombiniert und kritisch mit ein.
+  vorbeschaeftigung_deutschland_tage: number;
+  kombinierte_tage: number;
+  rest_bis_90_tage_kombiniert: number;
   kritisch: boolean;
+}
+
+// Ein Frageblock 8 - Zeile ("Bisherige Beschäftigungen im laufenden
+// Kalenderjahr") - rein dokumentierend, siehe schema.sql.
+export interface SvFragebogenVorbeschaeftigung {
+  id?: number;
+  von: string;
+  bis: string;
+  wochenstunden: number | null;
+  taetigkeit: string;
+  arbeitgeber: string;
+}
+
+// Ein SV-Fragebogen-Datensatz - ein Datensatz je Person UND Saison-Jahr
+// (siehe schema.sql, Nutzer-Vorgabe 2026-08-08: Vorjahresvergleich nötig).
+export interface SvFragebogen {
+  id: number;
+  employee_id: string;
+  saison_jahr: number;
+
+  beschaeftigt_heimatland: boolean | null;
+  beschaeftigt_firma: string | null;
+  beschaeftigt_taetigkeit: string | null;
+  bezahlter_urlaub: boolean | null;
+  bezahlter_urlaub_von: string | null;
+  bezahlter_urlaub_bis: string | null;
+  unbezahlter_urlaub: boolean | null;
+  unbezahlter_urlaub_von: string | null;
+  unbezahlter_urlaub_bis: string | null;
+  freistellung: boolean | null;
+  freistellung_von: string | null;
+  freistellung_bis: string | null;
+  freistellung_grund: string | null;
+
+  selbststaendig: boolean | null;
+  selbststaendig_seit: string | null;
+  selbststaendig_taetigkeit: string | null;
+
+  arbeitslos: boolean | null;
+  arbeitslos_seit: string | null;
+  arbeitsamt_name: string | null;
+  arbeitsamt_aktenzeichen: string | null;
+
+  schule_studium: boolean | null;
+  schule_seit: string | null;
+  schule_name: string | null;
+  schule_ende: string | null;
+  schulferien_waehrend_beschaeftigung: boolean | null;
+  schulferien_von: string | null;
+  schulferien_bis: string | null;
+
+  rente: boolean | null;
+  rente_seit: string | null;
+  rente_art: string | null;
+  rente_traeger: string | null;
+
+  hausmann: boolean | null;
+  hausmann_seit: string | null;
+
+  lebensunterhalt_sonstiges: string | null;
+
+  vorbeschaeftigung_deutschland_tage: number | null;
+  vorbeschaeftigung_deutschland_arbeitgeber: string | null;
+  ausgeloest_durch_lohnprogramm_hinweis: boolean;
+
+  ausgefuellt_am: string | null;
+  erfasst_von: string | null;
+  erfasst_am: string;
+  updated_by: string | null;
+  updated_at: string;
+}
+
+// Aus der Sicht sv_fragebogen_auswertung (fügt "bestanden" hinzu).
+export interface SvFragebogenAuswertung extends SvFragebogen {
+  bestanden: boolean;
 }
 
 export interface WorkEntry {

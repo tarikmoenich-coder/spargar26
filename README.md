@@ -202,12 +202,39 @@ Enthalten:
 - 90-Tage-/15-Wochen-Kontrolle (SV-Freiheit landwirtschaftliche
   Saisonarbeit, OI-004): Spalten auf der Personal-Seite (Rest bis 90 Tage,
   theoretisches Austrittsdatum, Status) sowie eine "Management"-Seite mit
-  allen kritischen Fällen. Reine Tage-/Wochen-Zählung auf Basis "1. bis
-  letzter Arbeitstag mit Stunden > 0" - ersetzt nicht die rechtliche
-  Prüfung der Sozialversicherungsbefreiung selbst (eigenes Formular nötig,
-  noch offen). Gilt nur für Personen, die noch NICHT sozialversicherungs-
-  pflichtig sind (die Grenze ist die Obergrenze für sozialversicherungs-
-  FREIE Beschäftigung, für bereits Pflichtige gegenstandslos)
+  allen kritischen Fällen. Tage-/Wochen-Zählung auf Basis "1. bis letzter
+  Arbeitstag mit Stunden > 0" bei uns, PLUS bisherige Arbeitstage bei
+  anderen Arbeitgebern in Deutschland laut SV-Fragebogen (siehe unten,
+  "Rest bis 90 Tage" auf der Personal-Seite zeigt den kombinierten Wert,
+  Management-Seite zeigt beide Werte einzeln). Gilt nur für Personen, die
+  noch NICHT sozialversicherungspflichtig sind (die Grenze ist die
+  Obergrenze für sozialversicherungsFREIE Beschäftigung, für bereits
+  Pflichtige gegenstandslos)
+- Eigene Unterseite "Personal → Sozialversicherung" (nur admin/hr):
+  SV-Fragebogen ("Fragebogen zur Feststellung der
+  Versicherungspflicht/Versicherungsfreiheit rumänischer
+  Saisonarbeitnehmer") - manuell vom ausgefüllten/gestempelten
+  Papierformular abgetippt (bewusst KEIN automatisches Auslesen -
+  Handschrift/Kästchen/rumänische Behördenstempel sind dafür nicht
+  verlässlich genug bei einem Formular mit sozialversicherungsrechtlicher
+  Bedeutung). Ein Datensatz je Person UND Saison-Jahr, damit im Folgejahr
+  geprüft werden kann, ob sich die Angaben (z.B. Hausfrau/Hausmann,
+  Selbstständigkeit) verändert haben - die Seite zeigt dafür direkt einen
+  "Zum Vorjahr geändert"-Hinweis je Person. Live berechnete Auswertung
+  "Bestanden"/"Nicht bestanden" nach der allgemeinen
+  Berufsmäßigkeits-Regel (kurzfristige Beschäftigung ist nur SV-frei, wenn
+  sie nicht die Haupt-Existenzgrundlage der Person ist) - reine Warnung,
+  keine automatische Sperre, am Ende entscheidet weiterhin der Nutzer
+  (z.B. über den bestehenden "Statuswechsel"). Eigenes Feld "bisherige
+  Arbeitstage in Deutschland (dieses Kalenderjahr, andere Arbeitgeber)",
+  markierbar als durch eine Lohnprogramm-Rückmeldung ausgelöst - fließt
+  direkt in die 90-Tage-Kontrolle oben ein (Kern der Regel: das
+  Kalenderjahr zählt über ALLE deutschen Arbeitgeber zusammen, nicht nur
+  die Tage bei uns). Ersetzt weiterhin nicht die rechtliche Prüfung der
+  Sozialversicherungsbefreiung im Einzelfall selbst (die hier hinterlegte
+  Bestanden/Nicht-bestanden-Logik ist unser Verständnis der allgemeinen
+  Regel, keine steuerberaterlich geprüfte Rechtsauskunft für den
+  Einzelfall)
 - "Statuswechsel" im Personalstamm (nur admin/hr, z.B. beim Erreichen der
   90-Tage-/15-Wochen-Grenze): legt eine neue, verknüpfte Person mit "a" an
   der Personalnummer an (z.B. "342" → "342a") mit wählbarer neuer
@@ -245,8 +272,10 @@ Enthalten:
 
 **Nicht enthalten** (siehe "Nächste Schritte"):
 - Finalisierte Auszahlungsliste/Lohnabrechnungs-Export
-- Rechtliche Prüfung der SV-Befreiung selbst (eigenes Formular, siehe
-  offener Punkt OI-004 unten) - aktuell nur die reine Tage-/Wochen-Zählung
+- Rechtsverbindliche Prüfung der SV-Befreiung im Einzelfall - der
+  SV-Fragebogen (siehe oben, OI-004) bildet unser Verständnis der
+  allgemeinen Regel ab, ist aber keine steuerberaterlich geprüfte
+  Rechtsauskunft
 - Druckvorlagen (Stundenzettel A5/A6 als PDF)
 - Migrations-Import aus der bestehenden Excel-Datei
 
@@ -332,12 +361,18 @@ Die App läuft dann auf http://localhost:3000.
 Diese Punkte betreffen die Datenqualität/Rechtssicherheit und lassen sich
 nicht ohne dich bzw. eine Steuerberatung klären:
 
-- OI-004: Die reine Tage-/Wochen-Zählung (90 Tage bzw. 15 Wochen - der
+- OI-004: Die Tage-/Wochen-Zählung (90 Tage bzw. 15 Wochen - der
   Excel-Text "14 Wochen" war ein Tippfehler, korrekt sind 15) ist
-  umgesetzt (Personal-Seite + Management-Seite). Offen: die eigentliche
-  rechtliche Prüfung der Voraussetzungen für Sozialversicherungsbefreiung
-  (eigenes Formular, vom Nutzer noch bereitzustellen/zu erklären) sowie
-  ob "90 Tage" oder "15 Wochen" je Person tatsächlich gilt.
+  umgesetzt (Personal-Seite + Management-Seite), inkl. SV-Fragebogen
+  (Personal → Sozialversicherung, Stand 2026-08-08: manuelles
+  Eingabeformular je Person/Saison-Jahr mit Vorjahresvergleich,
+  Bestanden/Nicht-bestanden-Auswertung nach der allgemeinen
+  Berufsmäßigkeits-Regel als Warnung, sowie Einrechnung bisheriger
+  Arbeitstage bei anderen deutschen Arbeitgebern in die 90-Tage-Kontrolle).
+  Offen: rechtsverbindliche Prüfung im Einzelfall bleibt beim Nutzer/einer
+  Steuerberatung - die App-Logik ist unser Verständnis der allgemeinen
+  Regel, keine geprüfte Rechtsauskunft; außerdem weiterhin offen, ob "90
+  Tage" oder "15 Wochen" je Person tatsächlich gilt.
 - OI-009: Exakte Brutto-/Netto-/Abzugsformeln der bisherigen Excel-Datei
   (die aktuelle `season_summary`-Berechnung ist ein Entwurf und muss
   gegen echte, abgeschlossene Abrechnungen verifiziert werden). Stand:

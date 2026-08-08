@@ -8,6 +8,7 @@ const tabs = [
   { href: "/personalplanung", label: "Planung" },
   { href: "/personal-anreiseliste", label: "Anreiseliste" },
   { href: "/mitarbeiter", label: "Personalstamm" },
+  { href: "/personal-sozialversicherung", label: "Sozialversicherung" },
   { href: "/personal-dokumente", label: "Dokumente" },
   { href: "/personalnummern", label: "Personalnummern" },
   { href: "/personal-import", label: "Import" },

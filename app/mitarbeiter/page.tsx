@@ -1075,7 +1075,9 @@ export default function MitarbeiterPage() {
               <th>Abrechnungsart</th>
               <th>Aktiv seit</th>
               <th>Zuletzt abgerechnet am</th>
-              <th>Rest bis 90 Tage</th>
+              <th title="Inkl. bisheriger Arbeitstage in Deutschland bei anderen Arbeitgebern laut SV-Fragebogen, falls erfasst (siehe Personal → Sozialversicherung)">
+                Rest bis 90 Tage
+              </th>
               <th>Austrittsdatum (15 Wo.)</th>
               <th>SV-Status</th>
               <th>Führerschein</th>
@@ -1118,7 +1120,18 @@ export default function MitarbeiterPage() {
                 <td>{ABRECHNUNGSART_LABELS[emp.abrechnungsart]}</td>
                 <td>{formatDatumDE(aktivSeit[emp.id])}</td>
                 <td>{formatDatumDE(letzteAbrechnung[emp.id])}</td>
-                <td>{sv ? sv.rest_bis_90_tage : "—"}</td>
+                <td
+                  title={
+                    sv && sv.vorbeschaeftigung_deutschland_tage > 0
+                      ? `${sv.arbeitstage_ueber0} Tage bei uns + ${sv.vorbeschaeftigung_deutschland_tage} Tage laut SV-Fragebogen bei anderen Arbeitgebern in Deutschland`
+                      : undefined
+                  }
+                >
+                  {sv ? sv.rest_bis_90_tage_kombiniert : "—"}
+                  {sv && sv.vorbeschaeftigung_deutschland_tage > 0 && (
+                    <span className="ml-1 text-xs text-amber-600">*</span>
+                  )}
+                </td>
                 <td>{sv ? formatDatumDE(sv.austrittsdatum_15_wochen) : "—"}</td>
                 <td>
                   {sv ? (

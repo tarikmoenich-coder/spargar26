@@ -32,6 +32,7 @@ const items: NavItem[] = [
       "/personal-dokumente",
       "/personalplanung",
       "/personal-anreiseliste",
+      "/personal-sozialversicherung",
     ],
   },
   {
