@@ -547,6 +547,10 @@ export default function AnreiselistePage() {
                             <span className="font-medium text-emerald-700">
                               ✓ Bestanden
                             </span>
+                          ) : c.sv_fragebogen_unvollstaendig_fehlerhaft ? (
+                            <span className="font-medium text-red-600">
+                              ⚠ Unvollständig/Fehlerhaft
+                            </span>
                           ) : c.sv_fragebogen_erfasst ? (
                             <span className="font-medium text-red-600">
                               ⚠ Nicht bestanden

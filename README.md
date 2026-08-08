@@ -232,7 +232,11 @@ Enthalten:
   Berufsmäßigkeits-Regel (kurzfristige Beschäftigung ist nur SV-frei, wenn
   sie nicht die Haupt-Existenzgrundlage der Person ist) - reine Warnung,
   keine automatische Sperre, am Ende entscheidet weiterhin der Nutzer
-  (z.B. über den bestehenden "Statuswechsel"). Eigenes Feld "bisherige
+  (z.B. über den bestehenden "Statuswechsel"). Eigenes Feld "Erfassungsbogen
+  unvollständig/fehlerhaft" mit Begründung - unterscheidet "bereits
+  geprüft, aber nicht verwertbar" (z.B. fehlende Angaben/Bestätigung) von
+  "noch gar nicht angesehen"; zählt ebenfalls automatisch als nicht
+  bestanden. Eigenes Feld "bisherige
   Arbeitstage in Deutschland (dieses Kalenderjahr, andere Arbeitgeber)",
   markierbar als durch eine Lohnprogramm-Rückmeldung ausgelöst - fließt
   direkt in die 90-Tage-Kontrolle oben ein (Kern der Regel: das

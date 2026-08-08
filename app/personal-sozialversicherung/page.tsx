@@ -142,6 +142,13 @@ export default function SozialversicherungPage() {
                         <span className="font-medium text-emerald-700">
                           ✓ Bestanden
                         </span>
+                      ) : f.unvollstaendig_fehlerhaft ? (
+                        <span
+                          className="font-medium text-red-600"
+                          title={f.unvollstaendig_fehlerhaft_grund ?? undefined}
+                        >
+                          ⚠ Unvollständig/Fehlerhaft
+                        </span>
                       ) : (
                         <span className="font-medium text-red-600">
                           ⚠ Nicht bestanden

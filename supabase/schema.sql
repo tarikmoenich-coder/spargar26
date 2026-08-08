@@ -400,6 +400,16 @@ create table sv_fragebogen (
   -- als Nachweis, dass dem nachgegangen wurde.
   ausgeloest_durch_lohnprogramm_hinweis boolean not null default false,
 
+  -- Markiert, dass der Bogen bereits geprüft wurde, aber unvollständig
+  -- oder fehlerhaft ist (z.B. fehlende Angaben, unleserlich, fehlende
+  -- Bestätigung/Stempel einer rumänischen Stelle) - unterscheidet das
+  -- bewusst von "noch gar nicht angesehen" (kein Datensatz vorhanden).
+  -- Zählt automatisch als "nicht bestanden" (siehe sv_fragebogen_
+  -- auswertung), damit ein fehlerhafter Bogen nicht unbemerkt als
+  -- geprüft/bestanden durchgeht.
+  unvollstaendig_fehlerhaft boolean not null default false,
+  unvollstaendig_fehlerhaft_grund text,
+
   -- Erklärung/Unterschrift auf dem Papierformular
   ausgefuellt_am date,
 
@@ -441,18 +451,78 @@ create index idx_sv_fragebogen_vorbeschaeftigung_fragebogen
 -- Nutzer übersteuerbar, kein harter Block).
 -- Ein unbeantwortetes (NULL) Feld zählt hier bewusst wie "nein" (coalesce
 -- ... false) - ein unvollständig ausgefüllter Fragebogen soll nicht
--- versehentlich als "bestanden" durchgehen.
+-- versehentlich als "bestanden" durchgehen. Ebenso zählt ein explizit als
+-- unvollständig/fehlerhaft markierter Bogen automatisch als nicht
+-- bestanden.
+-- WICHTIG: bewusst "f.spalte, f.spalte, ..." statt "f.*" - bei "f.*" würde
+-- eine künftig per ALTER TABLE ADD COLUMN neu angehängte Spalte auf
+-- sv_fragebogen automatisch VOR "bestanden" in dieser Sicht einsortiert
+-- und dessen Position verschieben, was "create or replace view" mit
+-- Fehler 42P16 ablehnt (schon zweimal passiert - siehe
+-- migration_2026-08-08_sv_fragebogen_unvollstaendig.sql). Mit expliziter
+-- Spaltenliste bleibt "bestanden" unabhängig von der Tabellen-
+-- Spaltenreihenfolge an fester Position; neue Spalten werden hier
+-- bewusst manuell ergänzt.
 create or replace view sv_fragebogen_auswertung as
 select
-  f.*,
+  f.id,
+  f.employee_id,
+  f.saison_jahr,
+  f.beschaeftigt_heimatland,
+  f.beschaeftigt_firma,
+  f.beschaeftigt_taetigkeit,
+  f.bezahlter_urlaub,
+  f.bezahlter_urlaub_von,
+  f.bezahlter_urlaub_bis,
+  f.unbezahlter_urlaub,
+  f.unbezahlter_urlaub_von,
+  f.unbezahlter_urlaub_bis,
+  f.freistellung,
+  f.freistellung_von,
+  f.freistellung_bis,
+  f.freistellung_grund,
+  f.selbststaendig,
+  f.selbststaendig_seit,
+  f.selbststaendig_taetigkeit,
+  f.arbeitslos,
+  f.arbeitslos_seit,
+  f.arbeitsamt_name,
+  f.arbeitsamt_aktenzeichen,
+  f.schule_studium,
+  f.schule_seit,
+  f.schule_name,
+  f.schule_ende,
+  f.schulferien_waehrend_beschaeftigung,
+  f.schulferien_von,
+  f.schulferien_bis,
+  f.rente,
+  f.rente_seit,
+  f.rente_art,
+  f.rente_traeger,
+  f.hausmann,
+  f.hausmann_seit,
+  f.lebensunterhalt_sonstiges,
+  f.vorbeschaeftigung_deutschland_tage,
+  f.vorbeschaeftigung_deutschland_arbeitgeber,
+  f.ausgeloest_durch_lohnprogramm_hinweis,
+  f.unvollstaendig_fehlerhaft,
+  f.unvollstaendig_fehlerhaft_grund,
+  f.ausgefuellt_am,
+  f.erfasst_von,
+  f.erfasst_am,
+  f.updated_by,
+  f.updated_at,
   (
-    coalesce(f.beschaeftigt_heimatland, false)
-    or coalesce(f.selbststaendig, false)
-    or coalesce(f.schule_studium, false)
-    or coalesce(f.rente, false)
-    or coalesce(f.hausmann, false)
+    (
+      coalesce(f.beschaeftigt_heimatland, false)
+      or coalesce(f.selbststaendig, false)
+      or coalesce(f.schule_studium, false)
+      or coalesce(f.rente, false)
+      or coalesce(f.hausmann, false)
+    )
+    and not coalesce(f.arbeitslos, false)
   )
-  and not coalesce(f.arbeitslos, false) as bestanden
+  and not f.unvollstaendig_fehlerhaft as bestanden
 from sv_fragebogen f;
 
 -- security_invoker = true: die Rohantworten sind so sensibel wie andere
@@ -526,7 +596,16 @@ select
         and fa.saison_jahr = extract(year from k.geplante_ankunft)::int
     ),
     false
-  ) as sv_fragebogen_bestanden
+  ) as sv_fragebogen_bestanden,
+  coalesce(
+    (
+      select fa.unvollstaendig_fehlerhaft
+      from sv_fragebogen_auswertung fa
+      where fa.employee_id = k.aktivierter_employee_id
+        and fa.saison_jahr = extract(year from k.geplante_ankunft)::int
+    ),
+    false
+  ) as sv_fragebogen_unvollstaendig_fehlerhaft
 from personal_kandidaten k
 where k.status = 'anreiseliste';
 

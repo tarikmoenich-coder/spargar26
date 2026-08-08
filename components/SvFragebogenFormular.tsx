@@ -87,6 +87,8 @@ const LEERER_ENTWURF: Entwurf = {
   vorbeschaeftigung_deutschland_tage: null,
   vorbeschaeftigung_deutschland_arbeitgeber: null,
   ausgeloest_durch_lohnprogramm_hinweis: false,
+  unvollstaendig_fehlerhaft: false,
+  unvollstaendig_fehlerhaft_grund: null,
   ausgefuellt_am: null,
 };
 
@@ -100,7 +102,8 @@ export function bestandenVorschau(e: Entwurf): boolean {
       !!e.schule_studium ||
       !!e.rente ||
       !!e.hausmann) &&
-    !e.arbeitslos
+    !e.arbeitslos &&
+    !e.unvollstaendig_fehlerhaft
   );
 }
 
@@ -294,7 +297,12 @@ export default function SvFragebogenFormular({
             bestandenVorschau(entwurf) ? "text-emerald-700" : "text-red-600"
           }`}
         >
-          Vorschau: {bestandenVorschau(entwurf) ? "✓ Bestanden" : "⚠ Nicht bestanden"}
+          Vorschau:{" "}
+          {bestandenVorschau(entwurf)
+            ? "✓ Bestanden"
+            : entwurf.unvollstaendig_fehlerhaft
+              ? "⚠ Unvollständig/Fehlerhaft"
+              : "⚠ Nicht bestanden"}
         </span>
       </div>
 
@@ -715,6 +723,37 @@ export default function SvFragebogenFormular({
               ))}
             </tbody>
           </table>
+        )}
+      </div>
+
+      <div className="rounded border border-red-300 bg-red-50 p-3">
+        <label className="flex items-center gap-2 text-sm font-medium text-red-900">
+          <input
+            type="checkbox"
+            checked={entwurf.unvollstaendig_fehlerhaft}
+            onChange={(e) =>
+              feld("unvollstaendig_fehlerhaft", e.target.checked)
+            }
+            disabled={!canEdit}
+          />
+          Erfassungsbogen unvollständig/fehlerhaft
+        </label>
+        <p className="mt-1 text-xs text-red-800">
+          Für Bögen, die bereits geprüft wurden, aber z.B. fehlende
+          Angaben, unleserliche Stellen oder eine fehlende Bestätigung
+          haben - unterscheidet das von "noch nicht angesehen". Zählt
+          automatisch als nicht bestanden.
+        </p>
+        {entwurf.unvollstaendig_fehlerhaft && (
+          <input
+            placeholder="Begründung (was fehlt/ist fehlerhaft)"
+            value={entwurf.unvollstaendig_fehlerhaft_grund ?? ""}
+            onChange={(e) =>
+              feld("unvollstaendig_fehlerhaft_grund", e.target.value)
+            }
+            disabled={!canEdit}
+            className="mt-2 w-full"
+          />
         )}
       </div>
 

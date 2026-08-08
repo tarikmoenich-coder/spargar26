@@ -199,6 +199,12 @@ export interface SvFragebogen {
   vorbeschaeftigung_deutschland_arbeitgeber: string | null;
   ausgeloest_durch_lohnprogramm_hinweis: boolean;
 
+  // Bogen wurde bereits geprüft, ist aber nicht verwertbar (fehlende
+  // Angaben, unleserlich, fehlende Bestätigung) - zählt automatisch als
+  // "nicht bestanden", siehe sv_fragebogen_auswertung.
+  unvollstaendig_fehlerhaft: boolean;
+  unvollstaendig_fehlerhaft_grund: string | null;
+
   ausgefuellt_am: string | null;
   erfasst_von: string | null;
   erfasst_am: string;
@@ -457,6 +463,7 @@ export interface PersonalKandidatChecklisteRow {
   // Vollständigkeits-Kriterium ab, siehe schema.sql.
   sv_fragebogen_erfasst: boolean;
   sv_fragebogen_bestanden: boolean;
+  sv_fragebogen_unvollstaendig_fehlerhaft: boolean;
 }
 
 export interface CashDeposit {
