@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useEffect } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { getSupabaseClient } from "@/lib/supabase/client";
 import { useProfile } from "@/lib/useProfile";
@@ -71,6 +72,24 @@ export default function Nav() {
   const pathname = usePathname();
   const router = useRouter();
   const { profile } = useProfile();
+
+  // Verhindert, dass das Mausrad den Wert eines fokussierten Zahlenfelds
+  // ändert (Browser-Standardverhalten bei input[type=number]) - führt sonst
+  // dazu, dass z.B. beim Scrollen über die Stundenerfassung unbemerkt
+  // Werte verändert werden. App-weit statt nur auf einer Seite, da dasselbe
+  // Risiko auch bei anderen Zahlenfeldern (Beträge, Sätze) besteht. Der
+  // Listener defokussiert nur - die normale Seiten-Scrollbewegung bleibt
+  // unangetastet.
+  useEffect(() => {
+    function onWheel() {
+      const el = document.activeElement;
+      if (el instanceof HTMLInputElement && el.type === "number") {
+        el.blur();
+      }
+    }
+    document.addEventListener("wheel", onWheel, { passive: true });
+    return () => document.removeEventListener("wheel", onWheel);
+  }, []);
 
   if (pathname === "/login") return null;
 

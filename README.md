@@ -35,7 +35,10 @@ Enthalten:
   mehrerer Tage in Folge ohne Maus). Datum ist standardmäßig auf gestern
   vorausgewählt. Beim Wechsel des Tages (Pfeil-Buttons, Datumsfeld oder
   Umschalt+Pfeil) bleibt die Ansicht an derselben Stelle (Fokus/Scroll-
-  Position), statt nach oben zu springen
+  Position), statt nach oben zu springen. Zahlenfelder (Stunden, aber auch
+  Beträge/Sätze an anderer Stelle) haben keine Hoch-/Runter-Pfeile und
+  ändern ihren Wert nicht mehr versehentlich durchs Scrollen mit der Maus,
+  wenn sie gerade fokussiert sind - ein häufiger Browser-Stolperstein
 - "Stundenerfassung → Import" (admin/hr/zeiterfassung): Excel-/CSV-Import
   zum Nacherfassen mehrerer Tage/Personen auf einmal - anderes Format als
   der Personal-Import: Spalte 1 = Personalnummer, ab Spalte 2 je eine
