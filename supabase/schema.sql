@@ -1258,6 +1258,14 @@ select
   floor((w.letzter_arbeitstag - w.erster_arbeitstag) / 7.0)::int as wochen_seit_start,
   (w.arbeitstage_ueber0 > 90) as ueberschritten_90_tage,
   (w.letzter_arbeitstag > (w.erster_arbeitstag + 104)) as ueberschritten_15_wochen,
+  (
+    w.arbeitstage_ueber0 > 90
+    or w.letzter_arbeitstag > (w.erster_arbeitstag + 104)
+    or (w.arbeitstage_ueber0 + coalesce(fb.vorbeschaeftigung_deutschland_tage, 0)) > 90
+  ) as kritisch,
+  -- Neue Spalten ans Ende angehängt (nicht dazwischen!) - "create or
+  -- replace view" erlaubt nur das Anhängen neuer Spalten am Ende, sonst
+  -- Fehler 42P16 "cannot change name of view column".
   -- Bisherige Arbeitstage in DEUTSCHLAND im Kalenderjahr laut SV-Fragebogen
   -- (nicht Ausland - das zählt nicht für die Tage-Grenze, siehe Kommentar
   -- bei sv_fragebogen.vorbeschaeftigung_deutschland_tage). Rechtlich zählt
@@ -1270,12 +1278,7 @@ select
   greatest(
     0,
     90 - (w.arbeitstage_ueber0 + coalesce(fb.vorbeschaeftigung_deutschland_tage, 0))
-  ) as rest_bis_90_tage_kombiniert,
-  (
-    w.arbeitstage_ueber0 > 90
-    or w.letzter_arbeitstag > (w.erster_arbeitstag + 104)
-    or (w.arbeitstage_ueber0 + coalesce(fb.vorbeschaeftigung_deutschland_tage, 0)) > 90
-  ) as kritisch
+  ) as rest_bis_90_tage_kombiniert
 from employees e
 join lateral (
   select
