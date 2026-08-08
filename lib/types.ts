@@ -453,6 +453,10 @@ export interface PersonalKandidatChecklisteRow {
   fuehrerschein_erfuellt: boolean;
   hochzeitsurkunde_erfuellt: boolean;
   lohnsteuerabzug_erfuellt: boolean;
+  // SV-Fragebogen: löst fragebogen_erfasst (oben) als
+  // Vollständigkeits-Kriterium ab, siehe schema.sql.
+  sv_fragebogen_erfasst: boolean;
+  sv_fragebogen_bestanden: boolean;
 }
 
 export interface CashDeposit {

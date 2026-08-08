@@ -75,15 +75,18 @@ Enthalten:
   «Platzhalter»-Feldern, direkt im Browser mit jszip befüllt, keine
   kommerzielle Templating-Bibliothek) - das erfolgte Drucken wird pro
   Person markiert. Nach der tatsächlichen Anreise werden weitere Punkte
-  abgehakt (Fragebogen zur Feststellung der Versicherungspflicht erfasst,
-  ggf. verheiratet, ggf. Lohnsteuerabzug-Antrag gewünscht) und Buskosten
+  abgehakt: SV-Fragebogen (siehe "Personal → Sozialversicherung" unten)
+  direkt hier person für person erfassbar/bearbeitbar - Status
+  "Nicht erfasst"/"Nicht bestanden"/"Bestanden" sofort sichtbar, ggf.
+  verheiratet, ggf. Lohnsteuerabzug-Antrag gewünscht, sowie Buskosten
   (Hinfahrt) eingetragen (fließt automatisch in season_bonuses/die
   Lohnübersicht ein). Ob Ausweiskopie/Führerscheinkopie/Hochzeitsurkunde/
   Formular "Doppelte Haushaltsführung" hochgeladen sind, wird live gegen
   "Personal → Dokumente" geprüft (nicht doppelt gepflegt). Erst wenn alles
-  erfüllt ist, springt der Status von "Offen" auf "Vollständig" - auch als
-  Spalte im Personalstamm sichtbar, live berechnet statt gespeichert, damit
-  nichts veraltet stehen bleiben kann
+  erfüllt ist (inkl. SV-Fragebogen "Bestanden"), springt der Status von
+  "Offen" auf "Vollständig" - auch als Spalte im Personalstamm sichtbar,
+  live berechnet statt gespeichert, damit nichts veraltet stehen bleiben
+  kann
 - "Schwarze Liste"-Flag im Personalstamm (nur admin/hr sichtbar, wie
   IBAN/SV-Nr.): dauerhaftes "nicht mehr erwünscht"-Markierung je Person,
   unabhängig vom Aktiv-Status - wird bei der Personalplanung automatisch
@@ -219,8 +222,12 @@ Enthalten:
   verlässlich genug bei einem Formular mit sozialversicherungsrechtlicher
   Bedeutung). Ein Datensatz je Person UND Saison-Jahr, damit im Folgejahr
   geprüft werden kann, ob sich die Angaben (z.B. Hausfrau/Hausmann,
-  Selbstständigkeit) verändert haben - die Seite zeigt dafür direkt einen
-  "Zum Vorjahr geändert"-Hinweis je Person. Live berechnete Auswertung
+  Selbstständigkeit) verändert haben - die Seite zeigt dafür die
+  diesjährigen Angaben direkt neben einem "Zum Vorjahr geändert"-Hinweis
+  je Person, zum unmittelbaren Vergleich. Dasselbe Eingabeformular ist
+  auch direkt in der Anreiseliste nutzbar (person für person, gruppenweise
+  wie der Rest des Anreise-Workflows) - beide Stellen teilen sich dieselbe
+  Komponente (`components/SvFragebogenFormular.tsx`). Live berechnete Auswertung
   "Bestanden"/"Nicht bestanden" nach der allgemeinen
   Berufsmäßigkeits-Regel (kurzfristige Beschäftigung ist nur SV-frei, wenn
   sie nicht die Haupt-Existenzgrundlage der Person ist) - reine Warnung,

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { Fragment, useEffect, useMemo, useState } from "react";
 import { getSupabaseClient } from "@/lib/supabase/client";
 import { useProfile } from "@/lib/useProfile";
 import { formatDatumDE, formatEuro } from "@/lib/format";
@@ -16,6 +16,15 @@ import type {
   VerpflegungsSatz,
 } from "@/lib/types";
 import PersonalTabs from "@/components/PersonalTabs";
+import SvFragebogenFormular from "@/components/SvFragebogenFormular";
+
+// Saison-Jahr für den SV-Fragebogen eines Kandidaten: aus dem geplanten
+// Ankunftsdatum abgeleitet (personal_kandidaten hat kein eigenes
+// Saison-Jahr-Feld) - per String-Slice statt new Date(...).getFullYear(),
+// um den bekannten Timezone-Stolperstein bei Datumswerten zu vermeiden.
+function svSaisonJahrFuer(k: PersonalKandidat): number | null {
+  return k.geplante_ankunft ? Number(k.geplante_ankunft.slice(0, 4)) : null;
+}
 
 const CURRENT_YEAR = new Date().getFullYear();
 
@@ -44,6 +53,9 @@ export default function AnreiselistePage() {
     Record<string, Vertragsfeld>
   >({});
   const [busfelder, setBusfelder] = useState<Record<string, string>>({});
+  // Kandidat, für den gerade der SV-Fragebogen inline erfasst/bearbeitet
+  // wird (person für person, siehe svSaisonJahrFuer).
+  const [svEditingId, setSvEditingId] = useState<string | null>(null);
 
   async function load() {
     setLoading(true);
@@ -126,7 +138,7 @@ export default function AnreiselistePage() {
     const c = checkliste[k.id];
     if (!c) return false;
     return (
-      c.fragebogen_erfasst &&
+      c.sv_fragebogen_bestanden &&
       c.buskosten_erfasst &&
       c.ausweiskopie_vorhanden &&
       c.fuehrerschein_erfuellt &&
@@ -155,10 +167,7 @@ export default function AnreiselistePage() {
 
   async function checklistFeldSpeichern(
     k: PersonalKandidat,
-    feld:
-      | "fragebogen_erfasst"
-      | "verheiratet_laut_fragebogen"
-      | "lohnsteuerabzug_antrag_gewuenscht",
+    feld: "verheiratet_laut_fragebogen" | "lohnsteuerabzug_antrag_gewuenscht",
     wert: boolean
   ) {
     const supabase = getSupabaseClient();
@@ -424,7 +433,7 @@ export default function AnreiselistePage() {
                   <th>Vertragsende</th>
                   {canEdit && <th>Dokumente</th>}
                   <th>Gedruckt</th>
-                  <th>Fragebogen</th>
+                  <th>SV-Fragebogen</th>
                   <th>Verheiratet</th>
                   <th>Lohnsteuerabzug-Antrag</th>
                   <th>Buskosten Hinfahrt €</th>
@@ -438,8 +447,10 @@ export default function AnreiselistePage() {
                   const c = checkliste[k.id];
                   const f = vertragsfelder[k.id] ?? { beginn: "", ende: "" };
                   const bereit = vertragszeitraumBereit(k);
+                  const svJahr = svSaisonJahrFuer(k);
                   return (
-                    <tr key={k.id}>
+                    <Fragment key={k.id}>
+                    <tr>
                       <td>
                         {k.name}, {k.vorname} ({k.personal_nr})
                       </td>
@@ -531,18 +542,38 @@ export default function AnreiselistePage() {
                         )}
                       </td>
                       <td>
-                        <input
-                          type="checkbox"
-                          disabled={!canEdit}
-                          checked={k.fragebogen_erfasst}
-                          onChange={(e) =>
-                            checklistFeldSpeichern(
-                              k,
-                              "fragebogen_erfasst",
-                              e.target.checked
-                            )
-                          }
-                        />
+                        {c ? (
+                          c.sv_fragebogen_bestanden ? (
+                            <span className="font-medium text-emerald-700">
+                              ✓ Bestanden
+                            </span>
+                          ) : c.sv_fragebogen_erfasst ? (
+                            <span className="font-medium text-red-600">
+                              ⚠ Nicht bestanden
+                            </span>
+                          ) : (
+                            <span className="text-neutral-400">
+                              Nicht erfasst
+                            </span>
+                          )
+                        ) : (
+                          <span className="text-neutral-400">—</span>
+                        )}
+                        {canEdit && k.aktivierter_employee_id && svJahr && (
+                          <div>
+                            <button
+                              type="button"
+                              className="btn-secondary text-xs"
+                              onClick={() =>
+                                setSvEditingId(
+                                  svEditingId === k.id ? null : k.id
+                                )
+                              }
+                            >
+                              {c?.sv_fragebogen_erfasst ? "Bearbeiten" : "Erfassen"}
+                            </button>
+                          </div>
+                        )}
                       </td>
                       <td>
                         <input
@@ -655,6 +686,26 @@ export default function AnreiselistePage() {
                         </td>
                       )}
                     </tr>
+                    {svEditingId === k.id &&
+                      k.aktivierter_employee_id &&
+                      svJahr && (
+                        <tr>
+                          <td colSpan={14}>
+                            <SvFragebogenFormular
+                              employeeId={k.aktivierter_employee_id}
+                              saisonJahr={svJahr}
+                              canEdit={canEdit}
+                              titel={`SV-Fragebogen ${svJahr} - ${k.name}, ${k.vorname}`}
+                              onGespeichert={() => {
+                                setSvEditingId(null);
+                                load();
+                              }}
+                              onAbbrechen={() => setSvEditingId(null)}
+                            />
+                          </td>
+                        </tr>
+                      )}
+                    </Fragment>
                   );
                 })}
               </tbody>

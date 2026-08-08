@@ -317,56 +317,6 @@ create table personal_kandidaten (
 
 create index idx_personal_kandidaten_status on personal_kandidaten (status);
 
--- Live berechnete Vollständigkeits-Prüfung für die Anreiseliste (und die
--- gespiegelte Anzeige im Personalstamm) - bewusst nicht gespeichert, damit
--- sie nie veraltet/falsch stehen bleiben kann, wenn z.B. anderswo (Personal
--- → Dokumente) eine fehlende Kopie nachträglich hochgeladen wird.
--- security_invoker = true (siehe unten): läuft mit den Rechten des
--- aufrufenden Nutzers, damit die RLS-Policies von personal_kandidaten UND
--- employee_documents (beide admin/hr-only) tatsächlich greifen.
-create view personal_kandidaten_checkliste as
-select
-  k.id as kandidat_id,
-  k.aktivierter_employee_id as employee_id,
-  k.gedruckt,
-  k.fragebogen_erfasst,
-  k.buskosten_erfasst,
-  exists (
-    select 1 from employee_documents d
-    where d.employee_id = k.aktivierter_employee_id
-      and d.kategorie = 'Ausweiskopie'
-  ) as ausweiskopie_vorhanden,
-  (
-    k.fuehrerschein_kategorien is null
-    or array_length(k.fuehrerschein_kategorien, 1) is null
-    or exists (
-      select 1 from employee_documents d
-      where d.employee_id = k.aktivierter_employee_id
-        and d.kategorie = 'Führerschein Kopie'
-    )
-  ) as fuehrerschein_erfuellt,
-  (
-    coalesce(k.verheiratet_laut_fragebogen, false) = false
-    or exists (
-      select 1 from employee_documents d
-      where d.employee_id = k.aktivierter_employee_id
-        and d.kategorie = 'Hochzeitsurkunde'
-    )
-  ) as hochzeitsurkunde_erfuellt,
-  (
-    k.lohnsteuerabzug_antrag_gewuenscht = false
-    or exists (
-      select 1 from employee_documents d
-      where d.employee_id = k.aktivierter_employee_id
-        and d.kategorie = 'Formular "Doppelte Haushaltsführung"'
-    )
-  ) as lohnsteuerabzug_erfuellt
-from personal_kandidaten k
-where k.status = 'anreiseliste';
-
-alter view personal_kandidaten_checkliste set (security_invoker = true);
-grant select on personal_kandidaten_checkliste to authenticated;
-
 -- ---------------------------------------------------------------------------
 -- 2a. SV-Fragebogen ("Fragebogen zur Feststellung der Versicherungspflicht/
 --     Versicherungsfreiheit rumänischer Saisonarbeitnehmer") - ein Datensatz
@@ -377,6 +327,8 @@ grant select on personal_kandidaten_checkliste to authenticated;
 --     Papierformular - KEIN automatisches Auslesen (Handschrift/Kästchen/
 --     rumänische Behördenstempel sind dafür nicht verlässlich genug bei
 --     einem Formular mit sozialversicherungsrechtlicher Bedeutung).
+--     Muss VOR personal_kandidaten_checkliste stehen, da diese View unten
+--     gegen sv_fragebogen/sv_fragebogen_auswertung nachschlägt.
 -- ---------------------------------------------------------------------------
 create table sv_fragebogen (
   id bigint generated always as identity primary key,
@@ -509,6 +461,77 @@ from sv_fragebogen f;
 -- greift (siehe RLS weiter unten).
 alter view sv_fragebogen_auswertung set (security_invoker = true);
 grant select on sv_fragebogen_auswertung to authenticated;
+
+-- Live berechnete Vollständigkeits-Prüfung für die Anreiseliste (und die
+-- gespiegelte Anzeige im Personalstamm) - bewusst nicht gespeichert, damit
+-- sie nie veraltet/falsch stehen bleiben kann, wenn z.B. anderswo (Personal
+-- → Dokumente) eine fehlende Kopie nachträglich hochgeladen wird.
+-- security_invoker = true (siehe unten): läuft mit den Rechten des
+-- aufrufenden Nutzers, damit die RLS-Policies von personal_kandidaten UND
+-- employee_documents (beide admin/hr-only) tatsächlich greifen.
+create or replace view personal_kandidaten_checkliste as
+select
+  k.id as kandidat_id,
+  k.aktivierter_employee_id as employee_id,
+  k.gedruckt,
+  k.fragebogen_erfasst,
+  k.buskosten_erfasst,
+  exists (
+    select 1 from employee_documents d
+    where d.employee_id = k.aktivierter_employee_id
+      and d.kategorie = 'Ausweiskopie'
+  ) as ausweiskopie_vorhanden,
+  (
+    k.fuehrerschein_kategorien is null
+    or array_length(k.fuehrerschein_kategorien, 1) is null
+    or exists (
+      select 1 from employee_documents d
+      where d.employee_id = k.aktivierter_employee_id
+        and d.kategorie = 'Führerschein Kopie'
+    )
+  ) as fuehrerschein_erfuellt,
+  (
+    coalesce(k.verheiratet_laut_fragebogen, false) = false
+    or exists (
+      select 1 from employee_documents d
+      where d.employee_id = k.aktivierter_employee_id
+        and d.kategorie = 'Hochzeitsurkunde'
+    )
+  ) as hochzeitsurkunde_erfuellt,
+  (
+    k.lohnsteuerabzug_antrag_gewuenscht = false
+    or exists (
+      select 1 from employee_documents d
+      where d.employee_id = k.aktivierter_employee_id
+        and d.kategorie = 'Formular "Doppelte Haushaltsführung"'
+    )
+  ) as lohnsteuerabzug_erfuellt,
+  -- SV-Fragebogen (Nutzer-Vorgabe 2026-08-08: löst das alte manuelle
+  -- fragebogen_erfasst-Häkchen als Vollständigkeits-Kriterium ab). Kein
+  -- eigenes Saison-Jahr-Feld auf personal_kandidaten - Jahr wird aus dem
+  -- geplanten Ankunftsdatum abgeleitet. "erfasst" = Datensatz existiert,
+  -- "bestanden" = zusätzlich laut Auswertung SV-frei plausibel möglich.
+  -- Ans Ende angehängt (nicht dazwischen) - siehe Kommentar bei
+  -- employee_sv_pruefung weiter unten zum Grund (Fehler 42P16).
+  exists (
+    select 1 from sv_fragebogen f
+    where f.employee_id = k.aktivierter_employee_id
+      and f.saison_jahr = extract(year from k.geplante_ankunft)::int
+  ) as sv_fragebogen_erfasst,
+  coalesce(
+    (
+      select fa.bestanden
+      from sv_fragebogen_auswertung fa
+      where fa.employee_id = k.aktivierter_employee_id
+        and fa.saison_jahr = extract(year from k.geplante_ankunft)::int
+    ),
+    false
+  ) as sv_fragebogen_bestanden
+from personal_kandidaten k
+where k.status = 'anreiseliste';
+
+alter view personal_kandidaten_checkliste set (security_invoker = true);
+grant select on personal_kandidaten_checkliste to authenticated;
 
 -- ---------------------------------------------------------------------------
 -- 3. Tageserfassung (ersetzt Sheets "Jan" bis "August")
