@@ -117,6 +117,11 @@ function ErfassungInner() {
   const [vorherigeEntries, setVorherigeEntries] = useState<
     Record<string, Record<string, WorkEntry>>
   >({});
+  // Ebenso, aber für die 2 kommenden Tage (z.B. um schon vorab erfasste
+  // Urlaubstage zu sehen) - Nutzer-Vorgabe 2026-08-08.
+  const [kommendeEntries, setKommendeEntries] = useState<
+    Record<string, Record<string, WorkEntry>>
+  >({});
   const [loading, setLoading] = useState(true);
   const [printGroupKey, setPrintGroupKey] = useState<string | null>(null);
   // Aus employee_fuehrerschein_kategorien (schmale, breit zugängliche
@@ -155,21 +160,24 @@ function ErfassungInner() {
     addDays(datum, -2),
     addDays(datum, -1),
   ];
+  const kommendeDaten = [addDays(datum, 1), addDays(datum, 2)];
 
   const loadAll = useCallback(async (forDate: string) => {
     setLoading(true);
     const supabase = getSupabaseClient();
     const vorherige = [addDays(forDate, -3), addDays(forDate, -2), addDays(forDate, -1)];
-    const [{ data: emp }, { data: we }, { data: gr }, { data: weVorher }] =
+    const kommende = [addDays(forDate, 1), addDays(forDate, 2)];
+    const [{ data: emp }, { data: we }, { data: gr }, { data: weVorher }, { data: weKommend }] =
       await Promise.all([
         supabase
           .from("employees")
-          .select("id, personal_nr, name, vorname, aktiv, gruppe_nr")
+          .select("id, personal_nr, name, vorname, herkunft, aktiv, gruppe_nr")
           .eq("aktiv", true)
           .order("name"),
         supabase.from("work_entries").select("*").eq("datum", forDate),
         supabase.from("arbeitsgruppen").select("*").order("reihenfolge"),
         supabase.from("work_entries").select("*").in("datum", vorherige),
+        supabase.from("work_entries").select("*").in("datum", kommende),
       ]);
     setEmployees((emp as Employee[]) ?? []);
     setGruppen((gr as Arbeitsgruppe[]) ?? []);
@@ -184,6 +192,12 @@ function ErfassungInner() {
       vorherigeMap[row.datum][row.employee_id] = row;
     });
     setVorherigeEntries(vorherigeMap);
+    const kommendeMap: Record<string, Record<string, WorkEntry>> = {};
+    ((weKommend as WorkEntry[]) ?? []).forEach((row) => {
+      if (!kommendeMap[row.datum]) kommendeMap[row.datum] = {};
+      kommendeMap[row.datum][row.employee_id] = row;
+    });
+    setKommendeEntries(kommendeMap);
     setLoading(false);
   }, []);
 
@@ -641,6 +655,7 @@ function ErfassungInner() {
                 <tr>
                   <th>Pers.-Nr.</th>
                   <th>Name</th>
+                  <th>Herkunft</th>
                   <th>Führerschein</th>
                   {vorherigeDaten.map((d) => (
                     <th
@@ -652,6 +667,15 @@ function ErfassungInner() {
                     </th>
                   ))}
                   <th>Stunden</th>
+                  {kommendeDaten.map((d) => (
+                    <th
+                      key={d}
+                      className="font-normal text-neutral-400"
+                      title="Nur zur Kontrolle - hier nicht bearbeitbar"
+                    >
+                      {kurzDatum(d)}
+                    </th>
+                  ))}
                   <th>Markierung</th>
                   <th>Notiz</th>
                   {canGruppeAendern && <th>Gruppe</th>}
@@ -666,6 +690,7 @@ function ErfassungInner() {
                       <td>
                         {emp.name}, {emp.vorname}
                       </td>
+                      <td>{emp.herkunft ?? "—"}</td>
                       <td>
                         {fuehrerschein[emp.id] ? (
                           <span className="text-emerald-700">
@@ -700,6 +725,14 @@ function ErfassungInner() {
                           title="↑/↓: vorherige/nächste Person · Umschalt+←/→: Vortag/Folgetag derselben Person"
                         />
                       </td>
+                      {kommendeDaten.map((d) => {
+                        const kommend = kommendeEntries[d]?.[emp.id];
+                        return (
+                          <td key={d} className="text-neutral-400">
+                            {kommend?.stunden ?? kommend?.markierung ?? "—"}
+                          </td>
+                        );
+                      })}
                       <td>
                         <select
                           defaultValue={entry?.markierung ?? ""}
@@ -711,6 +744,7 @@ function ErfassungInner() {
                         >
                           <option value="">—</option>
                           <option value="U">U (Urlaub/Feiertag)</option>
+                          <option value="F">F (Fahrer)</option>
                         </select>
                       </td>
                       <td>

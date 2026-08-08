@@ -28,7 +28,11 @@ Enthalten:
   Arbeitsgruppen (z.B. Sortierer, Träger) gruppiert mit Sprungleiste und
   Druckansicht pro Gruppe ("Gruppenstundenzettel"). Zur Kontrolle stehen
   die Stunden der letzten 3 Tage schreibgeschützt links neben dem
-  bearbeitbaren Tag; Pfeil-Buttons neben der Datumsauswahl springen einen
+  bearbeitbaren Tag, sowie zusätzlich die 2 kommenden Tage schreibgeschützt
+  rechts daneben; Herkunft-Spalte neben dem Namen. Markierung kennt neben
+  "U" (Urlaub/Feiertag) jetzt auch "F" (Fahrer) - reine Kennzeichnung
+  vorerst, soll später für die Fahrer-Prämie ausgewertet werden.
+  Pfeil-Buttons neben der Datumsauswahl springen einen
   Tag vor/zurück, Pfeiltasten hoch/runter im Stunden-Feld springen direkt
   zur nächsten/vorherigen Person, Umschalt+Pfeil rechts/links springt beim
   gleichen Mitarbeiter zum Folgetag/Vortag (praktisch zum Nacherfassen
