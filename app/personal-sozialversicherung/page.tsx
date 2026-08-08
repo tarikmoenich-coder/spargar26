@@ -6,7 +6,6 @@ import { useProfile } from "@/lib/useProfile";
 import PersonalTabs from "@/components/PersonalTabs";
 import SvFragebogenFormular, {
   SV_VERGLEICHS_FELDER,
-  jaNein,
 } from "@/components/SvFragebogenFormular";
 import type { Employee, SvFragebogenAuswertung } from "@/lib/types";
 
@@ -128,6 +127,14 @@ export default function SozialversicherungPage() {
                     (v) => !!f?.[v.key] !== !!fVorjahr[v.key]
                   )
                 : [];
+              // Rechtlich kann/darf nur genau einer der Blöcke 1/2/3/4/5/6
+              // zutreffen (Nutzer-Vorgabe 2026-08-08) - hier nur den
+              // zutreffenden zeigen statt aller Ja/Nein-Werte. Mehr als
+              // einer wäre ein Dateneingabe-Fehler und wird als solcher
+              // markiert statt ihn stillschweigend zu verstecken.
+              const zutreffendeFelder = f
+                ? SV_VERGLEICHS_FELDER.filter((v) => f[v.key] === true)
+                : [];
               return (
                 <Fragment key={emp.id}>
                   <tr className={emp.aktiv ? "" : "opacity-50"}>
@@ -159,10 +166,19 @@ export default function SozialversicherungPage() {
                     <td className="text-xs">
                       {!f ? (
                         <span className="text-neutral-400">—</span>
+                      ) : zutreffendeFelder.length === 0 ? (
+                        <span className="text-neutral-400">
+                          keine Angabe mit "Ja"
+                        </span>
+                      ) : zutreffendeFelder.length > 1 ? (
+                        <span
+                          className="font-medium text-red-600"
+                          title='Mehrere Angaben mit "Ja" gleichzeitig - rechtlich nicht möglich, bitte Eingabe prüfen'
+                        >
+                          ⚠ {zutreffendeFelder.map((v) => v.label).join(", ")}
+                        </span>
                       ) : (
-                        SV_VERGLEICHS_FELDER.map(
-                          (v) => `${v.label}: ${jaNein(f[v.key] as boolean | null)}`
-                        ).join(" · ")
+                        zutreffendeFelder[0].label
                       )}
                     </td>
                     <td>
