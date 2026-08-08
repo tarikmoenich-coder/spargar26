@@ -94,12 +94,32 @@ Enthalten:
 - Eigene Unterseite "Personal → Dokumente" (nur admin/hr, wie andere
   sensible Personaldaten): Tabelle wie im Personalstamm (Pers.-Nr.,
   Herkunft, Name, Vorname, Ort), dahinter eine Spalte je Dokument-
-  Kategorie (Hochzeitsurkunde, Ausweiskopie, Führerschein Kopie,
-  Arbeitsvertrag, Werks-/Mietvertrag, Formular "Doppelte
-  Haushaltsführung", Formular zur Feststellung der Versicherungspflicht,
-  Sonstiges) - leer, wenn noch nichts hochgeladen wurde, sonst anklickbar
-  zum Download. Dateien liegen in einem privaten Supabase-Storage-Bucket,
-  Downloads laufen über zeitlich begrenzte signierte Links.
+  Kategorie (Ausweiskopie, Führerschein Kopie, Arbeitsvertrag,
+  Werks-/Mietvertrag, Sonstiges neutral; Hochzeitsurkunde und Formular
+  "Doppelte Haushaltsführung" sanft gelb hinterlegt als Lohnsteuer-Themen;
+  Formular zur Feststellung der Versicherungspflicht sanft orange als
+  Sozialversicherungs-Thema, Stand 2026-08-08) - leer, wenn noch nichts
+  hochgeladen wurde, sonst anklickbar zum Download. Dateien liegen in
+  einem privaten Supabase-Storage-Bucket, Downloads laufen über zeitlich
+  begrenzte signierte Links. Hochzeitsurkunde bekommt zusätzlich einen
+  Hinweis "ggf. erneut prüfen", wenn die zuletzt hochgeladene Kopie älter
+  als ein Jahr ist und die Person laut diesjähriger "Doppelte
+  Haushaltsführung"-Erfassung verheiratet ist (Familienstand könnte sich
+  geändert haben - reine Erinnerung, keine echte Prüfung).
+- "Bestätigung für den Nachweis der doppelten Haushaltsführung" (gelbe
+  Spalten auf "Personal → Dokumente"): manuelles Eingabeformular je
+  Person und Saison-Jahr, analog zum SV-Fragebogen vom
+  ausgefüllten/gestempelten Papierformular (Gemeinde-Bestätigung)
+  abgetippt - Familienstand, bei nicht verheiratet zusätzlich die
+  Wohnsituation im Heimatland, sowie getrennt davon "Antrag auf
+  Lohnsteuerabzug beim Finanzamt gestellt" mit Datum (unterscheidet sich
+  von `lohnsteuerabzug_antrag_gewuenscht` in der Anreiseliste - das ist
+  nur der Wunsch der Person, dies hier der tatsächliche Stand der
+  Antragstellung). Name/Geburtsdatum/Adresse werden nicht dupliziert,
+  stehen schon im Personalstamm. Der gestempelte Papierbeleg bleibt
+  zusätzlich als Datei-Upload (Formular "Doppelte Haushaltsführung")
+  bestehen - der Stempel der Gemeinde ist der eigentliche Rechtsnachweis
+  und lässt sich nicht digital ersetzen.
 - Führerschein-Klassen (B, BE, C, CE) werden beim Hochladen einer
   "Führerschein Kopie" abgefragt und wirken sich breit aus: Personal,
   Stundenerfassung und Lohnübersicht zeigen für jede Person mit

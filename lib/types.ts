@@ -217,6 +217,52 @@ export interface SvFragebogenAuswertung extends SvFragebogen {
   bestanden: boolean;
 }
 
+// "Bestätigung für den Nachweis der doppelten Haushaltsführung" - analog
+// zum SV-Fragebogen ein Datensatz je Person UND Saison-Jahr. Name/
+// Geburtsdatum/Adresse stehen schon auf Employee, bewusst nicht dupliziert.
+export type Familienstand =
+  | 'verheiratet'
+  | 'ledig'
+  | 'verwitwet'
+  | 'geschieden_getrennt';
+
+export const FAMILIENSTAND_LABELS: Record<Familienstand, string> = {
+  verheiratet: 'Verheiratet',
+  ledig: 'Ledig',
+  verwitwet: 'Verwitwet',
+  geschieden_getrennt: 'Geschieden/getrennt lebend',
+};
+
+// Nur relevant, wenn Familienstand ungleich "verheiratet" ist (siehe
+// Formular).
+export type Wohnsituation =
+  | 'eigentuemer_mieter'
+  | 'lebenspartner'
+  | 'andere_verwandte'
+  | 'keine_angabe';
+
+export const WOHNSITUATION_LABELS: Record<Wohnsituation, string> = {
+  eigentuemer_mieter: 'Eigentümer/Mieter der Wohnung',
+  lebenspartner: 'Wohnt bei Lebenspartner(in)',
+  andere_verwandte: 'Wohnt bei anderen Verwandten',
+  keine_angabe: 'Keine Angabe möglich',
+};
+
+export interface DoppelteHaushaltsfuehrung {
+  id: number;
+  employee_id: string;
+  saison_jahr: number;
+  familienstand: Familienstand | null;
+  wohnsituation: Wohnsituation | null;
+  antrag_gestellt: boolean;
+  antrag_gestellt_am: string | null;
+  ausgefuellt_am: string | null;
+  erfasst_von: string | null;
+  erfasst_am: string;
+  updated_by: string | null;
+  updated_at: string;
+}
+
 export interface WorkEntry {
   id: number;
   employee_id: string;

@@ -532,6 +532,51 @@ from sv_fragebogen f;
 alter view sv_fragebogen_auswertung set (security_invoker = true);
 grant select on sv_fragebogen_auswertung to authenticated;
 
+-- ---------------------------------------------------------------------------
+-- 2b. Doppelte Haushaltsführung ("Bestätigung für den Nachweis der
+--     doppelten Haushaltsführung - saisonbeschäftigte Arbeitskräfte") -
+--     Nachweis für das Finanzamt, dass die Person im Heimatland einen
+--     eigenen Hausstand unterhält (Voraussetzung für den Lohnsteuerabzug-
+--     Antrag). Ein Datensatz je Person UND Saison-Jahr, analog zum
+--     SV-Fragebogen (Nutzer-Vorgabe 2026-08-08). Name/Geburtsdatum/Adresse
+--     stehen schon auf employees, werden hier bewusst nicht dupliziert -
+--     nur die formularspezifischen Angaben. Genau wie beim SV-Fragebogen:
+--     von der rumänischen Gemeinde bestätigt/gestempelt, daher manuell vom
+--     Papierformular abgetippt, kein automatisches Auslesen.
+-- ---------------------------------------------------------------------------
+create table doppelte_haushaltsfuehrung (
+  id bigint generated always as identity primary key,
+  employee_id uuid not null references employees (id) on delete restrict,
+  saison_jahr int not null,
+
+  familienstand text check (
+    familienstand in ('verheiratet', 'ledig', 'verwitwet', 'geschieden_getrennt')
+  ),
+  -- Nur laut Formular relevant/abgefragt, wenn familienstand <> 'verheiratet'.
+  wohnsituation text check (
+    wohnsituation in (
+      'eigentuemer_mieter', 'lebenspartner', 'andere_verwandte', 'keine_angabe'
+    )
+  ),
+
+  -- Antrag auf Lohnsteuerabzug (doppelte Haushaltsführung) beim Finanzamt
+  -- gestellt? Getrennt von "gewünscht" (personal_kandidaten.
+  -- lohnsteuerabzug_antrag_gewuenscht) - das ist der Wunsch der Person,
+  -- dies hier ist der tatsächliche Stand der Antragstellung.
+  antrag_gestellt boolean not null default false,
+  antrag_gestellt_am date,
+
+  -- Ort/Datum auf dem Papierformular
+  ausgefuellt_am date,
+
+  erfasst_von uuid references profiles (id) default auth.uid(),
+  erfasst_am timestamptz not null default now(),
+  updated_by uuid references profiles (id),
+  updated_at timestamptz not null default now(),
+
+  unique (employee_id, saison_jahr)
+);
+
 -- Live berechnete Vollständigkeits-Prüfung für die Anreiseliste (und die
 -- gespiegelte Anzeige im Personalstamm) - bewusst nicht gespeichert, damit
 -- sie nie veraltet/falsch stehen bleiben kann, wenn z.B. anderswo (Personal
@@ -1477,6 +1522,7 @@ alter table employee_documents enable row level security;
 alter table personal_kandidaten enable row level security;
 alter table sv_fragebogen enable row level security;
 alter table sv_fragebogen_vorbeschaeftigung enable row level security;
+alter table doppelte_haushaltsfuehrung enable row level security;
 
 -- profiles
 create policy "profiles_select" on profiles for select
@@ -1514,6 +1560,12 @@ create policy "sv_fragebogen_admin_hr_all" on sv_fragebogen for all
   with check (current_role_name() in ('admin', 'hr'));
 create policy "sv_fragebogen_vorbeschaeftigung_admin_hr_all"
   on sv_fragebogen_vorbeschaeftigung for all
+  using (current_role_name() in ('admin', 'hr'))
+  with check (current_role_name() in ('admin', 'hr'));
+
+-- Doppelte Haushaltsführung: gleiche Sensibilität wie SV-Fragebogen.
+create policy "doppelte_haushaltsfuehrung_admin_hr_all"
+  on doppelte_haushaltsfuehrung for all
   using (current_role_name() in ('admin', 'hr'))
   with check (current_role_name() in ('admin', 'hr'));
 
