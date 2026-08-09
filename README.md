@@ -169,7 +169,9 @@ Enthalten:
   Unterkunft-Abzüge, Vorschüsse, pauschale Lohnsteuer bei Abrechnungsart
   "pauschal": 5,275% vom Bruttolohn), filterbar nach Arbeitsgruppe - z.B.
   um alle zur Abrechnung vorgesehenen Personen vorab in eine Gruppe wie
-  "101 - Abrechnen" zu packen und dort gesammelt zu markieren
+  "101 - Abrechnen" zu packen und dort gesammelt zu markieren. Inaktive
+  Personen sind standardmäßig ausgeblendet (Checkbox "inaktive anzeigen",
+  gleiches Muster wie im Personalstamm, Stand 2026-08-09)
 - Einstellungen-Seite (nur admin): Verpflegungs-/Unterkunft-Satz pro Tag
   sowie Mindestlohn, versioniert je Saisonjahr, Default 10€/10€. Der
   Mindestlohn wird beim Neuanlegen einer Person (Personalstamm oder

@@ -56,6 +56,10 @@ export default function UebersichtPage() {
   const [rows, setRows] = useState<SeasonSummaryRow[]>([]);
   const [gruppen, setGruppen] = useState<Arbeitsgruppe[]>([]);
   const [gruppeFilter, setGruppeFilter] = useState("");
+  // Standardmäßig ausgeblendet (Nutzer-Vorgabe 2026-08-09) - bereits
+  // abgerechnete/inaktive Personen sollen die Lohnübersicht nicht
+  // zumüllen. Gleiches Muster wie "inaktive anzeigen" im Personalstamm.
+  const [showInactive, setShowInactive] = useState(false);
   // Aus employee_fuehrerschein_kategorien (schmale, breit zugängliche
   // Sicht) - zeigt nur, DASS und WOFÜR jemand einen Führerschein hat.
   const [fuehrerschein, setFuehrerschein] = useState<
@@ -252,13 +256,15 @@ export default function UebersichtPage() {
   // Damit eine Mitarbeiterin z.B. alle zur Abrechnung vorgesehenen Personen
   // vorab in eine Gruppe (z.B. "101 - Abrechnen") packen kann und diese hier
   // gefiltert und komplett auf einmal markiert werden können.
-  const gefilterteRows = !gruppeFilter
-    ? rows
-    : rows.filter((r) =>
-        gruppeFilter === OHNE_GRUPPE_KEY
+  const gefilterteRows = rows
+    .filter((r) => showInactive || r.aktiv)
+    .filter((r) =>
+      !gruppeFilter
+        ? true
+        : gruppeFilter === OHNE_GRUPPE_KEY
           ? !r.gruppe_nr
           : r.gruppe_nr === gruppeFilter
-      );
+    );
 
   // Druck: nach dem Öffnen des Druckdialogs (oder Abbruch) zurücksetzen.
   useEffect(() => {
@@ -485,6 +491,14 @@ export default function UebersichtPage() {
             ))}
             <option value={OHNE_GRUPPE_KEY}>Ohne Gruppe</option>
           </select>
+        </label>
+        <label className="flex items-center gap-1 text-sm">
+          <input
+            type="checkbox"
+            checked={showInactive}
+            onChange={(e) => setShowInactive(e.target.checked)}
+          />
+          inaktive anzeigen
         </label>
         <label className="text-sm">
           Monat{" "}
