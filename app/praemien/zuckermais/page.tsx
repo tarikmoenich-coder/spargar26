@@ -61,6 +61,7 @@ export default function PraemienZuckermaisPage() {
   const [loading, setLoading] = useState(true);
   const [entwurf, setEntwurf] = useState<Record<string, Entwurf>>({});
   const [speichernId, setSpeichernId] = useState<string | null>(null);
+  const [speichernAlle, setSpeichernAlle] = useState(false);
   const [fehler, setFehler] = useState<string | null>(null);
   const [druckModus, setDruckModus] = useState(false);
 
@@ -179,6 +180,43 @@ export default function PraemienZuckermaisPage() {
     load();
   }
 
+  // Speichert alle sichtbaren (gefilterten) Zeilen mit mindestens Kisten
+  // oder Stunden > 0 in einem einzigen Upsert, statt Zeile für Zeile zu
+  // klicken. Zeilen ohne jeglichen Wert werden übersprungen (kein
+  // unnötiges Anlegen leerer Einträge) - zum gezielten Nullsetzen eines
+  // bereits erfassten Werts weiterhin den einzelnen "Speichern"-Knopf
+  // dieser Zeile nutzen.
+  async function alleSpeichern() {
+    setSpeichernAlle(true);
+    setFehler(null);
+    const supabase = getSupabaseClient();
+    const zuSpeichern = gefiltert
+      .map((emp) => {
+        const werte = werteFuer(emp.id);
+        const kisten = Number(werte.kisten) || 0;
+        const stunden = Number(werte.stunden) || 0;
+        if (kisten === 0 && stunden === 0) return null;
+        return { employee_id: emp.id, datum, kisten, stunden };
+      })
+      .filter((e): e is NonNullable<typeof e> => e !== null);
+
+    if (zuSpeichern.length === 0) {
+      setSpeichernAlle(false);
+      return;
+    }
+
+    const { error } = await supabase
+      .from("zuckermais_rohdaten")
+      .upsert(zuSpeichern, { onConflict: "employee_id,datum" });
+    setSpeichernAlle(false);
+    if (error) {
+      setFehler(error.message);
+      return;
+    }
+    setEntwurf({});
+    load();
+  }
+
   async function neuenSatzSpeichern() {
     if (!neuNorm || !neuSatzProKolben) {
       setSatzFehler("Norm und Satz je Kolben sind Pflichtfelder.");
@@ -281,6 +319,14 @@ export default function PraemienZuckermaisPage() {
             ))}
           </select>
         </label>
+        <button
+          type="button"
+          className="btn"
+          disabled={speichernAlle}
+          onClick={alleSpeichern}
+        >
+          Alle speichern
+        </button>
         <button
           type="button"
           className="btn-secondary"
