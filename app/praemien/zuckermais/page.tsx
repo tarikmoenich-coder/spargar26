@@ -60,7 +60,6 @@ export default function PraemienZuckermaisPage() {
   const [alleSaetze, setAlleSaetze] = useState<ZuckermaisSatz[]>([]);
   const [loading, setLoading] = useState(true);
   const [entwurf, setEntwurf] = useState<Record<string, Entwurf>>({});
-  const [speichernId, setSpeichernId] = useState<string | null>(null);
   const [speichernAlle, setSpeichernAlle] = useState(false);
   const [fehler, setFehler] = useState<string | null>(null);
   const [druckModus, setDruckModus] = useState(false);
@@ -153,39 +152,11 @@ export default function PraemienZuckermaisPage() {
     return Math.max((kolben - norm) * aktuellerSatz.satz_pro_kolben, 0);
   }
 
-  async function speichern(empId: string) {
-    const werte = werteFuer(empId);
-    setSpeichernId(empId);
-    setFehler(null);
-    const supabase = getSupabaseClient();
-    const { error } = await supabase.from("zuckermais_rohdaten").upsert(
-      {
-        employee_id: empId,
-        datum,
-        kisten: Number(werte.kisten) || 0,
-        stunden: Number(werte.stunden) || 0,
-      },
-      { onConflict: "employee_id,datum" }
-    );
-    setSpeichernId(null);
-    if (error) {
-      setFehler(error.message);
-      return;
-    }
-    setEntwurf((prev) => {
-      const next = { ...prev };
-      delete next[empId];
-      return next;
-    });
-    load();
-  }
-
   // Speichert alle sichtbaren (gefilterten) Zeilen mit mindestens Kisten
-  // oder Stunden > 0 in einem einzigen Upsert, statt Zeile für Zeile zu
-  // klicken. Zeilen ohne jeglichen Wert werden übersprungen (kein
-  // unnötiges Anlegen leerer Einträge) - zum gezielten Nullsetzen eines
-  // bereits erfassten Werts weiterhin den einzelnen "Speichern"-Knopf
-  // dieser Zeile nutzen.
+  // oder Stunden > 0 in einem einzigen Upsert (einzelne Speichern-Knöpfe je
+  // Zeile gibt es bewusst nicht mehr - Nutzer-Vorgabe 2026-08-09, "Alle
+  // speichern" reicht). Zeilen ohne jeglichen Wert werden übersprungen
+  // (kein unnötiges Anlegen leerer Einträge).
   async function alleSpeichern() {
     setSpeichernAlle(true);
     setFehler(null);
@@ -377,7 +348,6 @@ export default function PraemienZuckermaisPage() {
                   Kolben Norm
                 </th>
                 <th>Prämie €</th>
-                <th></th>
               </tr>
             </thead>
             <tbody>
@@ -431,16 +401,6 @@ export default function PraemienZuckermaisPage() {
                       {kolbenNorm ? fmt(kolbenNorm) : "—"}
                     </td>
                     <td className="font-medium">{fmt(praemie)}</td>
-                    <td>
-                      <button
-                        type="button"
-                        className="btn-secondary text-xs"
-                        disabled={speichernId === emp.id}
-                        onClick={() => speichern(emp.id)}
-                      >
-                        Speichern
-                      </button>
-                    </td>
                   </tr>
                 );
               })}

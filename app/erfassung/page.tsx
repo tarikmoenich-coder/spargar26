@@ -679,7 +679,6 @@ function ErfassungInner() {
                   ))}
                   <th>{t("gemeinsam.markierung")}</th>
                   <th>{t("gemeinsam.notiz")}</th>
-                  {canGruppeAendern && <th>{t("erfassung.gruppe")}</th>}
                 </tr>
               </thead>
               <tbody>
