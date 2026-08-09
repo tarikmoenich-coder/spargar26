@@ -724,6 +724,42 @@ create table auszahlungsbelege (
 );
 
 -- ---------------------------------------------------------------------------
+-- 4b. Kautionsübergabe (Nutzer-Vorgabe 2026-08-09): die bei der Auszahlung
+--     einbehaltene Zimmerkaution wird real an den Hausmeister übergeben -
+--     erst dann wird sie auch als tatsächliche Kassenausgabe fällig (die
+--     Kaution mindert vorher schon den Auszahlungsbetrag der Person, aber
+--     NICHT den Kassenbestand - das macht erst diese Übergabe). Analog zum
+--     Vorschuss-Übergabebeleg: eine Zusammenfassung (wer/wann/wie viel an
+--     wen) plus die enthaltenen Personen/Beträge, mit EINEM
+--     Unterschriftsfeld für den Hausmeister (nicht je Person). Immer bar,
+--     da eine physische Kaution.
+-- ---------------------------------------------------------------------------
+create table kautionsuebergaben (
+  id bigint generated always as identity primary key,
+  belegnummer text not null unique,
+  -- Der Auszahlungsbeleg, aus dem die Kautionen dieser Übergabe stammen -
+  -- die Liste erscheint direkt im Anschluss an diesen Beleg (Nutzer-
+  -- Vorgabe: "muss unter den Auszahlungsbeleg").
+  auszahlungsbeleg_id bigint not null references auszahlungsbelege (id),
+  uebergeben_an text not null,
+  betrag_summe numeric(10, 2) not null check (betrag_summe > 0),
+  erstellt_von uuid references profiles (id) default auth.uid(),
+  erstellt_am timestamptz not null default now(),
+  storniert boolean not null default false,
+  storniert_am timestamptz,
+  storniert_von uuid references profiles (id),
+  storno_grund text
+);
+
+-- n:m-artig, da eine Übergabe mehrere Personen/Kautionen bündelt.
+create table kautionsuebergabe_personen (
+  kautionsuebergabe_id bigint not null references kautionsuebergaben (id) on delete restrict,
+  employee_id uuid not null references employees (id) on delete restrict,
+  betrag numeric(10, 2) not null,
+  primary key (kautionsuebergabe_id, employee_id)
+);
+
+-- ---------------------------------------------------------------------------
 -- 5. Saison-Boni & Zulagen (aus Sheet "Summen": Akkord, Prämien, Fahrer, Bus)
 -- ---------------------------------------------------------------------------
 create table season_bonuses (
@@ -743,6 +779,17 @@ create table season_bonuses (
   -- Fahrerkaution nur bei Fahrern (die auch fahrer_zulage bekommen).
   fahrer_kaution numeric(10, 2) not null default 0,
   zimmer_kaution numeric(10, 2) not null default 0,
+  -- Arbeitskleidung (Nutzer-Vorgabe 2026-08-09): nur Hose/Jacke/Stiefel
+  -- werden berechnet - Spargelmesser/Feile/Handschuhe sind
+  -- Verbrauchsgegenstände, werden beim Tausch gegen das Altgerät
+  -- kostenlos ersetzt und deshalb hier nicht erfasst. Anzahl statt
+  -- direktem Betrag, da der Preis je Stück fest in verpflegungssaetze
+  -- hinterlegt ist (Anzahl × Satz = Abzug, siehe season_summary).
+  -- Erfasst von der Rolle zeiterfassung, die die Kleidung ausgibt - siehe
+  -- arbeitskleidung_setzen weiter unten.
+  kleidung_hose_anzahl int not null default 0,
+  kleidung_jacke_anzahl int not null default 0,
+  kleidung_stiefel_anzahl int not null default 0,
   -- Bei abrechnungsart 'lohnsteuerklasse_1'/'sozialversicherungspflichtig'
   -- kann/darf die App die Lohnsteuer nicht selbst berechnen (das macht ein
   -- echtes Lohnprogramm) - entspricht Sheet "Summen", Spalte BA
@@ -874,6 +921,51 @@ $$;
 
 grant execute on function kandidat_buskosten_setzen(uuid, numeric) to authenticated;
 
+-- Arbeitskleidung-Ausgabe (Nutzer-Vorgabe 2026-08-09): landet in
+-- season_bonuses.kleidung_*_anzahl (fließt automatisch in die
+-- Lohnübersicht ein, siehe season_summary), ist dort aber laut
+-- season_bonuses_rw nur admin/lohnabrechnung erlaubt - die Ausgabe der
+-- Kleidung übernimmt aber die Rolle zeiterfassung. Gleiches kontrolliertes
+-- Ausnahme-Muster wie kandidat_buskosten_setzen oben, statt season_bonuses
+-- generell für zeiterfassung zu öffnen (die dann auch Akkord/Prämien/
+-- Kautionen ändern könnte).
+create or replace function arbeitskleidung_setzen(
+  p_employee_id uuid,
+  p_saison_jahr int,
+  p_hose_anzahl int,
+  p_jacke_anzahl int,
+  p_stiefel_anzahl int
+)
+returns void language plpgsql security definer as $$
+begin
+  if current_role_name() not in ('admin', 'hr', 'zeiterfassung') then
+    raise exception 'Keine Berechtigung für die Arbeitskleidung-Ausgabe';
+  end if;
+
+  if p_hose_anzahl < 0 or p_jacke_anzahl < 0 or p_stiefel_anzahl < 0 then
+    raise exception 'Anzahl darf nicht negativ sein';
+  end if;
+
+  insert into season_bonuses (
+    employee_id, saison_jahr,
+    kleidung_hose_anzahl, kleidung_jacke_anzahl, kleidung_stiefel_anzahl
+  )
+  values (
+    p_employee_id, p_saison_jahr,
+    p_hose_anzahl, p_jacke_anzahl, p_stiefel_anzahl
+  )
+  on conflict (employee_id, saison_jahr)
+  do update set
+    kleidung_hose_anzahl = excluded.kleidung_hose_anzahl,
+    kleidung_jacke_anzahl = excluded.kleidung_jacke_anzahl,
+    kleidung_stiefel_anzahl = excluded.kleidung_stiefel_anzahl,
+    updated_by = auth.uid(),
+    updated_at = now();
+end;
+$$;
+
+grant execute on function arbeitskleidung_setzen(uuid, int, int, int, int) to authenticated;
+
 -- ---------------------------------------------------------------------------
 -- 6. Verpflegungs-/Wohnen-Sätze (ADR-007: versioniert je Saisonjahr, über
 --    die Einstellungen-Seite konfigurierbar, Default 10€/Tag je Kategorie)
@@ -887,12 +979,35 @@ create table verpflegungssaetze (
   -- Dient als Vorbelegung für den Stundenlohn neu angelegter/geplanter
   -- Personen (personal_kandidaten.stundenlohn, employees.stundenlohn beim
   -- direkten Neuanlegen) - bleibt dort weiterhin frei änderbar.
-  mindestlohn numeric(6, 2)
+  mindestlohn numeric(6, 2),
+  -- Arbeitskleidung-Preise je Stück (Nutzer-Vorgabe 2026-08-09), fest
+  -- hinterlegt statt bei jeder Ausgabe neu eingetippt - kein Default,
+  -- admin muss sie bewusst setzen (siehe Einstellungen-Seite).
+  kleidung_hose numeric(6, 2),
+  kleidung_jacke numeric(6, 2),
+  kleidung_stiefel numeric(6, 2)
 );
 
 insert into verpflegungssaetze (saison_jahr, verpflegung, wohnen)
 values (extract(year from current_date)::int, 10.00, 10.00)
 on conflict (saison_jahr) do nothing;
+
+-- Schmale, für admin/hr/zeiterfassung lesbare Sicht auf die bereits
+-- ausgegebene Arbeitskleidung - season_bonuses selbst bleibt für
+-- zeiterfassung nicht lesbar (season_bonuses_rw ist admin/lohnabrechnung-
+-- only), aber genau diese Information wird für die Ausgabe gebraucht
+-- (siehe arbeitskleidung_setzen). Bewusst NICHT security_invoker - zeigt
+-- nur Stückzahlen, keine Beträge/Prämien/Kautionen.
+create or replace view employee_kleidung_ausgabe as
+select
+  employee_id,
+  saison_jahr,
+  kleidung_hose_anzahl,
+  kleidung_jacke_anzahl,
+  kleidung_stiefel_anzahl
+from season_bonuses;
+
+grant select on employee_kleidung_ausgabe to authenticated;
 
 -- ---------------------------------------------------------------------------
 -- 7. Zentrale Belegnummern-Vergabe (ADR-010: atomar, auch bei gleichzeitiger
@@ -1207,10 +1322,17 @@ grant select on employee_erster_arbeitstag to authenticated;
 --     Zwei Zwischenwerte, wie im bisherigen Excel-Workflow üblich:
 --       netto              = Bruttolohn - Lohnsteuer
 --       auszahlungsbetrag  = netto - Verpflegung - Unterkunft - Vorschüsse
---                            - Buskosten
+--                            - Buskosten - Kautionen - Arbeitskleidung
 --     Buskosten (bus_hin/bus_rueck): vorfinanzierte Heimreise, wird wie ein
 --     Vorschuss abgezogen, aber separat ausgewiesen ("damit es zu keinen
---     Missverständnissen kommen kann").
+--     Missverständnissen kommen kann"). Arbeitskleidung (Hose/Jacke/
+--     Stiefel, Nutzer-Vorgabe 2026-08-09) genauso: Anzahl × fester Satz aus
+--     verpflegungssaetze, ebenfalls separat ausgewiesen.
+--     WICHTIG: die äußerste SELECT-Liste hier ist bewusst explizit
+--     ausgeschrieben statt "steuer.*" zu nutzen, damit neue Spalten (wie
+--     kleidung_betrag) garantiert ans Ende angehängt werden und nicht die
+--     Position bestehender Spalten verschieben - siehe Kommentar bei
+--     sv_fragebogen_auswertung weiter oben zum Grund (Fehler 42P16).
 -- ---------------------------------------------------------------------------
 create or replace view season_summary as
 with base as (
@@ -1256,7 +1378,11 @@ with base as (
       where ar.employee_id = e.id
         and a.storniert = false
         and extract(year from a.datum) = we.saison_jahr
-    ), 0) as vorschuss_summe
+    ), 0) as vorschuss_summe,
+    coalesce(b.kleidung_hose_anzahl, 0) * coalesce(v.kleidung_hose, 0)
+      + coalesce(b.kleidung_jacke_anzahl, 0) * coalesce(v.kleidung_jacke, 0)
+      + coalesce(b.kleidung_stiefel_anzahl, 0) * coalesce(v.kleidung_stiefel, 0)
+      as kleidung_betrag
   from employees e
   join lateral (
     select
@@ -1291,12 +1417,38 @@ steuer as (
   from base
 )
 select
-  steuer.*,
+  steuer.employee_id,
+  steuer.personal_nr,
+  steuer.name,
+  steuer.vorname,
+  steuer.gruppe_nr,
+  steuer.abrechnungsart,
+  steuer.aktiv,
+  steuer.saison_jahr,
+  steuer.gesamt_stunden,
+  steuer.anwesenheitstage,
+  steuer.praemien_summe,
+  steuer.basis_brutto,
+  steuer.bruttolohn,
+  steuer.netto_extern,
+  steuer.abgerechnet_am,
+  steuer.snapshot,
+  steuer.auszahlungsbeleg_id,
+  steuer.bus_kosten,
+  steuer.fahrer_kaution,
+  steuer.zimmer_kaution,
+  steuer.abzug_verpflegung,
+  steuer.abzug_wohnen,
+  steuer.vorschuss_summe,
+  steuer.lohnsteuer_pauschal,
+  steuer.netto,
   -- NULL, solange bei nicht-pauschalen Abrechnungsarten noch kein
   -- netto_extern eingetragen wurde - bewusst kein Platzhalterwert.
-  netto - abzug_verpflegung - abzug_wohnen - vorschuss_summe - bus_kosten
-    - fahrer_kaution - zimmer_kaution
-    as auszahlungsbetrag
+  steuer.netto - steuer.abzug_verpflegung - steuer.abzug_wohnen
+    - steuer.vorschuss_summe - steuer.bus_kosten - steuer.fahrer_kaution
+    - steuer.zimmer_kaution - steuer.kleidung_betrag
+    as auszahlungsbetrag,
+  steuer.kleidung_betrag
 from steuer;
 
 grant select on season_summary to authenticated;
@@ -1580,6 +1732,8 @@ alter table work_entries enable row level security;
 alter table periods enable row level security;
 alter table season_bonuses enable row level security;
 alter table auszahlungsbelege enable row level security;
+alter table kautionsuebergaben enable row level security;
+alter table kautionsuebergabe_personen enable row level security;
 alter table verpflegungssaetze enable row level security;
 alter table advances enable row level security;
 alter table advance_recipients enable row level security;
@@ -1701,6 +1855,21 @@ create policy "season_bonuses_rw" on season_bonuses for all
 -- die security-definer Funktion saison_abrechnen_batch (wie Audit-Log).
 create policy "auszahlungsbelege_select" on auszahlungsbelege for select
   using (auth.uid() is not null);
+
+-- Kautionsübergabe: admin/lohnabrechnung (Auszahlungen-Seite) und kasse
+-- (Kassenbuch-Auswirkung) dürfen anlegen/stornieren, alle mit
+-- Kassenbuch-Einblick dürfen lesen.
+create policy "kautionsuebergaben_select" on kautionsuebergaben for select
+  using (current_role_name() in ('admin', 'hr', 'kasse', 'lohnabrechnung', 'pruefer', 'management'));
+create policy "kautionsuebergaben_write" on kautionsuebergaben for insert
+  with check (current_role_name() in ('admin', 'kasse', 'lohnabrechnung'));
+create policy "kautionsuebergaben_update" on kautionsuebergaben for update
+  using (current_role_name() in ('admin', 'kasse', 'lohnabrechnung'));
+create policy "kautionsuebergabe_personen_select" on kautionsuebergabe_personen for select
+  using (current_role_name() in ('admin', 'hr', 'kasse', 'lohnabrechnung', 'pruefer', 'management'));
+create policy "kautionsuebergabe_personen_write" on kautionsuebergabe_personen for insert
+  with check (current_role_name() in ('admin', 'kasse', 'lohnabrechnung'));
+
 create policy "verpflegungssaetze_rw" on verpflegungssaetze for all
   using (is_admin()) with check (is_admin());
 create policy "advances_select" on advances for select

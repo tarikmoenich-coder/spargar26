@@ -581,6 +581,9 @@ export default function UebersichtPage() {
                 <th>Buskosten €</th>
                 <th>Fahrerkaution €</th>
                 <th>Zimmerkaution €</th>
+                <th title="Hose/Jacke/Stiefel, erfasst über Stundenerfassung → Arbeitskleidung">
+                  Kleidung €
+                </th>
                 <th>Auszahlungsbetrag €</th>
                 <th>Status</th>
               </tr>
@@ -695,6 +698,7 @@ export default function UebersichtPage() {
                       />
                     )}
                   </td>
+                  <td>{fmt(anzeige(r, "kleidung_betrag"))}</td>
                   <td className="font-medium">
                     {fmt(anzeige(r, "auszahlungsbetrag"))}
                     {weichtAb(r) && (
@@ -928,6 +932,7 @@ export default function UebersichtPage() {
                 <th>Buskosten €</th>
                 <th>Fahrerkaution €</th>
                 <th>Zimmerkaution €</th>
+                <th>Kleidung €</th>
                 <th>Auszahlung €</th>
                 <th>Unterschrift</th>
               </tr>
@@ -954,6 +959,7 @@ export default function UebersichtPage() {
                   <td>{fmt(anzeige(r, "bus_kosten"))}</td>
                   <td>{fmt(anzeige(r, "fahrer_kaution"))}</td>
                   <td>{fmt(anzeige(r, "zimmer_kaution"))}</td>
+                  <td>{fmt(anzeige(r, "kleidung_betrag"))}</td>
                   <td className="font-semibold">
                     {fmt(anzeige(r, "auszahlungsbetrag"))}
                   </td>
@@ -963,7 +969,7 @@ export default function UebersichtPage() {
             </tbody>
             <tfoot>
               <tr>
-                <td colSpan={12} className="text-right font-semibold">
+                <td colSpan={13} className="text-right font-semibold">
                   Summe Auszahlung
                 </td>
                 <td className="font-semibold">

@@ -220,16 +220,38 @@ Enthalten:
   Rückzahlung nach Fahrzeug-/Zimmerkontrolle läuft weiterhin außerhalb der
   App in bar - die App bildet aktuell nur den Abzug ab, keinen offen/
   zurückgezahlt-Status
+- "Stundenerfassung → Arbeitskleidung" (admin/hr/zeiterfassung, Stand
+  2026-08-09): Ausgabe von Arbeitshose/-jacke/Gummistiefeln je Person
+  (Anzahl statt Betrag - fester Preis je Stück in den Einstellungen) -
+  landet wie Buskosten/Kautionen als eigene, sichtbare Abzugsposition im
+  Auszahlungsbetrag. Spargelmesser, Feile, Handschuhe sind
+  Verbrauchsgegenstände (kostenloser Tausch gegen das Altgerät) und werden
+  bewusst nicht erfasst. Erfasst über eine kontrollierte
+  security-definer-Ausnahme (season_bonuses selbst bleibt für
+  zeiterfassung nicht lesbar/schreibbar)
+- Kautionsübergabe an den Hausmeister (Stand 2026-08-09): die bei der
+  Auszahlung einbehaltene Zimmerkaution mindert zunächst nur den
+  Auszahlungsbetrag der Person, nicht den Kassenbestand - erst wenn sie
+  real an den Hausmeister übergeben wird (admin/kasse/lohnabrechnung,
+  Beleg direkt auf der Auszahlungen-Seite unter dem jeweiligen
+  Auszahlungsbeleg erstellbar), wird sie auch als echte Kassenausgabe im
+  Kassenbuch verbucht. Druck erzeugt wie bei den Vorschüssen zwei Blätter
+  im Anschluss an den Auszahlungsbeleg: eine Zusammenfassung (Personen,
+  Beträge, Summe, "Übergeben an") und eine zweite Liste mit einem
+  einzigen Unterschriftsfeld für den Hausmeister (ein Feld für die ganze
+  Übergabe, nicht je Person). Storno statt Löschen, macht die
+  Kassenausgabe wieder rückgängig
 - Zahlungsart (Bar/Überweisung) bei "Jetzt Abrechnen" wählbar und je
   Auszahlungsbeleg gespeichert - für Personen, die schon abgereist sind
   und erst später per Überweisung ausgezahlt werden (siehe Arbeitsgruppe
   "Ausstehend/Abgereist" als Merkposten dafür)
 - Kassenbuch (Einzahlungen) mit Saldo, einfacher Kassenprüfung und Log der
-  nachträglichen Vorschuss-Korrekturen ("Kassenbewegungen") - Bar-Vorschüsse
-  und Bar-Auszahlungen (aus "Jetzt Abrechnen") mindern automatisch den
-  Kassenbestand, Überweisungen nicht. Unter "Prüfung durchführen" steht
-  zusätzlich eine Liste aller Bewegungen (Vorschuss, Vorschuss-Korrektur,
-  Auszahlung) seit der letzten Prüfung, mit Datum, Belegnummer und
+  nachträglichen Vorschuss-Korrekturen ("Kassenbewegungen") - Bar-Vorschüsse,
+  Bar-Auszahlungen (aus "Jetzt Abrechnen") und Kautionsübergaben an den
+  Hausmeister mindern automatisch den Kassenbestand, Überweisungen nicht.
+  Unter "Prüfung durchführen" steht zusätzlich eine Liste aller Bewegungen
+  (Vorschuss, Vorschuss-Korrektur, Auszahlung, Kautionsübergabe) seit der
+  letzten Prüfung, mit Datum, Belegnummer und
   Anwender, zur Durchsicht vor dem Zählen der Kasse. Nach Freigabe einer
   Prüfung (nur admin/pruefer, zweistufig - kasse führt die Prüfung durch,
   pruefer gibt frei) werden alle Belege im geprüften Zeitraum gesperrt
@@ -378,7 +400,7 @@ nicht nur im Menü versteckt.
 |---|---|---|
 | `admin` | Alle | Voller Zugriff auf alles, inkl. Einstellungen, Kassenprüfungen freigeben |
 | `hr` | Personal, Stundenerfassung, Suche, Lohn, Management | Personalstamm + Dokumente voll pflegen (inkl. SV-Nr./IBAN/Ausweiskopien), Personalplanung + Anreiseliste (Kandidaten, Schwarze Liste, Buskosten) verwalten, Stunden erfassen, Lohnübersicht/Vorschüsse nur ansehen (nicht bearbeiten), Monatsabschluss sperren/öffnen |
-| `zeiterfassung` | Stundenerfassung, Suche | Nur Stunden eintragen/ändern; sieht Personal nur mit eingeschränkten Feldern (keine SV-Nr./IBAN etc.) |
+| `zeiterfassung` | Stundenerfassung, Suche | Nur Stunden eintragen/ändern; sieht Personal nur mit eingeschränkten Feldern (keine SV-Nr./IBAN etc.); erfasst zusätzlich die Ausgabe von Arbeitskleidung (Stundenerfassung → Arbeitskleidung) |
 | `kasse` | Suche, Lohn, Kassenbuch | Vorschüsse erfassen/stornieren/korrigieren, Kassenbuch führen, Kassenprüfung durchführen |
 | `lohnabrechnung` | Suche, Lohn | Lohnübersicht ansehen **und bearbeiten** (Buskosten, Kautionen, "Jetzt Abrechnen"), Vorschüsse einsehen |
 | `pruefer` | Suche, Lohn, Kassenbuch | Nur lesen, außer: Kassenprüfungen freigeben; einzige Nicht-Admin-Rolle mit Audit-Log-Einsicht |

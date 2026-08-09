@@ -8,6 +8,7 @@ import type {
   AuszahlungsbelegSummary,
   CashDeposit,
   Kassenbewegung,
+  Kautionsuebergabe,
   ProfilName,
 } from "@/lib/types";
 
@@ -58,6 +59,12 @@ export default function KassePage() {
     AuszahlungsbelegSummary[]
   >([]);
   const [bewegungen, setBewegungen] = useState<Kassenbewegung[]>([]);
+  // Kautionsübergaben an den Hausmeister (Nutzer-Vorgabe 2026-08-09) -
+  // immer bar, mindern den Kassenbestand erst mit der Übergabe (nicht
+  // schon bei der Auszahlung selbst).
+  const [kautionsuebergaben, setKautionsuebergaben] = useState<
+    Kautionsuebergabe[]
+  >([]);
   const [namenVon, setNamenVon] = useState<Record<string, string>>({});
   const [checks, setChecks] = useState<CashCheckRow[]>([]);
   const [toleranz, setToleranz] = useState(50);
@@ -82,6 +89,7 @@ export default function KassePage() {
       { data: adv },
       { data: az },
       { data: bew },
+      { data: kaution },
       { data: chk },
       { data: settings },
       { data: namen },
@@ -114,6 +122,12 @@ export default function KassePage() {
         .order("zeitstempel", { ascending: false })
         .limit(100),
       supabase
+        .from("kautionsuebergaben")
+        .select("*")
+        .eq("storniert", false)
+        .order("erstellt_am", { ascending: false })
+        .limit(200),
+      supabase
         .from("cash_checks")
         .select("*")
         .order("check_zeit", { ascending: false })
@@ -131,6 +145,7 @@ export default function KassePage() {
     setBarVorschuesse((adv as Advance[]) ?? []);
     setAuszahlungenBar((az as AuszahlungsbelegSummary[]) ?? []);
     setBewegungen((bew as Kassenbewegung[]) ?? []);
+    setKautionsuebergaben((kaution as Kautionsuebergabe[]) ?? []);
     setChecks((chk as CashCheckRow[]) ?? []);
     if (settings) setToleranz(Number(settings.toleranz_euro));
     const namenMap: Record<string, string> = {};
@@ -155,7 +170,12 @@ export default function KassePage() {
     (sum, a) => sum + Number(a.summe_auszahlungsbetrag ?? 0),
     0
   );
-  const saldo = einzahlungenSumme - vorschuesseSumme - auszahlungenSumme;
+  const kautionsuebergabenSumme = kautionsuebergaben.reduce(
+    (sum, k) => sum + Number(k.betrag_summe),
+    0
+  );
+  const saldo =
+    einzahlungenSumme - vorschuesseSumme - auszahlungenSumme - kautionsuebergabenSumme;
 
   // Bewegungen seit der letzten Kassenprüfung, für die Durchsicht vor einer
   // neuen Prüfung - vereinheitlicht Vorschüsse, Vorschuss-Korrekturen (nur
@@ -199,6 +219,18 @@ export default function KassePage() {
         belegnummer: ab.belegnummer,
         betrag: -Number(ab.summe_auszahlungsbetrag ?? 0),
         bearbeiter_id: ab.erstellt_von,
+      })),
+    ...kautionsuebergaben
+      .filter(
+        (k) => !letzterCheckZeit || k.erstellt_am > letzterCheckZeit
+      )
+      .map((k) => ({
+        key: `kaution-${k.id}`,
+        datum: k.erstellt_am,
+        art: "Kautionsübergabe",
+        belegnummer: k.belegnummer,
+        betrag: -Number(k.betrag_summe),
+        bearbeiter_id: k.erstellt_von,
       })),
   ].sort((a, b) => (a.datum < b.datum ? 1 : -1));
 
@@ -316,8 +348,9 @@ export default function KassePage() {
         <p className="mt-1 text-xs text-neutral-500">
           Einzahlungen {einzahlungenSumme.toFixed(2)} € − Bar-Vorschüsse{" "}
           {vorschuesseSumme.toFixed(2)} € − Bar-Auszahlungen{" "}
-          {auszahlungenSumme.toFixed(2)} € (Überweisungen zählen nicht zum
-          Kassenbestand)
+          {auszahlungenSumme.toFixed(2)} € − Kautionsübergaben{" "}
+          {kautionsuebergabenSumme.toFixed(2)} € (Überweisungen zählen nicht
+          zum Kassenbestand)
         </p>
       </div>
 

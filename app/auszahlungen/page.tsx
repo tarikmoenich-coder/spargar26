@@ -2,9 +2,19 @@
 
 import { useEffect, useState } from "react";
 import { getSupabaseClient } from "@/lib/supabase/client";
-import type { AuszahlungsbelegSummary, SeasonSummaryRow } from "@/lib/types";
+import { useProfile } from "@/lib/useProfile";
+import type {
+  AuszahlungsbelegSummary,
+  Kautionsuebergabe,
+  SeasonSummaryRow,
+} from "@/lib/types";
 import { formatDatumDE } from "@/lib/format";
 import LohnTabs from "@/components/LohnTabs";
+
+function monatsSchluessel(d: Date) {
+  const mm = String(d.getMonth() + 1).padStart(2, "0");
+  return `KU-${mm}-${d.getFullYear()}`;
+}
 
 function fmt(n: number | string | null | undefined) {
   return n === null || n === undefined || n === "" ? "—" : Number(n).toFixed(2);
@@ -31,6 +41,12 @@ const MONATSNAMEN = [
 ];
 
 export default function AuszahlungenPage() {
+  const { profile } = useProfile();
+  const canKaution =
+    profile?.role === "admin" ||
+    profile?.role === "kasse" ||
+    profile?.role === "lohnabrechnung";
+
   const [belege, setBelege] = useState<AuszahlungsbelegSummary[]>([]);
   const [jahrFilter, setJahrFilter] = useState<number | "alle">("alle");
   const [monatFilter, setMonatFilter] = useState<number | "alle">("alle");
@@ -41,16 +57,41 @@ export default function AuszahlungenPage() {
     belegnummer: string;
     zahlungsart: string;
     zeilen: SeasonSummaryRow[];
+    kaution: Kautionsuebergabe | null;
+    kautionPersonen: { name: string; personal_nr: string; betrag: number }[];
   } | null>(null);
+
+  // Kautionsübergabe an den Hausmeister (Nutzer-Vorgabe 2026-08-09) - je
+  // Auszahlungsbeleg maximal eine nicht-stornierte Übergabe.
+  const [kautionen, setKautionen] = useState<
+    Record<number, Kautionsuebergabe>
+  >({});
+  const [kautionFormBelegId, setKautionFormBelegId] = useState<number | null>(
+    null
+  );
+  const [uebergebenAn, setUebergebenAn] = useState("");
+  const [kautionSaving, setKautionSaving] = useState(false);
+  const [kautionFehler, setKautionFehler] = useState<string | null>(null);
 
   async function load() {
     setLoading(true);
     const supabase = getSupabaseClient();
-    const { data, error } = await supabase
-      .from("auszahlungsbeleg_summary")
-      .select("*")
-      .order("erstellt_am", { ascending: false });
+    const [{ data, error }, { data: kautionenData }] = await Promise.all([
+      supabase
+        .from("auszahlungsbeleg_summary")
+        .select("*")
+        .order("erstellt_am", { ascending: false }),
+      supabase
+        .from("kautionsuebergaben")
+        .select("*")
+        .eq("storniert", false),
+    ]);
     if (!error) setBelege((data as AuszahlungsbelegSummary[]) ?? []);
+    const kautionMap: Record<number, Kautionsuebergabe> = {};
+    ((kautionenData as Kautionsuebergabe[]) ?? []).forEach((k) => {
+      kautionMap[k.auszahlungsbeleg_id] = k;
+    });
+    setKautionen(kautionMap);
     setLoading(false);
   }
 
@@ -95,14 +136,131 @@ export default function AuszahlungenPage() {
     }
   }
 
-  function drucken(beleg: AuszahlungsbelegSummary) {
+  async function drucken(beleg: AuszahlungsbelegSummary) {
     const zeilen = details[beleg.id];
     if (!zeilen) return;
+    const kaution = kautionen[beleg.id] ?? null;
+    let kautionPersonen: { name: string; personal_nr: string; betrag: number }[] =
+      [];
+    if (kaution) {
+      const supabase = getSupabaseClient();
+      const { data } = await supabase
+        .from("kautionsuebergabe_personen")
+        .select("employee_id, betrag")
+        .eq("kautionsuebergabe_id", kaution.id);
+      kautionPersonen = ((data as { employee_id: string; betrag: number }[]) ?? [])
+        .map((p) => {
+          const z = zeilen.find((r) => r.employee_id === p.employee_id);
+          return {
+            name: z ? `${z.name}, ${z.vorname}` : "—",
+            personal_nr: z?.personal_nr ?? "—",
+            betrag: Number(p.betrag),
+          };
+        });
+    }
     setDruckZeilen({
       belegnummer: beleg.belegnummer,
       zahlungsart: beleg.zahlungsart,
       zeilen,
+      kaution,
+      kautionPersonen,
     });
+  }
+
+  // Kandidaten für die Kaution-Übergabe: alle Personen dieses Belegs mit
+  // Zimmerkaution > 0 (aus dem eingefrorenen Schnappschuss - unverändert,
+  // selbst wenn die Live-Berechnung inzwischen abweicht).
+  function kautionsKandidaten(belegId: number) {
+    return (details[belegId] ?? [])
+      .map((r) => ({
+        employee_id: r.employee_id,
+        name: r.name,
+        vorname: r.vorname,
+        personal_nr: r.personal_nr,
+        betrag: Number(anzeige(r, "zimmer_kaution")),
+      }))
+      .filter((p) => p.betrag > 0);
+  }
+
+  function kautionFormOeffnen(belegId: number) {
+    setKautionFormBelegId(belegId);
+    setUebergebenAn("");
+    setKautionFehler(null);
+  }
+
+  async function kautionUebergeben(beleg: AuszahlungsbelegSummary) {
+    const kandidaten = kautionsKandidaten(beleg.id);
+    if (kandidaten.length === 0) return;
+    if (!uebergebenAn.trim()) {
+      setKautionFehler('Bitte "Übergeben an" ausfüllen.');
+      return;
+    }
+    setKautionSaving(true);
+    setKautionFehler(null);
+    const supabase = getSupabaseClient();
+    const summe = kandidaten.reduce((s, p) => s + p.betrag, 0);
+
+    const { data: belegnummer, error: belegError } = await supabase.rpc(
+      "naechste_belegnummer",
+      { prefix_monat: monatsSchluessel(new Date()) }
+    );
+    if (belegError) {
+      setKautionFehler(belegError.message);
+      setKautionSaving(false);
+      return;
+    }
+
+    const { data: inserted, error: insertError } = await supabase
+      .from("kautionsuebergaben")
+      .insert({
+        belegnummer,
+        auszahlungsbeleg_id: beleg.id,
+        uebergeben_an: uebergebenAn.trim(),
+        betrag_summe: summe,
+      })
+      .select()
+      .single();
+    if (insertError || !inserted) {
+      setKautionFehler(insertError?.message ?? "Speichern fehlgeschlagen");
+      setKautionSaving(false);
+      return;
+    }
+
+    const { error: personenError } = await supabase
+      .from("kautionsuebergabe_personen")
+      .insert(
+        kandidaten.map((p) => ({
+          kautionsuebergabe_id: inserted.id,
+          employee_id: p.employee_id,
+          betrag: p.betrag,
+        }))
+      );
+    if (personenError) {
+      setKautionFehler(personenError.message);
+      setKautionSaving(false);
+      return;
+    }
+
+    setKautionSaving(false);
+    setKautionFormBelegId(null);
+    load();
+  }
+
+  async function kautionStornieren(k: Kautionsuebergabe) {
+    const grund = window.prompt(
+      "Grund für die Stornierung der Kautionsübergabe (Pflichtfeld, wird protokolliert):"
+    );
+    if (!grund) return;
+    const supabase = getSupabaseClient();
+    await supabase
+      .from("kautionsuebergaben")
+      .update({
+        storniert: true,
+        storno_grund: grund,
+        storniert_am: new Date().toISOString(),
+      })
+      .eq("id", k.id);
+    load();
   }
 
   const jahreOptionen = Array.from(
@@ -256,6 +414,7 @@ export default function AuszahlungenPage() {
                                 <th>Buskosten €</th>
                                 <th>Fahrerkaution €</th>
                                 <th>Zimmerkaution €</th>
+                                <th>Kleidung €</th>
                                 <th>Auszahlung €</th>
                               </tr>
                             </thead>
@@ -281,6 +440,7 @@ export default function AuszahlungenPage() {
                                   <td>{fmt(anzeige(r, "bus_kosten"))}</td>
                                   <td>{fmt(anzeige(r, "fahrer_kaution"))}</td>
                                   <td>{fmt(anzeige(r, "zimmer_kaution"))}</td>
+                                  <td>{fmt(anzeige(r, "kleidung_betrag"))}</td>
                                   <td className="font-medium">
                                     {fmt(anzeige(r, "auszahlungsbetrag"))}
                                     {weichtAb(r) && (
@@ -299,6 +459,104 @@ export default function AuszahlungenPage() {
                             </tbody>
                           </table>
                         </div>
+
+                        {canKaution && (
+                          <div className="mt-3 rounded border border-blue-200 bg-blue-50 p-3">
+                            {(() => {
+                              const kandidaten = kautionsKandidaten(beleg.id);
+                              const bestehend = kautionen[beleg.id];
+                              if (kandidaten.length === 0) {
+                                return (
+                                  <p className="text-sm text-neutral-500">
+                                    Keine Zimmerkaution in diesem Beleg -
+                                    keine Übergabe nötig.
+                                  </p>
+                                );
+                              }
+                              if (bestehend) {
+                                return (
+                                  <div className="flex items-center justify-between gap-3">
+                                    <p className="text-sm">
+                                      ✓ Kaution übergeben: Beleg{" "}
+                                      <strong>{bestehend.belegnummer}</strong>{" "}
+                                      an <strong>{bestehend.uebergeben_an}</strong>{" "}
+                                      ({Number(bestehend.betrag_summe).toFixed(2)} €)
+                                      am {formatDatumDE(bestehend.erstellt_am)}
+                                    </p>
+                                    <button
+                                      type="button"
+                                      className="btn-danger text-xs"
+                                      onClick={() => kautionStornieren(bestehend)}
+                                    >
+                                      Stornieren
+                                    </button>
+                                  </div>
+                                );
+                              }
+                              if (kautionFormBelegId === beleg.id) {
+                                const summe = kandidaten.reduce(
+                                  (s, p) => s + p.betrag,
+                                  0
+                                );
+                                return (
+                                  <div className="flex flex-col gap-2">
+                                    <p className="text-sm font-medium text-blue-900">
+                                      Kaution übergeben ({kandidaten.length}{" "}
+                                      Person(en), {summe.toFixed(2)} € gesamt)
+                                    </p>
+                                    <ul className="text-sm text-neutral-700">
+                                      {kandidaten.map((p) => (
+                                        <li key={p.employee_id}>
+                                          {p.personal_nr} – {p.name}, {p.vorname}:{" "}
+                                          {p.betrag.toFixed(2)} €
+                                        </li>
+                                      ))}
+                                    </ul>
+                                    <div className="flex flex-wrap items-center gap-2">
+                                      <input
+                                        placeholder="Übergeben an (Hausmeister)"
+                                        value={uebergebenAn}
+                                        onChange={(e) =>
+                                          setUebergebenAn(e.target.value)
+                                        }
+                                      />
+                                      <button
+                                        type="button"
+                                        className="btn text-xs"
+                                        disabled={kautionSaving}
+                                        onClick={() => kautionUebergeben(beleg)}
+                                      >
+                                        Bestätigen
+                                      </button>
+                                      <button
+                                        type="button"
+                                        className="btn-secondary text-xs"
+                                        onClick={() => setKautionFormBelegId(null)}
+                                      >
+                                        Abbrechen
+                                      </button>
+                                      {kautionFehler && (
+                                        <span className="text-sm text-red-600">
+                                          {kautionFehler}
+                                        </span>
+                                      )}
+                                    </div>
+                                  </div>
+                                );
+                              }
+                              return (
+                                <button
+                                  type="button"
+                                  className="btn-secondary text-xs"
+                                  onClick={() => kautionFormOeffnen(beleg.id)}
+                                >
+                                  Kaution übergeben ({kandidaten.length} Person
+                                  (en))
+                                </button>
+                              );
+                            })()}
+                          </div>
+                        )}
                       </>
                     )}
                   </div>
@@ -335,6 +593,7 @@ export default function AuszahlungenPage() {
                 <th>Buskosten €</th>
                 <th>Fahrerkaution €</th>
                 <th>Zimmerkaution €</th>
+                <th>Kleidung €</th>
                 <th>Auszahlung €</th>
                 <th>Unterschrift</th>
               </tr>
@@ -361,6 +620,7 @@ export default function AuszahlungenPage() {
                   <td>{fmt(anzeige(r, "bus_kosten"))}</td>
                   <td>{fmt(anzeige(r, "fahrer_kaution"))}</td>
                   <td>{fmt(anzeige(r, "zimmer_kaution"))}</td>
+                  <td>{fmt(anzeige(r, "kleidung_betrag"))}</td>
                   <td className="font-semibold">
                     {fmt(anzeige(r, "auszahlungsbetrag"))}
                   </td>
@@ -370,7 +630,7 @@ export default function AuszahlungenPage() {
             </tbody>
             <tfoot>
               <tr>
-                <td colSpan={12} className="text-right font-semibold">
+                <td colSpan={13} className="text-right font-semibold">
                   Summe Auszahlung
                 </td>
                 <td className="font-semibold">
@@ -385,6 +645,62 @@ export default function AuszahlungenPage() {
               </tr>
             </tfoot>
           </table>
+
+          {/* Kautionsübergabe an den Hausmeister - erscheint direkt im
+              Anschluss an den Auszahlungsbeleg (Nutzer-Vorgabe 2026-08-09).
+              Analog zum Vorschuss-Übergabebeleg: Zusammenfassung, dann eine
+              zweite Liste nur für die Unterschrift. */}
+          {druckZeilen.kaution && (
+            <div className="print-page-break">
+              <h2 className="text-xl font-semibold">Kautionsübergabe</h2>
+              <p className="mt-1 text-base">
+                Belegnummer: {druckZeilen.kaution.belegnummer} · Datum:{" "}
+                {formatDatumDE(druckZeilen.kaution.erstellt_am)}
+              </p>
+              <p className="text-base">
+                Übergeben an: {druckZeilen.kaution.uebergeben_an} · Personen:{" "}
+                {druckZeilen.kautionPersonen.length} · Betrag:{" "}
+                {Number(druckZeilen.kaution.betrag_summe).toFixed(2)} €
+              </p>
+              <table className="mt-4 print-form-table">
+                <thead>
+                  <tr>
+                    <th>Pers.-Nr.</th>
+                    <th>Name</th>
+                    <th>Betrag €</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {druckZeilen.kautionPersonen.map((p, i) => (
+                    <tr key={i}>
+                      <td>{p.personal_nr}</td>
+                      <td>{p.name}</td>
+                      <td>{p.betrag.toFixed(2)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+                <tfoot>
+                  <tr>
+                    <td colSpan={2} className="text-right font-semibold">
+                      Summe
+                    </td>
+                    <td className="font-semibold">
+                      {Number(druckZeilen.kaution.betrag_summe).toFixed(2)}
+                    </td>
+                  </tr>
+                </tfoot>
+              </table>
+              <p className="mt-8 text-base">
+                Übergeben an: {druckZeilen.kaution.uebergeben_an}
+              </p>
+              <p className="mt-8 text-base">
+                Unterschrift:{" "}
+                <span className="ml-2 inline-block w-64 border-b-2 border-black">
+                  &nbsp;
+                </span>
+              </p>
+            </div>
+          )}
         </div>
       )}
     </div>

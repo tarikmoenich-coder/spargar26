@@ -7,6 +7,7 @@ import { useEffect, useRef } from "react";
 const tabs = [
   { href: "/erfassung", label: "Erfassung" },
   { href: "/erfassung-import", label: "Import" },
+  { href: "/arbeitskleidung", label: "Arbeitskleidung" },
 ];
 
 // Analog zu components/PersonalTabs.tsx - siehe dort für die Erklärung der

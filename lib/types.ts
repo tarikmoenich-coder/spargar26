@@ -335,6 +335,10 @@ export interface SeasonSummaryRow {
   // Beide NULL, solange netto_extern bei nicht-pauschalen Fällen fehlt.
   netto: number | null;
   auszahlungsbetrag: number | null;
+  // Arbeitskleidung (Hose/Jacke/Stiefel, Anzahl × Satz aus
+  // verpflegungssaetze) - wie Buskosten/Kautionen abgezogen, aber separat
+  // ausgewiesen.
+  kleidung_betrag: number;
 }
 
 // Monats-Ansicht für den Monatsfilter auf der Lohnübersicht (Monats-
@@ -426,6 +430,11 @@ export interface VerpflegungsSatz {
   verpflegung: number;
   wohnen: number;
   mindestlohn: number | null;
+  // Arbeitskleidung-Preise je Stück - nur Hose/Jacke/Stiefel werden
+  // berechnet, siehe schema.sql.
+  kleidung_hose: number | null;
+  kleidung_jacke: number | null;
+  kleidung_stiefel: number | null;
 }
 
 export interface Arbeitsgruppe {
@@ -464,6 +473,41 @@ export interface AdvanceRecipientDetail {
   name: string;
   vorname: string;
   anteil: number;
+}
+
+// Bereits ausgegebene Arbeitskleidung je Person/Saison-Jahr - aus der
+// schmalen Sicht employee_kleidung_ausgabe (season_bonuses selbst bleibt
+// für zeiterfassung nicht lesbar).
+export interface EmployeeKleidungAusgabe {
+  employee_id: string;
+  saison_jahr: number;
+  kleidung_hose_anzahl: number;
+  kleidung_jacke_anzahl: number;
+  kleidung_stiefel_anzahl: number;
+}
+
+// Kautionsübergabe an den Hausmeister (Nutzer-Vorgabe 2026-08-09) - ein
+// Übergabebeleg je Auszahlungsbeleg, mit den enthaltenen Personen/
+// Kautionsbeträgen. Erst mit dieser Übergabe wird die Kaution auch als
+// Kassenausgabe fällig, siehe app/kasse/page.tsx.
+export interface Kautionsuebergabe {
+  id: number;
+  belegnummer: string;
+  auszahlungsbeleg_id: number;
+  uebergeben_an: string;
+  betrag_summe: number;
+  erstellt_von: string | null;
+  erstellt_am: string;
+  storniert: boolean;
+  storniert_am: string | null;
+  storniert_von: string | null;
+  storno_grund: string | null;
+}
+
+export interface KautionsuebergabePerson {
+  kautionsuebergabe_id: number;
+  employee_id: string;
+  betrag: number;
 }
 
 // Personalplanung: eine Person VOR der Aktivierung (Anreise). Getrennt von

@@ -20,6 +20,9 @@ export default function EinstellungenPage() {
     verpflegung: "10.00",
     wohnen: "10.00",
     mindestlohn: "",
+    kleidung_hose: "",
+    kleidung_jacke: "",
+    kleidung_stiefel: "",
   });
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -67,6 +70,9 @@ export default function EinstellungenPage() {
       verpflegung: satz.verpflegung.toString(),
       wohnen: satz.wohnen.toString(),
       mindestlohn: satz.mindestlohn?.toString() ?? "",
+      kleidung_hose: satz.kleidung_hose?.toString() ?? "",
+      kleidung_jacke: satz.kleidung_jacke?.toString() ?? "",
+      kleidung_stiefel: satz.kleidung_stiefel?.toString() ?? "",
     });
   }
 
@@ -80,6 +86,11 @@ export default function EinstellungenPage() {
       verpflegung: Number(form.verpflegung),
       wohnen: Number(form.wohnen),
       mindestlohn: form.mindestlohn ? Number(form.mindestlohn) : null,
+      kleidung_hose: form.kleidung_hose ? Number(form.kleidung_hose) : null,
+      kleidung_jacke: form.kleidung_jacke ? Number(form.kleidung_jacke) : null,
+      kleidung_stiefel: form.kleidung_stiefel
+        ? Number(form.kleidung_stiefel)
+        : null,
     });
     setSaving(false);
     if (error) {
@@ -202,6 +213,33 @@ export default function EinstellungenPage() {
             value={form.mindestlohn}
             onChange={(e) => setForm({ ...form, mindestlohn: e.target.value })}
           />
+          <input
+            type="number"
+            step="0.01"
+            placeholder="Arbeitshose €/Stück"
+            value={form.kleidung_hose}
+            onChange={(e) =>
+              setForm({ ...form, kleidung_hose: e.target.value })
+            }
+          />
+          <input
+            type="number"
+            step="0.01"
+            placeholder="Arbeitsjacke €/Stück"
+            value={form.kleidung_jacke}
+            onChange={(e) =>
+              setForm({ ...form, kleidung_jacke: e.target.value })
+            }
+          />
+          <input
+            type="number"
+            step="0.01"
+            placeholder="Gummistiefel €/Stück"
+            value={form.kleidung_stiefel}
+            onChange={(e) =>
+              setForm({ ...form, kleidung_stiefel: e.target.value })
+            }
+          />
           <div className="col-span-full flex items-center gap-2">
             <button type="submit" className="btn" disabled={saving}>
               Speichern
@@ -225,6 +263,9 @@ export default function EinstellungenPage() {
               <th>Verpflegung €/Tag</th>
               <th>Unterkunft €/Tag</th>
               <th>Mindestlohn €/Std.</th>
+              <th>Hose €/Stück</th>
+              <th>Jacke €/Stück</th>
+              <th>Stiefel €/Stück</th>
               {isAdmin && <th></th>}
             </tr>
           </thead>
@@ -235,6 +276,9 @@ export default function EinstellungenPage() {
                 <td>{Number(s.verpflegung).toFixed(2)}</td>
                 <td>{Number(s.wohnen).toFixed(2)}</td>
                 <td>{s.mindestlohn != null ? Number(s.mindestlohn).toFixed(2) : "—"}</td>
+                <td>{s.kleidung_hose != null ? Number(s.kleidung_hose).toFixed(2) : "—"}</td>
+                <td>{s.kleidung_jacke != null ? Number(s.kleidung_jacke).toFixed(2) : "—"}</td>
+                <td>{s.kleidung_stiefel != null ? Number(s.kleidung_stiefel).toFixed(2) : "—"}</td>
                 {isAdmin && (
                   <td>
                     <button
