@@ -350,6 +350,13 @@ Enthalten:
   02.05.-29.07. ergibt nur 2 Tage, da nur Juni ein voller Monat ist).
   Listet Personen, bei denen mehr "U"-markierte Tage erfasst wurden als
   der berechnete Anspruch hergibt
+- Farbschema auf Lohnübersicht und Auszahlungen (Stand 2026-08-09, reine
+  Optik, keine Funktionsänderung): Brutto-Spalte durchgehend hellbraun,
+  Netto-Spalte durchgehend hellgrau (Kopf + Zellen); die Überschriften von
+  Kautionen (Fahrer-/Zimmerkaution) immer blau, Abzügen (Verpflegung/
+  Unterkunft, Vorschüsse, Buskosten, Kleidung) immer rot - Zulagen/Boni
+  sind aktuell in der Brutto-Summe enthalten, es gibt noch keine eigene
+  Spalte dafür (Grün ist als Kategorie vorgesehen, siehe `lib/farben.ts`)
 - Rollen/Rechte serverseitig über Postgres Row Level Security
 - Append-only Audit-Log für Personal, Stunden, Vorschüsse, Kassenbuch
 

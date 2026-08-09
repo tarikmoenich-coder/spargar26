@@ -14,6 +14,14 @@ import {
 } from "@/lib/types";
 import { formatDatumDE } from "@/lib/format";
 import LohnTabs from "@/components/LohnTabs";
+import {
+  FARBE_ABZUG_TH,
+  FARBE_BRUTTO_TD,
+  FARBE_BRUTTO_TH,
+  FARBE_KAUTION_TH,
+  FARBE_NETTO_TD,
+  FARBE_NETTO_TH,
+} from "@/lib/farben";
 
 const OHNE_GRUPPE_KEY = "__ohne__";
 
@@ -587,15 +595,18 @@ export default function UebersichtPage() {
                 <th>Std.</th>
                 <th>Tage</th>
                 <th>Abrechnungsart</th>
-                <th>Brutto €</th>
+                <th className={FARBE_BRUTTO_TH}>Brutto €</th>
                 <th>Lohnsteuer (pauschal) €</th>
-                <th>Netto €</th>
-                <th>Verpfl./Unterkunft €</th>
-                <th>Vorschüsse €</th>
-                <th>Buskosten €</th>
-                <th>Fahrerkaution €</th>
-                <th>Zimmerkaution €</th>
-                <th title="Hose/Jacke/Stiefel, erfasst über Stundenerfassung → Arbeitskleidung">
+                <th className={FARBE_NETTO_TH}>Netto €</th>
+                <th className={FARBE_ABZUG_TH}>Verpfl./Unterkunft €</th>
+                <th className={FARBE_ABZUG_TH}>Vorschüsse €</th>
+                <th className={FARBE_ABZUG_TH}>Buskosten €</th>
+                <th className={FARBE_KAUTION_TH}>Fahrerkaution €</th>
+                <th className={FARBE_KAUTION_TH}>Zimmerkaution €</th>
+                <th
+                  className={FARBE_ABZUG_TH}
+                  title="Hose/Jacke/Stiefel, erfasst über Stundenerfassung → Arbeitskleidung"
+                >
                   Kleidung €
                 </th>
                 <th>Auszahlungsbetrag €</th>
@@ -637,9 +648,11 @@ export default function UebersichtPage() {
                   <td>{fmt(anzeige(r, "gesamt_stunden"))}</td>
                   <td>{anzeige(r, "anwesenheitstage") ?? "—"}</td>
                   <td>{ABRECHNUNGSART_LABELS[r.abrechnungsart]}</td>
-                  <td>{fmt(anzeige(r, "bruttolohn"))}</td>
+                  <td className={FARBE_BRUTTO_TD}>
+                    {fmt(anzeige(r, "bruttolohn"))}
+                  </td>
                   <td>{fmt(anzeige(r, "lohnsteuer_pauschal"))}</td>
-                  <td>
+                  <td className={FARBE_NETTO_TD}>
                     {r.abrechnungsart === "pauschal" || !canEdit || r.abgerechnet_am ? (
                       fmt(anzeige(r, "netto"))
                     ) : (
@@ -837,9 +850,9 @@ export default function UebersichtPage() {
                     <th>Gruppe</th>
                     <th>Std.</th>
                     <th>Tage</th>
-                    <th>Basis-Brutto €</th>
-                    <th>Verpflegung €</th>
-                    <th>Unterkunft €</th>
+                    <th className={FARBE_BRUTTO_TH}>Basis-Brutto €</th>
+                    <th className={FARBE_ABZUG_TH}>Verpflegung €</th>
+                    <th className={FARBE_ABZUG_TH}>Unterkunft €</th>
                     <th>Letzter Eintrag</th>
                   </tr>
                 </thead>
@@ -865,7 +878,7 @@ export default function UebersichtPage() {
                         </td>
                         <td>{fmt(r.gesamt_stunden)}</td>
                         <td>{r.anwesenheitstage}</td>
-                        <td>{fmt(r.basis_brutto)}</td>
+                        <td className={FARBE_BRUTTO_TD}>{fmt(r.basis_brutto)}</td>
                         <td>{fmt(r.abzug_verpflegung)}</td>
                         <td>{fmt(r.abzug_wohnen)}</td>
                         <td>

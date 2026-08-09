@@ -10,6 +10,14 @@ import type {
 } from "@/lib/types";
 import { formatDatumDE } from "@/lib/format";
 import LohnTabs from "@/components/LohnTabs";
+import {
+  FARBE_ABZUG_TH,
+  FARBE_BRUTTO_TD,
+  FARBE_BRUTTO_TH,
+  FARBE_KAUTION_TH,
+  FARBE_NETTO_TD,
+  FARBE_NETTO_TH,
+} from "@/lib/farben";
 
 function monatsSchluessel(d: Date) {
   const mm = String(d.getMonth() + 1).padStart(2, "0");
@@ -406,15 +414,15 @@ export default function AuszahlungenPage() {
                                 <th>Name</th>
                                 <th>Std.</th>
                                 <th>Tage</th>
-                                <th>Brutto €</th>
+                                <th className={FARBE_BRUTTO_TH}>Brutto €</th>
                                 <th>Steuer €</th>
-                                <th>Netto €</th>
-                                <th>Verpfl./Unterk. €</th>
-                                <th>Vorschüsse €</th>
-                                <th>Buskosten €</th>
-                                <th>Fahrerkaution €</th>
-                                <th>Zimmerkaution €</th>
-                                <th>Kleidung €</th>
+                                <th className={FARBE_NETTO_TH}>Netto €</th>
+                                <th className={FARBE_ABZUG_TH}>Verpfl./Unterk. €</th>
+                                <th className={FARBE_ABZUG_TH}>Vorschüsse €</th>
+                                <th className={FARBE_ABZUG_TH}>Buskosten €</th>
+                                <th className={FARBE_KAUTION_TH}>Fahrerkaution €</th>
+                                <th className={FARBE_KAUTION_TH}>Zimmerkaution €</th>
+                                <th className={FARBE_ABZUG_TH}>Kleidung €</th>
                                 <th>Auszahlung €</th>
                               </tr>
                             </thead>
@@ -427,9 +435,13 @@ export default function AuszahlungenPage() {
                                   </td>
                                   <td>{fmt(anzeige(r, "gesamt_stunden"))}</td>
                                   <td>{anzeige(r, "anwesenheitstage") ?? "—"}</td>
-                                  <td>{fmt(anzeige(r, "bruttolohn"))}</td>
+                                  <td className={FARBE_BRUTTO_TD}>
+                                    {fmt(anzeige(r, "bruttolohn"))}
+                                  </td>
                                   <td>{fmt(anzeige(r, "lohnsteuer_pauschal"))}</td>
-                                  <td>{fmt(anzeige(r, "netto"))}</td>
+                                  <td className={FARBE_NETTO_TD}>
+                                    {fmt(anzeige(r, "netto"))}
+                                  </td>
                                   <td>
                                     {(
                                       Number(anzeige(r, "abzug_verpflegung")) +
