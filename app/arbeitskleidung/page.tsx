@@ -11,6 +11,7 @@
 import { useEffect, useState } from "react";
 import { getSupabaseClient } from "@/lib/supabase/client";
 import { useProfile } from "@/lib/useProfile";
+import { uebersetzung } from "@/lib/i18n";
 import ErfassungTabs from "@/components/ErfassungTabs";
 import type {
   Arbeitsgruppe,
@@ -29,6 +30,7 @@ interface Entwurf {
 
 export default function ArbeitskleidungPage() {
   const { profile } = useProfile();
+  const t = uebersetzung(profile?.sprache);
   const canEdit =
     profile?.role === "admin" ||
     profile?.role === "hr" ||
@@ -138,7 +140,7 @@ export default function ArbeitskleidungPage() {
       <div className="flex flex-col gap-4">
         <ErfassungTabs />
         <p className="text-neutral-500">
-          Nur admin/hr/zeiterfassung dürfen Arbeitskleidung erfassen.
+          {t("arbeitskleidung.keineberechtigung")}
         </p>
       </div>
     );
@@ -149,23 +151,16 @@ export default function ArbeitskleidungPage() {
       <ErfassungTabs />
       <div>
         <h1 className="text-lg font-semibold text-emerald-800">
-          Arbeitskleidung {CURRENT_YEAR}
+          {t("arbeitskleidung.title", { jahr: CURRENT_YEAR })}
         </h1>
         <p className="text-sm text-neutral-500">
-          Nur Hose, Jacke und Stiefel werden berechnet und als eigene
-          Abzugsposition in die Lohnübersicht übernommen (wie
-          Buskosten/Kautionen). Spargelmesser, Feile, Handschuhe sind
-          Verbrauchsgegenstände - werden beim Tausch gegen das Altgerät
-          kostenlos ersetzt und hier nicht erfasst. Anzahl statt Betrag: der
-          Preis je Stück steht fest in den Einstellungen.
+          {t("arbeitskleidung.untertitel")}
         </p>
       </div>
 
       {keinePreiseHinterlegt && !loading && (
         <p className="rounded border border-amber-300 bg-amber-50 px-3 py-2 text-sm font-medium text-amber-800">
-          ⚠ Für {CURRENT_YEAR} sind noch keine Preise für Hose/Jacke/Stiefel
-          in den Einstellungen hinterlegt - eingetragene Stückzahlen werden
-          erst mit 0 € berechnet, bis das nachgeholt wird.
+          {t("arbeitskleidung.keinepreise", { jahr: CURRENT_YEAR })}
         </p>
       )}
 
@@ -176,12 +171,12 @@ export default function ArbeitskleidungPage() {
       )}
 
       <label className="text-sm">
-        Gruppe{" "}
+        {t("erfassung.gruppe")}{" "}
         <select
           value={gruppeFilter}
           onChange={(e) => setGruppeFilter(e.target.value)}
         >
-          <option value="">Alle</option>
+          <option value="">{t("gemeinsam.alle")}</option>
           {gruppen.map((g) => (
             <option key={g.gruppe_nr} value={g.gruppe_nr}>
               {g.gruppe_nr} – {g.bezeichnung}
@@ -191,17 +186,17 @@ export default function ArbeitskleidungPage() {
       </label>
 
       {loading ? (
-        <p className="text-neutral-500">Lädt…</p>
+        <p className="text-neutral-500">{t("gemeinsam.laedt")}</p>
       ) : (
         <table>
           <thead>
             <tr>
-              <th>Pers.-Nr.</th>
-              <th>Name</th>
-              <th>Gruppe</th>
-              <th>Hose (Anzahl)</th>
-              <th>Jacke (Anzahl)</th>
-              <th>Stiefel (Anzahl)</th>
+              <th>{t("erfassung.persnr")}</th>
+              <th>{t("erfassung.name")}</th>
+              <th>{t("erfassung.gruppe")}</th>
+              <th>{t("arbeitskleidung.hose")}</th>
+              <th>{t("arbeitskleidung.jacke")}</th>
+              <th>{t("arbeitskleidung.stiefel")}</th>
               <th></th>
             </tr>
           </thead>
@@ -255,7 +250,7 @@ export default function ArbeitskleidungPage() {
                       disabled={speichernId === emp.id}
                       onClick={() => speichern(emp.id)}
                     >
-                      Speichern
+                      {t("gemeinsam.speichern")}
                     </button>
                   </td>
                 </tr>

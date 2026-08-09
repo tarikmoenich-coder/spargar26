@@ -37,6 +37,8 @@ const de = {
   "gemeinsam.kisten": "Kisten",
   "gemeinsam.praemieeuro": "Prämie €",
   "gemeinsam.kolbennorm": "Kolben Norm",
+  "gemeinsam.alle": "Alle",
+  "gemeinsam.speichern": "Speichern",
 
   // Stundenerfassung (app/erfassung/page.tsx)
   "erfassung.title": "Stundenerfassung",
@@ -88,6 +90,18 @@ const de = {
   "suche.zuckermaispraemien": "Zuckermais-Prämien {jahr}",
   "suche.praemiegesamt": "{betrag} € gesamt",
   "suche.keinezuckermais": "Keine Zuckermais-Einträge in diesem Jahr.",
+
+  // Arbeitskleidung (app/arbeitskleidung/page.tsx)
+  "arbeitskleidung.title": "Arbeitskleidung {jahr}",
+  "arbeitskleidung.untertitel":
+    "Nur Hose, Jacke und Stiefel werden berechnet und als eigene Abzugsposition in die Lohnübersicht übernommen (wie Buskosten/Kautionen). Spargelmesser, Feile, Handschuhe sind Verbrauchsgegenstände - werden beim Tausch gegen das Altgerät kostenlos ersetzt und hier nicht erfasst. Anzahl statt Betrag: der Preis je Stück steht fest in den Einstellungen.",
+  "arbeitskleidung.keinepreise":
+    "⚠ Für {jahr} sind noch keine Preise für Hose/Jacke/Stiefel in den Einstellungen hinterlegt - eingetragene Stückzahlen werden erst mit 0 € berechnet, bis das nachgeholt wird.",
+  "arbeitskleidung.keineberechtigung":
+    "Nur admin/hr/zeiterfassung dürfen Arbeitskleidung erfassen.",
+  "arbeitskleidung.hose": "Hose (Anzahl)",
+  "arbeitskleidung.jacke": "Jacke (Anzahl)",
+  "arbeitskleidung.stiefel": "Stiefel (Anzahl)",
 } as const;
 
 export type TKey = keyof typeof de;
@@ -107,6 +121,8 @@ const hr: Record<TKey, string> = {
   "gemeinsam.kisten": "Sanduci",
   "gemeinsam.praemieeuro": "Premija €",
   "gemeinsam.kolbennorm": "Klipovi norma",
+  "gemeinsam.alle": "Sve",
+  "gemeinsam.speichern": "Spremi",
 
   "erfassung.title": "Evidencija radnih sati",
   "erfassung.untertitel":
@@ -156,6 +172,17 @@ const hr: Record<TKey, string> = {
   "suche.zuckermaispraemien": "Premije kukuruz šećerac {jahr}",
   "suche.praemiegesamt": "{betrag} € ukupno",
   "suche.keinezuckermais": "Nema unosa za kukuruz šećerac u ovoj godini.",
+
+  "arbeitskleidung.title": "Radna odjeća {jahr}",
+  "arbeitskleidung.untertitel":
+    "Obračunavaju se samo hlače, jakna i čizme te se preuzimaju kao zasebna stavka odbitka u pregledu plaća (kao putni troškovi/depoziti). Nož za šparoge, turpija i rukavice su potrošni materijal - besplatno se zamjenjuju uz predaju starog komada i ovdje se ne evidentiraju. Broj komada umjesto iznosa: cijena po komadu je fiksno postavljena u postavkama.",
+  "arbeitskleidung.keinepreise":
+    "⚠ Za {jahr} još nisu unesene cijene za hlače/jaknu/čizme u postavkama - unesene količine se do tada obračunavaju s 0 €.",
+  "arbeitskleidung.keineberechtigung":
+    "Samo admin/hr/zeiterfassung smiju evidentirati radnu odjeću.",
+  "arbeitskleidung.hose": "Hlače (kom.)",
+  "arbeitskleidung.jacke": "Jakna (kom.)",
+  "arbeitskleidung.stiefel": "Čizme (kom.)",
 };
 
 const WOERTERBUECHER: Record<Sprache, Record<TKey, string>> = { de, hr };

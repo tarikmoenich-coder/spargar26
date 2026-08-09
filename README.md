@@ -14,8 +14,9 @@ Enthalten:
   gespeichert in `profiles.sprache`) - betrifft NUR die Bedienoberfläche,
   keine Dokumente/Formulare/Druckansichten (die bleiben in ihrer
   jeweiligen Sprache, z.B. Deutsch/Rumänisch bei den SV-Formularen).
-  Schrittweise ausgerollt (Stand 2026-08-08): bisher nur Stundenerfassung
-  und Suche ins Kroatische übersetzt, weitere Seiten folgen bei Bedarf.
+  Schrittweise ausgerollt (Stand 2026-08-09): bisher Stundenerfassung,
+  Suche und Arbeitskleidung ins Kroatische übersetzt, weitere Seiten
+  folgen bei Bedarf.
   Leichtgewichtige eigene Lösung ohne Framework (`lib/i18n.ts`, flaches
   Wörterbuch je Sprache) - kein Aufwand für ungenutzte Sprachen/Seiten
 - Rollenabhängiges Dashboard ("Start", auch neue Startseite nach dem
