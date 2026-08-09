@@ -380,7 +380,17 @@ Enthalten:
   vermarktungsfähige Ware) miterfasst (zählt nicht zur Prämie, nur zur
   Statistik). 1 Steige = 10 Schalen à 500g = 5 kg. Spargel ist als eigener
   Reiter angelegt, aber noch in Vorbereitung - braucht eine Anbindung an
-  die externe Waage-Datenbank sowie eine Klärung der Feldstufen-Logik
+  die externe Waage-Datenbank sowie eine Klärung der Feldstufen-Logik.
+  Viertes Untermenü **"Gruppenaufteilung"** (nur admin/hr, Stand
+  2026-08-09): legt fest, wer in den Prämien-Erfassungsseiten überhaupt
+  auftaucht - unabhängig von den Stundenerfassungs-Gruppen (`gruppe_nr`),
+  die weiterhin unverändert wichtig bleiben. Einfaches An/Aus je Kultur
+  (`employees.praemien_zuckermais/_erdbeeren/_spargel`), keine neue eigene
+  Gruppen-Ebene. Bestehende Gruppen/Herkünfte dienen nur als Filter zum
+  schnellen Mehrfach-Auswählen (Checkbox-Liste), danach "Zu X hinzufügen"/
+  "Von X entfernen" für die gewählte Kultur. Zuckermais/Erdbeeren zeigen
+  standardmäßig nur zugeordnete Mitarbeiter (weniger Scrollen/Ablenkung bei
+  der täglichen Erfassung)
 - Neuer Menüpunkt "Statistik" (Stand 2026-08-09, admin/hr/lohnabrechnung/
   management/erntewirtschaft), analog zu "Prämien" mit eigenen Untermenüs
   Spargel/Erdbeeren/Zuckermais - Tagesstatistik über alle Mitarbeiter

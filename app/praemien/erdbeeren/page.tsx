@@ -113,6 +113,10 @@ export default function PraemienErdbeerenPage() {
           .from("employees")
           .select("*")
           .eq("aktiv", true)
+          // Nur wer über "Prämien → Gruppenaufteilung" für Erdbeeren
+          // freigegeben ist (Nutzer-Vorgabe 2026-08-09) - unabhängig von
+          // gruppe_nr (Stundenerfassungs-Gruppen).
+          .eq("praemien_erdbeeren", true)
           .order("name"),
         supabase.from("arbeitsgruppen").select("*").order("reihenfolge"),
         supabase
@@ -587,6 +591,11 @@ export default function PraemienErdbeerenPage() {
       {parzellen.length > 0 &&
         (loading ? (
           <p className="text-neutral-500 print:hidden">Lädt…</p>
+        ) : gefiltert.length === 0 ? (
+          <p className="text-neutral-500 print:hidden">
+            Niemand für Erdbeeren freigegeben (oder Gruppenfilter zu eng) -
+            siehe „Prämien → Gruppenaufteilung".
+          </p>
         ) : (
           <div className="overflow-x-auto print:hidden">
             <table>

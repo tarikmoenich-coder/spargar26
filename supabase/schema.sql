@@ -188,6 +188,16 @@ create table employees (
   -- unterschiedlicher Abrechnungsart korrekt abgerechnet werden können.
   vorgaenger_employee_id uuid references employees (id) on delete set null,
   notiz text,
+  -- Zugehörigkeit zu den Prämien-Erfassungen (Nutzer-Vorgabe 2026-08-09):
+  -- unabhängig von gruppe_nr (Stundenerfassungs-Gruppen bleiben unverändert
+  -- wichtig, siehe README) - eigene, einfache An/Aus-Flags je Kultur, damit
+  -- Prämien → Zuckermais/Erdbeeren/Spargel nur die tatsächlich dort
+  -- pflückenden Mitarbeiter zeigen statt aller aktiven Personen. Gepflegt
+  -- über "Prämien → Gruppenaufteilung" (nur admin/hr, wie andere
+  -- Personalstamm-Änderungen).
+  praemien_zuckermais boolean not null default false,
+  praemien_erdbeeren boolean not null default false,
+  praemien_spargel boolean not null default false,
   -- Optimistische Nebenläufigkeit (ADR-010): Version wird bei jedem Update
   -- hochgezählt; das Frontend muss die zuletzt gelesene Version mitschicken.
   version int not null default 1,
@@ -2096,7 +2106,8 @@ create policy "employees_read_for_logged_in" on employees for select
 -- direkte Tabelle keine sensiblen Felder (SV-Nr., Steuer-ID, IBAN, BIC).
 revoke select on employees from authenticated;
 grant select (id, personal_nr, gruppe_nr, herkunft, nationalitaet, name, vorname,
-  geburtsdatum, ort, land, stundenlohn, saison_beginn, saison_ende, aktiv)
+  geburtsdatum, ort, land, stundenlohn, saison_beginn, saison_ende, aktiv,
+  praemien_zuckermais, praemien_erdbeeren, praemien_spargel)
   on employees to authenticated;
 
 -- employee_documents: wie andere sensible Personaldaten nur admin/hr, sowohl

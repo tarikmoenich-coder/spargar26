@@ -13,6 +13,7 @@ const tabs = [
   { href: "/praemien/zuckermais", label: "Zuckermais" },
   { href: "/praemien/spargel", label: "Spargel" },
   { href: "/praemien/erdbeeren", label: "Erdbeeren" },
+  { href: "/praemien/gruppenaufteilung", label: "Gruppenaufteilung" },
 ];
 
 export default function PraemienTabs() {

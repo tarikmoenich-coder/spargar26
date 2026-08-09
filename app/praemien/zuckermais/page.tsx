@@ -83,6 +83,10 @@ export default function PraemienZuckermaisPage() {
           .from("employees")
           .select("*")
           .eq("aktiv", true)
+          // Nur wer über "Prämien → Gruppenaufteilung" für Zuckermais
+          // freigegeben ist (Nutzer-Vorgabe 2026-08-09) - unabhängig von
+          // gruppe_nr (Stundenerfassungs-Gruppen).
+          .eq("praemien_zuckermais", true)
           .order("name"),
         supabase.from("arbeitsgruppen").select("*").order("reihenfolge"),
         supabase
@@ -421,6 +425,11 @@ export default function PraemienZuckermaisPage() {
 
       {loading ? (
         <p className="text-neutral-500 print:hidden">Lädt…</p>
+      ) : gefiltert.length === 0 ? (
+        <p className="text-neutral-500 print:hidden">
+          Niemand für Zuckermais freigegeben (oder Gruppenfilter zu eng) -
+          siehe „Prämien → Gruppenaufteilung".
+        </p>
       ) : (
         <div className="overflow-x-auto print:hidden">
           <table>

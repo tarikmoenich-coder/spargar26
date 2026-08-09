@@ -100,6 +100,11 @@ export interface Employee {
   saison_beginn: string | null;
   saison_ende: string | null;
   aktiv: boolean;
+  // Zugehörigkeit zu den Prämien-Erfassungen (Nutzer-Vorgabe 2026-08-09) -
+  // unabhängig von gruppe_nr, gepflegt über "Prämien → Gruppenaufteilung".
+  praemien_zuckermais: boolean;
+  praemien_erdbeeren: boolean;
+  praemien_spargel: boolean;
   // Schwarze Liste: dauerhaftes "nicht mehr erwünscht"-Flag, unabhängig vom
   // aktiv-Status. Nur admin/hr sehen diese Felder (siehe grant select in
   // schema.sql).
