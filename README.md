@@ -383,6 +383,12 @@ Enthalten:
   - fester Stundenlohn (Nutzer-Vorgabe, exakt wie angegeben), nicht der
   individuelle Stundenlohn je Person. Start mit Zuckermais, Spargel/
   Erdbeeren folgen, sobald deren Prämien-Erfassung steht
+- Neue Rolle `erntewirtschaft` (Stand 2026-08-09): eigener,
+  eingeschränkter Arbeitsbereich mit ausschließlich Zugriff auf Prämien
+  (erfassen, wie zeiterfassung) und Statistik - landet nach dem Login
+  direkt auf Prämien → Zuckermais statt auf dem Dashboard (analog zu
+  zeiterfassung → Stundenerfassung), kein Zugriff auf Personal,
+  Lohnübersicht, Kassenbuch, Management oder Einstellungen
 - Rollen/Rechte serverseitig über Postgres Row Level Security
 - Append-only Audit-Log für Personal, Stunden, Vorschüsse, Kassenbuch
 
@@ -416,8 +422,8 @@ atomare Belegnummern).
    (E-Mail + Passwort). Für jeden Nutzer anschließend im Table Editor in
    der Tabelle `profiles` eine Zeile mit derselben `id` (siehe Auth →
    Users → User UID), `full_name` und `role` anlegen
-   (`admin`, `hr`, `zeiterfassung`, `kasse`, `lohnabrechnung`, `pruefer`
-   oder `management`).
+   (`admin`, `hr`, `zeiterfassung`, `kasse`, `lohnabrechnung`, `pruefer`,
+   `management` oder `erntewirtschaft`).
 4. Unter Project Settings → API: `Project URL` und `anon public key`
    kopieren.
 
@@ -440,6 +446,7 @@ nicht nur im Menü versteckt.
 | `lohnabrechnung` | Suche, Lohn, Prämien, Statistik | Lohnübersicht ansehen **und bearbeiten** (Buskosten, Kautionen, "Jetzt Abrechnen"), Vorschüsse einsehen, Prämien ansehen |
 | `pruefer` | Suche, Lohn, Kassenbuch | Nur lesen, außer: Kassenprüfungen freigeben; einzige Nicht-Admin-Rolle mit Audit-Log-Einsicht |
 | `management` | Suche, Lohn, Kassenbuch, Prämien, Statistik, Management | Nur lesende/aggregierte Sicht |
+| `erntewirtschaft` | Suche, Prämien, Statistik | Eigener, eingeschränkter Arbeitsbereich (Nutzer-Vorgabe 2026-08-09) - erfasst Prämien (Kisten/Stunden je Tag, wie zeiterfassung), sieht die Statistik; landet nach dem Login direkt auf Prämien → Zuckermais (kein Dashboard, analog zu zeiterfassung → Stundenerfassung); kein Zugriff auf Personal, Lohnübersicht, Kassenbuch, Management, Einstellungen |
 
 Neuen Benutzer anlegen: Supabase-Dashboard → Authentication → Users →
 "Add user" (E-Mail + Passwort) → User UID kopieren → Table Editor →

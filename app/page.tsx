@@ -15,9 +15,16 @@ export default function Home() {
       return;
     }
     // zeiterfassung hat kein eigenes Dashboard (Stundenerfassung ist schon
-    // ihr einziger Arbeitsbereich) - alle anderen Rollen landen auf ihrem
-    // rollenabhängigen Dashboard, siehe app/dashboard/page.tsx.
-    router.replace(profile?.role === "zeiterfassung" ? "/erfassung" : "/dashboard");
+    // ihr einziger Arbeitsbereich), erntewirtschaft genauso (nur Prämien/
+    // Statistik, Nutzer-Vorgabe 2026-08-09) - alle anderen Rollen landen
+    // auf ihrem rollenabhängigen Dashboard, siehe app/dashboard/page.tsx.
+    if (profile?.role === "zeiterfassung") {
+      router.replace("/erfassung");
+    } else if (profile?.role === "erntewirtschaft") {
+      router.replace("/praemien/zuckermais");
+    } else {
+      router.replace("/dashboard");
+    }
   }, [loading, profile, userId, router]);
 
   return <p className="text-neutral-500">Lädt…</p>;

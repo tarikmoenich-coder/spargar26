@@ -44,7 +44,8 @@ export default function PraemienZuckermaisPage() {
   const canEdit =
     profile?.role === "admin" ||
     profile?.role === "hr" ||
-    profile?.role === "zeiterfassung";
+    profile?.role === "zeiterfassung" ||
+    profile?.role === "erntewirtschaft";
   const isAdmin = profile?.role === "admin";
 
   const [datum, setDatum] = useState(heuteIso());
@@ -246,7 +247,8 @@ export default function PraemienZuckermaisPage() {
       <div className="flex flex-col gap-4">
         <PraemienTabs />
         <p className="text-neutral-500">
-          Nur admin/hr/zeiterfassung dürfen Zuckermais-Prämien erfassen.
+          Nur admin/hr/zeiterfassung/erntewirtschaft dürfen Zuckermais-Prämien
+          erfassen.
         </p>
       </div>
     );

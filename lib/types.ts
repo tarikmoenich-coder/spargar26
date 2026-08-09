@@ -8,7 +8,10 @@ export type UserRole =
   | 'kasse'
   | 'lohnabrechnung'
   | 'pruefer'
-  | 'management';
+  | 'management'
+  // Nur Zugriff auf Prämien (Erfassung) und Statistik, sonst nichts
+  // (Nutzer-Vorgabe 2026-08-09).
+  | 'erntewirtschaft';
 
 export type Abrechnungsart =
   | 'pauschal'

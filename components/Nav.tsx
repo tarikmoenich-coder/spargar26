@@ -56,13 +56,20 @@ const items: NavItem[] = [
   {
     href: "/praemien/zuckermais",
     label: "Prämien",
-    roles: ["admin", "hr", "zeiterfassung", "lohnabrechnung", "management"],
+    roles: [
+      "admin",
+      "hr",
+      "zeiterfassung",
+      "lohnabrechnung",
+      "management",
+      "erntewirtschaft",
+    ],
     auchAktivBei: ["/praemien"],
   },
   {
     href: "/statistik/zuckermais",
     label: "Statistik",
-    roles: ["admin", "hr", "lohnabrechnung", "management"],
+    roles: ["admin", "hr", "lohnabrechnung", "management", "erntewirtschaft"],
     auchAktivBei: ["/statistik"],
   },
   {

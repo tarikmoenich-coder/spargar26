@@ -23,6 +23,19 @@
 -- ---------------------------------------------------------------------------
 -- 1. Rollen & Profile (angelehnt an die Rollenmatrix im Testkatalog,
 --    vereinfacht auf das MVP zugeschnitten)
+--
+--    WICHTIG bei künftigen neuen Rollen (Migration, nicht bei diesem
+--    schema.sql-Fresh-Install): "alter type user_role add value '...'"
+--    darf NICHT in derselben Transaktion wie eine Nutzung dieses neuen
+--    Werts stehen (z.B. eine RLS-Policy mit
+--    "current_role_name() in (..., 'neue_rolle')" - current_role_name()
+--    gibt user_role zurück, der Vergleich braucht also einen impliziten
+--    Cast des String-Literals auf den Enum-Typ). Sonst Fehler "unsafe use
+--    of new value of enum type". Deshalb IMMER zwei getrennte
+--    Migrationsdateien (erst der ADD VALUE allein, danach - in einem
+--    zweiten, separaten Lauf im SQL Editor - die Policies/Grants mit dem
+--    neuen Wert), siehe migration_2026-08-09_rolle_erntewirtschaft_1_enum.sql
+--    und ..._2_policies.sql als Beispiel.
 -- ---------------------------------------------------------------------------
 create type user_role as enum (
   'admin',           -- Administrator: volle Rechte, Konfiguration, Reopen
@@ -31,7 +44,11 @@ create type user_role as enum (
   'kasse',            -- Vorschüsse/Kassenbuch erfassen
   'lohnabrechnung',   -- Lohnübersicht einsehen/prüfen
   'pruefer',          -- nur lesen, Kassenprüfungen freigeben
-  'management'        -- nur aggregierte/lesende Sicht
+  'management',       -- nur aggregierte/lesende Sicht
+  -- Nutzer-Vorgabe 2026-08-09: nur Zugriff auf Prämien (Erfassung) und
+  -- Statistik, sonst nichts - eigener Arbeitsbereich wie zeiterfassung
+  -- bei Stundenerfassung.
+  'erntewirtschaft'
 );
 
 create table profiles (
@@ -2004,16 +2021,17 @@ create policy "kautionsuebergabe_personen_write" on kautionsuebergabe_personen f
 create policy "verpflegungssaetze_rw" on verpflegungssaetze for all
   using (is_admin()) with check (is_admin());
 
--- Zuckermais-Prämien: Rohdaten wie work_entries (zeiterfassung/admin/hr
--- schreiben, alle lesen dürfen - Suche braucht das für den tageweisen
--- Prämien-Stand). Sätze (Norm/Preis) nur admin schreibt, aber breit lesbar
--- (zeiterfassung soll beim Erfassen die aktuell gültige Norm sehen können).
+-- Zuckermais-Prämien: Rohdaten wie work_entries (zeiterfassung/admin/hr/
+-- erntewirtschaft schreiben, alle lesen dürfen - Suche braucht das für den
+-- tageweisen Prämien-Stand). Sätze (Norm/Preis) nur admin schreibt, aber
+-- breit lesbar (zeiterfassung/erntewirtschaft sollen beim Erfassen die
+-- aktuell gültige Norm sehen können).
 create policy "zuckermais_rohdaten_select" on zuckermais_rohdaten for select
   using (auth.uid() is not null);
 create policy "zuckermais_rohdaten_write" on zuckermais_rohdaten for insert
-  with check (current_role_name() in ('admin', 'hr', 'zeiterfassung'));
+  with check (current_role_name() in ('admin', 'hr', 'zeiterfassung', 'erntewirtschaft'));
 create policy "zuckermais_rohdaten_update" on zuckermais_rohdaten for update
-  using (current_role_name() in ('admin', 'hr', 'zeiterfassung'));
+  using (current_role_name() in ('admin', 'hr', 'zeiterfassung', 'erntewirtschaft'));
 create policy "zuckermais_saetze_select" on zuckermais_saetze for select
   using (auth.uid() is not null);
 create policy "zuckermais_saetze_write" on zuckermais_saetze for all
