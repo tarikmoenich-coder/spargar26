@@ -344,6 +344,11 @@ export default function SuchePage() {
                           <th>{t("gemeinsam.datum")}</th>
                           <th>{t("gemeinsam.kisten")}</th>
                           <th>{t("gemeinsam.std")}</th>
+                          <th
+                            title="Erwartete Kolbenzahl bei der an diesem Tag gültigen Norm (Stunden × Norm/Std.) - erst darüber gibt es eine Prämie"
+                          >
+                            {t("gemeinsam.kolbennorm")}
+                          </th>
                           <th>{t("gemeinsam.praemieeuro")}</th>
                         </tr>
                       </thead>
@@ -353,6 +358,12 @@ export default function SuchePage() {
                             <td>{formatDatumDE(z.datum)}</td>
                             <td>{z.kisten}</td>
                             <td>{z.stunden}</td>
+                            <td className="text-neutral-500">
+                              {(
+                                Number(z.stunden) *
+                                Number(z.norm_kolben_pro_stunde ?? 0)
+                              ).toFixed(2)}
+                            </td>
                             <td className="font-medium">
                               {Number(z.praemie).toFixed(2)}
                             </td>
@@ -449,6 +460,7 @@ export default function SuchePage() {
                     <th>Datum</th>
                     <th>Kisten</th>
                     <th>Std.</th>
+                    <th>Kolben Norm</th>
                     <th>Prämie €</th>
                   </tr>
                 </thead>
@@ -458,6 +470,12 @@ export default function SuchePage() {
                       <td>{formatDatumDE(z.datum)}</td>
                       <td>{z.kisten}</td>
                       <td>{z.stunden}</td>
+                      <td>
+                        {(
+                          Number(z.stunden) *
+                          Number(z.norm_kolben_pro_stunde ?? 0)
+                        ).toFixed(2)}
+                      </td>
                       <td>{Number(z.praemie).toFixed(2)}</td>
                     </tr>
                   ))}

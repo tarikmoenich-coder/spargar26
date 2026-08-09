@@ -36,6 +36,7 @@ const de = {
   "gemeinsam.inaktiv": "inaktiv",
   "gemeinsam.kisten": "Kisten",
   "gemeinsam.praemieeuro": "Prämie €",
+  "gemeinsam.kolbennorm": "Kolben Norm",
 
   // Stundenerfassung (app/erfassung/page.tsx)
   "erfassung.title": "Stundenerfassung",
@@ -105,6 +106,7 @@ const hr: Record<TKey, string> = {
   "gemeinsam.inaktiv": "neaktivno",
   "gemeinsam.kisten": "Sanduci",
   "gemeinsam.praemieeuro": "Premija €",
+  "gemeinsam.kolbennorm": "Klipovi norma",
 
   "erfassung.title": "Evidencija radnih sati",
   "erfassung.untertitel":

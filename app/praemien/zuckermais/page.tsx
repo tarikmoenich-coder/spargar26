@@ -260,14 +260,13 @@ export default function PraemienZuckermaisPage() {
       const e = eintraege[emp.id];
       if (!e || (!e.kisten && !e.stunden)) return null;
       const kolben = aktuellerSatz ? e.kisten * aktuellerSatz.kolben_pro_kiste : null;
-      const praemie = aktuellerSatz
-        ? Math.max(
-            ((kolben ?? 0) - e.stunden * aktuellerSatz.norm_kolben_pro_stunde) *
-              aktuellerSatz.satz_pro_kolben,
-            0
-          )
+      const kolbenNorm = aktuellerSatz
+        ? e.stunden * aktuellerSatz.norm_kolben_pro_stunde
         : null;
-      return { emp, e, kolben, praemie };
+      const praemie = aktuellerSatz
+        ? Math.max(((kolben ?? 0) - (kolbenNorm ?? 0)) * aktuellerSatz.satz_pro_kolben, 0)
+        : null;
+      return { emp, e, kolben, kolbenNorm, praemie };
     })
     .filter((z): z is NonNullable<typeof z> => z !== null);
 
@@ -374,6 +373,9 @@ export default function PraemienZuckermaisPage() {
                 <th>Kisten</th>
                 <th>Stunden</th>
                 <th>Kolben</th>
+                <th title="Erwartete Kolbenzahl bei der aktuellen Norm (Stunden × Norm/Std.) - erst darüber gibt es eine Prämie">
+                  Kolben Norm
+                </th>
                 <th>Prämie €</th>
                 <th></th>
               </tr>
@@ -383,6 +385,8 @@ export default function PraemienZuckermaisPage() {
                 const werte = werteFuer(emp.id);
                 const kolben = (Number(werte.kisten) || 0) *
                   (aktuellerSatz?.kolben_pro_kiste ?? 0);
+                const kolbenNorm = (Number(werte.stunden) || 0) *
+                  (aktuellerSatz?.norm_kolben_pro_stunde ?? 0);
                 const praemie = praemieVorschau(werte);
                 return (
                   <tr key={emp.id}>
@@ -423,6 +427,9 @@ export default function PraemienZuckermaisPage() {
                       />
                     </td>
                     <td className="text-neutral-500">{kolben ? fmt(kolben) : "—"}</td>
+                    <td className="text-neutral-500">
+                      {kolbenNorm ? fmt(kolbenNorm) : "—"}
+                    </td>
                     <td className="font-medium">{fmt(praemie)}</td>
                     <td>
                       <button
@@ -539,11 +546,12 @@ export default function PraemienZuckermaisPage() {
                 <th>Kisten</th>
                 <th>Stunden</th>
                 <th>Kolben</th>
+                <th>Kolben Norm</th>
                 <th>Prämie €</th>
               </tr>
             </thead>
             <tbody>
-              {druckZeilen.map(({ emp, e, kolben, praemie }) => (
+              {druckZeilen.map(({ emp, e, kolben, kolbenNorm, praemie }) => (
                 <tr key={emp.id}>
                   <td>{emp.personal_nr}</td>
                   <td>
@@ -552,13 +560,14 @@ export default function PraemienZuckermaisPage() {
                   <td>{e.kisten}</td>
                   <td>{e.stunden}</td>
                   <td>{fmt(kolben)}</td>
+                  <td>{fmt(kolbenNorm)}</td>
                   <td>{fmt(praemie)}</td>
                 </tr>
               ))}
             </tbody>
             <tfoot>
               <tr>
-                <td colSpan={5} className="text-right font-semibold">
+                <td colSpan={6} className="text-right font-semibold">
                   Summe Prämie
                 </td>
                 <td className="font-semibold">
