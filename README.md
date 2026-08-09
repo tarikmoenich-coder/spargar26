@@ -37,8 +37,9 @@ Enthalten:
   Druckansicht pro Gruppe ("Gruppenstundenzettel"). Zur Kontrolle stehen
   die Stunden der letzten 3 Tage schreibgeschützt links neben dem
   bearbeitbaren Tag, sowie zusätzlich die 2 kommenden Tage schreibgeschützt
-  rechts daneben; Herkunft-Spalte neben dem Namen. Markierung kennt neben
-  "U" (Urlaub/Feiertag) jetzt auch "F" (Fahrer) - reine Kennzeichnung
+  rechts daneben; Gruppen-Spalte direkt neben der Personalnummer (weniger
+  Hin-und-her-Blicken), Herkunft-Spalte neben dem Namen. Markierung kennt
+  neben "U" (Urlaub/Feiertag) jetzt auch "F" (Fahrer) - reine Kennzeichnung
   vorerst, soll später für die Fahrer-Prämie ausgewertet werden.
   Pfeil-Buttons neben der Datumsauswahl springen einen
   Tag vor/zurück, Pfeiltasten hoch/runter im Stunden-Feld springen direkt
@@ -318,6 +319,13 @@ Enthalten:
   vom eingefrorenen Schnappschuss abweicht (das „⚠" von der
   Auszahlungen-Seite), mit konkreter Angabe je Feld (alt → neu) statt nur
   des Warnzeichens
+- "Management"-Seite, Abschnitt "Urlaubstage" (Stand 2026-08-09): Anspruch
+  ist 2 Urlaubstage je vollem Kalendermonat der Beschäftigung (1. bis
+  letzter Tag mit Stunden oder Markierung) - ein Monat zählt nur, wenn die
+  Beschäftigung Monatsanfang UND -ende dieses Monats abdeckt (z.B.
+  02.05.-29.07. ergibt nur 2 Tage, da nur Juni ein voller Monat ist).
+  Listet Personen, bei denen mehr "U"-markierte Tage erfasst wurden als
+  der berechnete Anspruch hergibt
 - Rollen/Rechte serverseitig über Postgres Row Level Security
 - Append-only Audit-Log für Personal, Stunden, Vorschüsse, Kassenbuch
 

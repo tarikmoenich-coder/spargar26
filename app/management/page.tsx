@@ -5,6 +5,7 @@ import Link from "next/link";
 import { getSupabaseClient } from "@/lib/supabase/client";
 import {
   ABRECHNUNGSART_LABELS,
+  type EmployeeUrlaubstage,
   type SeasonSummaryRow,
   type SvPruefung,
 } from "@/lib/types";
@@ -110,6 +111,11 @@ export default function ManagementPage() {
     string | null
   >(null);
 
+  const [urlaubUeberzogen, setUrlaubUeberzogen] = useState<
+    EmployeeUrlaubstage[]
+  >([]);
+  const [loadingUrlaub, setLoadingUrlaub] = useState(true);
+
   useEffect(() => {
     async function load() {
       setLoading(true);
@@ -198,6 +204,22 @@ export default function ManagementPage() {
       setLoadingUeberstunden(false);
     }
     loadUeberstunden();
+  }, [jahr]);
+
+  useEffect(() => {
+    async function loadUrlaub() {
+      setLoadingUrlaub(true);
+      const supabase = getSupabaseClient();
+      const { data, error } = await supabase
+        .from("employee_urlaubstage")
+        .select("*")
+        .eq("saison_jahr", jahr)
+        .eq("ueberzogen", true)
+        .order("u_tage", { ascending: false });
+      if (!error) setUrlaubUeberzogen((data as EmployeeUrlaubstage[]) ?? []);
+      setLoadingUrlaub(false);
+    }
+    loadUrlaub();
   }, [jahr]);
 
   return (
@@ -442,6 +464,66 @@ export default function ManagementPage() {
                           </li>
                         ))}
                       </ul>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+
+      <div>
+        <h2 className="mb-2 text-base font-semibold text-emerald-800">
+          Urlaubstage
+        </h2>
+        <p className="mb-2 text-sm text-neutral-500">
+          Anspruch: 2 Urlaubstage je vollem Kalendermonat der Beschäftigung
+          (1. bis letzter Tag mit Stunden oder Markierung) - ein Monat, in
+          dem erst nach dem 1. begonnen oder vor dem Monatsletzten geendet
+          wurde, zählt nicht mit. Personen, bei denen mehr Tage mit
+          Markierung "U" erfasst wurden als der Anspruch hergibt.
+        </p>
+        {loadingUrlaub ? (
+          <p className="text-neutral-500">Lädt…</p>
+        ) : urlaubUeberzogen.length === 0 ? (
+          <p className="text-neutral-500">
+            Keine überzogenen Urlaubstage für {jahr}.
+          </p>
+        ) : (
+          <div className="overflow-x-auto">
+            <table>
+              <thead>
+                <tr>
+                  <th>Pers.-Nr.</th>
+                  <th>Name</th>
+                  <th>1. Eintrag</th>
+                  <th>Letzter Eintrag</th>
+                  <th>Volle Kalendermonate</th>
+                  <th>Anspruch (Tage)</th>
+                  <th>Genommen ("U", Tage)</th>
+                  <th>Status</th>
+                </tr>
+              </thead>
+              <tbody>
+                {urlaubUeberzogen.map((u) => (
+                  <tr key={u.employee_id}>
+                    <td>{u.personal_nr}</td>
+                    <td>
+                      {u.name}, {u.vorname}
+                      {!u.aktiv && (
+                        <span className="ml-1 text-xs text-neutral-500">
+                          (inaktiv)
+                        </span>
+                      )}
+                    </td>
+                    <td>{formatDatumDE(u.erster_eintrag)}</td>
+                    <td>{formatDatumDE(u.letzter_eintrag)}</td>
+                    <td>{u.volle_kalendermonate}</td>
+                    <td>{u.urlaubsanspruch_tage}</td>
+                    <td>{u.u_tage}</td>
+                    <td className="font-medium text-red-600">
+                      ⚠ {u.u_tage - u.urlaubsanspruch_tage} Tag(e) zu viel
                     </td>
                   </tr>
                 ))}

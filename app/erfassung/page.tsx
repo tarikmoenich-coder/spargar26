@@ -654,6 +654,7 @@ function ErfassungInner() {
               <thead>
                 <tr>
                   <th>{t("erfassung.persnr")}</th>
+                  {canGruppeAendern && <th>{t("erfassung.gruppe")}</th>}
                   <th>{t("erfassung.name")}</th>
                   <th>{t("erfassung.herkunft")}</th>
                   <th>{t("erfassung.fuehrerschein")}</th>
@@ -687,6 +688,23 @@ function ErfassungInner() {
                   return (
                     <tr key={emp.id}>
                       <td>{emp.personal_nr}</td>
+                      {canGruppeAendern && (
+                        <td>
+                          <select
+                            value={emp.gruppe_nr ?? ""}
+                            onChange={(e) =>
+                              gruppeAendern(emp.id, e.target.value)
+                            }
+                          >
+                            <option value="">{t("erfassung.keinegruppe")}</option>
+                            {gruppen.map((gr) => (
+                              <option key={gr.gruppe_nr} value={gr.gruppe_nr}>
+                                {gr.gruppe_nr} – {gr.bezeichnung}
+                              </option>
+                            ))}
+                          </select>
+                        </td>
+                      )}
                       <td>
                         {emp.name}, {emp.vorname}
                       </td>
@@ -758,23 +776,6 @@ function ErfassungInner() {
                           disabled={gesperrt || !canEditStunden}
                         />
                       </td>
-                      {canGruppeAendern && (
-                        <td>
-                          <select
-                            value={emp.gruppe_nr ?? ""}
-                            onChange={(e) =>
-                              gruppeAendern(emp.id, e.target.value)
-                            }
-                          >
-                            <option value="">{t("erfassung.keinegruppe")}</option>
-                            {gruppen.map((gr) => (
-                              <option key={gr.gruppe_nr} value={gr.gruppe_nr}>
-                                {gr.gruppe_nr} – {gr.bezeichnung}
-                              </option>
-                            ))}
-                          </select>
-                        </td>
-                      )}
                     </tr>
                   );
                 })}

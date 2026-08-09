@@ -139,6 +139,24 @@ export interface SvPruefung {
   kritisch: boolean;
 }
 
+// Aus der Sicht employee_urlaubstage - Urlaubstage-Anspruch (2 je vollem
+// Kalendermonat der Beschäftigung) vs. tatsächlich genommene "U"-Tage,
+// siehe ausführlichen Kommentar in schema.sql.
+export interface EmployeeUrlaubstage {
+  employee_id: string;
+  personal_nr: string;
+  name: string;
+  vorname: string;
+  aktiv: boolean;
+  saison_jahr: number;
+  erster_eintrag: string;
+  letzter_eintrag: string;
+  u_tage: number;
+  volle_kalendermonate: number;
+  urlaubsanspruch_tage: number;
+  ueberzogen: boolean;
+}
+
 // Ein Frageblock 8 - Zeile ("Bisherige Beschäftigungen im laufenden
 // Kalenderjahr") - rein dokumentierend, siehe schema.sql.
 export interface SvFragebogenVorbeschaeftigung {
