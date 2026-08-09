@@ -5,10 +5,11 @@
 // werden Kisten und Stunden erfasst; Norm (Kolben/Std.), Kolben je Kiste
 // und €-Satz je Kolben über der Norm ändern sich im Saisonverlauf (in der
 // Excel stieg die Norm z.B. von 140 auf 180 Kolben/Std.) - deshalb eine
-// eigene, mit "gültig ab" versionierte Sätze-Verwaltung unten auf der
-// Seite (nur admin), analog zu den Verpflegungssätzen in den
-// Einstellungen. Tagesprämie = GREATEST(0, (Kisten × Kolben/Kiste −
-// Stunden × Norm) × Satz/Kolben) - 1:1 aus der Excel übernommen. Die
+// eigene, mit "gültig ab" versionierte Sätze-Verwaltung direkt unter der
+// Datumsauswahl (nur admin, Nutzer-Vorgabe 2026-08-09), analog zu den
+// Verpflegungssätzen in den Einstellungen. Tagesprämie =
+// GREATEST(0, (Kisten × Kolben/Kiste − Stunden × Norm) × Satz/Kolben) -
+// 1:1 aus der Excel übernommen. Die
 // Saison-Summe fließt automatisch (live) in die Lohnübersicht/Auszahlung
 // ein (siehe season_summary.praemien_summe), erscheint dort mit in der
 // Brutto-Spalte - genau wie die bisherigen Akkord-/Fahrer-/Erdbeer-/
@@ -310,10 +311,95 @@ export default function PraemienZuckermaisPage() {
         </button>
       </div>
 
+      {/* Sätze-Verwaltung (nur admin) - Norm/Preis ändern sich im
+          Saisonverlauf, daher eine Historie statt eines einzelnen Werts.
+          Bewusst direkt unter der Datumsauswahl (Nutzer-Vorgabe
+          2026-08-09), nicht unten auf der Seite. */}
+      {isAdmin && (
+        <div className="rounded border border-neutral-200 bg-white p-3 print:hidden">
+          <h2 className="text-sm font-semibold text-emerald-800">
+            Sätze verwalten (Norm/Preis, ändert sich im Saisonverlauf)
+          </h2>
+          <div className="mt-2 flex flex-wrap items-end gap-2">
+            <label className="text-sm">
+              Gültig ab{" "}
+              <input
+                type="date"
+                value={neuGueltigAb}
+                onChange={(e) => setNeuGueltigAb(e.target.value)}
+              />
+            </label>
+            <label className="text-sm">
+              Norm (Kolben/Std.){" "}
+              <input
+                type="number"
+                step="0.01"
+                className="w-24"
+                value={neuNorm}
+                onChange={(e) => setNeuNorm(e.target.value)}
+              />
+            </label>
+            <label className="text-sm">
+              Kolben/Kiste{" "}
+              <input
+                type="number"
+                step="0.01"
+                className="w-20"
+                value={neuKolbenProKiste}
+                onChange={(e) => setNeuKolbenProKiste(e.target.value)}
+              />
+            </label>
+            <label className="text-sm">
+              €/Kolben über Norm{" "}
+              <input
+                type="number"
+                step="0.0001"
+                className="w-24"
+                value={neuSatzProKolben}
+                onChange={(e) => setNeuSatzProKolben(e.target.value)}
+              />
+            </label>
+            <button
+              type="button"
+              className="btn text-xs"
+              disabled={satzSpeichern}
+              onClick={neuenSatzSpeichern}
+            >
+              Satz hinzufügen
+            </button>
+          </div>
+          {satzFehler && (
+            <p className="mt-1 text-sm text-red-600">{satzFehler}</p>
+          )}
+          {alleSaetze.length > 0 && (
+            <table className="mt-3">
+              <thead>
+                <tr>
+                  <th>Gültig ab</th>
+                  <th>Norm (Kolben/Std.)</th>
+                  <th>Kolben/Kiste</th>
+                  <th>€/Kolben über Norm</th>
+                </tr>
+              </thead>
+              <tbody>
+                {alleSaetze.map((s) => (
+                  <tr key={s.id}>
+                    <td>{formatDatumDE(s.gueltig_ab)}</td>
+                    <td>{s.norm_kolben_pro_stunde}</td>
+                    <td>{s.kolben_pro_kiste}</td>
+                    <td>{s.satz_pro_kolben.toFixed(4)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </div>
+      )}
+
       {!aktuellerSatz && !loading && (
         <p className="rounded border border-amber-300 bg-amber-50 px-3 py-2 text-sm font-medium text-amber-800 print:hidden">
           ⚠ Für den {formatDatumDE(datum)} ist noch kein Satz (Norm/Preis)
-          hinterlegt - weiter unten unter &bdquo;Sätze verwalten&ldquo;
+          hinterlegt - weiter oben unter &bdquo;Sätze verwalten&ldquo;
           nachtragen, sonst wird die Prämie mit 0 € berechnet.
         </p>
       )}
@@ -408,89 +494,6 @@ export default function PraemienZuckermaisPage() {
               })}
             </tbody>
           </table>
-        </div>
-      )}
-
-      {/* Sätze-Verwaltung (nur admin) - Norm/Preis ändern sich im
-          Saisonverlauf, daher eine Historie statt eines einzelnen Werts. */}
-      {isAdmin && (
-        <div className="mt-4 rounded border border-neutral-200 bg-white p-3 print:hidden">
-          <h2 className="text-sm font-semibold text-emerald-800">
-            Sätze verwalten (Norm/Preis, ändert sich im Saisonverlauf)
-          </h2>
-          <div className="mt-2 flex flex-wrap items-end gap-2">
-            <label className="text-sm">
-              Gültig ab{" "}
-              <input
-                type="date"
-                value={neuGueltigAb}
-                onChange={(e) => setNeuGueltigAb(e.target.value)}
-              />
-            </label>
-            <label className="text-sm">
-              Norm (Kolben/Std.){" "}
-              <input
-                type="number"
-                step="0.01"
-                className="w-24"
-                value={neuNorm}
-                onChange={(e) => setNeuNorm(e.target.value)}
-              />
-            </label>
-            <label className="text-sm">
-              Kolben/Kiste{" "}
-              <input
-                type="number"
-                step="0.01"
-                className="w-20"
-                value={neuKolbenProKiste}
-                onChange={(e) => setNeuKolbenProKiste(e.target.value)}
-              />
-            </label>
-            <label className="text-sm">
-              €/Kolben über Norm{" "}
-              <input
-                type="number"
-                step="0.0001"
-                className="w-24"
-                value={neuSatzProKolben}
-                onChange={(e) => setNeuSatzProKolben(e.target.value)}
-              />
-            </label>
-            <button
-              type="button"
-              className="btn text-xs"
-              disabled={satzSpeichern}
-              onClick={neuenSatzSpeichern}
-            >
-              Satz hinzufügen
-            </button>
-          </div>
-          {satzFehler && (
-            <p className="mt-1 text-sm text-red-600">{satzFehler}</p>
-          )}
-          {alleSaetze.length > 0 && (
-            <table className="mt-3">
-              <thead>
-                <tr>
-                  <th>Gültig ab</th>
-                  <th>Norm (Kolben/Std.)</th>
-                  <th>Kolben/Kiste</th>
-                  <th>€/Kolben über Norm</th>
-                </tr>
-              </thead>
-              <tbody>
-                {alleSaetze.map((s) => (
-                  <tr key={s.id}>
-                    <td>{formatDatumDE(s.gueltig_ab)}</td>
-                    <td>{s.norm_kolben_pro_stunde}</td>
-                    <td>{s.kolben_pro_kiste}</td>
-                    <td>{s.satz_pro_kolben.toFixed(4)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          )}
         </div>
       )}
 

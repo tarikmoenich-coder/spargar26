@@ -408,114 +408,12 @@ export default function PraemienErdbeerenPage() {
         </div>
       )}
 
-      {parzellen.length > 0 && !aktuellerSatz && !loading && (
-        <p className="rounded border border-amber-300 bg-amber-50 px-3 py-2 text-sm font-medium text-amber-800 print:hidden">
-          ⚠ Für {aktuelleParzelle?.name} am {formatDatumDE(datum)} ist noch
-          kein Satz (Norm/Bonus) hinterlegt - weiter unten unter „Sätze
-          verwalten" nachtragen, sonst wird die Prämie mit 0 € berechnet.
-        </p>
-      )}
-
-      {fehler && (
-        <p className="rounded border border-red-300 bg-red-50 px-3 py-2 text-sm font-medium text-red-800 print:hidden">
-          ⚠ {fehler}
-        </p>
-      )}
-
-      {aktuellerSatz && (
-        <p className="text-sm text-neutral-500 print:hidden">
-          Gültiger Satz seit {formatDatumDE(aktuellerSatz.gueltig_ab)}: Norm{" "}
-          {aktuellerSatz.norm_steigen_pro_stunde} Steigen/Std. ·{" "}
-          {aktuellerSatz.bonus_pro_steige.toFixed(4)} €/Steige über Norm
-        </p>
-      )}
-
-      {parzellen.length > 0 &&
-        (loading ? (
-          <p className="text-neutral-500 print:hidden">Lädt…</p>
-        ) : (
-          <div className="overflow-x-auto print:hidden">
-            <table>
-              <thead>
-                <tr>
-                  <th>Pers.-Nr.</th>
-                  <th>Name</th>
-                  <th>Gruppe</th>
-                  <th>Steigen</th>
-                  <th>Stunden</th>
-                  <th title="Abfall/nicht vermarktungsfähige Ware - zählt nicht zur Prämie">
-                    Sut
-                  </th>
-                  <th>Prämie €</th>
-                </tr>
-              </thead>
-              <tbody>
-                {gefiltert.map((emp) => {
-                  const werte = werteFuer(emp.id);
-                  const praemie = praemieVorschau(werte);
-                  return (
-                    <tr key={emp.id}>
-                      <td>{emp.personal_nr}</td>
-                      <td>
-                        {emp.name}, {emp.vorname}
-                      </td>
-                      <td className="text-sm text-neutral-500">
-                        {emp.gruppe_nr
-                          ? `${emp.gruppe_nr} – ${
-                              gruppenByNr.get(emp.gruppe_nr)?.bezeichnung ??
-                              emp.gruppe_nr
-                            }`
-                          : "—"}
-                      </td>
-                      <td>
-                        <input
-                          type="number"
-                          min={0}
-                          step="0.01"
-                          className="w-20"
-                          value={werte.steigen}
-                          onChange={(e) =>
-                            feldAendern(emp.id, "steigen", e.target.value)
-                          }
-                        />
-                      </td>
-                      <td>
-                        <input
-                          type="number"
-                          min={0}
-                          step="0.25"
-                          className="w-20"
-                          value={werte.stunden}
-                          onChange={(e) =>
-                            feldAendern(emp.id, "stunden", e.target.value)
-                          }
-                        />
-                      </td>
-                      <td>
-                        <input
-                          type="number"
-                          min={0}
-                          step="0.01"
-                          className="w-20"
-                          value={werte.sut}
-                          onChange={(e) =>
-                            feldAendern(emp.id, "sut", e.target.value)
-                          }
-                        />
-                      </td>
-                      <td className="font-medium">{fmt(praemie)}</td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        ))}
-
       {/* Parzellen verwalten (nur admin) - Stammdaten für spätere
-          Ertragsstatistik (Anzahl Pflanzen/Hektar). */}
+          Ertragsstatistik (Anzahl Pflanzen/Hektar). Bewusst direkt unter
+          der Datumsauswahl (Nutzer-Vorgabe 2026-08-09), nicht unten auf
+          der Seite. */}
       {isAdmin && (
-        <div className="mt-4 rounded border border-neutral-200 bg-white p-3 print:hidden">
+        <div className="rounded border border-neutral-200 bg-white p-3 print:hidden">
           <h2 className="text-sm font-semibold text-emerald-800">
             Parzellen verwalten
           </h2>
@@ -663,6 +561,110 @@ export default function PraemienErdbeerenPage() {
           )}
         </div>
       )}
+
+      {parzellen.length > 0 && !aktuellerSatz && !loading && (
+        <p className="rounded border border-amber-300 bg-amber-50 px-3 py-2 text-sm font-medium text-amber-800 print:hidden">
+          ⚠ Für {aktuelleParzelle?.name} am {formatDatumDE(datum)} ist noch
+          kein Satz (Norm/Bonus) hinterlegt - weiter oben unter „Sätze
+          verwalten" nachtragen, sonst wird die Prämie mit 0 € berechnet.
+        </p>
+      )}
+
+      {fehler && (
+        <p className="rounded border border-red-300 bg-red-50 px-3 py-2 text-sm font-medium text-red-800 print:hidden">
+          ⚠ {fehler}
+        </p>
+      )}
+
+      {aktuellerSatz && (
+        <p className="text-sm text-neutral-500 print:hidden">
+          Gültiger Satz seit {formatDatumDE(aktuellerSatz.gueltig_ab)}: Norm{" "}
+          {aktuellerSatz.norm_steigen_pro_stunde} Steigen/Std. ·{" "}
+          {aktuellerSatz.bonus_pro_steige.toFixed(4)} €/Steige über Norm
+        </p>
+      )}
+
+      {parzellen.length > 0 &&
+        (loading ? (
+          <p className="text-neutral-500 print:hidden">Lädt…</p>
+        ) : (
+          <div className="overflow-x-auto print:hidden">
+            <table>
+              <thead>
+                <tr>
+                  <th>Pers.-Nr.</th>
+                  <th>Name</th>
+                  <th>Gruppe</th>
+                  <th>Steigen</th>
+                  <th>Stunden</th>
+                  <th title="Abfall/nicht vermarktungsfähige Ware - zählt nicht zur Prämie">
+                    Sut
+                  </th>
+                  <th>Prämie €</th>
+                </tr>
+              </thead>
+              <tbody>
+                {gefiltert.map((emp) => {
+                  const werte = werteFuer(emp.id);
+                  const praemie = praemieVorschau(werte);
+                  return (
+                    <tr key={emp.id}>
+                      <td>{emp.personal_nr}</td>
+                      <td>
+                        {emp.name}, {emp.vorname}
+                      </td>
+                      <td className="text-sm text-neutral-500">
+                        {emp.gruppe_nr
+                          ? `${emp.gruppe_nr} – ${
+                              gruppenByNr.get(emp.gruppe_nr)?.bezeichnung ??
+                              emp.gruppe_nr
+                            }`
+                          : "—"}
+                      </td>
+                      <td>
+                        <input
+                          type="number"
+                          min={0}
+                          step="0.01"
+                          className="w-20"
+                          value={werte.steigen}
+                          onChange={(e) =>
+                            feldAendern(emp.id, "steigen", e.target.value)
+                          }
+                        />
+                      </td>
+                      <td>
+                        <input
+                          type="number"
+                          min={0}
+                          step="0.25"
+                          className="w-20"
+                          value={werte.stunden}
+                          onChange={(e) =>
+                            feldAendern(emp.id, "stunden", e.target.value)
+                          }
+                        />
+                      </td>
+                      <td>
+                        <input
+                          type="number"
+                          min={0}
+                          step="0.01"
+                          className="w-20"
+                          value={werte.sut}
+                          onChange={(e) =>
+                            feldAendern(emp.id, "sut", e.target.value)
+                          }
+                        />
+                      </td>
+                      <td className="font-medium">{fmt(praemie)}</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        ))}
 
       {/* Tagesliste zum Aushängen - nur im Druck sichtbar. */}
       {druckModus && (
