@@ -1141,6 +1141,138 @@ alter view zuckermais_statistik_tag set (security_invoker = true);
 grant select on zuckermais_statistik_tag to authenticated;
 
 -- ---------------------------------------------------------------------------
+-- 6b. Prämien Erdbeeren (Nutzer-Vorgabe 2026-08-09) - gleiches Grundmuster
+--     wie Zuckermais (Strichliste je Mitarbeiter/Tag), aber mit einem
+--     wichtigen Unterschied: es wird auf mehreren Parzellen gleichzeitig
+--     gepflückt, mit sehr unterschiedlichen Gegebenheiten (Sorte, Alter,
+--     Bodenverhältnisse) - Norm (Steigen/Std.) und Bonus (€/Steige über
+--     Norm) müssen deshalb JE PARZELLE UND TAG eigenständig einstellbar
+--     sein, nicht global wie bei Zuckermais. Dafür eine eigene, einfache
+--     Parzellen-Stammdatentabelle (Name, Größe, Sorte, Pflanzenanzahl -
+--     "vorerst die notwendigsten Informationen", spätere Ertragsstatistik
+--     pro Pflanze/Hektar vorbereitet). "Sut" (Abfall/nicht
+--     vermarktungsfähige Ware) wird zusätzlich erfasst, fließt aber NICHT
+--     in die Prämienberechnung ein (nur Steigen zählen) - dient der
+--     Ertrags-/Kostenstatistik. 1 Steige = 10 Schalen à 500g = 5 kg (fürs
+--     spätere Umrechnen in der Statistik).
+--
+--     Tagesprämie (je Mitarbeiter, Parzelle und Tag) =
+--     GREATEST(0, (Steigen − Stunden × Norm) × Bonus/Steige) - gleiches
+--     Muster wie Zuckermais, nur mit parzellenspezifischem Satz statt
+--     eines einzigen globalen. Fließt genauso live in
+--     season_summary.praemien_summe/bruttolohn ein.
+--
+--     Bewusst NICHT jetzt gebaut (Nutzer-Vorgabe: "das erstmal für den
+--     Anfang"): Mitarbeitermonitoring mit Checkbox für schlechte
+--     Ernteleistung + Wiederholungs-Warnung - soll später für alle drei
+--     Kulturen gemeinsam kommen.
+-- ---------------------------------------------------------------------------
+create table erdbeeren_parzellen (
+  id bigint generated always as identity primary key,
+  name text not null unique,
+  groesse_ha numeric(6, 2),
+  sorte text,
+  anzahl_pflanzen int,
+  aktiv boolean not null default true,
+  erstellt_von uuid references profiles (id) default auth.uid(),
+  erstellt_am timestamptz not null default now(),
+  updated_by uuid references profiles (id),
+  updated_at timestamptz not null default now()
+);
+
+create table erdbeeren_parzellen_saetze (
+  id bigint generated always as identity primary key,
+  parzelle_id bigint not null references erdbeeren_parzellen (id) on delete restrict,
+  gueltig_ab date not null,
+  norm_steigen_pro_stunde numeric(6, 2) not null,
+  bonus_pro_steige numeric(6, 4) not null,
+  erstellt_von uuid references profiles (id) default auth.uid(),
+  erstellt_am timestamptz not null default now(),
+  unique (parzelle_id, gueltig_ab)
+);
+
+create table erdbeeren_rohdaten (
+  id bigint generated always as identity primary key,
+  employee_id uuid not null references employees (id) on delete restrict,
+  parzelle_id bigint not null references erdbeeren_parzellen (id) on delete restrict,
+  datum date not null,
+  steigen numeric(8, 2) not null default 0,
+  stunden numeric(5, 2) not null default 0,
+  -- Abfall/nicht vermarktungsfähige Ware - informativ, zählt nicht zur
+  -- Prämie.
+  sut numeric(8, 2) not null default 0,
+  erfasst_von uuid references profiles (id) default auth.uid(),
+  erfasst_am timestamptz not null default now(),
+  updated_by uuid references profiles (id),
+  updated_at timestamptz not null default now(),
+  version int not null default 1,
+  unique (employee_id, parzelle_id, datum)
+);
+
+create index idx_erdbeeren_rohdaten_datum on erdbeeren_rohdaten (datum);
+create index idx_erdbeeren_rohdaten_employee on erdbeeren_rohdaten (employee_id);
+create index idx_erdbeeren_rohdaten_parzelle on erdbeeren_rohdaten (parzelle_id);
+
+-- Tagesprämie je Erfassung (Mitarbeiter + Parzelle + Tag) - LATERAL JOIN
+-- auf den zu diesem Datum UND dieser Parzelle gültigen Satz (letzter
+-- "gültig ab" <= Datum, je Parzelle getrennt).
+create or replace view erdbeeren_praemie_tag as
+select
+  r.id,
+  r.employee_id,
+  r.parzelle_id,
+  p.name as parzelle_name,
+  r.datum,
+  r.steigen,
+  r.stunden,
+  r.sut,
+  s.norm_steigen_pro_stunde,
+  s.bonus_pro_steige,
+  greatest(
+    (r.steigen - r.stunden * coalesce(s.norm_steigen_pro_stunde, 0))
+      * coalesce(s.bonus_pro_steige, 0),
+    0
+  ) as praemie
+from erdbeeren_rohdaten r
+join erdbeeren_parzellen p on p.id = r.parzelle_id
+left join lateral (
+  select z.norm_steigen_pro_stunde, z.bonus_pro_steige
+  from erdbeeren_parzellen_saetze z
+  where z.parzelle_id = r.parzelle_id
+    and z.gueltig_ab <= r.datum
+  order by z.gueltig_ab desc
+  limit 1
+) s on true;
+
+alter view erdbeeren_praemie_tag set (security_invoker = true);
+grant select on erdbeeren_praemie_tag to authenticated;
+
+-- Tagesstatistik je Parzelle (Nutzer-Vorgabe: Ertrag/Kosten je Feld sind
+-- für den Betrieb wichtig) - Kosten/Steige nutzt denselben festen
+-- Stundenlohn von 13,90 € wie zuckermais_statistik_tag.
+create or replace view erdbeeren_statistik_tag as
+select
+  datum,
+  parzelle_id,
+  parzelle_name,
+  sum(steigen) as summe_steigen,
+  sum(sut) as summe_sut,
+  sum(stunden) as summe_stunden,
+  sum(praemie) as summe_praemie,
+  case when sum(stunden) > 0 then sum(steigen) / sum(stunden) else null end
+    as steigen_pro_stunde,
+  case when sum(steigen) > 0
+    then (13.90 * sum(stunden) + sum(praemie)) / sum(steigen)
+    else null
+  end as kosten_pro_steige
+from erdbeeren_praemie_tag
+group by datum, parzelle_id, parzelle_name
+order by datum desc;
+
+alter view erdbeeren_statistik_tag set (security_invoker = true);
+grant select on erdbeeren_statistik_tag to authenticated;
+
+-- ---------------------------------------------------------------------------
 -- 7. Zentrale Belegnummern-Vergabe (ADR-010: atomar, auch bei gleichzeitiger
 --    Nutzung durch mehrere Personen - Format wie im Altsystem "MM-JJJJ-###")
 -- ---------------------------------------------------------------------------
@@ -1390,6 +1522,9 @@ create trigger trg_audit_work_entries
 create trigger trg_audit_zuckermais_rohdaten
   after insert or update on zuckermais_rohdaten
   for each row execute function write_audit_log();
+create trigger trg_audit_erdbeeren_rohdaten
+  after insert or update on erdbeeren_rohdaten
+  for each row execute function write_audit_log();
 create trigger trg_audit_advances
   after insert or update on advances
   for each row execute function write_audit_log();
@@ -1433,6 +1568,8 @@ create trigger trg_employees_updated_at before update on employees
 create trigger trg_work_entries_updated_at before update on work_entries
   for each row execute function set_updated_at_and_version();
 create trigger trg_zuckermais_rohdaten_updated_at before update on zuckermais_rohdaten
+  for each row execute function set_updated_at_and_version();
+create trigger trg_erdbeeren_rohdaten_updated_at before update on erdbeeren_rohdaten
   for each row execute function set_updated_at_and_version();
 create trigger trg_personal_kandidaten_updated_at before update on personal_kandidaten
   for each row execute function set_updated_at_and_version();
@@ -1490,7 +1627,8 @@ with base as (
       + coalesce(b.fahrer_zulage, 0)
       + coalesce(b.erdbeer_praemie, 0)
       + coalesce(b.spargel_praemie, 0)
-      + coalesce(zm.zuckermais_praemie_summe, 0) as praemien_summe,
+      + coalesce(zm.zuckermais_praemie_summe, 0)
+      + coalesce(eb.erdbeeren_praemie_summe, 0) as praemien_summe,
     (we.gesamt_stunden * coalesce(e.stundenlohn, 0)) as basis_brutto,
     (we.gesamt_stunden * coalesce(e.stundenlohn, 0))
       + coalesce(b.akkord_betrag, 0)
@@ -1498,7 +1636,8 @@ with base as (
       + coalesce(b.fahrer_zulage, 0)
       + coalesce(b.erdbeer_praemie, 0)
       + coalesce(b.spargel_praemie, 0)
-      + coalesce(zm.zuckermais_praemie_summe, 0) as bruttolohn,
+      + coalesce(zm.zuckermais_praemie_summe, 0)
+      + coalesce(eb.erdbeeren_praemie_summe, 0) as bruttolohn,
     b.netto_extern,
     b.abgerechnet_am,
     b.snapshot,
@@ -1544,6 +1683,12 @@ with base as (
     where pt.employee_id = e.id
       and extract(year from pt.datum) = we.saison_jahr
   ) zm on true
+  left join lateral (
+    select sum(ept.praemie) as erdbeeren_praemie_summe
+    from erdbeeren_praemie_tag ept
+    where ept.employee_id = e.id
+      and extract(year from ept.datum) = we.saison_jahr
+  ) eb on true
 ),
 steuer as (
   select
@@ -1883,6 +2028,9 @@ alter table kautionsuebergabe_personen enable row level security;
 alter table verpflegungssaetze enable row level security;
 alter table zuckermais_rohdaten enable row level security;
 alter table zuckermais_saetze enable row level security;
+alter table erdbeeren_parzellen enable row level security;
+alter table erdbeeren_parzellen_saetze enable row level security;
+alter table erdbeeren_rohdaten enable row level security;
 alter table advances enable row level security;
 alter table advance_recipients enable row level security;
 alter table kassenbewegungen enable row level security;
@@ -2036,6 +2184,27 @@ create policy "zuckermais_saetze_select" on zuckermais_saetze for select
   using (auth.uid() is not null);
 create policy "zuckermais_saetze_write" on zuckermais_saetze for all
   using (is_admin()) with check (is_admin());
+
+-- Erdbeeren-Prämien: gleiches Muster wie Zuckermais. Parzellen-Stammdaten
+-- (Name/Größe/Sorte/Pflanzenanzahl) und ihre Sätze (Norm/Bonus je
+-- Parzelle) nur admin pflegt, aber breit lesbar - Rohdaten (Steigen/
+-- Stunden/Sut) wie zeiterfassung/admin/hr/erntewirtschaft schreiben, alle
+-- lesen dürfen.
+create policy "erdbeeren_parzellen_select" on erdbeeren_parzellen for select
+  using (auth.uid() is not null);
+create policy "erdbeeren_parzellen_write" on erdbeeren_parzellen for all
+  using (is_admin()) with check (is_admin());
+create policy "erdbeeren_parzellen_saetze_select" on erdbeeren_parzellen_saetze for select
+  using (auth.uid() is not null);
+create policy "erdbeeren_parzellen_saetze_write" on erdbeeren_parzellen_saetze for all
+  using (is_admin()) with check (is_admin());
+create policy "erdbeeren_rohdaten_select" on erdbeeren_rohdaten for select
+  using (auth.uid() is not null);
+create policy "erdbeeren_rohdaten_write" on erdbeeren_rohdaten for insert
+  with check (current_role_name() in ('admin', 'hr', 'zeiterfassung', 'erntewirtschaft'));
+create policy "erdbeeren_rohdaten_update" on erdbeeren_rohdaten for update
+  using (current_role_name() in ('admin', 'hr', 'zeiterfassung', 'erntewirtschaft'));
+
 create policy "advances_select" on advances for select
   using (current_role_name() in ('admin', 'hr', 'kasse', 'lohnabrechnung', 'pruefer', 'management'));
 create policy "advances_write" on advances for insert

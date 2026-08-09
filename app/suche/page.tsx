@@ -6,6 +6,7 @@ import { useProfile } from "@/lib/useProfile";
 import { uebersetzung } from "@/lib/i18n";
 import type {
   Employee,
+  ErdbeerenPraemieTag,
   VorschussHistorieEintrag,
   WorkEntry,
   ZuckermaisPraemieTag,
@@ -33,6 +34,7 @@ export default function SuchePage() {
   const [stunden, setStunden] = useState<WorkEntry[]>([]);
   const [vorschuesse, setVorschuesse] = useState<VorschussHistorieEintrag[]>([]);
   const [zuckermais, setZuckermais] = useState<ZuckermaisPraemieTag[]>([]);
+  const [erdbeeren, setErdbeeren] = useState<ErdbeerenPraemieTag[]>([]);
   const [ladenListe, setLadenListe] = useState(true);
   const [ladenDetail, setLadenDetail] = useState(false);
 
@@ -68,7 +70,7 @@ export default function SuchePage() {
     setAusgewaehlt(m);
     setLadenDetail(true);
     const supabase = getSupabaseClient();
-    const [{ data: we }, { data: vh }, { data: zm }] = await Promise.all([
+    const [{ data: we }, { data: vh }, { data: zm }, { data: eb }] = await Promise.all([
       supabase
         .from("work_entries")
         .select("*")
@@ -88,10 +90,18 @@ export default function SuchePage() {
         .gte("datum", `${saisonJahr}-01-01`)
         .lte("datum", `${saisonJahr}-12-31`)
         .order("datum"),
+      supabase
+        .from("erdbeeren_praemie_tag")
+        .select("*")
+        .eq("employee_id", m.id)
+        .gte("datum", `${saisonJahr}-01-01`)
+        .lte("datum", `${saisonJahr}-12-31`)
+        .order("datum"),
     ]);
     setStunden((we as WorkEntry[]) ?? []);
     setVorschuesse((vh as VorschussHistorieEintrag[]) ?? []);
     setZuckermais((zm as ZuckermaisPraemieTag[]) ?? []);
+    setErdbeeren((eb as ErdbeerenPraemieTag[]) ?? []);
     setLadenDetail(false);
   }
 
@@ -111,6 +121,10 @@ export default function SuchePage() {
     .reduce((s, v) => s + Number(v.betrag), 0);
   const zuckermaisGesamt = zuckermais.reduce(
     (s, z) => s + Number(z.praemie ?? 0),
+    0
+  );
+  const erdbeerenGesamt = erdbeeren.reduce(
+    (s, e) => s + Number(e.praemie ?? 0),
     0
   );
 
@@ -374,6 +388,49 @@ export default function SuchePage() {
                   </div>
                 </div>
               )}
+
+              {erdbeeren.length > 0 && (
+                <div className="rounded border border-neutral-200 bg-white p-4">
+                  <div className="mb-2 flex items-baseline justify-between">
+                    <h2 className="text-base font-semibold text-emerald-800">
+                      {t("suche.erdbeerenpraemien", { jahr: saisonJahr })}
+                    </h2>
+                    <span className="text-sm text-neutral-500">
+                      {t("suche.praemiegesamt", {
+                        betrag: erdbeerenGesamt.toFixed(2),
+                      })}
+                    </span>
+                  </div>
+                  <div className="max-h-96 overflow-y-auto">
+                    <table>
+                      <thead>
+                        <tr>
+                          <th>{t("gemeinsam.datum")}</th>
+                          <th>{t("gemeinsam.parzelle")}</th>
+                          <th>{t("gemeinsam.steigen")}</th>
+                          <th>{t("gemeinsam.std")}</th>
+                          <th>{t("gemeinsam.sut")}</th>
+                          <th>{t("gemeinsam.praemieeuro")}</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {erdbeeren.map((e) => (
+                          <tr key={e.id}>
+                            <td>{formatDatumDE(e.datum)}</td>
+                            <td>{e.parzelle_name}</td>
+                            <td>{e.steigen}</td>
+                            <td>{e.stunden}</td>
+                            <td className="text-neutral-500">{e.sut}</td>
+                            <td className="font-medium">
+                              {Number(e.praemie).toFixed(2)}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
             </div>
           )}
         </div>
@@ -477,6 +534,38 @@ export default function SuchePage() {
                         ).toFixed(2)}
                       </td>
                       <td>{Number(z.praemie).toFixed(2)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </>
+          )}
+
+          {erdbeeren.length > 0 && (
+            <>
+              <h3 className="mt-6 text-base font-semibold">
+                Erdbeeren-Prämien ({erdbeerenGesamt.toFixed(2)} € gesamt)
+              </h3>
+              <table className="mt-2 print-form-table">
+                <thead>
+                  <tr>
+                    <th>Datum</th>
+                    <th>Parzelle</th>
+                    <th>Steigen</th>
+                    <th>Std.</th>
+                    <th>Sut</th>
+                    <th>Prämie €</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {erdbeeren.map((e) => (
+                    <tr key={e.id}>
+                      <td>{formatDatumDE(e.datum)}</td>
+                      <td>{e.parzelle_name}</td>
+                      <td>{e.steigen}</td>
+                      <td>{e.stunden}</td>
+                      <td>{e.sut}</td>
+                      <td>{Number(e.praemie).toFixed(2)}</td>
                     </tr>
                   ))}
                 </tbody>

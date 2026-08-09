@@ -370,19 +370,27 @@ Enthalten:
   fließt live in die Lohnübersicht (Brutto-Spalte) ein, genau wie die
   bisherigen Akkord-/Fahrer-/Erdbeer-/Spargel-Prämien. Tagesaktueller Stand
   zusätzlich in der "Suche" sichtbar (Mitarbeiter-Selbstauskunft) sowie als
-  druckbare Tagesliste zum Aushängen. Spargel und Erdbeeren sind als eigene
-  Reiter angelegt, aber noch in Vorbereitung: Spargel braucht eine
-  Anbindung an die externe Waage-Datenbank sowie eine Klärung der
-  Feldstufen-Logik, Erdbeeren rechnet mit mehreren Wiegungen je Tag und
-  läuft strukturell anders
+  druckbare Tagesliste zum Aushängen. **Erdbeeren** (Prämien → Erdbeeren,
+  admin/hr/zeiterfassung/erntewirtschaft, Stand 2026-08-09) nach
+  demselben Muster, aber mit Norm (Steigen/Std.) und Bonus (€/Steige über
+  Norm) JE PARZELLE UND TAG statt global (auf mehreren Parzellen mit sehr
+  unterschiedlichen Gegebenheiten gleichzeitig gepflückt) - eigene
+  Parzellen-Stammdaten (Name/Größe/Sorte/Anzahl Pflanzen, admin-verwaltet
+  direkt auf der Seite), zusätzlich wird "Sut" (Abfall/nicht
+  vermarktungsfähige Ware) miterfasst (zählt nicht zur Prämie, nur zur
+  Statistik). 1 Steige = 10 Schalen à 500g = 5 kg. Spargel ist als eigener
+  Reiter angelegt, aber noch in Vorbereitung - braucht eine Anbindung an
+  die externe Waage-Datenbank sowie eine Klärung der Feldstufen-Logik
 - Neuer Menüpunkt "Statistik" (Stand 2026-08-09, admin/hr/lohnabrechnung/
-  management), analog zu "Prämien" mit eigenen Untermenüs Spargel/
-  Erdbeeren/Zuckermais - Tagesstatistik über alle Mitarbeiter (Summe
-  Kisten/Kolben/Stunden/Prämien, Durchschnitt Kolben/Std., Kosten/Kolben).
-  Kosten/Kolben = (13,90 € × Summe Stunden + Summe Prämien) / Summe Kolben
-  - fester Stundenlohn (Nutzer-Vorgabe, exakt wie angegeben), nicht der
-  individuelle Stundenlohn je Person. Start mit Zuckermais, Spargel/
-  Erdbeeren folgen, sobald deren Prämien-Erfassung steht
+  management/erntewirtschaft), analog zu "Prämien" mit eigenen Untermenüs
+  Spargel/Erdbeeren/Zuckermais - Tagesstatistik über alle Mitarbeiter
+  (Summe Kisten bzw. Steigen/Kolben/Stunden/Prämien, Durchschnitt je
+  Stunde, Kosten je Einheit). Kosten-Formel nutzt einen festen
+  Stundenlohn von 13,90 € (Nutzer-Vorgabe, exakt wie angegeben), nicht den
+  individuellen Stundenlohn je Person. Erdbeeren zusätzlich mit
+  Saison-Summe je Parzelle (Ertrag in Steigen und kg, Nutzer-Vorgabe: "wie
+  viel Ertrag pro Feld kommt runter") und Parzelle-Filter. Spargel folgt,
+  sobald dessen Prämien-Erfassung steht
 - Neue Rolle `erntewirtschaft` (Stand 2026-08-09): eigener,
   eingeschränkter Arbeitsbereich mit ausschließlich Zugriff auf Prämien
   (erfassen, wie zeiterfassung) und Statistik - landet nach dem Login

@@ -39,6 +39,9 @@ const de = {
   "gemeinsam.kolbennorm": "Kolben Norm",
   "gemeinsam.alle": "Alle",
   "gemeinsam.speichern": "Speichern",
+  "gemeinsam.steigen": "Steigen",
+  "gemeinsam.sut": "Sut",
+  "gemeinsam.parzelle": "Parzelle",
 
   // Stundenerfassung (app/erfassung/page.tsx)
   "erfassung.title": "Stundenerfassung",
@@ -90,6 +93,7 @@ const de = {
   "suche.zuckermaispraemien": "Zuckermais-Prämien {jahr}",
   "suche.praemiegesamt": "{betrag} € gesamt",
   "suche.keinezuckermais": "Keine Zuckermais-Einträge in diesem Jahr.",
+  "suche.erdbeerenpraemien": "Erdbeeren-Prämien {jahr}",
 
   // Arbeitskleidung (app/arbeitskleidung/page.tsx)
   "arbeitskleidung.title": "Arbeitskleidung {jahr}",
@@ -123,6 +127,9 @@ const hr: Record<TKey, string> = {
   "gemeinsam.kolbennorm": "Klipovi norma",
   "gemeinsam.alle": "Sve",
   "gemeinsam.speichern": "Spremi",
+  "gemeinsam.steigen": "Gajbe",
+  "gemeinsam.sut": "Otpad",
+  "gemeinsam.parzelle": "Parcela",
 
   "erfassung.title": "Evidencija radnih sati",
   "erfassung.untertitel":
@@ -172,6 +179,7 @@ const hr: Record<TKey, string> = {
   "suche.zuckermaispraemien": "Premije kukuruz šećerac {jahr}",
   "suche.praemiegesamt": "{betrag} € ukupno",
   "suche.keinezuckermais": "Nema unosa za kukuruz šećerac u ovoj godini.",
+  "suche.erdbeerenpraemien": "Premije jagode {jahr}",
 
   "arbeitskleidung.title": "Radna odjeća {jahr}",
   "arbeitskleidung.untertitel":

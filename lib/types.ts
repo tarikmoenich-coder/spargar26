@@ -543,6 +543,80 @@ export interface ZuckermaisStatistikTag {
   kosten_pro_kolben: number | null;
 }
 
+// Prämien Erdbeeren (Nutzer-Vorgabe 2026-08-09) - Norm/Bonus je Parzelle
+// UND Tag statt global (anders als Zuckermais), da auf mehreren Parzellen
+// mit sehr unterschiedlichen Gegebenheiten gleichzeitig gepflückt wird.
+export interface ErdbeerenParzelle {
+  id: number;
+  name: string;
+  groesse_ha: number | null;
+  sorte: string | null;
+  anzahl_pflanzen: number | null;
+  aktiv: boolean;
+  erstellt_von: string | null;
+  erstellt_am: string;
+  updated_by: string | null;
+  updated_at: string;
+}
+
+export interface ErdbeerenParzellenSatz {
+  id: number;
+  parzelle_id: number;
+  gueltig_ab: string;
+  norm_steigen_pro_stunde: number;
+  bonus_pro_steige: number;
+  erstellt_von: string | null;
+  erstellt_am: string;
+}
+
+export interface ErdbeerenRohdatenEintrag {
+  id: number;
+  employee_id: string;
+  parzelle_id: number;
+  datum: string;
+  steigen: number;
+  stunden: number;
+  // Abfall/nicht vermarktungsfähige Ware - informativ, zählt nicht zur
+  // Prämie.
+  sut: number;
+  erfasst_von: string | null;
+  erfasst_am: string;
+  updated_by: string | null;
+  updated_at: string;
+  version: number;
+}
+
+// Aus der Sicht erdbeeren_praemie_tag - Rohdaten-Zeile plus dem am
+// jeweiligen Tag/dieser Parzelle gültigen Satz und der berechneten
+// Tagesprämie.
+export interface ErdbeerenPraemieTag {
+  id: number;
+  employee_id: string;
+  parzelle_id: number;
+  parzelle_name: string;
+  datum: string;
+  steigen: number;
+  stunden: number;
+  sut: number;
+  norm_steigen_pro_stunde: number | null;
+  bonus_pro_steige: number | null;
+  praemie: number;
+}
+
+// Aus der Sicht erdbeeren_statistik_tag - Tagesstatistik je Parzelle
+// (Menüpunkt "Statistik").
+export interface ErdbeerenStatistikTag {
+  datum: string;
+  parzelle_id: number;
+  parzelle_name: string;
+  summe_steigen: number;
+  summe_sut: number;
+  summe_stunden: number;
+  summe_praemie: number;
+  steigen_pro_stunde: number | null;
+  kosten_pro_steige: number | null;
+}
+
 // Kautionsübergabe an den Hausmeister (Nutzer-Vorgabe 2026-08-09) - ein
 // Übergabebeleg je Auszahlungsbeleg, mit den enthaltenen Personen/
 // Kautionsbeträgen. Erst mit dieser Übergabe wird die Kaution auch als
