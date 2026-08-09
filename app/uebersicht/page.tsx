@@ -21,6 +21,7 @@ import {
   FARBE_KAUTION_TH,
   FARBE_NETTO_TD,
   FARBE_NETTO_TH,
+  FARBE_ZULAGE_TH,
 } from "@/lib/farben";
 
 const OHNE_GRUPPE_KEY = "__ohne__";
@@ -596,6 +597,12 @@ export default function UebersichtPage() {
                 <th>Tage</th>
                 <th>Abrechnungsart</th>
                 <th className={FARBE_BRUTTO_TH}>Brutto €</th>
+                <th
+                  className={FARBE_ZULAGE_TH}
+                  title="Akkord, Fahrer-Zulage, Erdbeer-/Spargel-/Zuckermais-Prämie - bereits im Brutto enthalten, hier zur Nachvollziehbarkeit separat ausgewiesen"
+                >
+                  Prämien €
+                </th>
                 <th>Lohnsteuer (pauschal) €</th>
                 <th className={FARBE_NETTO_TH}>Netto €</th>
                 <th className={FARBE_ABZUG_TH}>Verpfl./Unterkunft €</th>
@@ -651,6 +658,7 @@ export default function UebersichtPage() {
                   <td className={FARBE_BRUTTO_TD}>
                     {fmt(anzeige(r, "bruttolohn"))}
                   </td>
+                  <td>{fmt(anzeige(r, "praemien_summe"))}</td>
                   <td>{fmt(anzeige(r, "lohnsteuer_pauschal"))}</td>
                   <td className={FARBE_NETTO_TD}>
                     {r.abrechnungsart === "pauschal" || !canEdit || r.abgerechnet_am ? (
@@ -952,6 +960,7 @@ export default function UebersichtPage() {
                 <th>Std.</th>
                 <th>Tage</th>
                 <th>Brutto €</th>
+                <th>Prämien €</th>
                 <th>Steuer €</th>
                 <th>Netto €</th>
                 <th>Verpfl./Unterk. €</th>
@@ -974,6 +983,7 @@ export default function UebersichtPage() {
                   <td>{fmt(anzeige(r, "gesamt_stunden"))}</td>
                   <td>{anzeige(r, "anwesenheitstage") ?? "—"}</td>
                   <td>{fmt(anzeige(r, "bruttolohn"))}</td>
+                  <td>{fmt(anzeige(r, "praemien_summe"))}</td>
                   <td>{fmt(anzeige(r, "lohnsteuer_pauschal"))}</td>
                   <td>{fmt(anzeige(r, "netto"))}</td>
                   <td>
@@ -996,7 +1006,7 @@ export default function UebersichtPage() {
             </tbody>
             <tfoot>
               <tr>
-                <td colSpan={13} className="text-right font-semibold">
+                <td colSpan={14} className="text-right font-semibold">
                   Summe Auszahlung
                 </td>
                 <td className="font-semibold">
