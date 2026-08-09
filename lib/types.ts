@@ -30,6 +30,9 @@ export interface Profile {
   full_name: string;
   role: UserRole;
   aktiv: boolean;
+  // UI-Sprache je Nutzer (nicht je Rolle) - siehe lib/i18n.ts. Betrifft
+  // nur die Bedienoberfläche, keine Dokumente/Formulare.
+  sprache: "de" | "hr";
 }
 
 // Feste Kategorie-Liste für Mitarbeiter-Dokumente (Nutzer-Vorgabe) - muss

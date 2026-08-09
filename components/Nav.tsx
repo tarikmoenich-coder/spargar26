@@ -5,6 +5,7 @@ import { useEffect } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { getSupabaseClient } from "@/lib/supabase/client";
 import { useProfile } from "@/lib/useProfile";
+import { SPRACHEN, type Sprache } from "@/lib/i18n";
 import type { UserRole } from "@/lib/types";
 
 interface NavItem {
@@ -99,6 +100,21 @@ export default function Nav() {
     router.push("/login");
   }
 
+  // Je Nutzer (nicht je Rolle) gespeichert, siehe profiles.sprache -
+  // betrifft nur die Bedienoberfläche, keine Dokumente/Formulare
+  // (Nutzer-Vorgabe 2026-08-08). Voller Reload nach dem Ändern, da
+  // useProfile() auf jeder Seite unabhängig lädt (kein geteilter Kontext)
+  // - so sehen Navigation UND aktuelle Seite garantiert konsistent die
+  // neue Sprache.
+  async function spracheAendern(neueSprache: Sprache) {
+    if (!profile) return;
+    await getSupabaseClient()
+      .from("profiles")
+      .update({ sprache: neueSprache })
+      .eq("id", profile.id);
+    window.location.reload();
+  }
+
   return (
     <nav className="sticky top-0 z-50 h-14 border-b border-neutral-200 bg-white print:hidden">
       <div className="mx-auto flex h-full max-w-[1800px] items-center justify-between px-4">
@@ -131,9 +147,23 @@ export default function Nav() {
         </div>
         <div className="flex items-center gap-3 text-sm text-neutral-600">
           {profile && (
-            <span>
-              {profile.full_name} · <span className="italic">{profile.role}</span>
-            </span>
+            <>
+              <span>
+                {profile.full_name} · <span className="italic">{profile.role}</span>
+              </span>
+              <select
+                value={profile.sprache}
+                onChange={(e) => spracheAendern(e.target.value as Sprache)}
+                title="Sprache der Bedienoberfläche (nur für dich, betrifft keine Dokumente)"
+                className="text-xs"
+              >
+                {SPRACHEN.map((s) => (
+                  <option key={s.wert} value={s.wert}>
+                    {s.label}
+                  </option>
+                ))}
+              </select>
+            </>
           )}
           <button className="btn-secondary" onClick={logout}>
             Abmelden

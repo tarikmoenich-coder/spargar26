@@ -4,6 +4,7 @@ import { Suspense, useCallback, useEffect, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { getSupabaseClient } from "@/lib/supabase/client";
 import { useProfile } from "@/lib/useProfile";
+import { uebersetzung } from "@/lib/i18n";
 import type {
   Arbeitsgruppe,
   Employee,
@@ -86,6 +87,7 @@ function gruppiere(
 
 function ErfassungInner() {
   const { profile } = useProfile();
+  const t = uebersetzung(profile?.sprache);
   const canGruppeAendern =
     profile?.role === "admin" || profile?.role === "hr";
   // Muss exakt zu work_entries_write/-update in schema.sql passen (RLS).
@@ -530,24 +532,21 @@ function ErfassungInner() {
       <ErfassungTabs />
       <div className="print:hidden">
         <h1 className="text-lg font-semibold text-emerald-800">
-          Stundenerfassung
+          {t("erfassung.title")}
         </h1>
-        <p className="text-sm text-neutral-500">
-          Änderungen werden sofort für alle angemeldeten Nutzer sichtbar
-          (Live-Sync). „U“ = Urlaub/Feiertag.
-        </p>
+        <p className="text-sm text-neutral-500">{t("erfassung.untertitel")}</p>
       </div>
 
       <div className="sticky top-[calc(3.5rem+var(--subtabs-h,2.5rem))] z-30 flex flex-col gap-2 bg-neutral-50 py-2 print:hidden">
         <div className="flex items-center gap-3">
           <label className="text-sm">
-            Datum{" "}
+            {t("gemeinsam.datum")}{" "}
             <span className="inline-flex items-center gap-1">
               <button
                 type="button"
                 className="btn-secondary px-2 text-xs"
                 onClick={() => datumWechseln(addDays(datum, -1))}
-                title="Ein Tag zurück"
+                title={t("erfassung.eintagzurueck")}
               >
                 ←
               </button>
@@ -560,30 +559,26 @@ function ErfassungInner() {
                 type="button"
                 className="btn-secondary px-2 text-xs"
                 onClick={() => datumWechseln(addDays(datum, 1))}
-                title="Ein Tag vor"
+                title={t("erfassung.eintagvor")}
               >
                 →
               </button>
             </span>
           </label>
           <span className="text-sm text-neutral-500">
-            Tagessumme: {gesamtStunden.toFixed(2)} Std.
+            {t("erfassung.tagessumme", { wert: gesamtStunden.toFixed(2) })}
           </span>
         </div>
 
         {!canEditStunden && (
           <p className="rounded border border-amber-300 bg-amber-50 px-3 py-2 text-sm font-medium text-amber-800">
-            🔒 Deine Rolle ({profile?.role}) darf hier nur lesen, keine
-            Stunden eintragen - die Felder sind deshalb gesperrt.
+            {t("erfassung.rollegesperrt", { rolle: profile?.role ?? "" })}
           </p>
         )}
 
         {gesperrt && (
           <p className="rounded border border-amber-300 bg-amber-50 px-3 py-2 text-sm font-medium text-amber-800">
-            🔒 Dieser Monat ist im Rahmen des Monatsabschlusses gesperrt -
-            die Stunden für diesen Tag können nicht mehr geändert werden.
-            Zum Nachtragen muss der Monat auf der Lohnübersicht bewusst
-            wieder geöffnet werden.
+            {t("erfassung.monatgesperrt")}
           </p>
         )}
 
@@ -595,7 +590,7 @@ function ErfassungInner() {
               className="btn-secondary shrink-0 text-xs"
               onClick={() => setSpeicherFehler(null)}
             >
-              Ausblenden
+              {t("erfassung.ausblenden")}
             </button>
           </p>
         )}
@@ -612,7 +607,7 @@ function ErfassungInner() {
       </div>
 
       {loading ? (
-        <p className="text-neutral-500">Lädt…</p>
+        <p className="text-neutral-500">{t("gemeinsam.laedt")}</p>
       ) : (
         gruppierungen.map((g) => (
           <section
@@ -638,7 +633,12 @@ function ErfassungInner() {
               <h2 className="text-base font-semibold text-emerald-800">
                 {g.anzeige}{" "}
                 <span className="font-normal text-neutral-500">
-                  ({g.employees.length} Pers., {gruppenStunden(g).toFixed(2)} Std.)
+                  (
+                  {t("erfassung.personenstd", {
+                    n: g.employees.length,
+                    std: gruppenStunden(g).toFixed(2),
+                  })}
+                  )
                 </span>
               </h2>
               <button
@@ -646,39 +646,39 @@ function ErfassungInner() {
                 className="btn-secondary text-xs"
                 onClick={() => setPrintGroupKey(g.key)}
               >
-                Gruppe drucken
+                {t("erfassung.gruppedrucken")}
               </button>
             </div>
 
             <table className="print:hidden">
               <thead>
                 <tr>
-                  <th>Pers.-Nr.</th>
-                  <th>Name</th>
-                  <th>Herkunft</th>
-                  <th>Führerschein</th>
+                  <th>{t("erfassung.persnr")}</th>
+                  <th>{t("erfassung.name")}</th>
+                  <th>{t("erfassung.herkunft")}</th>
+                  <th>{t("erfassung.fuehrerschein")}</th>
                   {vorherigeDaten.map((d) => (
                     <th
                       key={d}
                       className="font-normal text-neutral-400"
-                      title="Nur zur Kontrolle - hier nicht bearbeitbar"
+                      title={t("erfassung.nurkontrolle")}
                     >
                       {kurzDatum(d)}
                     </th>
                   ))}
-                  <th>Stunden</th>
+                  <th>{t("erfassung.stunden")}</th>
                   {kommendeDaten.map((d) => (
                     <th
                       key={d}
                       className="font-normal text-neutral-400"
-                      title="Nur zur Kontrolle - hier nicht bearbeitbar"
+                      title={t("erfassung.nurkontrolle")}
                     >
                       {kurzDatum(d)}
                     </th>
                   ))}
-                  <th>Markierung</th>
-                  <th>Notiz</th>
-                  {canGruppeAendern && <th>Gruppe</th>}
+                  <th>{t("gemeinsam.markierung")}</th>
+                  <th>{t("gemeinsam.notiz")}</th>
+                  {canGruppeAendern && <th>{t("erfassung.gruppe")}</th>}
                 </tr>
               </thead>
               <tbody>
@@ -722,7 +722,7 @@ function ErfassungInner() {
                           onBlur={(e) => saveHours(emp.id, e.target.value)}
                           onKeyDown={handleStundenKeyDown}
                           disabled={gesperrt || !canEditStunden}
-                          title="↑/↓: vorherige/nächste Person · Umschalt+←/→: Vortag/Folgetag derselben Person"
+                          title={t("erfassung.stundenfeldtitel")}
                         />
                       </td>
                       {kommendeDaten.map((d) => {
@@ -743,14 +743,14 @@ function ErfassungInner() {
                           disabled={gesperrt || !canEditStunden}
                         >
                           <option value="">—</option>
-                          <option value="U">U (Urlaub/Feiertag)</option>
-                          <option value="F">F (Fahrer)</option>
+                          <option value="U">{t("erfassung.markierungurlaub")}</option>
+                          <option value="F">{t("erfassung.markierungfahrer")}</option>
                         </select>
                       </td>
                       <td>
                         <input
                           type="text"
-                          placeholder="z.B. krank, zu spät"
+                          placeholder={t("erfassung.notizplatzhalter")}
                           className="w-36"
                           defaultValue={entry?.notiz ?? ""}
                           key={`n-${emp.id}-${entry?.version ?? 0}`}
@@ -766,7 +766,7 @@ function ErfassungInner() {
                               gruppeAendern(emp.id, e.target.value)
                             }
                           >
-                            <option value="">— keine Gruppe —</option>
+                            <option value="">{t("erfassung.keinegruppe")}</option>
                             {gruppen.map((gr) => (
                               <option key={gr.gruppe_nr} value={gr.gruppe_nr}>
                                 {gr.gruppe_nr} – {gr.bezeichnung}

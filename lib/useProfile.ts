@@ -26,7 +26,7 @@ export function useProfile() {
       }
       const { data, error } = await supabase
         .from("profiles")
-        .select("id, full_name, role, aktiv")
+        .select("id, full_name, role, aktiv, sprache")
         .eq("id", uid)
         .single();
       if (!error) setProfile(data as Profile);

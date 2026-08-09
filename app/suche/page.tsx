@@ -2,6 +2,8 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { getSupabaseClient } from "@/lib/supabase/client";
+import { useProfile } from "@/lib/useProfile";
+import { uebersetzung } from "@/lib/i18n";
 import type { Employee, VorschussHistorieEintrag, WorkEntry } from "@/lib/types";
 import { formatDatumDE } from "@/lib/format";
 
@@ -17,6 +19,8 @@ function jetzigeSaison() {
 }
 
 export default function SuchePage() {
+  const { profile } = useProfile();
+  const t = uebersetzung(profile?.sprache);
   const [alle, setAlle] = useState<SucheEmployee[]>([]);
   const [suchtext, setSuchtext] = useState("");
   const [ausgewaehlt, setAusgewaehlt] = useState<SucheEmployee | null>(null);
@@ -100,17 +104,16 @@ export default function SuchePage() {
   return (
     <div className="flex flex-col gap-4">
       <div className="print:hidden">
-        <h1 className="text-lg font-semibold text-emerald-800">Suche</h1>
-        <p className="text-sm text-neutral-500">
-          Nach Name oder Personalnummer suchen, um Arbeitsstunden und
-          Vorschüsse einer Person einzusehen.
-        </p>
+        <h1 className="text-lg font-semibold text-emerald-800">
+          {t("suche.title")}
+        </h1>
+        <p className="text-sm text-neutral-500">{t("suche.untertitel")}</p>
       </div>
 
       <div className="rounded border border-neutral-200 bg-white p-4 print:hidden">
         <input
           autoFocus
-          placeholder="Name oder Personalnummer eingeben…"
+          placeholder={t("suche.platzhalter")}
           value={suchtext}
           onChange={(e) => {
             setSuchtext(e.target.value);
@@ -119,14 +122,16 @@ export default function SuchePage() {
           className="w-full"
         />
         {ladenListe ? (
-          <p className="mt-2 text-sm text-neutral-500">Lädt…</p>
+          <p className="mt-2 text-sm text-neutral-500">
+            {t("gemeinsam.laedt")}
+          </p>
         ) : (
           suchtext.trim() !== "" &&
           !ausgewaehlt && (
             <ul className="mt-2 flex flex-col divide-y divide-neutral-100 rounded border border-neutral-200">
               {treffer.length === 0 ? (
                 <li className="p-2 text-sm text-neutral-500">
-                  Keine Treffer.
+                  {t("suche.keinetreffer")}
                 </li>
               ) : (
                 treffer.map((m) => (
@@ -144,7 +149,7 @@ export default function SuchePage() {
                       </span>
                       {!m.aktiv && (
                         <span className="text-xs text-neutral-400">
-                          inaktiv
+                          {t("gemeinsam.inaktiv")}
                         </span>
                       )}
                     </button>
@@ -164,12 +169,14 @@ export default function SuchePage() {
                 {ausgewaehlt.name}, {ausgewaehlt.vorname}
               </p>
               <p className="text-sm text-neutral-500">
-                Personalnummer {ausgewaehlt.personal_nr}
-                {!ausgewaehlt.aktiv && " · inaktiv"}
+                {t("suche.personalnummer", { nr: ausgewaehlt.personal_nr })}
+                {!ausgewaehlt.aktiv && ` · ${t("gemeinsam.inaktiv")}`}
               </p>
             </div>
             <div className="flex items-center gap-2">
-              <label className="text-sm text-neutral-500">Saison-Jahr</label>
+              <label className="text-sm text-neutral-500">
+                {t("suche.saisonjahr")}
+              </label>
               <select
                 value={saisonJahr}
                 onChange={(e) => setSaisonJahr(Number(e.target.value))}
@@ -185,7 +192,7 @@ export default function SuchePage() {
                 className="btn-secondary text-xs"
                 onClick={() => window.print()}
               >
-                Drucken
+                {t("gemeinsam.drucken")}
               </button>
               <button
                 type="button"
@@ -195,37 +202,40 @@ export default function SuchePage() {
                   setSuchtext("");
                 }}
               >
-                Neue Suche
+                {t("suche.neuesuche")}
               </button>
             </div>
           </div>
 
           {ladenDetail ? (
-            <p className="text-neutral-500">Lädt…</p>
+            <p className="text-neutral-500">{t("gemeinsam.laedt")}</p>
           ) : (
             <div className="grid gap-4 md:grid-cols-2">
               <div className="rounded border border-neutral-200 bg-white p-4">
                 <div className="mb-2 flex items-baseline justify-between">
                   <h2 className="text-base font-semibold text-emerald-800">
-                    Arbeitsstunden {saisonJahr}
+                    {t("suche.arbeitsstunden", { jahr: saisonJahr })}
                   </h2>
                   <span className="text-sm text-neutral-500">
-                    {stundenGesamt.toFixed(2)} Std. · {tageGesamt} Tage
+                    {t("suche.stdtage", {
+                      std: stundenGesamt.toFixed(2),
+                      tage: tageGesamt,
+                    })}
                   </span>
                 </div>
                 {stunden.length === 0 ? (
                   <p className="text-sm text-neutral-500">
-                    Keine Einträge in diesem Jahr.
+                    {t("suche.keineeintraege")}
                   </p>
                 ) : (
                   <div className="max-h-96 overflow-y-auto">
                     <table>
                       <thead>
                         <tr>
-                          <th>Datum</th>
-                          <th>Std.</th>
-                          <th>Markierung</th>
-                          <th>Notiz</th>
+                          <th>{t("gemeinsam.datum")}</th>
+                          <th>{t("gemeinsam.std")}</th>
+                          <th>{t("gemeinsam.markierung")}</th>
+                          <th>{t("gemeinsam.notiz")}</th>
                         </tr>
                       </thead>
                       <tbody>
@@ -246,26 +256,28 @@ export default function SuchePage() {
               <div className="rounded border border-neutral-200 bg-white p-4">
                 <div className="mb-2 flex items-baseline justify-between">
                   <h2 className="text-base font-semibold text-emerald-800">
-                    Vorschüsse
+                    {t("suche.vorschuesse")}
                   </h2>
                   <span className="text-sm text-neutral-500">
-                    {vorschussGesamt.toFixed(2)} € (aktiv)
+                    {t("suche.betragaktiv", {
+                      betrag: vorschussGesamt.toFixed(2),
+                    })}
                   </span>
                 </div>
                 {vorschuesse.length === 0 ? (
                   <p className="text-sm text-neutral-500">
-                    Keine Vorschüsse erfasst.
+                    {t("suche.keinevorschuesse")}
                   </p>
                 ) : (
                   <div className="max-h-96 overflow-y-auto">
                     <table>
                       <thead>
                         <tr>
-                          <th>Datum</th>
-                          <th>Betrag €</th>
-                          <th>Art</th>
-                          <th>Begründung</th>
-                          <th>Status</th>
+                          <th>{t("gemeinsam.datum")}</th>
+                          <th>{t("suche.betrageuro")}</th>
+                          <th>{t("suche.art")}</th>
+                          <th>{t("suche.begruendung")}</th>
+                          <th>{t("suche.status")}</th>
                         </tr>
                       </thead>
                       <tbody>
@@ -276,9 +288,17 @@ export default function SuchePage() {
                           >
                             <td>{formatDatumDE(v.datum)}</td>
                             <td>{Number(v.betrag).toFixed(2)}</td>
-                            <td>{v.zahlungsart === "BAR" ? "Bar" : "Überweisung"}</td>
+                            <td>
+                              {v.zahlungsart === "BAR"
+                                ? t("gemeinsam.bar")
+                                : t("gemeinsam.ueberweisung")}
+                            </td>
                             <td>{v.begruendung ?? "—"}</td>
-                            <td>{v.storniert ? "storniert" : "aktiv"}</td>
+                            <td>
+                              {v.storniert
+                                ? t("gemeinsam.storniert")
+                                : t("gemeinsam.aktiv")}
+                            </td>
                           </tr>
                         ))}
                       </tbody>

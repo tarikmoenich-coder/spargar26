@@ -39,6 +39,12 @@ create table profiles (
   full_name text not null,
   role user_role not null default 'zeiterfassung',
   aktiv boolean not null default true,
+  -- UI-Sprache je Nutzer (nicht je Rolle) - Nutzer-Vorgabe 2026-08-08.
+  -- Betrifft NUR die Bedienoberfläche, keine Dokumente/Formulare (die
+  -- bleiben Deutsch/Rumänisch etc., je nach Vorlage). Schrittweise
+  -- ausgerollt, aktuell nur Stundenerfassung + Suche übersetzt, siehe
+  -- lib/i18n.ts.
+  sprache text not null default 'de' check (sprache in ('de', 'hr')),
   created_at timestamptz not null default now()
 );
 
