@@ -111,7 +111,11 @@ export default function PraemienErdbeerenPage() {
       await Promise.all([
         supabase
           .from("employees")
-          .select("*")
+          // Bewusst kein "select *" (2026-08-09-Vorfall, siehe schema.sql) -
+          // diese Seite ist auch für zeiterfassung/erntewirtschaft
+          // erreichbar, die keine sensiblen Felder (SV-Nr./IBAN/...) sehen
+          // sollen.
+          .select("id, personal_nr, gruppe_nr, name, vorname, aktiv")
           .eq("aktiv", true)
           // Nur wer über "Prämien → Gruppenaufteilung" für Erdbeeren
           // freigegeben ist (Nutzer-Vorgabe 2026-08-09) - unabhängig von

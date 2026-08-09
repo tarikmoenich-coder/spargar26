@@ -55,7 +55,10 @@ export default function ArbeitskleidungPage() {
       await Promise.all([
         supabase
           .from("employees")
-          .select("*")
+          // Bewusst kein "select *" (2026-08-09-Vorfall, siehe schema.sql) -
+          // diese Seite ist auch für zeiterfassung erreichbar, die keine
+          // sensiblen Felder (SV-Nr./IBAN/...) sehen soll.
+          .select("id, personal_nr, gruppe_nr, name, vorname, aktiv")
           .eq("aktiv", true)
           .order("name"),
         supabase.from("arbeitsgruppen").select("*").order("reihenfolge"),

@@ -44,7 +44,16 @@ export default function PraemienGruppenaufteilungPage() {
     setLoading(true);
     const supabase = getSupabaseClient();
     const [{ data: emp }, { data: gr }, { data: hk }] = await Promise.all([
-      supabase.from("employees").select("*").order("name"),
+      supabase
+        .from("employees")
+        // Bewusst kein "select *" (2026-08-09-Vorfall, siehe schema.sql) -
+        // die Route ist technisch auch für zeiterfassung/erntewirtschaft
+        // erreichbar (Nav blendet nur den Link aus), die keine sensiblen
+        // Felder (SV-Nr./IBAN/...) sehen sollen.
+        .select(
+          "id, personal_nr, gruppe_nr, herkunft, name, vorname, aktiv, praemien_zuckermais, praemien_erdbeeren, praemien_spargel"
+        )
+        .order("name"),
       supabase.from("arbeitsgruppen").select("*").order("reihenfolge"),
       supabase.from("herkuenfte").select("*").order("reihenfolge"),
     ]);

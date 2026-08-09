@@ -2102,13 +2102,28 @@ create policy "doppelte_haushaltsfuehrung_admin_hr_all"
 alter view employees_public set (security_invoker = true);
 create policy "employees_read_for_logged_in" on employees for select
   using (auth.uid() is not null);
--- Spalten-Ebene zusätzlich einschränken: Rollen ohne HR/Admin sehen über die
--- direkte Tabelle keine sensiblen Felder (SV-Nr., Steuer-ID, IBAN, BIC).
-revoke select on employees from authenticated;
-grant select (id, personal_nr, gruppe_nr, herkunft, nationalitaet, name, vorname,
-  geburtsdatum, ort, land, stundenlohn, saison_beginn, saison_ende, aktiv,
-  praemien_zuckermais, praemien_erdbeeren, praemien_spargel)
-  on employees to authenticated;
+-- WICHTIGE LEHRE (2026-08-09-Vorfall): hier stand früher ein Versuch,
+-- sensible Felder (SV-Nr., Steuer-ID, IBAN, BIC) per Spalten-Ebene über
+-- "revoke select ... / grant select (Teilliste) ..." einzuschränken. Das
+-- ist grundlegend fragil: "select *" (von mehreren Seiten genutzt)
+-- verlangt in Postgres SELECT-Recht auf ALLE Spalten der Tabelle - sobald
+-- auch nur eine einzige Spalte fehlt (z.B. weil eine Migration eine neue
+-- Spalte hinzufügt, ohne die Grant-Liste synchron zu pflegen), schlägt
+-- JEDE "select *"-Abfrage für ALLE Rollen mit 403 fehl - auch für
+-- admin/hr, die diese Felder eigentlich sehen dürfen. Genau das ist am
+-- 2026-08-09 passiert (die neue Prämien-Gruppenaufteilung-Migration hat
+-- die Spaltenliste erweitert, aber offenbar erstmals wirksam verengt statt
+-- vorher schon zu greifen - Ergebnis: komplette Sperre der Personal-Seite
+-- für alle Rollen). Lösung: volle SELECT-Berechtigung auf Tabellenebene
+-- (unten) statt einer Spaltenliste, die bei jeder neuen Spalte händisch
+-- gepflegt werden müsste. Der Schutz sensibler Felder vor
+-- zeiterfassung/erntewirtschaft läuft stattdessen darüber, dass die für
+-- diese Rollen erreichbaren Seiten (Prämien, Arbeitskleidung, ...) gezielt
+-- nur die tatsächlich benötigten Spalten abfragen (nie "select *" auf
+-- employees) - siehe die jeweiligen page.tsx-Dateien. NIE wieder
+-- "revoke select on employees" + Teilliste versuchen, ohne alle
+-- "select *"-Nutzungen im ganzen Code geprüft zu haben.
+grant select on employees to authenticated;
 
 -- employee_documents: wie andere sensible Personaldaten nur admin/hr, sowohl
 -- für die Metadaten-Tabelle als auch für die Dateien im Storage-Bucket.
