@@ -54,6 +54,12 @@ const items: NavItem[] = [
     auchAktivBei: ["/vorschuesse", "/auszahlungen"],
   },
   {
+    href: "/praemien/zuckermais",
+    label: "Prämien",
+    roles: ["admin", "hr", "zeiterfassung", "lohnabrechnung", "management"],
+    auchAktivBei: ["/praemien"],
+  },
+  {
     href: "/kasse",
     label: "Kassenbuch",
     roles: ["admin", "kasse", "pruefer", "management"],

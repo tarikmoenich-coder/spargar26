@@ -34,6 +34,8 @@ const de = {
   "gemeinsam.storniert": "storniert",
   "gemeinsam.aktiv": "aktiv",
   "gemeinsam.inaktiv": "inaktiv",
+  "gemeinsam.kisten": "Kisten",
+  "gemeinsam.praemieeuro": "Prämie €",
 
   // Stundenerfassung (app/erfassung/page.tsx)
   "erfassung.title": "Stundenerfassung",
@@ -82,6 +84,9 @@ const de = {
   "suche.art": "Art",
   "suche.begruendung": "Begründung",
   "suche.status": "Status",
+  "suche.zuckermaispraemien": "Zuckermais-Prämien {jahr}",
+  "suche.praemiegesamt": "{betrag} € gesamt",
+  "suche.keinezuckermais": "Keine Zuckermais-Einträge in diesem Jahr.",
 } as const;
 
 export type TKey = keyof typeof de;
@@ -98,6 +103,8 @@ const hr: Record<TKey, string> = {
   "gemeinsam.storniert": "stornirano",
   "gemeinsam.aktiv": "aktivno",
   "gemeinsam.inaktiv": "neaktivno",
+  "gemeinsam.kisten": "Sanduci",
+  "gemeinsam.praemieeuro": "Premija €",
 
   "erfassung.title": "Evidencija radnih sati",
   "erfassung.untertitel":
@@ -144,6 +151,9 @@ const hr: Record<TKey, string> = {
   "suche.art": "Vrsta",
   "suche.begruendung": "Obrazloženje",
   "suche.status": "Status",
+  "suche.zuckermaispraemien": "Premije kukuruz šećerac {jahr}",
+  "suche.praemiegesamt": "{betrag} € ukupno",
+  "suche.keinezuckermais": "Nema unosa za kukuruz šećerac u ovoj godini.",
 };
 
 const WOERTERBUECHER: Record<Sprache, Record<TKey, string>> = { de, hr };

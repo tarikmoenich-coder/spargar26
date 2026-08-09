@@ -357,6 +357,23 @@ Enthalten:
   Unterkunft, Vorschüsse, Buskosten, Kleidung) immer rot - Zulagen/Boni
   sind aktuell in der Brutto-Summe enthalten, es gibt noch keine eigene
   Spalte dafür (Grün ist als Kategorie vorgesehen, siehe `lib/farben.ts`)
+- Neuer Menüpunkt "Prämien" (Stand 2026-08-09) mit Untermenüs Spargel/
+  Erdbeeren/Zuckermais - ersetzt schrittweise drei bisher separate
+  Excel-Dateien ("Prämien Spargel/Erdbeeren/Zuckermais 2026.xlsx"), die den
+  Personalstamm bislang nur als kopierte Werte nutzten. Start mit
+  Zuckermais (Prämien → Zuckermais, admin/hr/zeiterfassung): pro
+  Mitarbeiter und Tag werden Kisten und Stunden erfasst, die Prämie wird
+  automatisch berechnet (Norm in Kolben/Std., Kolben je Kiste und €-Satz je
+  Kolben über der Norm - alle drei mit "gültig ab" versioniert, da sie sich
+  im Saisonverlauf ändern können, admin-verwaltet direkt auf der Seite) und
+  fließt live in die Lohnübersicht (Brutto-Spalte) ein, genau wie die
+  bisherigen Akkord-/Fahrer-/Erdbeer-/Spargel-Prämien. Tagesaktueller Stand
+  zusätzlich in der "Suche" sichtbar (Mitarbeiter-Selbstauskunft) sowie als
+  druckbare Tagesliste zum Aushängen. Spargel und Erdbeeren sind als eigene
+  Reiter angelegt, aber noch in Vorbereitung: Spargel braucht eine
+  Anbindung an die externe Waage-Datenbank sowie eine Klärung der
+  Feldstufen-Logik, Erdbeeren rechnet mit mehreren Wiegungen je Tag und
+  läuft strukturell anders
 - Rollen/Rechte serverseitig über Postgres Row Level Security
 - Append-only Audit-Log für Personal, Stunden, Vorschüsse, Kassenbuch
 
@@ -408,12 +425,12 @@ nicht nur im Menü versteckt.
 | Rolle | Sichtbare Menüpunkte | Kernrechte |
 |---|---|---|
 | `admin` | Alle | Voller Zugriff auf alles, inkl. Einstellungen, Kassenprüfungen freigeben |
-| `hr` | Personal, Stundenerfassung, Suche, Lohn, Management | Personalstamm + Dokumente voll pflegen (inkl. SV-Nr./IBAN/Ausweiskopien), Personalplanung + Anreiseliste (Kandidaten, Schwarze Liste, Buskosten) verwalten, Stunden erfassen, Lohnübersicht/Vorschüsse nur ansehen (nicht bearbeiten), Monatsabschluss sperren/öffnen |
-| `zeiterfassung` | Stundenerfassung, Suche | Nur Stunden eintragen/ändern; sieht Personal nur mit eingeschränkten Feldern (keine SV-Nr./IBAN etc.); erfasst zusätzlich die Ausgabe von Arbeitskleidung (Stundenerfassung → Arbeitskleidung) |
+| `hr` | Personal, Stundenerfassung, Suche, Lohn, Prämien, Management | Personalstamm + Dokumente voll pflegen (inkl. SV-Nr./IBAN/Ausweiskopien), Personalplanung + Anreiseliste (Kandidaten, Schwarze Liste, Buskosten) verwalten, Stunden erfassen, Lohnübersicht/Vorschüsse nur ansehen (nicht bearbeiten), Prämien erfassen, Monatsabschluss sperren/öffnen |
+| `zeiterfassung` | Stundenerfassung, Suche, Prämien | Nur Stunden eintragen/ändern; sieht Personal nur mit eingeschränkten Feldern (keine SV-Nr./IBAN etc.); erfasst zusätzlich die Ausgabe von Arbeitskleidung (Stundenerfassung → Arbeitskleidung) sowie Prämien (Kisten/Stunden je Tag) |
 | `kasse` | Suche, Lohn, Kassenbuch | Vorschüsse erfassen/stornieren/korrigieren, Kassenbuch führen, Kassenprüfung durchführen |
-| `lohnabrechnung` | Suche, Lohn | Lohnübersicht ansehen **und bearbeiten** (Buskosten, Kautionen, "Jetzt Abrechnen"), Vorschüsse einsehen |
+| `lohnabrechnung` | Suche, Lohn, Prämien | Lohnübersicht ansehen **und bearbeiten** (Buskosten, Kautionen, "Jetzt Abrechnen"), Vorschüsse einsehen, Prämien ansehen |
 | `pruefer` | Suche, Lohn, Kassenbuch | Nur lesen, außer: Kassenprüfungen freigeben; einzige Nicht-Admin-Rolle mit Audit-Log-Einsicht |
-| `management` | Suche, Lohn, Kassenbuch, Management | Nur lesende/aggregierte Sicht |
+| `management` | Suche, Lohn, Kassenbuch, Prämien, Management | Nur lesende/aggregierte Sicht |
 
 Neuen Benutzer anlegen: Supabase-Dashboard → Authentication → Users →
 "Add user" (E-Mail + Passwort) → User UID kopieren → Table Editor →

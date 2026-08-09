@@ -486,6 +486,48 @@ export interface EmployeeKleidungAusgabe {
   kleidung_stiefel_anzahl: number;
 }
 
+// Prämien (Nutzer-Vorgabe 2026-08-09) - Menüpunkt mit Untermenüs Spargel/
+// Erdbeeren/Zuckermais, ersetzt schrittweise die bisherigen Excel-Dateien.
+// Norm/Preis ändern sich im Saisonverlauf, daher mit "gültig ab"
+// versioniert statt eines festen Werts pro Jahr.
+export interface ZuckermaisSatz {
+  id: number;
+  gueltig_ab: string;
+  norm_kolben_pro_stunde: number;
+  kolben_pro_kiste: number;
+  satz_pro_kolben: number;
+  erstellt_von: string | null;
+  erstellt_am: string;
+}
+
+export interface ZuckermaisRohdatenEintrag {
+  id: number;
+  employee_id: string;
+  datum: string;
+  kisten: number;
+  stunden: number;
+  erfasst_von: string | null;
+  erfasst_am: string;
+  updated_by: string | null;
+  updated_at: string;
+  version: number;
+}
+
+// Aus der Sicht zuckermais_praemie_tag - Rohdaten-Zeile plus dem am
+// jeweiligen Tag gültigen Satz und der berechneten Tagesprämie.
+export interface ZuckermaisPraemieTag {
+  id: number;
+  employee_id: string;
+  datum: string;
+  kisten: number;
+  stunden: number;
+  norm_kolben_pro_stunde: number | null;
+  kolben_pro_kiste: number | null;
+  satz_pro_kolben: number | null;
+  kolben: number;
+  praemie: number;
+}
+
 // Kautionsübergabe an den Hausmeister (Nutzer-Vorgabe 2026-08-09) - ein
 // Übergabebeleg je Auszahlungsbeleg, mit den enthaltenen Personen/
 // Kautionsbeträgen. Erst mit dieser Übergabe wird die Kaution auch als

@@ -1010,6 +1010,93 @@ from season_bonuses;
 grant select on employee_kleidung_ausgabe to authenticated;
 
 -- ---------------------------------------------------------------------------
+-- 6a. Prämien (Nutzer-Vorgabe 2026-08-09): neuer Menüpunkt "Prämien" mit
+--     Untermenüs Spargel/Erdbeeren/Zuckermais, ersetzt schrittweise die drei
+--     separaten Excel-Dateien "Prämien Spargel/Erdbeeren/Zuckermais 2026".
+--     Start mit Zuckermais (einfachste Berechnung, kein Fremdsystem, keine
+--     offene Frage) - Spargel (Waage-Anbindung, Feld-Stufen) und Erdbeeren
+--     (mehrere Wiegungen je Tag) folgen später als eigene Ausbaustufen.
+--
+--     Zuckermais-Logik (1:1 aus der bisherigen Excel-Datei übernommen):
+--     pro Mitarbeiter und Tag werden Kisten und Stunden erfasst. Norm
+--     (Kolben/Std.), Kolben je Kiste und €-Satz je Kolben über der Norm
+--     ändern sich im Saisonverlauf (siehe Excel: Norm stieg z.B. von 140
+--     auf 180 Kolben/Std.) - deshalb eine mit "gültig ab" versionierte
+--     Sätze-Tabelle statt eines einzelnen Werts pro Jahr (wie
+--     verpflegungssaetze), analog zu ADR-007. Tagesprämie =
+--     GREATEST(0, (Kisten × Kolben/Kiste − Stunden × Norm) × Satz/Kolben).
+--     Die Saison-Summe fließt direkt (live berechnet, nicht manuell
+--     gepflegt) in season_summary.praemien_summe/bruttolohn ein - genau wie
+--     die bisherigen (bislang manuell eingetragenen) Felder
+--     erdbeer_praemie/spargel_praemie auf season_bonuses. Kein neues
+--     Auszahlungsfeld nötig, keine Änderung an der äußersten SELECT-Liste
+--     von season_summary (kein 42P16-Risiko), da praemien_summe/bruttolohn
+--     bereits bestehende Spalten sind.
+-- ---------------------------------------------------------------------------
+create table zuckermais_saetze (
+  id bigint generated always as identity primary key,
+  gueltig_ab date not null unique,
+  norm_kolben_pro_stunde numeric(6, 2) not null,
+  kolben_pro_kiste numeric(6, 2) not null default 55,
+  satz_pro_kolben numeric(6, 4) not null,
+  erstellt_von uuid references profiles (id) default auth.uid(),
+  erstellt_am timestamptz not null default now()
+);
+
+create table zuckermais_rohdaten (
+  id bigint generated always as identity primary key,
+  employee_id uuid not null references employees (id) on delete restrict,
+  datum date not null,
+  kisten numeric(8, 2) not null default 0,
+  stunden numeric(5, 2) not null default 0,
+  erfasst_von uuid references profiles (id) default auth.uid(),
+  erfasst_am timestamptz not null default now(),
+  updated_by uuid references profiles (id),
+  updated_at timestamptz not null default now(),
+  -- Optimistisches Sperren wie bei work_entries (siehe der Live-Sync-Bug
+  -- vom 2026-08-08: dort fehlte diese Absicherung nicht, sondern eine
+  -- fehlende RLS-Berechtigung führte zu lautlos fehlgeschlagenen
+  -- Speicherversuchen - version schützt zusätzlich vor echten
+  -- Wettlaufsituationen bei gleichzeitiger Bearbeitung).
+  version int not null default 1,
+  unique (employee_id, datum)
+);
+
+create index idx_zuckermais_rohdaten_datum on zuckermais_rohdaten (datum);
+create index idx_zuckermais_rohdaten_employee on zuckermais_rohdaten (employee_id);
+
+-- Tagesprämie je Erfassung - für Suche (tageweiser Stand) und die
+-- druckbare Tagesliste. Verknüpft jede Rohdaten-Zeile per LATERAL mit dem
+-- zum jeweiligen Datum gültigen Satz (letzter "gültig ab" <= Datum).
+create or replace view zuckermais_praemie_tag as
+select
+  r.id,
+  r.employee_id,
+  r.datum,
+  r.kisten,
+  r.stunden,
+  s.norm_kolben_pro_stunde,
+  s.kolben_pro_kiste,
+  s.satz_pro_kolben,
+  r.kisten * s.kolben_pro_kiste as kolben,
+  greatest(
+    (r.kisten * s.kolben_pro_kiste - r.stunden * coalesce(s.norm_kolben_pro_stunde, 0))
+      * coalesce(s.satz_pro_kolben, 0),
+    0
+  ) as praemie
+from zuckermais_rohdaten r
+left join lateral (
+  select z.norm_kolben_pro_stunde, z.kolben_pro_kiste, z.satz_pro_kolben
+  from zuckermais_saetze z
+  where z.gueltig_ab <= r.datum
+  order by z.gueltig_ab desc
+  limit 1
+) s on true;
+
+alter view zuckermais_praemie_tag set (security_invoker = true);
+grant select on zuckermais_praemie_tag to authenticated;
+
+-- ---------------------------------------------------------------------------
 -- 7. Zentrale Belegnummern-Vergabe (ADR-010: atomar, auch bei gleichzeitiger
 --    Nutzung durch mehrere Personen - Format wie im Altsystem "MM-JJJJ-###")
 -- ---------------------------------------------------------------------------
@@ -1254,6 +1341,11 @@ create trigger trg_audit_employees
 create trigger trg_audit_work_entries
   after insert or update on work_entries
   for each row execute function write_audit_log();
+-- Prämien-Rohdaten fließen direkt (live) in die Lohnberechnung ein - wie
+-- work_entries daher ebenfalls protokolliert.
+create trigger trg_audit_zuckermais_rohdaten
+  after insert or update on zuckermais_rohdaten
+  for each row execute function write_audit_log();
 create trigger trg_audit_advances
   after insert or update on advances
   for each row execute function write_audit_log();
@@ -1295,6 +1387,8 @@ $$;
 create trigger trg_employees_updated_at before update on employees
   for each row execute function set_updated_at_and_version();
 create trigger trg_work_entries_updated_at before update on work_entries
+  for each row execute function set_updated_at_and_version();
+create trigger trg_zuckermais_rohdaten_updated_at before update on zuckermais_rohdaten
   for each row execute function set_updated_at_and_version();
 create trigger trg_personal_kandidaten_updated_at before update on personal_kandidaten
   for each row execute function set_updated_at_and_version();
@@ -1351,14 +1445,16 @@ with base as (
       + coalesce(b.praemie_ausgleich, 0)
       + coalesce(b.fahrer_zulage, 0)
       + coalesce(b.erdbeer_praemie, 0)
-      + coalesce(b.spargel_praemie, 0) as praemien_summe,
+      + coalesce(b.spargel_praemie, 0)
+      + coalesce(zm.zuckermais_praemie_summe, 0) as praemien_summe,
     (we.gesamt_stunden * coalesce(e.stundenlohn, 0)) as basis_brutto,
     (we.gesamt_stunden * coalesce(e.stundenlohn, 0))
       + coalesce(b.akkord_betrag, 0)
       + coalesce(b.praemie_ausgleich, 0)
       + coalesce(b.fahrer_zulage, 0)
       + coalesce(b.erdbeer_praemie, 0)
-      + coalesce(b.spargel_praemie, 0) as bruttolohn,
+      + coalesce(b.spargel_praemie, 0)
+      + coalesce(zm.zuckermais_praemie_summe, 0) as bruttolohn,
     b.netto_extern,
     b.abgerechnet_am,
     b.snapshot,
@@ -1398,6 +1494,12 @@ with base as (
   ) we on true
   left join season_bonuses b on b.employee_id = e.id and b.saison_jahr = we.saison_jahr
   left join verpflegungssaetze v on v.saison_jahr = we.saison_jahr
+  left join lateral (
+    select sum(pt.praemie) as zuckermais_praemie_summe
+    from zuckermais_praemie_tag pt
+    where pt.employee_id = e.id
+      and extract(year from pt.datum) = we.saison_jahr
+  ) zm on true
 ),
 steuer as (
   select
@@ -1735,6 +1837,8 @@ alter table auszahlungsbelege enable row level security;
 alter table kautionsuebergaben enable row level security;
 alter table kautionsuebergabe_personen enable row level security;
 alter table verpflegungssaetze enable row level security;
+alter table zuckermais_rohdaten enable row level security;
+alter table zuckermais_saetze enable row level security;
 alter table advances enable row level security;
 alter table advance_recipients enable row level security;
 alter table kassenbewegungen enable row level security;
@@ -1871,6 +1975,21 @@ create policy "kautionsuebergabe_personen_write" on kautionsuebergabe_personen f
   with check (current_role_name() in ('admin', 'kasse', 'lohnabrechnung'));
 
 create policy "verpflegungssaetze_rw" on verpflegungssaetze for all
+  using (is_admin()) with check (is_admin());
+
+-- Zuckermais-Prämien: Rohdaten wie work_entries (zeiterfassung/admin/hr
+-- schreiben, alle lesen dürfen - Suche braucht das für den tageweisen
+-- Prämien-Stand). Sätze (Norm/Preis) nur admin schreibt, aber breit lesbar
+-- (zeiterfassung soll beim Erfassen die aktuell gültige Norm sehen können).
+create policy "zuckermais_rohdaten_select" on zuckermais_rohdaten for select
+  using (auth.uid() is not null);
+create policy "zuckermais_rohdaten_write" on zuckermais_rohdaten for insert
+  with check (current_role_name() in ('admin', 'hr', 'zeiterfassung'));
+create policy "zuckermais_rohdaten_update" on zuckermais_rohdaten for update
+  using (current_role_name() in ('admin', 'hr', 'zeiterfassung'));
+create policy "zuckermais_saetze_select" on zuckermais_saetze for select
+  using (auth.uid() is not null);
+create policy "zuckermais_saetze_write" on zuckermais_saetze for all
   using (is_admin()) with check (is_admin());
 create policy "advances_select" on advances for select
   using (current_role_name() in ('admin', 'hr', 'kasse', 'lohnabrechnung', 'pruefer', 'management'));

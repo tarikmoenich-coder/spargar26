@@ -4,7 +4,12 @@ import { useEffect, useMemo, useState } from "react";
 import { getSupabaseClient } from "@/lib/supabase/client";
 import { useProfile } from "@/lib/useProfile";
 import { uebersetzung } from "@/lib/i18n";
-import type { Employee, VorschussHistorieEintrag, WorkEntry } from "@/lib/types";
+import type {
+  Employee,
+  VorschussHistorieEintrag,
+  WorkEntry,
+  ZuckermaisPraemieTag,
+} from "@/lib/types";
 import { formatDatumDE } from "@/lib/format";
 
 // Für die Suche reicht die eingeschränkte Sicht (keine sensiblen Felder) -
@@ -27,6 +32,7 @@ export default function SuchePage() {
   const [saisonJahr, setSaisonJahr] = useState(jetzigeSaison());
   const [stunden, setStunden] = useState<WorkEntry[]>([]);
   const [vorschuesse, setVorschuesse] = useState<VorschussHistorieEintrag[]>([]);
+  const [zuckermais, setZuckermais] = useState<ZuckermaisPraemieTag[]>([]);
   const [ladenListe, setLadenListe] = useState(true);
   const [ladenDetail, setLadenDetail] = useState(false);
 
@@ -62,7 +68,7 @@ export default function SuchePage() {
     setAusgewaehlt(m);
     setLadenDetail(true);
     const supabase = getSupabaseClient();
-    const [{ data: we }, { data: vh }] = await Promise.all([
+    const [{ data: we }, { data: vh }, { data: zm }] = await Promise.all([
       supabase
         .from("work_entries")
         .select("*")
@@ -75,9 +81,17 @@ export default function SuchePage() {
         .select("*")
         .eq("employee_id", m.id)
         .order("datum"),
+      supabase
+        .from("zuckermais_praemie_tag")
+        .select("*")
+        .eq("employee_id", m.id)
+        .gte("datum", `${saisonJahr}-01-01`)
+        .lte("datum", `${saisonJahr}-12-31`)
+        .order("datum"),
     ]);
     setStunden((we as WorkEntry[]) ?? []);
     setVorschuesse((vh as VorschussHistorieEintrag[]) ?? []);
+    setZuckermais((zm as ZuckermaisPraemieTag[]) ?? []);
     setLadenDetail(false);
   }
 
@@ -95,6 +109,10 @@ export default function SuchePage() {
   const vorschussGesamt = vorschuesse
     .filter((v) => !v.storniert)
     .reduce((s, v) => s + Number(v.betrag), 0);
+  const zuckermaisGesamt = zuckermais.reduce(
+    (s, z) => s + Number(z.praemie ?? 0),
+    0
+  );
 
   const jahreOptionen = Array.from(
     { length: 5 },
@@ -306,6 +324,45 @@ export default function SuchePage() {
                   </div>
                 )}
               </div>
+
+              {zuckermais.length > 0 && (
+                <div className="rounded border border-neutral-200 bg-white p-4">
+                  <div className="mb-2 flex items-baseline justify-between">
+                    <h2 className="text-base font-semibold text-emerald-800">
+                      {t("suche.zuckermaispraemien", { jahr: saisonJahr })}
+                    </h2>
+                    <span className="text-sm text-neutral-500">
+                      {t("suche.praemiegesamt", {
+                        betrag: zuckermaisGesamt.toFixed(2),
+                      })}
+                    </span>
+                  </div>
+                  <div className="max-h-96 overflow-y-auto">
+                    <table>
+                      <thead>
+                        <tr>
+                          <th>{t("gemeinsam.datum")}</th>
+                          <th>{t("gemeinsam.kisten")}</th>
+                          <th>{t("gemeinsam.std")}</th>
+                          <th>{t("gemeinsam.praemieeuro")}</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {zuckermais.map((z) => (
+                          <tr key={z.id}>
+                            <td>{formatDatumDE(z.datum)}</td>
+                            <td>{z.kisten}</td>
+                            <td>{z.stunden}</td>
+                            <td className="font-medium">
+                              {Number(z.praemie).toFixed(2)}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
             </div>
           )}
         </div>
@@ -379,6 +436,34 @@ export default function SuchePage() {
                 ))}
               </tbody>
             </table>
+          )}
+
+          {zuckermais.length > 0 && (
+            <>
+              <h3 className="mt-6 text-base font-semibold">
+                Zuckermais-Prämien ({zuckermaisGesamt.toFixed(2)} € gesamt)
+              </h3>
+              <table className="mt-2 print-form-table">
+                <thead>
+                  <tr>
+                    <th>Datum</th>
+                    <th>Kisten</th>
+                    <th>Std.</th>
+                    <th>Prämie €</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {zuckermais.map((z) => (
+                    <tr key={z.id}>
+                      <td>{formatDatumDE(z.datum)}</td>
+                      <td>{z.kisten}</td>
+                      <td>{z.stunden}</td>
+                      <td>{Number(z.praemie).toFixed(2)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </>
           )}
         </div>
       )}
