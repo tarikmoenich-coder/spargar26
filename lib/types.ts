@@ -528,6 +528,18 @@ export interface ZuckermaisPraemieTag {
   praemie: number;
 }
 
+// Aus der Sicht zuckermais_statistik_tag - Tagesstatistik über alle
+// Mitarbeiter (Menüpunkt "Statistik", Nutzer-Vorgabe 2026-08-09).
+export interface ZuckermaisStatistikTag {
+  datum: string;
+  summe_kisten: number;
+  summe_kolben: number;
+  summe_stunden: number;
+  summe_praemie: number;
+  kolben_pro_stunde: number | null;
+  kosten_pro_kolben: number | null;
+}
+
 // Kautionsübergabe an den Hausmeister (Nutzer-Vorgabe 2026-08-09) - ein
 // Übergabebeleg je Auszahlungsbeleg, mit den enthaltenen Personen/
 // Kautionsbeträgen. Erst mit dieser Übergabe wird die Kaution auch als

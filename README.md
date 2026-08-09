@@ -374,6 +374,14 @@ Enthalten:
   Anbindung an die externe Waage-Datenbank sowie eine Klärung der
   Feldstufen-Logik, Erdbeeren rechnet mit mehreren Wiegungen je Tag und
   läuft strukturell anders
+- Neuer Menüpunkt "Statistik" (Stand 2026-08-09, admin/hr/lohnabrechnung/
+  management), analog zu "Prämien" mit eigenen Untermenüs Spargel/
+  Erdbeeren/Zuckermais - Tagesstatistik über alle Mitarbeiter (Summe
+  Kisten/Kolben/Stunden/Prämien, Durchschnitt Kolben/Std., Kosten/Kolben).
+  Kosten/Kolben = (13,90 € × Summe Stunden + Summe Prämien) / Summe Kolben
+  - fester Stundenlohn (Nutzer-Vorgabe, exakt wie angegeben), nicht der
+  individuelle Stundenlohn je Person. Start mit Zuckermais, Spargel/
+  Erdbeeren folgen, sobald deren Prämien-Erfassung steht
 - Rollen/Rechte serverseitig über Postgres Row Level Security
 - Append-only Audit-Log für Personal, Stunden, Vorschüsse, Kassenbuch
 
@@ -425,12 +433,12 @@ nicht nur im Menü versteckt.
 | Rolle | Sichtbare Menüpunkte | Kernrechte |
 |---|---|---|
 | `admin` | Alle | Voller Zugriff auf alles, inkl. Einstellungen, Kassenprüfungen freigeben |
-| `hr` | Personal, Stundenerfassung, Suche, Lohn, Prämien, Management | Personalstamm + Dokumente voll pflegen (inkl. SV-Nr./IBAN/Ausweiskopien), Personalplanung + Anreiseliste (Kandidaten, Schwarze Liste, Buskosten) verwalten, Stunden erfassen, Lohnübersicht/Vorschüsse nur ansehen (nicht bearbeiten), Prämien erfassen, Monatsabschluss sperren/öffnen |
+| `hr` | Personal, Stundenerfassung, Suche, Lohn, Prämien, Statistik, Management | Personalstamm + Dokumente voll pflegen (inkl. SV-Nr./IBAN/Ausweiskopien), Personalplanung + Anreiseliste (Kandidaten, Schwarze Liste, Buskosten) verwalten, Stunden erfassen, Lohnübersicht/Vorschüsse nur ansehen (nicht bearbeiten), Prämien erfassen, Monatsabschluss sperren/öffnen |
 | `zeiterfassung` | Stundenerfassung, Suche, Prämien | Nur Stunden eintragen/ändern; sieht Personal nur mit eingeschränkten Feldern (keine SV-Nr./IBAN etc.); erfasst zusätzlich die Ausgabe von Arbeitskleidung (Stundenerfassung → Arbeitskleidung) sowie Prämien (Kisten/Stunden je Tag) |
 | `kasse` | Suche, Lohn, Kassenbuch | Vorschüsse erfassen/stornieren/korrigieren, Kassenbuch führen, Kassenprüfung durchführen |
-| `lohnabrechnung` | Suche, Lohn, Prämien | Lohnübersicht ansehen **und bearbeiten** (Buskosten, Kautionen, "Jetzt Abrechnen"), Vorschüsse einsehen, Prämien ansehen |
+| `lohnabrechnung` | Suche, Lohn, Prämien, Statistik | Lohnübersicht ansehen **und bearbeiten** (Buskosten, Kautionen, "Jetzt Abrechnen"), Vorschüsse einsehen, Prämien ansehen |
 | `pruefer` | Suche, Lohn, Kassenbuch | Nur lesen, außer: Kassenprüfungen freigeben; einzige Nicht-Admin-Rolle mit Audit-Log-Einsicht |
-| `management` | Suche, Lohn, Kassenbuch, Prämien, Management | Nur lesende/aggregierte Sicht |
+| `management` | Suche, Lohn, Kassenbuch, Prämien, Statistik, Management | Nur lesende/aggregierte Sicht |
 
 Neuen Benutzer anlegen: Supabase-Dashboard → Authentication → Users →
 "Add user" (E-Mail + Passwort) → User UID kopieren → Table Editor →

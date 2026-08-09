@@ -60,6 +60,12 @@ const items: NavItem[] = [
     auchAktivBei: ["/praemien"],
   },
   {
+    href: "/statistik/zuckermais",
+    label: "Statistik",
+    roles: ["admin", "hr", "lohnabrechnung", "management"],
+    auchAktivBei: ["/statistik"],
+  },
+  {
     href: "/kasse",
     label: "Kassenbuch",
     roles: ["admin", "kasse", "pruefer", "management"],
