@@ -17,6 +17,7 @@ export default function SozialversicherungPage() {
 
   const [jahr, setJahr] = useState(CURRENT_YEAR);
   const [showInactive, setShowInactive] = useState(false);
+  const [search, setSearch] = useState("");
   const [loading, setLoading] = useState(true);
 
   const [employees, setEmployees] = useState<Employee[]>([]);
@@ -65,6 +66,16 @@ export default function SozialversicherungPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [jahr, showInactive]);
 
+  const gefiltert = employees.filter((e) => {
+    const q = search.toLowerCase();
+    return (
+      !q ||
+      e.name.toLowerCase().includes(q) ||
+      e.vorname.toLowerCase().includes(q) ||
+      e.personal_nr.toLowerCase().includes(q)
+    );
+  });
+
   return (
     <div className="flex flex-col gap-4">
       <PersonalTabs />
@@ -84,6 +95,12 @@ export default function SozialversicherungPage() {
       </div>
 
       <div className="sticky top-14 z-30 flex flex-wrap items-center gap-4 bg-neutral-50 py-2 text-sm">
+        <input
+          placeholder="Suche nach Name oder Personalnummer…"
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          className="w-72"
+        />
         <label>
           Saison-Jahr{" "}
           <input
@@ -119,7 +136,7 @@ export default function SozialversicherungPage() {
             </tr>
           </thead>
           <tbody>
-            {employees.map((emp) => {
+            {gefiltert.map((emp) => {
               const f = fragebogen[emp.id];
               const fVorjahr = fragebogenVorjahr[emp.id];
               const aenderungen = fVorjahr
