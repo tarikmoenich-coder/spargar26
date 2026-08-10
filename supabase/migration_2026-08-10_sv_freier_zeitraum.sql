@@ -115,8 +115,6 @@ select
   f.vorbeschaeftigung_deutschland_tage,
   f.vorbeschaeftigung_deutschland_arbeitgeber,
   f.ausgeloest_durch_lohnprogramm_hinweis,
-  f.unvollstaendig_fehlerhaft,
-  f.unvollstaendig_fehlerhaft_grund,
   f.ausgefuellt_am,
   f.erfasst_von,
   f.erfasst_am,
@@ -133,6 +131,11 @@ select
     and not coalesce(f.arbeitslos, false)
   )
   and not f.unvollstaendig_fehlerhaft as bestanden,
+  -- unvollstaendig_fehlerhaft/_grund stehen HIER (nach bestanden) - das ist
+  -- die tatsächlich live deployte Spaltenposition (siehe schema.sql-
+  -- Kommentar), NICHT die Tabellen-Spaltenreihenfolge.
+  f.unvollstaendig_fehlerhaft,
+  f.unvollstaendig_fehlerhaft_grund,
   sv_freier_zeitraum_von(f) as sv_frei_von,
   sv_freier_zeitraum_bis(f) as sv_frei_bis,
   sv_freier_zeitraum_luecke(f) as sv_frei_luecke,

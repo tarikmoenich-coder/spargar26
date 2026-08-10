@@ -625,8 +625,6 @@ select
   f.vorbeschaeftigung_deutschland_tage,
   f.vorbeschaeftigung_deutschland_arbeitgeber,
   f.ausgeloest_durch_lohnprogramm_hinweis,
-  f.unvollstaendig_fehlerhaft,
-  f.unvollstaendig_fehlerhaft_grund,
   f.ausgefuellt_am,
   f.erfasst_von,
   f.erfasst_am,
@@ -643,10 +641,19 @@ select
     and not coalesce(f.arbeitslos, false)
   )
   and not f.unvollstaendig_fehlerhaft as bestanden,
+  -- WICHTIG: unvollstaendig_fehlerhaft/_grund stehen HIER (nach bestanden),
+  -- nicht in Tabellen-Spaltenreihenfolge vor ausgefuellt_am - das ist die
+  -- Position, in der sie live per "create or replace view" angehängt
+  -- wurden (migration_2026-08-08_sv_fragebogen_unvollstaendig.sql). Diese
+  -- SELECT-Liste muss die TATSÄCHLICH deployte Spaltenreihenfolge
+  -- widerspiegeln, nicht die Tabellen-Spaltenreihenfolge - sonst 42P16
+  -- (schon einmal passiert, 2026-08-10).
+  f.unvollstaendig_fehlerhaft,
+  f.unvollstaendig_fehlerhaft_grund,
   -- Sozialversicherungsfreier Zeitraum laut Angaben (Nutzer-Vorgabe
   -- 2026-08-10) - siehe ausführlichen Kommentar bei den sv_freier_zeitraum_
-  -- *-Funktionen oben. Ans Ende angehängt, wie bei "bestanden" oben
-  -- gefordert (42P16).
+  -- *-Funktionen oben. Ans Ende angehängt (nach unvollstaendig_fehlerhaft_
+  -- grund, dem tatsächlich letzten Feld der live laufenden Sicht).
   sv_freier_zeitraum_von(f) as sv_frei_von,
   sv_freier_zeitraum_bis(f) as sv_frei_bis,
   sv_freier_zeitraum_luecke(f) as sv_frei_luecke,
