@@ -2084,10 +2084,15 @@ join lateral (
     extract(year from we.datum)::int as saison_jahr,
     min(we.datum) filter (where we.stunden > 0) as erster_arbeitstag,
     max(we.datum) filter (where we.stunden > 0) as letzter_arbeitstag,
+    -- ::bigint: Datumsdifferenz liefert in Postgres "integer", die
+    -- Vorgänger-Spalte "arbeitstage_ueber0" war aber "bigint" (aus
+    -- count()) - "create or replace view" verbietet auch einen
+    -- Typwechsel an derselben Position (Fehler 42P16), nicht nur eine
+    -- Namensänderung.
     (
       max(we.datum) filter (where we.stunden > 0)
       - min(we.datum) filter (where we.stunden > 0) + 1
-    ) as beschaeftigungstage
+    )::bigint as beschaeftigungstage
   from work_entries we
   where we.employee_id = e.id
   group by extract(year from we.datum)

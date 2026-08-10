@@ -23,8 +23,20 @@
 
 -- 1) Spalte umbenennen, BEVOR die Sicht neu definiert wird - "create or
 -- replace view" erlaubt keine Namensänderung an derselben Position
--- (Fehler 42P16), "alter view ... rename column" schon.
-alter view employee_sv_pruefung rename column arbeitstage_ueber0 to beschaeftigungstage;
+-- (Fehler 42P16), "alter view ... rename column" schon. In ein "if
+-- exists"-DO-Block gekapselt, damit die Migration gefahrlos erneut
+-- ausgeführt werden kann, falls sie beim vorherigen Versuch schon bis
+-- hierher kam (z.B. wegen des Typ-Fehlers weiter unten).
+do $$
+begin
+  if exists (
+    select 1 from information_schema.columns
+    where table_name = 'employee_sv_pruefung'
+      and column_name = 'arbeitstage_ueber0'
+  ) then
+    execute 'alter view employee_sv_pruefung rename column arbeitstage_ueber0 to beschaeftigungstage';
+  end if;
+end $$;
 
 -- 2) Sicht neu definieren: beschaeftigungstage jetzt kalendertage-basiert,
 -- kritisch-Formel an Vorbeschäftigung gekoppelt, neues exaktes
@@ -96,7 +108,7 @@ join lateral (
     (
       max(we.datum) filter (where we.stunden > 0)
       - min(we.datum) filter (where we.stunden > 0) + 1
-    ) as beschaeftigungstage
+    )::bigint as beschaeftigungstage
   from work_entries we
   where we.employee_id = e.id
   group by extract(year from we.datum)
