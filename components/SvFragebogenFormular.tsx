@@ -92,6 +92,63 @@ const LEERER_ENTWURF: Entwurf = {
   ausgefuellt_am: null,
 };
 
+// Wandelt eine geladene Zeile aus der Sicht sv_fragebogen_auswertung in
+// einen Entwurf um - bewusst als explizite Feldauswahl (nicht "{ ...f }"):
+// die Sicht liefert zusätzlich berechnete, NICHT auf der Rohtabelle
+// sv_fragebogen existierende Spalten (bestanden, sv_frei_von/bis/luecke/
+// luecke_von/luecke_bis, id, employee_id, saison_jahr, erfasst_*,
+// updated_*). Ein "{ ...f }"-Spread hätte diese beim Speichern
+// mitgeschickt und zu Fehler "Could not find the 'bestanden' column of
+// 'sv_fragebogen' in the schema cache" geführt (Vorfall 2026-08-10 - erst
+// durch die neuen sv_frei_*-Spalten aufgefallen, war aber bereits vorher
+// beim Bearbeiten bestehender Fragebögen latent kaputt).
+function entwurfAusAuswertung(f: SvFragebogenAuswertung): Entwurf {
+  return {
+    beschaeftigt_heimatland: f.beschaeftigt_heimatland,
+    beschaeftigt_firma: f.beschaeftigt_firma,
+    beschaeftigt_taetigkeit: f.beschaeftigt_taetigkeit,
+    bezahlter_urlaub: f.bezahlter_urlaub,
+    bezahlter_urlaub_von: f.bezahlter_urlaub_von,
+    bezahlter_urlaub_bis: f.bezahlter_urlaub_bis,
+    unbezahlter_urlaub: f.unbezahlter_urlaub,
+    unbezahlter_urlaub_von: f.unbezahlter_urlaub_von,
+    unbezahlter_urlaub_bis: f.unbezahlter_urlaub_bis,
+    freistellung: f.freistellung,
+    freistellung_von: f.freistellung_von,
+    freistellung_bis: f.freistellung_bis,
+    freistellung_grund: f.freistellung_grund,
+    selbststaendig: f.selbststaendig,
+    selbststaendig_seit: f.selbststaendig_seit,
+    selbststaendig_taetigkeit: f.selbststaendig_taetigkeit,
+    arbeitslos: f.arbeitslos,
+    arbeitslos_seit: f.arbeitslos_seit,
+    arbeitsamt_name: f.arbeitsamt_name,
+    arbeitsamt_aktenzeichen: f.arbeitsamt_aktenzeichen,
+    schule_studium: f.schule_studium,
+    schule_seit: f.schule_seit,
+    schule_name: f.schule_name,
+    schule_ende: f.schule_ende,
+    schulferien_waehrend_beschaeftigung: f.schulferien_waehrend_beschaeftigung,
+    schulferien_von: f.schulferien_von,
+    schulferien_bis: f.schulferien_bis,
+    rente: f.rente,
+    rente_seit: f.rente_seit,
+    rente_art: f.rente_art,
+    rente_traeger: f.rente_traeger,
+    hausmann: f.hausmann,
+    hausmann_seit: f.hausmann_seit,
+    lebensunterhalt_sonstiges: f.lebensunterhalt_sonstiges,
+    vorbeschaeftigung_deutschland_tage: f.vorbeschaeftigung_deutschland_tage,
+    vorbeschaeftigung_deutschland_arbeitgeber:
+      f.vorbeschaeftigung_deutschland_arbeitgeber,
+    ausgeloest_durch_lohnprogramm_hinweis:
+      f.ausgeloest_durch_lohnprogramm_hinweis,
+    unvollstaendig_fehlerhaft: f.unvollstaendig_fehlerhaft,
+    unvollstaendig_fehlerhaft_grund: f.unvollstaendig_fehlerhaft_grund,
+    ausgefuellt_am: f.ausgefuellt_am,
+  };
+}
+
 // Live-Vorschau der Auswertung, identisch zur Logik der Sicht
 // sv_fragebogen_auswertung in schema.sql - damit man beim Ausfüllen direkt
 // sieht, wie sich die Angaben auswirken, ohne erst zu speichern.
@@ -152,7 +209,7 @@ export default function SvFragebogenFormular({
           .maybeSingle(),
       ]);
       if (bestehend) {
-        setEntwurf({ ...(bestehend as SvFragebogenAuswertung) });
+        setEntwurf(entwurfAusAuswertung(bestehend as SvFragebogenAuswertung));
         setFragebogenId((bestehend as SvFragebogenAuswertung).id);
         const { data: vb } = await supabase
           .from("sv_fragebogen_vorbeschaeftigung")
