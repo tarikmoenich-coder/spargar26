@@ -337,9 +337,19 @@ Enthalten:
   angezeigt), bei Schule/Studium der Schulferienzeitraum (nur wenn
   "Schulferien während Beschäftigung" angekreuzt ist), bei Hausfrau/
   Hausmann, Rentenbezug und Selbstständigkeit im Heimatland ein offener
-  (unbefristeter) Zeitraum ab dem jeweiligen "seit"-Datum. Dieser
-  SV-freie Zeitraum wird auf der Management-Seite gegen den tatsächlichen
-  Beschäftigungszeitraum geprüft (siehe dort)
+  Zeitraum ab dem jeweiligen "seit"-Datum, in den Angaben ohne Enddatum.
+  Fehlkorrektur vermieden (Nutzer-Feedback 2026-08-10): dieser offene
+  Zeitraum wird NIE als "unbefristet" angezeigt, da er immer durch die
+  15-Wochen-Grenze (bzw. bei Vorbeschäftigung/Rückkehr kombiniert die
+  90-Tage-Grenze) begrenzt ist - sobald der tatsächliche Arbeitsbeginn
+  bekannt ist (mind. ein Arbeitstag mit Stunden > 0 erfasst), zeigt die
+  Spalte das daraus berechnete Enddatum mit Regel-Hinweis ("15-Wochen-
+  Grenze ab Arbeitsbeginn" bzw. "laut Angaben"); ist der Arbeitsbeginn noch
+  unbekannt, zeigt sie stattdessen den Regeltext ohne konkretes Datum. Bei
+  Vorbeschäftigung/Rückkehr erscheint zusätzlich ein Hinweis auf die
+  kombinierte 90-Tage-Grenze. Dieser SV-freie Zeitraum wird auf der
+  Management-Seite gegen den tatsächlichen Beschäftigungszeitraum geprüft
+  (siehe dort)
 - "Statuswechsel" im Personalstamm (nur admin/hr, z.B. beim Erreichen der
   90-Tage-/15-Wochen-Grenze): legt eine neue, verknüpfte Person mit "a" an
   der Personalnummer an (z.B. "342" → "342a") mit wählbarer neuer
