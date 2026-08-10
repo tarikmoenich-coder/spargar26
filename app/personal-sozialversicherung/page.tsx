@@ -8,6 +8,7 @@ import SvFragebogenFormular, {
   SV_VERGLEICHS_FELDER,
 } from "@/components/SvFragebogenFormular";
 import type { Employee, SvFragebogenAuswertung } from "@/lib/types";
+import { formatDatumDE } from "@/lib/format";
 
 const CURRENT_YEAR = new Date().getFullYear();
 
@@ -130,6 +131,9 @@ export default function SozialversicherungPage() {
               <th>Name</th>
               <th>Status {jahr}</th>
               <th>Vorbeschäftigung Deutschland (Tage)</th>
+              <th title="Aus den Angaben abgeleiteter Zeitraum, in dem eine Beschäftigung in Deutschland sozialversicherungsfrei möglich ist">
+                SV-freier Zeitraum
+              </th>
               <th>Angaben {jahr}</th>
               <th>Zum Vorjahr ({jahr - 1})</th>
               {canEdit && <th></th>}
@@ -193,6 +197,28 @@ export default function SozialversicherungPage() {
                     </td>
                     <td>{f?.vorbeschaeftigung_deutschland_tage ?? "—"}</td>
                     <td className="text-xs">
+                      {!f || (!f.sv_frei_von && !f.sv_frei_bis) ? (
+                        <span className="text-neutral-400">—</span>
+                      ) : (
+                        <>
+                          {formatDatumDE(f.sv_frei_von)} –{" "}
+                          {f.sv_frei_bis
+                            ? formatDatumDE(f.sv_frei_bis)
+                            : "unbefristet"}
+                          {f.sv_frei_luecke && (
+                            <div
+                              className="text-amber-700"
+                              title="Lücke zwischen Bezahltem Urlaub und Freistellung - in diesem Zeitraum nicht SV-frei"
+                            >
+                              ⚠ Lücke:{" "}
+                              {formatDatumDE(f.sv_frei_luecke_von)} –{" "}
+                              {formatDatumDE(f.sv_frei_luecke_bis)}
+                            </div>
+                          )}
+                        </>
+                      )}
+                    </td>
+                    <td className="text-xs">
                       {!f ? (
                         <span className="text-neutral-400">—</span>
                       ) : zutreffendeFelder.length === 0 ? (
@@ -239,7 +265,7 @@ export default function SozialversicherungPage() {
                   </tr>
                   {editingId === emp.id && (
                     <tr>
-                      <td colSpan={7}>
+                      <td colSpan={8}>
                         <SvFragebogenFormular
                           employeeId={emp.id}
                           saisonJahr={jahr}

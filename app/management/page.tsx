@@ -231,8 +231,11 @@ export default function ManagementPage() {
         <p className="text-sm text-neutral-500">
           90-Tage-/15-Wochen-Kontrolle: Personen, bei denen die Grenze für
           sozialversicherungsfreie kurzfristige Beschäftigung bereits
-          überschritten ist. Reine Tage-/Wochen-Zählung – ersetzt nicht die
-          rechtliche Prüfung der Sozialversicherungsbefreiung selbst.
+          überschritten ist – jetzt zusätzlich abgeglichen mit dem SV-freien
+          Zeitraum laut den Angaben auf „Personal → Sozialversicherung"
+          (Bezahlter Urlaub/Freistellung bzw. Schulferien/offener Zeitraum).
+          Reine Tage-/Wochen-/Datums-Prüfung – ersetzt nicht die rechtliche
+          Prüfung der Sozialversicherungsbefreiung selbst.
         </p>
       </div>
 
@@ -272,7 +275,12 @@ export default function ManagementPage() {
                   </th>
                   <th>Kombinierte Tage</th>
                   <th>Rest bis 90 Tage (kombiniert)</th>
-                  <th>Austrittsdatum (15 Wo.)</th>
+                  <th title="SV-freier Zeitraum laut Angaben (Personal → Sozialversicherung), abgeleitet aus Bezahlter Urlaub/Freistellung bzw. Schulferien/offenem Zeitraum">
+                    SV-freier Zeitraum (Angaben)
+                  </th>
+                  <th title="Das frühere von 15-Wochen-Ende und dem Ende des SV-freien Zeitraums laut Angaben. Die 90-Tage-Grenze links gilt nur zusätzlich, falls die Person nach einer Auszahlung vor Erreichen der 90 Tage erneut kommt.">
+                    Austrittsdatum (empfohlen)
+                  </th>
                   <th>Grund</th>
                   <th>Status</th>
                 </tr>
@@ -296,13 +304,46 @@ export default function ManagementPage() {
                     <td>{f.vorbeschaeftigung_deutschland_tage}</td>
                     <td>{f.kombinierte_tage}</td>
                     <td>{f.rest_bis_90_tage_kombiniert}</td>
-                    <td>{formatDatumDE(f.austrittsdatum_15_wochen)}</td>
+                    <td className="text-sm">
+                      {f.sv_frei_von || f.sv_frei_bis ? (
+                        <>
+                          {formatDatumDE(f.sv_frei_von)} –{" "}
+                          {f.sv_frei_bis
+                            ? formatDatumDE(f.sv_frei_bis)
+                            : "unbefristet"}
+                          {f.sv_frei_luecke && (
+                            <span
+                              className="ml-1 text-amber-700"
+                              title={`Lücke zwischen Bezahltem Urlaub und Freistellung: ${formatDatumDE(f.sv_frei_luecke_von)} – ${formatDatumDE(f.sv_frei_luecke_bis)}`}
+                            >
+                              ⚠ Lücke
+                            </span>
+                          )}
+                        </>
+                      ) : (
+                        <span className="text-neutral-400">
+                          keine Angaben
+                        </span>
+                      )}
+                    </td>
+                    <td>{formatDatumDE(f.austrittsdatum_empfohlen)}</td>
                     <td className="text-sm">
                       {[
                         f.arbeitstage_ueber0 > 90 ? "90-Tage-Grenze" : null,
                         f.ueberschritten_15_wochen ? "15-Wochen-Grenze" : null,
                         f.arbeitstage_ueber0 <= 90 && f.kombinierte_tage > 90
                           ? "90-Tage-Grenze (mit Vorbeschäftigung)"
+                          : null,
+                        f.ueberschritten_sv_frei_beginn
+                          ? "SV-freier Zeitraum (Angaben) beginnt zu spät"
+                          : null,
+                        f.ueberschritten_sv_frei_ende
+                          ? "SV-freier Zeitraum (Angaben) überschritten"
+                          : null,
+                        f.sv_frei_luecke &&
+                        !f.ueberschritten_sv_frei_beginn &&
+                        !f.ueberschritten_sv_frei_ende
+                          ? "Lücke im SV-freien Zeitraum"
                           : null,
                       ]
                         .filter(Boolean)

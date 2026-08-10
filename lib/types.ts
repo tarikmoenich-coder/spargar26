@@ -145,6 +145,18 @@ export interface SvPruefung {
   kombinierte_tage: number;
   rest_bis_90_tage_kombiniert: number;
   kritisch: boolean;
+  // Sozialversicherungsfreier Zeitraum laut SV-Fragebogen-Angaben
+  // (Nutzer-Vorgabe 2026-08-10) - siehe ausführlichen Kommentar in
+  // schema.sql bei den sv_freier_zeitraum_*-Funktionen. sv_frei_bis ist
+  // null bei offenen Zeiträumen (Rente/Hausmann/Selbstständigkeit).
+  austrittsdatum_empfohlen: string | null;
+  sv_frei_von: string | null;
+  sv_frei_bis: string | null;
+  sv_frei_luecke: boolean;
+  sv_frei_luecke_von: string | null;
+  sv_frei_luecke_bis: string | null;
+  ueberschritten_sv_frei_beginn: boolean;
+  ueberschritten_sv_frei_ende: boolean;
 }
 
 // Aus der Sicht employee_urlaubstage - Urlaubstage-Anspruch (2 je vollem
@@ -241,9 +253,15 @@ export interface SvFragebogen {
   updated_at: string;
 }
 
-// Aus der Sicht sv_fragebogen_auswertung (fügt "bestanden" hinzu).
+// Aus der Sicht sv_fragebogen_auswertung (fügt "bestanden" und den
+// abgeleiteten SV-freien Zeitraum hinzu, siehe schema.sql).
 export interface SvFragebogenAuswertung extends SvFragebogen {
   bestanden: boolean;
+  sv_frei_von: string | null;
+  sv_frei_bis: string | null;
+  sv_frei_luecke: boolean;
+  sv_frei_luecke_von: string | null;
+  sv_frei_luecke_bis: string | null;
 }
 
 // "Bestätigung für den Nachweis der doppelten Haushaltsführung" - analog

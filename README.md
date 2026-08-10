@@ -278,7 +278,19 @@ Enthalten:
   Management-Seite zeigt beide Werte einzeln). Gilt nur für Personen, die
   noch NICHT sozialversicherungspflichtig sind (die Grenze ist die
   Obergrenze für sozialversicherungsFREIE Beschäftigung, für bereits
-  Pflichtige gegenstandslos)
+  Pflichtige gegenstandslos). Stand 2026-08-10: die Management-Seite
+  gleicht den tatsächlichen Beschäftigungszeitraum zusätzlich mit dem
+  SV-freien Zeitraum laut den SV-Fragebogen-Angaben ab (siehe unten) -
+  beginnt die Beschäftigung vor dessen Anfang, geht sie über dessen Ende
+  hinaus, oder fällt sie in eine Lücke zwischen "Bezahlter Urlaub" und
+  "Freistellung", zählt das genauso als kritisch wie eine Überschreitung
+  der 90-Tage-/15-Wochen-Grenze (eigene Spalte "SV-freier Zeitraum
+  (Angaben)" plus Grund-Text in der Tabelle). Das "normale" empfohlene
+  Austrittsdatum ist jetzt das frühere von 15-Wochen-Ende und dem Ende des
+  SV-freien Zeitraums laut Angaben (Spalte "Austrittsdatum (empfohlen)");
+  die bisherige 90-Tage-Kombinationsprüfung bleibt unverändert und
+  greift zusätzlich nur im Wiederkehr-Fall (Person kommt nach einer
+  Auszahlung vor Erreichen der 90 Tage erneut)
 - Eigene Unterseite "Personal → Sozialversicherung" (nur admin/hr):
   SV-Fragebogen ("Fragebogen zur Feststellung der
   Versicherungspflicht/Versicherungsfreiheit rumänischer
@@ -316,7 +328,18 @@ Enthalten:
   Abrechnungsart "sozialversicherungspflichtig" zeigt die Spalte direkt
   "SV-Pflicht." statt einer Bestanden/Nicht-bestanden-Auswertung (eine
   SV-Freiheits-Feststellung ergibt für bereits SV-pflichtig Beschäftigte
-  keinen Sinn mehr) - "Bestanden" heißt jetzt "✓ SV-Frei"
+  keinen Sinn mehr) - "Bestanden" heißt jetzt "✓ SV-Frei". Stand 2026-08-10:
+  zusätzlich eine Spalte "SV-freier Zeitraum", live aus den Angaben
+  abgeleitet - bei "Beschäftigung im Heimatland" die Spanne aus "Bezahlter
+  Urlaub" UND "Freistellung aus anderem Grund" (beide zusammen sind
+  SV-frei, "Unbezahlter Urlaub" zählt bewusst nicht mit; eine echte Lücke
+  zwischen den beiden Teilzeiträumen wird als "⚠ Lücke" mit Datum
+  angezeigt), bei Schule/Studium der Schulferienzeitraum (nur wenn
+  "Schulferien während Beschäftigung" angekreuzt ist), bei Hausfrau/
+  Hausmann, Rentenbezug und Selbstständigkeit im Heimatland ein offener
+  (unbefristeter) Zeitraum ab dem jeweiligen "seit"-Datum. Dieser
+  SV-freie Zeitraum wird auf der Management-Seite gegen den tatsächlichen
+  Beschäftigungszeitraum geprüft (siehe dort)
 - "Statuswechsel" im Personalstamm (nur admin/hr, z.B. beim Erreichen der
   90-Tage-/15-Wochen-Grenze): legt eine neue, verknüpfte Person mit "a" an
   der Personalnummer an (z.B. "342" → "342a") mit wählbarer neuer
