@@ -129,6 +129,9 @@ export default function ManagementPage() {
   const [offenUeberstundenId, setOffenUeberstundenId] = useState<
     string | null
   >(null);
+  // Nutzer-Vorgabe 2026-08-10: Stundenmonitoring aufklappbar, standardmäßig
+  // eingeklappt mit nur der Gesamtzahl als Info.
+  const [stundenmonitoringOffen, setStundenmonitoringOffen] = useState(false);
 
   const [urlaubUeberzogen, setUrlaubUeberzogen] = useState<
     EmployeeUrlaubstage[]
@@ -542,22 +545,42 @@ export default function ManagementPage() {
       </div>
 
       <div>
-        <h2 className="mb-2 text-base font-semibold text-emerald-800">
-          Stundenmonitoring
-        </h2>
-        <p className="mb-2 text-sm text-neutral-500">
-          Personen mit mindestens einem Tag über {MAX_STUNDEN_PRO_TAG.toFixed(2)}{" "}
-          Stunden in der Stundenerfassung. Aufklappen zeigt die betroffenen
-          Tage.
-        </p>
-        {loadingUeberstunden ? (
-          <p className="text-neutral-500">Lädt…</p>
-        ) : ueberstunden.length === 0 ? (
-          <p className="text-neutral-500">
-            Keine Tage über {MAX_STUNDEN_PRO_TAG.toFixed(2)} Stunden für{" "}
-            {jahr}.
+        <div className="mb-2 flex items-center justify-between">
+          <h2 className="text-base font-semibold text-emerald-800">
+            Stundenmonitoring
+          </h2>
+          <button
+            type="button"
+            className="btn-secondary text-xs"
+            onClick={() => setStundenmonitoringOffen((o) => !o)}
+          >
+            {stundenmonitoringOffen ? "Einklappen" : "Aufklappen"}
+          </button>
+        </div>
+        {!stundenmonitoringOffen ? (
+          <p className="text-sm text-neutral-500">
+            Anzahl Tage &gt; {MAX_STUNDEN_PRO_TAG.toFixed(0)} Std.:{" "}
+            <span className="font-medium text-amber-600">
+              {loadingUeberstunden
+                ? "…"
+                : ueberstunden.reduce((summe, u) => summe + u.tage.length, 0)}
+            </span>
           </p>
         ) : (
+          <>
+            <p className="mb-2 text-sm text-neutral-500">
+              Personen mit mindestens einem Tag über{" "}
+              {MAX_STUNDEN_PRO_TAG.toFixed(2)} Stunden in der
+              Stundenerfassung. Aufklappen zeigt die betroffenen Tage.
+            </p>
+            {loadingUeberstunden ? (
+              <p className="text-neutral-500">Lädt…</p>
+            ) : ueberstunden.length === 0 ? (
+              <p className="text-neutral-500">
+                Keine Tage über {MAX_STUNDEN_PRO_TAG.toFixed(2)} Stunden für{" "}
+                {jahr}.
+              </p>
+            ) : (
           <div className="overflow-x-auto">
             <table>
               <thead>
@@ -637,6 +660,8 @@ export default function ManagementPage() {
               </tbody>
             </table>
           </div>
+            )}
+          </>
         )}
       </div>
 

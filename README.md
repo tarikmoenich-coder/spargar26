@@ -418,7 +418,10 @@ Enthalten:
 - "Controlling"-Seite, Abschnitt "Stundenmonitoring": listet alle Personen
   mit mindestens einem Tag über 12,00 Stunden in der Stundenerfassung
   (Saison-Jahr-Filter), aufklappbar je Person mit allen betroffenen Tagen
-  und einem Sprung-Link direkt zu Datum + Person in der Stundenerfassung
+  und einem Sprung-Link direkt zu Datum + Person in der Stundenerfassung.
+  Der ganze Abschnitt ist zusätzlich als Ganzes ein-/ausklappbar (Stand
+  2026-08-10, standardmäßig eingeklappt) - im eingeklappten Zustand nur
+  die Gesamtzahl "Anzahl Tage > 12 Std." über alle Personen
 - "Controlling"-Seite, Abschnitt "Abweichungen bei Auszahlungen": listet
   alle bereits abgerechneten Personen, deren Live-Berechnung inzwischen
   vom eingefrorenen Schnappschuss abweicht (das „⚠" von der
