@@ -1490,6 +1490,29 @@ returns boolean language sql stable security definer as $$
   );
 $$;
 
+-- Prüft, ob eine Person für die Saison, in die das übergebene Datum fällt,
+-- bereits abgerechnet ist ("Jetzt Abrechnen" auf der Lohnübersicht) -
+-- sperrt damit rückwirkende Änderungen an Prämien-Rohdaten (Zuckermais/
+-- Erdbeeren, später Spargel) für bereits ausgezahlte Personen (Nutzer-
+-- Vorgabe 2026-08-09: "ein Wert, der eine abgeschlossene Auszahlung
+-- betrifft, sollte nicht mehr abgeändert werden dürfen"). security
+-- definer, da season_bonuses selbst nur für admin/lohnabrechnung lesbar
+-- ist (season_bonuses_rw) - zeiterfassung/erntewirtschaft dürfen Prämien
+-- erfassen, aber nicht direkt in season_bonuses schauen; ohne security
+-- definer würde die Prüfung für sie immer "nicht abgerechnet" ergeben,
+-- unabhängig vom echten Status.
+create or replace function ist_saison_abgerechnet(p_employee_id uuid, p_datum date)
+returns boolean language sql stable security definer
+set search_path = public
+as $$
+  select exists (
+    select 1 from season_bonuses b
+    where b.employee_id = p_employee_id
+      and b.saison_jahr = extract(year from p_datum)::int
+      and b.abgerechnet_am is not null
+  );
+$$;
+
 -- ---------------------------------------------------------------------------
 -- 11. Append-only Audit-Log (ADR-005) - erfasst alle relevanten Änderungen
 --     an Personal, Stunden, Vorschüssen und Kassenbuch.
@@ -2202,10 +2225,30 @@ create policy "verpflegungssaetze_rw" on verpflegungssaetze for all
 -- aktuell gültige Norm sehen können).
 create policy "zuckermais_rohdaten_select" on zuckermais_rohdaten for select
   using (auth.uid() is not null);
+-- Löschen/Ändern erlaubt (statt nur auf 0 zu setzen), damit ein
+-- versehentlich am falschen Tag eingetragener Wert vollständig rückgängig
+-- gemacht werden kann (Nutzer-Vorgabe 2026-08-09) - anders als bei
+-- Vorschüssen/Auszahlungen gibt es hier keine Storno-Pflicht, da es sich
+-- um reine Tageserfassung ohne Beleg-Charakter handelt (wie
+-- work_entries). ABER: nicht mehr möglich, sobald die betroffene Person
+-- für die jeweilige Saison bereits abgerechnet ("Jetzt Abrechnen") ist -
+-- ein Wert, der eine abgeschlossene Auszahlung betrifft, darf nicht mehr
+-- rückwirkend verändert werden (Nutzer-Vorgabe 2026-08-09).
 create policy "zuckermais_rohdaten_write" on zuckermais_rohdaten for insert
-  with check (current_role_name() in ('admin', 'hr', 'zeiterfassung', 'erntewirtschaft'));
+  with check (
+    current_role_name() in ('admin', 'hr', 'zeiterfassung', 'erntewirtschaft')
+    and not ist_saison_abgerechnet(employee_id, datum)
+  );
 create policy "zuckermais_rohdaten_update" on zuckermais_rohdaten for update
-  using (current_role_name() in ('admin', 'hr', 'zeiterfassung', 'erntewirtschaft'));
+  using (
+    current_role_name() in ('admin', 'hr', 'zeiterfassung', 'erntewirtschaft')
+    and not ist_saison_abgerechnet(employee_id, datum)
+  );
+create policy "zuckermais_rohdaten_delete" on zuckermais_rohdaten for delete
+  using (
+    current_role_name() in ('admin', 'hr', 'zeiterfassung', 'erntewirtschaft')
+    and not ist_saison_abgerechnet(employee_id, datum)
+  );
 create policy "zuckermais_saetze_select" on zuckermais_saetze for select
   using (auth.uid() is not null);
 create policy "zuckermais_saetze_write" on zuckermais_saetze for all
@@ -2226,10 +2269,23 @@ create policy "erdbeeren_parzellen_saetze_write" on erdbeeren_parzellen_saetze f
   using (is_admin()) with check (is_admin());
 create policy "erdbeeren_rohdaten_select" on erdbeeren_rohdaten for select
   using (auth.uid() is not null);
+-- Löschen/Ändern erlaubt, aber nicht mehr nach Auszahlung - gleicher Grund
+-- wie bei Zuckermais.
 create policy "erdbeeren_rohdaten_write" on erdbeeren_rohdaten for insert
-  with check (current_role_name() in ('admin', 'hr', 'zeiterfassung', 'erntewirtschaft'));
+  with check (
+    current_role_name() in ('admin', 'hr', 'zeiterfassung', 'erntewirtschaft')
+    and not ist_saison_abgerechnet(employee_id, datum)
+  );
 create policy "erdbeeren_rohdaten_update" on erdbeeren_rohdaten for update
-  using (current_role_name() in ('admin', 'hr', 'zeiterfassung', 'erntewirtschaft'));
+  using (
+    current_role_name() in ('admin', 'hr', 'zeiterfassung', 'erntewirtschaft')
+    and not ist_saison_abgerechnet(employee_id, datum)
+  );
+create policy "erdbeeren_rohdaten_delete" on erdbeeren_rohdaten for delete
+  using (
+    current_role_name() in ('admin', 'hr', 'zeiterfassung', 'erntewirtschaft')
+    and not ist_saison_abgerechnet(employee_id, datum)
+  );
 
 create policy "advances_select" on advances for select
   using (current_role_name() in ('admin', 'hr', 'kasse', 'lohnabrechnung', 'pruefer', 'management'));

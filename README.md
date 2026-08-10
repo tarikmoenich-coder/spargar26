@@ -311,7 +311,12 @@ Enthalten:
   Sozialversicherungsbefreiung im Einzelfall selbst (die hier hinterlegte
   Bestanden/Nicht-bestanden-Logik ist unser Verständnis der allgemeinen
   Regel, keine steuerberaterlich geprüfte Rechtsauskunft für den
-  Einzelfall)
+  Einzelfall). Suche nach Name/Personalnummer wie im Personalstamm (Stand
+  2026-08-09). Status-Anzeige verfeinert (Stand 2026-08-09): bei
+  Abrechnungsart "sozialversicherungspflichtig" zeigt die Spalte direkt
+  "SV-Pflicht." statt einer Bestanden/Nicht-bestanden-Auswertung (eine
+  SV-Freiheits-Feststellung ergibt für bereits SV-pflichtig Beschäftigte
+  keinen Sinn mehr) - "Bestanden" heißt jetzt "✓ SV-Frei"
 - "Statuswechsel" im Personalstamm (nur admin/hr, z.B. beim Erreichen der
   90-Tage-/15-Wochen-Grenze): legt eine neue, verknüpfte Person mit "a" an
   der Personalnummer an (z.B. "342" → "342a") mit wählbarer neuer
@@ -390,7 +395,13 @@ Enthalten:
   schnellen Mehrfach-Auswählen (Checkbox-Liste), danach "Zu X hinzufügen"/
   "Von X entfernen" für die gewählte Kultur. Zuckermais/Erdbeeren zeigen
   standardmäßig nur zugeordnete Mitarbeiter (weniger Scrollen/Ablenkung bei
-  der täglichen Erfassung)
+  der täglichen Erfassung). Korrektur/Löschen (Stand 2026-08-09): Feld auf
+  0 setzen und "Alle speichern" entfernt einen versehentlich am falschen
+  Tag/an der falschen Parzelle eingetragenen Eintrag wieder vollständig
+  (vorher nur stillschweigend übersprungen, nicht korrigierbar) - das geht
+  aber nicht mehr, sobald die betroffene Person für die jeweilige Saison
+  bereits abgerechnet ("Jetzt Abrechnen") ist, ein Wert einer
+  abgeschlossenen Auszahlung bleibt unveränderlich
 - Neuer Menüpunkt "Statistik" (Stand 2026-08-09, admin/hr/lohnabrechnung/
   management/erntewirtschaft), analog zu "Prämien" mit eigenen Untermenüs
   Spargel/Erdbeeren/Zuckermais - Tagesstatistik über alle Mitarbeiter

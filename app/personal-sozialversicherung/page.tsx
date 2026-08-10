@@ -160,11 +160,23 @@ export default function SozialversicherungPage() {
                       {emp.name}, {emp.vorname}
                     </td>
                     <td>
-                      {!f ? (
+                      {emp.abrechnungsart === "sozialversicherungspflichtig" ? (
+                        // Eine SV-Freiheits-Feststellung ergibt für bereits
+                        // sozialversicherungspflichtig beschäftigte Personen
+                        // keinen Sinn mehr (Nutzer-Vorgabe 2026-08-09) - der
+                        // Status zeigt hier direkt die Abrechnungsart statt
+                        // der Fragebogen-Auswertung.
+                        <span
+                          className="font-medium text-neutral-700"
+                          title="Abrechnungsart: sozialversicherungspflichtig - eine Feststellung zur SV-Freiheit ist hier nicht relevant"
+                        >
+                          SV-Pflicht.
+                        </span>
+                      ) : !f ? (
                         <span className="text-neutral-400">Nicht erfasst</span>
                       ) : f.bestanden ? (
                         <span className="font-medium text-emerald-700">
-                          ✓ Bestanden
+                          ✓ SV-Frei
                         </span>
                       ) : f.unvollstaendig_fehlerhaft ? (
                         <span

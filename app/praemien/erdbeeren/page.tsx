@@ -198,45 +198,79 @@ export default function PraemienErdbeerenPage() {
     return Math.max((steigen - norm) * aktuellerSatz.bonus_pro_steige, 0);
   }
 
-  // Speichert alle sichtbaren (gefilterten) Zeilen mit mindestens Steigen,
-  // Stunden oder Sut > 0 in einem einzigen Upsert (kein einzelner
-  // Speichern-Knopf je Zeile, wie bei Zuckermais).
+  // Speichert alle vom Nutzer bearbeiteten Zeilen (nur die tatsächlich
+  // angefassten, siehe entwurf) in einem einzigen Upsert. Zeilen, die auf
+  // 0/0/0 zurückgesetzt wurden, werden - falls vorher schon ein Eintrag
+  // bestand - stattdessen GELÖSCHT statt stillschweigend übersprungen
+  // (Nutzer-Vorgabe 2026-08-09: versehentlich am falschen Tag/an der
+  // falschen Parzelle eingetragene Werte müssen wieder rauszubekommen
+  // sein). Unberührte Zeilen ohne vorherigen Eintrag bleiben unangetastet.
   async function alleSpeichern() {
     if (parzelleId === null) return;
     setSpeichernAlle(true);
     setFehler(null);
     const supabase = getSupabaseClient();
-    const zuSpeichern = gefiltert
-      .map((emp) => {
-        const werte = werteFuer(emp.id);
-        const steigen = Number(werte.steigen) || 0;
-        const stunden = Number(werte.stunden) || 0;
-        const sut = Number(werte.sut) || 0;
-        if (steigen === 0 && stunden === 0 && sut === 0) return null;
-        return {
-          employee_id: emp.id,
-          parzelle_id: parzelleId,
-          datum,
-          steigen,
-          stunden,
-          sut,
-        };
-      })
-      .filter((e): e is NonNullable<typeof e> => e !== null);
 
-    if (zuSpeichern.length === 0) {
+    const zuSpeichern: {
+      employee_id: string;
+      parzelle_id: number;
+      datum: string;
+      steigen: number;
+      stunden: number;
+      sut: number;
+    }[] = [];
+    const zuLoeschenIds: number[] = [];
+
+    gefiltert.forEach((emp) => {
+      if (!entwurf[emp.id]) return; // nicht bearbeitet - unangetastet lassen
+      const werte = werteFuer(emp.id);
+      const steigen = Number(werte.steigen) || 0;
+      const stunden = Number(werte.stunden) || 0;
+      const sut = Number(werte.sut) || 0;
+      const bestehend = eintraege[emp.id];
+      if (steigen === 0 && stunden === 0 && sut === 0) {
+        if (bestehend) zuLoeschenIds.push(bestehend.id);
+        return;
+      }
+      zuSpeichern.push({
+        employee_id: emp.id,
+        parzelle_id: parzelleId,
+        datum,
+        steigen,
+        stunden,
+        sut,
+      });
+    });
+
+    if (zuSpeichern.length === 0 && zuLoeschenIds.length === 0) {
       setSpeichernAlle(false);
       return;
     }
 
-    const { error } = await supabase
-      .from("erdbeeren_rohdaten")
-      .upsert(zuSpeichern, { onConflict: "employee_id,parzelle_id,datum" });
-    setSpeichernAlle(false);
-    if (error) {
-      setFehler(error.message);
-      return;
+    if (zuLoeschenIds.length > 0) {
+      const { error: loeschFehler } = await supabase
+        .from("erdbeeren_rohdaten")
+        .delete()
+        .in("id", zuLoeschenIds);
+      if (loeschFehler) {
+        setSpeichernAlle(false);
+        setFehler(loeschFehler.message);
+        return;
+      }
     }
+
+    if (zuSpeichern.length > 0) {
+      const { error } = await supabase
+        .from("erdbeeren_rohdaten")
+        .upsert(zuSpeichern, { onConflict: "employee_id,parzelle_id,datum" });
+      if (error) {
+        setSpeichernAlle(false);
+        setFehler(error.message);
+        return;
+      }
+    }
+
+    setSpeichernAlle(false);
     setEntwurf({});
     load();
   }
@@ -351,6 +385,10 @@ export default function PraemienErdbeerenPage() {
           nicht vermarktungsfähige Ware) erfassen. Norm und Bonus gelten je
           Parzelle (nicht global wie bei Zuckermais) und fließen live in die
           Lohnübersicht (Brutto-Spalte) ein. Sut zählt nicht zur Prämie.
+          Feld leeren/auf 0 setzen und „Alle speichern" klicken entfernt
+          einen versehentlich eingetragenen Wert wieder komplett - das
+          geht allerdings nicht mehr, sobald die Person für diese Saison
+          schon abgerechnet ("Jetzt Abrechnen") wurde.
         </p>
       </div>
 
