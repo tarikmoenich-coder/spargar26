@@ -298,7 +298,33 @@ Enthalten:
   dort, sobald tatsächlich AN oder NACH dem Grenzdatum gearbeitet wurde
   (nicht schon am Tag, an dem die Grenze erreicht wird). Wer wissen will,
   wann eine Person die Grenze erreicht, bevor es kritisch wird, sieht das
-  proaktiv in der Spalte "Austrittsdatum (empfohlen)" auf der Personal-Seite
+  proaktiv in der Spalte "Austrittsdatum (empfohlen)" auf der Personal-Seite.
+  Stand 2026-08-10, Nutzer-Korrektur: die 90-Tage-Grenze zählt jetzt
+  KALENDERTAGE des Beschäftigungszeitraums (1. bis letzter Arbeitstag,
+  inkl. freier Tage dazwischen - Spalte "Beschäftigungstage", vorher
+  "Arbeitstage > 0" mit reinen Tagen mit Stunden > 0), exakt wie die
+  15-Wochen-Grenze, nur mit 90 statt 105 Tagen Budget. Damit die 90-Tage-
+  Grenze (90 Kalendertage) nicht immer schon vor der 15-Wochen-Grenze
+  (105 Kalendertage) greift, ist sie jetzt AUSSCHLIESSLICH im
+  Wiederkehr-Fall bindend (Vorbeschäftigung > 0 laut SV-Fragebogen) - ohne
+  gemeldete Vorbeschäftigung gilt nur noch die 15-Wochen-Grenze. Im
+  Wiederkehr-Fall wird zusätzlich ein EXAKTES Enddatum berechnet
+  (Startdatum der aktuellen Beschäftigung + (89 − bereits gemeldete
+  Vorbeschäftigungstage)) und fließt jetzt mit in "Austrittsdatum
+  (empfohlen)" ein (das früheste von 15-Wochen-Ende, SV-frei-Ende laut
+  Angaben und 90-Tage-kombiniert-Ende). "Rest bis 90 Tage" auf der
+  Personal-Seite zeigt "—", wenn keine Vorbeschäftigung gemeldet ist (die
+  Zahl wäre sonst irreführend, da sie ohne rechtliche Bedeutung wäre).
+  Auf "Personal → Sozialversicherung" (siehe unten) zwei neue Spalten:
+  "Angewendete Regel" (15-Wochen- oder 90-Tage-Grenze, je nach gemeldeter
+  Vorbeschäftigung) und "Ende der SV-Freiheit (Tage)" - Resttage bis zum
+  empfohlenen Austrittsdatum, gelb unter 7 Tagen, rot bei bereits
+  überschrittenen (negativen) Tagen; erst berechenbar, sobald mindestens
+  ein Arbeitstag erfasst ist. Auf der Controlling-Seite zusätzlich eine
+  neue, rein proaktive Übersicht "Nächste 10, deren SV-freier Zeitraum
+  endet" (unabhängig vom "kritisch"-Status, sortiert nach empfohlenem
+  Austrittsdatum) - ergänzt die reaktive "kritisch"-Liste um eine echte
+  Vorausschau
 - Eigene Unterseite "Personal → Sozialversicherung" (nur admin/hr):
   SV-Fragebogen ("Fragebogen zur Feststellung der
   Versicherungspflicht/Versicherungsfreiheit rumänischer

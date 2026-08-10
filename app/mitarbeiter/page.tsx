@@ -1075,10 +1075,10 @@ export default function MitarbeiterPage() {
               <th>Abrechnungsart</th>
               <th>Aktiv seit</th>
               <th>Zuletzt abgerechnet am</th>
-              <th title="Inkl. bisheriger Arbeitstage in Deutschland bei anderen Arbeitgebern laut SV-Fragebogen, falls erfasst (siehe Personal → Sozialversicherung)">
+              <th title="Nur relevant bei gemeldeter Vorbeschäftigung in Deutschland (siehe Personal → Sozialversicherung) - sonst gilt nur die 15-Wochen-Grenze rechts. Kalendertage des Beschäftigungszeitraums (nicht nur Tage mit Stunden > 0) plus gemeldete Vorbeschäftigungstage, von 90 abgezogen.">
                 Rest bis 90 Tage
               </th>
-              <th title="Das frühere von 15-Wochen-Ende und dem Ende des SV-freien Zeitraums laut Angaben (Personal → Sozialversicherung). Die 90-Tage-Grenze links gilt nur zusätzlich, falls die Person nach einer Auszahlung vor Erreichen der 90 Tage erneut kommt.">
+              <th title="Das früheste von 15-Wochen-Ende, dem Ende des SV-freien Zeitraums laut Angaben, und (bei Vorbeschäftigung) dem exakten 90-Tage-kombiniert-Ende (Personal → Sozialversicherung).">
                 Austrittsdatum (empfohlen)
               </th>
               <th>SV-Status</th>
@@ -1125,13 +1125,17 @@ export default function MitarbeiterPage() {
                 <td
                   title={
                     sv && sv.vorbeschaeftigung_deutschland_tage > 0
-                      ? `${sv.arbeitstage_ueber0} Tage bei uns + ${sv.vorbeschaeftigung_deutschland_tage} Tage laut SV-Fragebogen bei anderen Arbeitgebern in Deutschland`
+                      ? `${sv.beschaeftigungstage} Kalendertage bei uns + ${sv.vorbeschaeftigung_deutschland_tage} Tage laut SV-Fragebogen bei anderen Arbeitgebern in Deutschland`
                       : undefined
                   }
                 >
-                  {sv ? sv.rest_bis_90_tage_kombiniert : "—"}
-                  {sv && sv.vorbeschaeftigung_deutschland_tage > 0 && (
-                    <span className="ml-1 text-xs text-amber-600">*</span>
+                  {sv && sv.vorbeschaeftigung_deutschland_tage > 0 ? (
+                    <>
+                      {sv.rest_bis_90_tage_kombiniert}
+                      <span className="ml-1 text-xs text-amber-600">*</span>
+                    </>
+                  ) : (
+                    <span className="text-neutral-400">—</span>
                   )}
                 </td>
                 <td>{sv ? formatDatumDE(sv.austrittsdatum_empfohlen) : "—"}</td>

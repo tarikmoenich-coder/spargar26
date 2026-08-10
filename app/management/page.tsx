@@ -10,6 +10,12 @@ import {
   type SvPruefung,
 } from "@/lib/types";
 import { formatDatumDE } from "@/lib/format";
+import {
+  angewendeteRegel,
+  resttageFarbeClass,
+  resttageText,
+  svFreiheitResttage,
+} from "@/lib/svPruefung";
 
 const CURRENT_YEAR = new Date().getFullYear();
 
@@ -97,6 +103,11 @@ function findeAbweichungen(r: SeasonSummaryRow): Abweichung[] {
 
 export default function ManagementPage() {
   const [faelle, setFaelle] = useState<SvPruefung[]>([]);
+  // Proaktive Vorausschau (Nutzer-Vorgabe 2026-08-10): die 10 Personen,
+  // deren SV-freier Zeitraum als nächstes endet - unabhängig davon, ob
+  // schon "kritisch" (bereits überschritten). Ergänzt die reaktive
+  // "kritisch"-Liste oben um einen Blick nach vorn.
+  const [baldEndend, setBaldEndend] = useState<SvPruefung[]>([]);
   const [loading, setLoading] = useState(true);
   const [jahr, setJahr] = useState(CURRENT_YEAR);
 
@@ -120,13 +131,28 @@ export default function ManagementPage() {
     async function load() {
       setLoading(true);
       const supabase = getSupabaseClient();
+      // Eine Abfrage für beide Listen: alle Fälle des Jahres, kritisch
+      // oder nicht - die kritische Liste UND die "bald endend"-Vorausschau
+      // werden client-seitig aus derselben Grundmenge abgeleitet.
       const { data, error } = await supabase
         .from("employee_sv_pruefung")
         .select("*")
         .eq("saison_jahr", jahr)
-        .eq("kritisch", true)
-        .order("arbeitstage_ueber0", { ascending: false });
-      if (!error) setFaelle((data as SvPruefung[]) ?? []);
+        .order("beschaeftigungstage", { ascending: false });
+      const alle = (data as SvPruefung[]) ?? [];
+      if (!error) {
+        setFaelle(alle.filter((f) => f.kritisch));
+        setBaldEndend(
+          [...alle]
+            .filter((f) => f.austrittsdatum_empfohlen)
+            .sort((a, b) =>
+              (a.austrittsdatum_empfohlen ?? "").localeCompare(
+                b.austrittsdatum_empfohlen ?? ""
+              )
+            )
+            .slice(0, 10)
+        );
+      }
       setLoading(false);
     }
     load();
@@ -269,12 +295,16 @@ export default function ManagementPage() {
                   <th>Abrechnungsart</th>
                   <th>1. Arbeitstag</th>
                   <th>Letzter Arbeitstag</th>
-                  <th>Arbeitstage &gt; 0 (bei uns)</th>
+                  <th title="Kalendertage des Beschäftigungszeitraums (1. bis letzter Arbeitstag bei uns), nicht nur Tage mit Stunden > 0">
+                    Beschäftigungstage (bei uns)
+                  </th>
                   <th title="Bisherige Arbeitstage in Deutschland bei anderen Arbeitgebern laut SV-Fragebogen (Personal → Sozialversicherung)">
                     Vorbeschäftigung Deutschland
                   </th>
                   <th>Kombinierte Tage</th>
-                  <th>Rest bis 90 Tage (kombiniert)</th>
+                  <th title="Nur relevant bei Vorbeschäftigung > 0 - sonst gilt nur die 15-Wochen-Grenze">
+                    Rest bis 90 Tage (kombiniert)
+                  </th>
                   <th title="SV-freier Zeitraum laut Angaben (Personal → Sozialversicherung), abgeleitet aus Bezahlter Urlaub/Freistellung bzw. Schulferien/offenem Zeitraum">
                     SV-freier Zeitraum (Angaben)
                   </th>
@@ -300,10 +330,16 @@ export default function ManagementPage() {
                     <td>{ABRECHNUNGSART_LABELS[f.abrechnungsart]}</td>
                     <td>{formatDatumDE(f.erster_arbeitstag)}</td>
                     <td>{formatDatumDE(f.letzter_arbeitstag)}</td>
-                    <td>{f.arbeitstage_ueber0}</td>
+                    <td>{f.beschaeftigungstage}</td>
                     <td>{f.vorbeschaeftigung_deutschland_tage}</td>
                     <td>{f.kombinierte_tage}</td>
-                    <td>{f.rest_bis_90_tage_kombiniert}</td>
+                    <td>
+                      {f.vorbeschaeftigung_deutschland_tage > 0 ? (
+                        f.rest_bis_90_tage_kombiniert
+                      ) : (
+                        <span className="text-neutral-400">—</span>
+                      )}
+                    </td>
                     <td className="text-sm">
                       {f.sv_frei_von || f.sv_frei_bis ? (
                         <>
@@ -329,9 +365,9 @@ export default function ManagementPage() {
                     <td>{formatDatumDE(f.austrittsdatum_empfohlen)}</td>
                     <td className="text-sm">
                       {[
-                        f.arbeitstage_ueber0 > 90 ? "90-Tage-Grenze" : null,
                         f.ueberschritten_15_wochen ? "15-Wochen-Grenze" : null,
-                        f.arbeitstage_ueber0 <= 90 && f.kombinierte_tage > 90
+                        f.vorbeschaeftigung_deutschland_tage > 0 &&
+                        f.kombinierte_tage > 90
                           ? "90-Tage-Grenze (mit Vorbeschäftigung)"
                           : null,
                         f.ueberschritten_sv_frei_beginn
@@ -352,6 +388,64 @@ export default function ManagementPage() {
                     <td className="font-medium text-red-600">⚠ Überschritten</td>
                   </tr>
                 ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+
+      <div>
+        <h2 className="mb-2 text-base font-semibold text-emerald-800">
+          Nächste 10, deren SV-freier Zeitraum endet
+        </h2>
+        <p className="mb-2 text-sm text-neutral-500">
+          Proaktive Vorausschau (unabhängig davon, ob bereits kritisch) -
+          sortiert nach empfohlenem Austrittsdatum, das nächste zuerst.
+        </p>
+        {loading ? (
+          <p className="text-neutral-500">Lädt…</p>
+        ) : baldEndend.length === 0 ? (
+          <p className="text-neutral-500">
+            Keine Fälle mit bekanntem Austrittsdatum für {jahr}.
+          </p>
+        ) : (
+          <div className="overflow-x-auto">
+            <table>
+              <thead>
+                <tr>
+                  <th>Pers.-Nr.</th>
+                  <th>Name</th>
+                  <th>Abrechnungsart</th>
+                  <th>Angewendete Regel</th>
+                  <th>Austrittsdatum (empfohlen)</th>
+                  <th>Ende der SV-Freiheit (Tage)</th>
+                </tr>
+              </thead>
+              <tbody>
+                {baldEndend.map((f) => {
+                  const tage = svFreiheitResttage(f);
+                  return (
+                    <tr key={f.employee_id}>
+                      <td>{f.personal_nr}</td>
+                      <td>
+                        {f.name}, {f.vorname}
+                        {!f.aktiv && (
+                          <span className="ml-1 text-xs text-neutral-500">
+                            (inaktiv)
+                          </span>
+                        )}
+                      </td>
+                      <td>{ABRECHNUNGSART_LABELS[f.abrechnungsart]}</td>
+                      <td>
+                        {angewendeteRegel(f.vorbeschaeftigung_deutschland_tage)}
+                      </td>
+                      <td>{formatDatumDE(f.austrittsdatum_empfohlen)}</td>
+                      <td className={tage !== null ? resttageFarbeClass(tage) : ""}>
+                        {tage !== null ? resttageText(tage) : "—"}
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>

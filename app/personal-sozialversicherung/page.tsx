@@ -9,54 +9,14 @@ import SvFragebogenFormular, {
 } from "@/components/SvFragebogenFormular";
 import type { Employee, SvFragebogenAuswertung, SvPruefung } from "@/lib/types";
 import { formatDatumDE } from "@/lib/format";
+import {
+  angewendeteRegel,
+  resttageFarbeClass,
+  resttageText,
+  svFreiheitResttage,
+} from "@/lib/svPruefung";
 
 const CURRENT_YEAR = new Date().getFullYear();
-
-// Zeigt das tatsächlich geltende Ende des SV-freien Zeitraums an - NIE
-// pauschal "unbefristet" (Nutzer-Vorgabe 2026-08-10: irreführend, da immer
-// durch die 15-Wochen-Grenze - bzw. bei Vorbeschäftigung/Rückkehr die
-// 90-Tage-Grenze kombiniert - begrenzt). Braucht dafür den tatsächlichen
-// Arbeitsbeginn (aus employee_sv_pruefung, nur vorhanden sobald mindestens
-// ein Arbeitstag mit Stunden > 0 erfasst ist) - ohne den lässt sich kein
-// konkretes Datum nennen, dafür aber die geltende Regel.
-function svFreiZeitraumAnzeige(
-  f: SvFragebogenAuswertung,
-  p: SvPruefung | undefined
-): { bis: string | null; label: string; hinweis?: string } {
-  const vorbeschaeftigt = (f.vorbeschaeftigung_deutschland_tage ?? 0) > 0;
-  const hinweis90 = vorbeschaeftigt
-    ? `Bei Vorbeschäftigung/Rückkehr gilt zusätzlich die 90-Tage-Grenze kombiniert (bereits ${f.vorbeschaeftigung_deutschland_tage} Tage angegeben)`
-    : undefined;
-
-  if (p) {
-    // Arbeitsbeginn bekannt: austrittsdatum_empfohlen ist bereits das
-    // frühere von 15-Wochen-Ende und dem Ende laut Angaben (sv_frei_bis,
-    // NULL-sicher), siehe employee_sv_pruefung in schema.sql.
-    const laut15Wochen =
-      !f.sv_frei_bis || p.austrittsdatum_15_wochen <= f.sv_frei_bis;
-    return {
-      bis: p.austrittsdatum_empfohlen,
-      label: laut15Wochen
-        ? "15-Wochen-Grenze ab Arbeitsbeginn"
-        : "laut Angaben",
-      hinweis: hinweis90,
-    };
-  }
-  if (f.sv_frei_bis) {
-    return {
-      bis: f.sv_frei_bis,
-      label: "laut Angaben",
-      hinweis:
-        "Zusätzlich befristet auf 15 Wochen ab Arbeitsbeginn" +
-        (hinweis90 ? " · " + hinweis90 : ""),
-    };
-  }
-  return {
-    bis: null,
-    label: "Befristet auf 15 Wochen ab Arbeitsbeginn in Deutschland",
-    hinweis: hinweis90,
-  };
-}
 
 export default function SozialversicherungPage() {
   const { profile } = useProfile();
@@ -192,8 +152,14 @@ export default function SozialversicherungPage() {
               <th>Name</th>
               <th>Status {jahr}</th>
               <th>Vorbeschäftigung Deutschland (Tage)</th>
+              <th title="Ohne Vorbeschäftigung gilt die 15-Wochen-Grenze (Normalfall), mit Vorbeschäftigung/Rückkehr zusätzlich die kombinierte 90-Tage-Grenze">
+                Angewendete Regel
+              </th>
               <th title="Aus den Angaben abgeleiteter Zeitraum, in dem eine Beschäftigung in Deutschland sozialversicherungsfrei möglich ist">
                 SV-freier Zeitraum
+              </th>
+              <th title="Resttage bis zum empfohlenen Austrittsdatum (frühestes von 15-Wochen-Ende, SV-frei-Ende laut Angaben und ggf. 90-Tage-kombiniert-Ende) - erst berechenbar, sobald mindestens ein Arbeitstag erfasst ist">
+                Ende der SV-Freiheit (Tage)
               </th>
               <th>Angaben {jahr}</th>
               <th>Zum Vorjahr ({jahr - 1})</th>
@@ -217,9 +183,8 @@ export default function SozialversicherungPage() {
               const zutreffendeFelder = f
                 ? SV_VERGLEICHS_FELDER.filter((v) => f[v.key] === true)
                 : [];
-              const svFreiAnzeige = f
-                ? svFreiZeitraumAnzeige(f, pruefung[emp.id])
-                : null;
+              const svPruefung = pruefung[emp.id];
+              const resttage = svPruefung ? svFreiheitResttage(svPruefung) : null;
               return (
                 <Fragment key={emp.id}>
                   <tr className={emp.aktiv ? "" : "opacity-50"}>
@@ -261,21 +226,23 @@ export default function SozialversicherungPage() {
                     </td>
                     <td>{f?.vorbeschaeftigung_deutschland_tage ?? "—"}</td>
                     <td className="text-xs">
-                      {!f || !f.sv_frei_von || !svFreiAnzeige ? (
+                      {f ? angewendeteRegel(f.vorbeschaeftigung_deutschland_tage) : "—"}
+                    </td>
+                    <td className="text-xs">
+                      {!f || !f.sv_frei_von ? (
                         <span className="text-neutral-400">—</span>
                       ) : (
                         <>
                           {formatDatumDE(f.sv_frei_von)} –{" "}
-                          {svFreiAnzeige.bis
-                            ? formatDatumDE(svFreiAnzeige.bis)
-                            : "…"}
-                          <div className="text-neutral-500">
-                            ({svFreiAnzeige.label})
-                          </div>
-                          {svFreiAnzeige.hinweis && (
-                            <div className="text-amber-700">
-                              {svFreiAnzeige.hinweis}
-                            </div>
+                          {f.sv_frei_bis ? (
+                            formatDatumDE(f.sv_frei_bis)
+                          ) : (
+                            <span
+                              className="text-neutral-500"
+                              title="Kein Enddatum in den Angaben - siehe Spalte „Ende der SV-Freiheit“ für das tatsächlich geltende, durch die 15-Wochen-/90-Tage-Grenze begrenzte Ende"
+                            >
+                              offen
+                            </span>
                           )}
                           {f.sv_frei_luecke && (
                             <div
@@ -288,6 +255,20 @@ export default function SozialversicherungPage() {
                             </div>
                           )}
                         </>
+                      )}
+                    </td>
+                    <td className={resttage !== null ? resttageFarbeClass(resttage) : "text-xs"}>
+                      {!f ? (
+                        <span className="text-neutral-400">—</span>
+                      ) : resttage !== null ? (
+                        resttageText(resttage)
+                      ) : (
+                        <span
+                          className="text-neutral-400"
+                          title="Erst berechenbar, sobald mindestens ein Arbeitstag mit Stunden > 0 erfasst ist"
+                        >
+                          —
+                        </span>
                       )}
                     </td>
                     <td className="text-xs">
@@ -337,7 +318,7 @@ export default function SozialversicherungPage() {
                   </tr>
                   {editingId === emp.id && (
                     <tr>
-                      <td colSpan={8}>
+                      <td colSpan={10}>
                         <SvFragebogenFormular
                           employeeId={emp.id}
                           saisonJahr={jahr}

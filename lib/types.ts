@@ -132,7 +132,11 @@ export interface SvPruefung {
   saison_jahr: number;
   erster_arbeitstag: string;
   letzter_arbeitstag: string;
-  arbeitstage_ueber0: number;
+  // Bis 2026-08-10 "arbeitstage_ueber0" (nur Tage mit Stunden > 0) - jetzt
+  // Kalendertage des Beschäftigungszeitraums (1. bis letzter Arbeitstag,
+  // Nutzer-Korrektur 2026-08-10), umbenannt weil der alte Name sonst
+  // irreführend wäre.
+  beschaeftigungstage: number;
   rest_bis_90_tage: number;
   austrittsdatum_15_wochen: string;
   wochen_seit_start: number;
@@ -157,6 +161,12 @@ export interface SvPruefung {
   sv_frei_luecke_bis: string | null;
   ueberschritten_sv_frei_beginn: boolean;
   ueberschritten_sv_frei_ende: boolean;
+  // Exaktes Enddatum der kombinierten 90-Tage-Grenze im Rückkehr-Fall
+  // (Nutzer-Vorgabe 2026-08-10) - null, wenn keine Vorbeschäftigung
+  // gemeldet ist. Fließt bereits in austrittsdatum_empfohlen ein, hier
+  // zusätzlich einzeln für die transparente Anzeige "welche Regel war
+  // bindend".
+  austrittsdatum_90_tage_kombiniert: string | null;
 }
 
 // Aus der Sicht employee_urlaubstage - Urlaubstage-Anspruch (2 je vollem

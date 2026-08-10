@@ -1,0 +1,70 @@
+// Gemeinsame Hilfsfunktionen für die SV-Prüfung (90-Tage-/15-Wochen-/
+// SV-frei-Zeitraum-Logik) - genutzt von "Personal → Sozialversicherung"
+// und "Controlling" (app/management/page.tsx), damit die Berechnung nur
+// an einer Stelle steht. Siehe schema.sql (employee_sv_pruefung) für die
+// serverseitige Herleitung von austrittsdatum_empfohlen.
+
+import type { SvPruefung } from "./types";
+
+// Heutiges Datum als LOKALES Kalenderdatum (nicht UTC!) - wichtig, siehe
+// Lehre aus dem xlsx-Datum-Timezone-Bug: new Date().toISOString() würde
+// nahe Mitternacht je nach Zeitzone den falschen Tag liefern, weil es erst
+// nach UTC konvertiert.
+function heutigesDatumLokalIso(): string {
+  const d = new Date();
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const t = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${t}`;
+}
+
+// Differenz in Tagen zwischen zwei Datums-Strings (YYYY-MM-DD) - beide auf
+// UTC-Mittag verankert, um DST-Kanten bei der Differenzbildung zu
+// vermeiden (reine Kalendertage-Differenz, unabhängig von Uhrzeit/Zeitzone
+// des Browsers).
+function tageZwischen(vonIso: string, bisIso: string): number {
+  const [y1, m1, d1] = vonIso.split("-").map(Number);
+  const [y2, m2, d2] = bisIso.split("-").map(Number);
+  const t1 = Date.UTC(y1, m1 - 1, d1, 12);
+  const t2 = Date.UTC(y2, m2 - 1, d2, 12);
+  return Math.round((t2 - t1) / 86400000);
+}
+
+// Welche Tage-Grenze zusätzlich zur SV-frei-Prüfung bindend ist
+// (Nutzer-Vorgabe 2026-08-10): ohne gemeldete Vorbeschäftigung in
+// Deutschland gilt die 15-Wochen-Grenze (Normalfall - "anfänglich gehen
+// wir immer davon aus, dass ein Mitarbeiter 15 Wochen am Stück bleibt");
+// mit Vorbeschäftigung/Rückkehr im selben Kalenderjahr gilt zusätzlich die
+// kombinierte 90-Tage-Grenze.
+export function angewendeteRegel(
+  vorbeschaeftigungTage: number | null | undefined
+): string {
+  return (vorbeschaeftigungTage ?? 0) > 0
+    ? "90-Tage-Grenze (kombiniert)"
+    : "15-Wochen-Grenze";
+}
+
+// Resttage bis zum (bereits serverseitig korrekt zusammengeführten)
+// empfohlenen Austrittsdatum - positiv = noch Tage übrig, negativ =
+// bereits überschritten. austrittsdatum_empfohlen vereint bereits
+// 15-Wochen-Ende, SV-frei-Ende laut Angaben UND (im Rückkehr-Fall) das
+// exakte 90-Tage-kombiniert-Enddatum (siehe schema.sql).
+export function svFreiheitResttage(p: SvPruefung): number | null {
+  if (!p.austrittsdatum_empfohlen) return null;
+  return tageZwischen(heutigesDatumLokalIso(), p.austrittsdatum_empfohlen);
+}
+
+// Farbklasse nach Nutzer-Vorgabe 2026-08-10: unter 7 Tage gelb, unter 0
+// Tage (bereits überschritten) rot, sonst neutral.
+export function resttageFarbeClass(tage: number): string {
+  if (tage < 0) return "font-medium text-red-600";
+  if (tage < 7) return "font-medium text-amber-600";
+  return "";
+}
+
+// Lesbarer Text für die Resttage-Zahl.
+export function resttageText(tage: number): string {
+  return tage < 0
+    ? `Überschritten seit ${Math.abs(tage)} Tag(en)`
+    : `${tage} Tage`;
+}

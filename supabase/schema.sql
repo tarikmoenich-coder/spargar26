@@ -1984,16 +1984,36 @@ select
   w.saison_jahr,
   w.erster_arbeitstag,
   w.letzter_arbeitstag,
-  w.arbeitstage_ueber0,
-  greatest(0, 90 - w.arbeitstage_ueber0) as rest_bis_90_tage,
+  -- Bis 2026-08-10 hieß diese Spalte "arbeitstage_ueber0" und zählte nur
+  -- Tage mit tatsächlich geleisteten Stunden. Nutzer-Korrektur 2026-08-10:
+  -- für die 90-Tage-Grenze zählen die KALENDERTAGE des Beschäftigungs-
+  -- zeitraums (1. bis letzter Arbeitstag, inklusive freier Tage dazwischen)
+  -- - exakt dieselbe Kalendertage-Logik wie bei der 15-Wochen-Grenze, nur
+  -- mit 90 statt 105 Tagen Budget. Umbenannt für Ehrlichkeit (der alte
+  -- Name "Arbeitstage" wäre jetzt irreführend) - dafür zwingend per
+  -- "alter view ... rename column" VOR diesem "create or replace view"
+  -- (sonst 42P16, siehe Migration).
+  w.beschaeftigungstage,
+  greatest(0, 90 - w.beschaeftigungstage) as rest_bis_90_tage,
   (w.erster_arbeitstag + 104) as austrittsdatum_15_wochen,
   floor((w.letzter_arbeitstag - w.erster_arbeitstag) / 7.0)::int as wochen_seit_start,
-  (w.arbeitstage_ueber0 > 90) as ueberschritten_90_tage,
+  (w.beschaeftigungstage > 90) as ueberschritten_90_tage,
   (w.letzter_arbeitstag > (w.erster_arbeitstag + 104)) as ueberschritten_15_wochen,
   (
-    w.arbeitstage_ueber0 > 90
-    or w.letzter_arbeitstag > (w.erster_arbeitstag + 104)
-    or (w.arbeitstage_ueber0 + coalesce(fb.vorbeschaeftigung_deutschland_tage, 0)) > 90
+    w.letzter_arbeitstag > (w.erster_arbeitstag + 104)
+    -- Nutzer-Vorgabe 2026-08-10: die 90-Tage-Grenze ist NUR im
+    -- Wiederkehr-Fall bindend (Vorbeschäftigung > 0) - "anfänglich gehen
+    -- wir immer davon aus, dass ein Mitarbeiter 15 Wochen am Stück
+    -- bleibt". Ohne diese Bedingung würde die 90-Tage-Grenze (90
+    -- Kalendertage < 105 Kalendertage) IMMER vor der 15-Wochen-Grenze
+    -- greifen, auch ganz ohne Vorbeschäftigung - das war bis zur
+    -- Kalendertage-Umstellung unauffällig (Arbeitstage mit Stunden > 0
+    -- lagen bei üblichem Arbeitsmuster nahe an der 15-Wochen-Grenze),
+    -- würde jetzt aber jede Person fälschlich kritisch markieren.
+    or (
+      coalesce(fb.vorbeschaeftigung_deutschland_tage, 0) > 0
+      and (w.beschaeftigungstage + fb.vorbeschaeftigung_deutschland_tage) > 90
+    )
     -- SV-freier Zeitraum laut Angaben deckt den tatsächlichen
     -- Beschäftigungszeitraum nicht ab, oder dieser fällt in eine Lücke
     -- zwischen "Bezahlter Urlaub" und "Freistellung" (Nutzer-Vorgabe
@@ -2016,22 +2036,29 @@ select
   -- die Tage bei uns (Nutzer-Korrektur 2026-08-08).
   coalesce(fb.vorbeschaeftigung_deutschland_tage, 0)
     as vorbeschaeftigung_deutschland_tage,
-  w.arbeitstage_ueber0 + coalesce(fb.vorbeschaeftigung_deutschland_tage, 0)
+  w.beschaeftigungstage + coalesce(fb.vorbeschaeftigung_deutschland_tage, 0)
     as kombinierte_tage,
   greatest(
     0,
-    90 - (w.arbeitstage_ueber0 + coalesce(fb.vorbeschaeftigung_deutschland_tage, 0))
+    90 - (w.beschaeftigungstage + coalesce(fb.vorbeschaeftigung_deutschland_tage, 0))
   ) as rest_bis_90_tage_kombiniert,
   -- Empfohlenes Austrittsdatum (Nutzer-Vorgabe 2026-08-10): normalerweise
   -- ist die 15-Wochen-Grenze maßgeblich ("anfänglich gehen wir immer davon
   -- aus, dass ein Mitarbeiter 15 Wochen am Stück bleibt") - liegt das Ende
-  -- des SV-freien Zeitraums laut Angaben davor, ist DAS maßgeblich. Die
-  -- 90-Tage-Grenze (rest_bis_90_tage/_kombiniert oben) bleibt davon
-  -- unberührt - die braucht es nur im separaten Wiederkehr-Fall (mehrere
-  -- Zeiträume im selben Kalenderjahr), nicht für dieses "normale" Ende.
-  -- least() ignoriert dabei NULL-Werte (sv_frei_bis ist bei offenen
-  -- Zeiträumen wie Rente/Hausmann/Selbstständigkeit NULL).
-  least((w.erster_arbeitstag + 104), fb.sv_frei_bis) as austrittsdatum_empfohlen,
+  -- des SV-freien Zeitraums laut Angaben davor, ist DAS maßgeblich. Im
+  -- Wiederkehr-Fall (Vorbeschäftigung > 0) fließt zusätzlich das exakte
+  -- 90-Tage-kombiniert-Enddatum ein (Nutzer-Vorgabe 2026-08-10: soll in
+  -- "empfohlen" einfließen, nicht mehr nur separat) - least() ignoriert
+  -- NULL-Werte (sv_frei_bis ist bei offenen Zeiträumen wie Rente/Hausmann/
+  -- Selbstständigkeit NULL; das 90-Tage-Datum ist NULL, wenn keine
+  -- Vorbeschäftigung gemeldet ist).
+  least(
+    (w.erster_arbeitstag + 104),
+    fb.sv_frei_bis,
+    case when coalesce(fb.vorbeschaeftigung_deutschland_tage, 0) > 0
+      then w.erster_arbeitstag + (89 - fb.vorbeschaeftigung_deutschland_tage)
+    end
+  ) as austrittsdatum_empfohlen,
   fb.sv_frei_von,
   fb.sv_frei_bis,
   coalesce(fb.sv_frei_luecke, false) as sv_frei_luecke,
@@ -2040,14 +2067,27 @@ select
   (fb.sv_frei_von is not null and w.erster_arbeitstag < fb.sv_frei_von)
     as ueberschritten_sv_frei_beginn,
   (fb.sv_frei_bis is not null and w.letzter_arbeitstag > fb.sv_frei_bis)
-    as ueberschritten_sv_frei_ende
+    as ueberschritten_sv_frei_ende,
+  -- Exaktes Enddatum der kombinierten 90-Tage-Grenze im Wiederkehr-Fall
+  -- (Nutzer-Vorgabe 2026-08-10, wörtlich hergeleitet): Startdatum dieser
+  -- (zweiten) Beschäftigung + (89 - bereits gemeldete Vorbeschäftigungs-
+  -- tage). NULL, wenn keine Vorbeschäftigung gemeldet ist (dann rechtlich
+  -- ohne Bedeutung, siehe kritisch oben) - eigene Spalte zusätzlich zur
+  -- Einbindung in austrittsdatum_empfohlen oben, für die transparente
+  -- Anzeige "welche Regel war bindend".
+  case when coalesce(fb.vorbeschaeftigung_deutschland_tage, 0) > 0
+    then w.erster_arbeitstag + (89 - fb.vorbeschaeftigung_deutschland_tage)
+  end as austrittsdatum_90_tage_kombiniert
 from employees e
 join lateral (
   select
     extract(year from we.datum)::int as saison_jahr,
     min(we.datum) filter (where we.stunden > 0) as erster_arbeitstag,
     max(we.datum) filter (where we.stunden > 0) as letzter_arbeitstag,
-    count(distinct we.datum) filter (where we.stunden > 0) as arbeitstage_ueber0
+    (
+      max(we.datum) filter (where we.stunden > 0)
+      - min(we.datum) filter (where we.stunden > 0) + 1
+    ) as beschaeftigungstage
   from work_entries we
   where we.employee_id = e.id
   group by extract(year from we.datum)
