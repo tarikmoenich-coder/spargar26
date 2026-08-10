@@ -87,7 +87,7 @@ const items: NavItem[] = [
   },
   {
     href: "/management",
-    label: "Management",
+    label: "Controlling",
     roles: ["admin", "hr", "management"],
   },
   {

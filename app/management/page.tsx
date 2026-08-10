@@ -226,7 +226,7 @@ export default function ManagementPage() {
     <div className="flex flex-col gap-4">
       <div>
         <h1 className="text-lg font-semibold text-emerald-800">
-          Management
+          Controlling
         </h1>
         <p className="text-sm text-neutral-500">
           90-Tage-/15-Wochen-Kontrolle: Personen, bei denen die Grenze für

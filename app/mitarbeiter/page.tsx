@@ -1078,7 +1078,9 @@ export default function MitarbeiterPage() {
               <th title="Inkl. bisheriger Arbeitstage in Deutschland bei anderen Arbeitgebern laut SV-Fragebogen, falls erfasst (siehe Personal → Sozialversicherung)">
                 Rest bis 90 Tage
               </th>
-              <th>Austrittsdatum (15 Wo.)</th>
+              <th title="Das frühere von 15-Wochen-Ende und dem Ende des SV-freien Zeitraums laut Angaben (Personal → Sozialversicherung). Die 90-Tage-Grenze links gilt nur zusätzlich, falls die Person nach einer Auszahlung vor Erreichen der 90 Tage erneut kommt.">
+                Austrittsdatum (empfohlen)
+              </th>
               <th>SV-Status</th>
               <th>Führerschein</th>
               <th>Status</th>
@@ -1132,7 +1134,7 @@ export default function MitarbeiterPage() {
                     <span className="ml-1 text-xs text-amber-600">*</span>
                   )}
                 </td>
-                <td>{sv ? formatDatumDE(sv.austrittsdatum_15_wochen) : "—"}</td>
+                <td>{sv ? formatDatumDE(sv.austrittsdatum_empfohlen) : "—"}</td>
                 <td>
                   {sv ? (
                     sv.kritisch ? (

@@ -8,7 +8,9 @@ import { formatZahlDE } from "@/lib/format";
 import MaisStatistikKachel from "@/components/MaisStatistikKachel";
 
 const CURRENT_YEAR = new Date().getFullYear();
-// Muss zum Wert auf der Management-Seite passen (app/management/page.tsx).
+// Muss zum Wert auf der Controlling-Seite passen (app/management/page.tsx -
+// Route/Rollenname "management" bewusst unverändert, nur die sichtbare
+// Bezeichnung heißt seit 2026-08-10 "Controlling").
 const MAX_STUNDEN_PRO_TAG = 12;
 
 interface LetzterCheck {
@@ -514,7 +516,7 @@ export default function DashboardPage() {
           {zeigeManagement && (
             <section>
               <h2 className="mb-2 text-base font-semibold text-emerald-800">
-                Management
+                Controlling
               </h2>
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
                 <Kachel

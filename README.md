@@ -26,7 +26,7 @@ Enthalten:
   Kassenprüfung und Bewegungen seit der letzten Prüfung, lohnabrechnung
   Abweichungen bei Auszahlungen und die Anzahl aktiver Personen, pruefer
   offene Kassenprüfungs-Freigaben und die letzten Audit-Log-Einträge,
-  management eine kompakte Fassung der Management-Seite. admin sieht alle
+  management eine kompakte Fassung der Controlling-Seite. admin sieht alle
   Kacheln kombiniert. zeiterfassung hat kein eigenes Dashboard und landet
   weiterhin direkt auf der Stundenerfassung, da das schon ihr einziger
   Arbeitsbereich ist
@@ -57,7 +57,7 @@ Enthalten:
   dürfen Stunden eintragen) jetzt clientseitig gesperrt mit erklärendem
   Hinweis, statt normal bearbeitbar auszusehen, aber die Eingabe lautlos
   von der Datenbank abzulehnen (Bugfix 2026-08-08, betraf z.B. den
-  Sprung-Link von der Management-Seite ins Stundenmonitoring). Ein
+  Sprung-Link von der Controlling-Seite ins Stundenmonitoring). Ein
   fehlgeschlagener Speicherversuch (z.B. weil jemand anders denselben
   Eintrag zwischenzeitlich geändert hat) zeigt jetzt ebenfalls einen
   Hinweis, statt die Eingabe kommentarlos zu verwerfen
@@ -270,15 +270,15 @@ Enthalten:
   spät") - erscheint auch auf der "Suche"-Seite
 - 90-Tage-/15-Wochen-Kontrolle (SV-Freiheit landwirtschaftliche
   Saisonarbeit, OI-004): Spalten auf der Personal-Seite (Rest bis 90 Tage,
-  theoretisches Austrittsdatum, Status) sowie eine "Management"-Seite mit
+  theoretisches Austrittsdatum, Status) sowie eine "Controlling"-Seite mit
   allen kritischen Fällen. Tage-/Wochen-Zählung auf Basis "1. bis letzter
   Arbeitstag mit Stunden > 0" bei uns, PLUS bisherige Arbeitstage bei
   anderen Arbeitgebern in Deutschland laut SV-Fragebogen (siehe unten,
   "Rest bis 90 Tage" auf der Personal-Seite zeigt den kombinierten Wert,
-  Management-Seite zeigt beide Werte einzeln). Gilt nur für Personen, die
+  Controlling-Seite zeigt beide Werte einzeln). Gilt nur für Personen, die
   noch NICHT sozialversicherungspflichtig sind (die Grenze ist die
   Obergrenze für sozialversicherungsFREIE Beschäftigung, für bereits
-  Pflichtige gegenstandslos). Stand 2026-08-10: die Management-Seite
+  Pflichtige gegenstandslos). Stand 2026-08-10: die Controlling-Seite
   gleicht den tatsächlichen Beschäftigungszeitraum zusätzlich mit dem
   SV-freien Zeitraum laut den SV-Fragebogen-Angaben ab (siehe unten) -
   beginnt die Beschäftigung vor dessen Anfang, geht sie über dessen Ende
@@ -287,10 +287,18 @@ Enthalten:
   der 90-Tage-/15-Wochen-Grenze (eigene Spalte "SV-freier Zeitraum
   (Angaben)" plus Grund-Text in der Tabelle). Das "normale" empfohlene
   Austrittsdatum ist jetzt das frühere von 15-Wochen-Ende und dem Ende des
-  SV-freien Zeitraums laut Angaben (Spalte "Austrittsdatum (empfohlen)");
-  die bisherige 90-Tage-Kombinationsprüfung bleibt unverändert und
-  greift zusätzlich nur im Wiederkehr-Fall (Person kommt nach einer
-  Auszahlung vor Erreichen der 90 Tage erneut)
+  SV-freien Zeitraums laut Angaben (Spalte "Austrittsdatum (empfohlen)" -
+  auch auf der Personal-Seite selbst korrigiert, zeigt dort jetzt für JEDE
+  Person dieses frühere Datum statt nur der reinen 15-Wochen-Grenze); die
+  bisherige 90-Tage-Kombinationsprüfung bleibt unverändert und greift
+  zusätzlich nur im Wiederkehr-Fall (Person kommt nach einer Auszahlung vor
+  Erreichen der 90 Tage erneut). Wichtig zum Verständnis der
+  "Controlling"-Seite: die dortige "kritisch"-Liste ist bewusst reaktiv, wie
+  schon bei der 90-Tage-/15-Wochen-Regel selbst - eine Person landet erst
+  dort, sobald tatsächlich AN oder NACH dem Grenzdatum gearbeitet wurde
+  (nicht schon am Tag, an dem die Grenze erreicht wird). Wer wissen will,
+  wann eine Person die Grenze erreicht, bevor es kritisch wird, sieht das
+  proaktiv in der Spalte "Austrittsdatum (empfohlen)" auf der Personal-Seite
 - Eigene Unterseite "Personal → Sozialversicherung" (nur admin/hr):
   SV-Fragebogen ("Fragebogen zur Feststellung der
   Versicherungspflicht/Versicherungsfreiheit rumänischer
@@ -348,7 +356,7 @@ Enthalten:
   unbekannt, zeigt sie stattdessen den Regeltext ohne konkretes Datum. Bei
   Vorbeschäftigung/Rückkehr erscheint zusätzlich ein Hinweis auf die
   kombinierte 90-Tage-Grenze. Dieser SV-freie Zeitraum wird auf der
-  Management-Seite gegen den tatsächlichen Beschäftigungszeitraum geprüft
+  Controlling-Seite gegen den tatsächlichen Beschäftigungszeitraum geprüft
   (siehe dort)
 - "Statuswechsel" im Personalstamm (nur admin/hr, z.B. beim Erreichen der
   90-Tage-/15-Wochen-Grenze): legt eine neue, verknüpfte Person mit "a" an
@@ -373,16 +381,16 @@ Enthalten:
   Bankverbindungs-Nachweis aus der Vorlage neu erzeugen und herunterladen,
   z.B. für einen Nachdruck. Bisher war die Dokumenterzeugung nur einmalig
   über "Anreise vorbereiten" in der Anreiseliste erreichbar
-- "Management"-Seite, Abschnitt "Stundenmonitoring": listet alle Personen
+- "Controlling"-Seite, Abschnitt "Stundenmonitoring": listet alle Personen
   mit mindestens einem Tag über 12,00 Stunden in der Stundenerfassung
   (Saison-Jahr-Filter), aufklappbar je Person mit allen betroffenen Tagen
   und einem Sprung-Link direkt zu Datum + Person in der Stundenerfassung
-- "Management"-Seite, Abschnitt "Abweichungen bei Auszahlungen": listet
+- "Controlling"-Seite, Abschnitt "Abweichungen bei Auszahlungen": listet
   alle bereits abgerechneten Personen, deren Live-Berechnung inzwischen
   vom eingefrorenen Schnappschuss abweicht (das „⚠" von der
   Auszahlungen-Seite), mit konkreter Angabe je Feld (alt → neu) statt nur
   des Warnzeichens
-- "Management"-Seite, Abschnitt "Urlaubstage" (Stand 2026-08-09): Anspruch
+- "Controlling"-Seite, Abschnitt "Urlaubstage" (Stand 2026-08-09): Anspruch
   ist 2 Urlaubstage je vollem Kalendermonat der Beschäftigung (1. bis
   letzter Tag mit Stunden oder Markierung) - ein Monat zählt nur, wenn die
   Beschäftigung Monatsanfang UND -ende dieses Monats abdeckt (z.B.
@@ -448,7 +456,7 @@ Enthalten:
 - Neue Rolle `erntewirtschaft` (Stand 2026-08-09): eigener,
   eingeschränkter Arbeitsbereich mit ausschließlich Zugriff auf Prämien
   (erfassen, wie zeiterfassung), Statistik und ein eigenes Dashboard - kein
-  Zugriff auf Personal, Lohnübersicht, Kassenbuch, Management oder
+  Zugriff auf Personal, Lohnübersicht, Kassenbuch, Controlling oder
   Einstellungen. Eigenes Dashboard (Stand 2026-08-09, `app/dashboard/
   page.tsx`): Kacheln für Zuckermais/Erdbeeren heute (erfasste Personen,
   Prämien-Summe), Warnung falls für Zuckermais noch kein Satz für heute
@@ -513,13 +521,13 @@ nicht nur im Menü versteckt.
 | Rolle | Sichtbare Menüpunkte | Kernrechte |
 |---|---|---|
 | `admin` | Alle | Voller Zugriff auf alles, inkl. Einstellungen, Kassenprüfungen freigeben |
-| `hr` | Personal, Stundenerfassung, Suche, Lohn, Prämien, Statistik, Management | Personalstamm + Dokumente voll pflegen (inkl. SV-Nr./IBAN/Ausweiskopien), Personalplanung + Anreiseliste (Kandidaten, Schwarze Liste, Buskosten) verwalten, Stunden erfassen, Lohnübersicht/Vorschüsse nur ansehen (nicht bearbeiten), Prämien erfassen, Monatsabschluss sperren/öffnen |
+| `hr` | Personal, Stundenerfassung, Suche, Lohn, Prämien, Statistik, Controlling | Personalstamm + Dokumente voll pflegen (inkl. SV-Nr./IBAN/Ausweiskopien), Personalplanung + Anreiseliste (Kandidaten, Schwarze Liste, Buskosten) verwalten, Stunden erfassen, Lohnübersicht/Vorschüsse nur ansehen (nicht bearbeiten), Prämien erfassen, Monatsabschluss sperren/öffnen |
 | `zeiterfassung` | Stundenerfassung, Suche, Prämien | Nur Stunden eintragen/ändern; sieht Personal nur mit eingeschränkten Feldern (keine SV-Nr./IBAN etc.); erfasst zusätzlich die Ausgabe von Arbeitskleidung (Stundenerfassung → Arbeitskleidung) sowie Prämien (Kisten/Stunden je Tag) |
 | `kasse` | Suche, Lohn, Kassenbuch | Vorschüsse erfassen/stornieren/korrigieren, Kassenbuch führen, Kassenprüfung durchführen |
 | `lohnabrechnung` | Suche, Lohn, Prämien, Statistik | Lohnübersicht ansehen **und bearbeiten** (Buskosten, Kautionen, "Jetzt Abrechnen"), Vorschüsse einsehen, Prämien ansehen |
 | `pruefer` | Suche, Lohn, Kassenbuch | Nur lesen, außer: Kassenprüfungen freigeben; einzige Nicht-Admin-Rolle mit Audit-Log-Einsicht |
-| `management` | Suche, Lohn, Kassenbuch, Prämien, Statistik, Management | Nur lesende/aggregierte Sicht |
-| `erntewirtschaft` | Start, Suche, Prämien, Statistik | Eigener, eingeschränkter Arbeitsbereich (Nutzer-Vorgabe 2026-08-09) - erfasst Prämien (Kisten/Stunden je Tag, wie zeiterfassung), sieht die Statistik, eigenes Dashboard mit Tageskennzahlen; kein Zugriff auf Personal, Lohnübersicht, Kassenbuch, Management, Einstellungen |
+| `management` | Suche, Lohn, Kassenbuch, Prämien, Statistik, Controlling | Nur lesende/aggregierte Sicht |
+| `erntewirtschaft` | Start, Suche, Prämien, Statistik | Eigener, eingeschränkter Arbeitsbereich (Nutzer-Vorgabe 2026-08-09) - erfasst Prämien (Kisten/Stunden je Tag, wie zeiterfassung), sieht die Statistik, eigenes Dashboard mit Tageskennzahlen; kein Zugriff auf Personal, Lohnübersicht, Kassenbuch, Controlling, Einstellungen |
 
 Neuen Benutzer anlegen: Supabase-Dashboard → Authentication → Users →
 "Add user" (E-Mail + Passwort) → User UID kopieren → Table Editor →
@@ -559,7 +567,7 @@ nicht ohne dich bzw. eine Steuerberatung klären:
 
 - OI-004: Die Tage-/Wochen-Zählung (90 Tage bzw. 15 Wochen - der
   Excel-Text "14 Wochen" war ein Tippfehler, korrekt sind 15) ist
-  umgesetzt (Personal-Seite + Management-Seite), inkl. SV-Fragebogen
+  umgesetzt (Personal-Seite + Controlling-Seite), inkl. SV-Fragebogen
   (Personal → Sozialversicherung, Stand 2026-08-08: manuelles
   Eingabeformular je Person/Saison-Jahr mit Vorjahresvergleich,
   Bestanden/Nicht-bestanden-Auswertung nach der allgemeinen
