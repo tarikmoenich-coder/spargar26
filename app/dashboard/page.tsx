@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { getSupabaseClient } from "@/lib/supabase/client";
 import { useProfile } from "@/lib/useProfile";
+import { formatZahlDE } from "@/lib/format";
 import MaisStatistikKachel from "@/components/MaisStatistikKachel";
 
 const CURRENT_YEAR = new Date().getFullYear();
@@ -88,6 +89,7 @@ export default function DashboardPage() {
   const [zmSatzFehlt, setZmSatzFehlt] = useState(false);
   const [ebHeuteAnzahl, setEbHeuteAnzahl] = useState(0);
   const [ebHeuteSumme, setEbHeuteSumme] = useState(0);
+  const [zmKolbenSaison, setZmKolbenSaison] = useState(0);
 
   const zeigeHr = profile?.role === "admin" || profile?.role === "hr";
   const zeigeKasse = profile?.role === "admin" || profile?.role === "kasse";
@@ -267,7 +269,7 @@ export default function DashboardPage() {
 
     async function ladeErntewirtschaft(supabase: ReturnType<typeof getSupabaseClient>) {
       const heute = new Date().toISOString().slice(0, 10);
-      const [{ data: zm }, { data: eb }, { data: satzHeute }] =
+      const [{ data: zm }, { data: eb }, { data: satzHeute }, { data: zmSaison }] =
         await Promise.all([
           supabase
             .from("zuckermais_praemie_tag")
@@ -284,6 +286,14 @@ export default function DashboardPage() {
             .order("gueltig_ab", { ascending: false })
             .limit(1)
             .maybeSingle(),
+          // Saison-Summe Kolben bis heute (Nutzer-Vorgabe 2026-08-09) - aus
+          // der bereits pro Tag aggregierten Statistik-Sicht, nicht aus den
+          // einzelnen Rohdaten-Zeilen.
+          supabase
+            .from("zuckermais_statistik_tag")
+            .select("summe_kolben")
+            .gte("datum", `${CURRENT_YEAR}-01-01`)
+            .lte("datum", `${CURRENT_YEAR}-12-31`),
         ]);
       const zmRows = zm ?? [];
       const ebRows = eb ?? [];
@@ -295,6 +305,12 @@ export default function DashboardPage() {
       setEbHeuteAnzahl(new Set(ebRows.map((r: any) => r.employee_id)).size);
       setEbHeuteSumme(
         ebRows.reduce((s: number, r: any) => s + Number(r.praemie ?? 0), 0)
+      );
+      setZmKolbenSaison(
+        (zmSaison ?? []).reduce(
+          (s: number, r: any) => s + Number(r.summe_kolben ?? 0),
+          0
+        )
       );
     }
 
@@ -555,9 +571,9 @@ export default function DashboardPage() {
                 />
                 <Kachel
                   href="/statistik/zuckermais"
-                  titel="Statistik"
-                  wert="Öffnen"
-                  unterzeile="Tages-/Saisonauswertung Zuckermais & Erdbeeren"
+                  titel="Anzahl Kolben bis heute"
+                  wert={formatZahlDE(zmKolbenSaison)}
+                  unterzeile="Zuckermais, Saison-Summe - Details in der Statistik"
                 />
                 {profile?.role === "admin" && (
                   <Kachel
