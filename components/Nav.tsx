@@ -21,7 +21,15 @@ const items: NavItem[] = [
   {
     href: "/dashboard",
     label: "Start",
-    roles: ["admin", "hr", "kasse", "lohnabrechnung", "pruefer", "management"],
+    roles: [
+      "admin",
+      "hr",
+      "kasse",
+      "lohnabrechnung",
+      "pruefer",
+      "management",
+      "erntewirtschaft",
+    ],
   },
   {
     href: "/mitarbeiter",

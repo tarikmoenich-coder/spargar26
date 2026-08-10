@@ -80,6 +80,14 @@ export default function DashboardPage() {
   // management
   const [stundenmonitoring, setStundenmonitoring] = useState(0);
 
+  // erntewirtschaft (Nutzer-Vorgabe 2026-08-09) - Kurzüberblick über den
+  // heutigen Tag, da diese Rolle nur Prämien/Statistik sieht.
+  const [zmHeuteAnzahl, setZmHeuteAnzahl] = useState(0);
+  const [zmHeuteSumme, setZmHeuteSumme] = useState(0);
+  const [zmSatzFehlt, setZmSatzFehlt] = useState(false);
+  const [ebHeuteAnzahl, setEbHeuteAnzahl] = useState(0);
+  const [ebHeuteSumme, setEbHeuteSumme] = useState(0);
+
   const zeigeHr = profile?.role === "admin" || profile?.role === "hr";
   const zeigeKasse = profile?.role === "admin" || profile?.role === "kasse";
   const zeigeLohnabrechnung =
@@ -87,13 +95,16 @@ export default function DashboardPage() {
   const zeigePruefer = profile?.role === "admin" || profile?.role === "pruefer";
   const zeigeManagement =
     profile?.role === "admin" || profile?.role === "management";
+  const zeigeErntewirtschaft =
+    profile?.role === "admin" || profile?.role === "erntewirtschaft";
   const keinDashboard =
     !!profile &&
     !zeigeHr &&
     !zeigeKasse &&
     !zeigeLohnabrechnung &&
     !zeigePruefer &&
-    !zeigeManagement;
+    !zeigeManagement &&
+    !zeigeErntewirtschaft;
 
   useEffect(() => {
     if (!profile) return;
@@ -253,6 +264,39 @@ export default function DashboardPage() {
       setStundenmonitoring(distinct.size);
     }
 
+    async function ladeErntewirtschaft(supabase: ReturnType<typeof getSupabaseClient>) {
+      const heute = new Date().toISOString().slice(0, 10);
+      const [{ data: zm }, { data: eb }, { data: satzHeute }] =
+        await Promise.all([
+          supabase
+            .from("zuckermais_praemie_tag")
+            .select("employee_id, praemie")
+            .eq("datum", heute),
+          supabase
+            .from("erdbeeren_praemie_tag")
+            .select("employee_id, praemie")
+            .eq("datum", heute),
+          supabase
+            .from("zuckermais_saetze")
+            .select("id")
+            .lte("gueltig_ab", heute)
+            .order("gueltig_ab", { ascending: false })
+            .limit(1)
+            .maybeSingle(),
+        ]);
+      const zmRows = zm ?? [];
+      const ebRows = eb ?? [];
+      setZmHeuteAnzahl(new Set(zmRows.map((r: any) => r.employee_id)).size);
+      setZmHeuteSumme(
+        zmRows.reduce((s: number, r: any) => s + Number(r.praemie ?? 0), 0)
+      );
+      setZmSatzFehlt(!satzHeute);
+      setEbHeuteAnzahl(new Set(ebRows.map((r: any) => r.employee_id)).size);
+      setEbHeuteSumme(
+        ebRows.reduce((s: number, r: any) => s + Number(r.praemie ?? 0), 0)
+      );
+    }
+
     async function load() {
       setLoading(true);
       const supabase = getSupabaseClient();
@@ -266,6 +310,7 @@ export default function DashboardPage() {
         zeigeLohnabrechnung ? ladeAktivePersonen(supabase) : null,
         zeigePruefer ? ladePruefer(supabase) : null,
         zeigeManagement ? ladeStundenmonitoring(supabase) : null,
+        zeigeErntewirtschaft ? ladeErntewirtschaft(supabase) : null,
       ]);
       setLoading(false);
     }
@@ -474,6 +519,53 @@ export default function DashboardPage() {
                   wert={String(abweichungen)}
                   ton={abweichungen > 0 ? "warn" : "ok"}
                 />
+              </div>
+            </section>
+          )}
+
+          {zeigeErntewirtschaft && (
+            <section>
+              <h2 className="mb-2 text-base font-semibold text-emerald-800">
+                Prämien heute
+              </h2>
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                <Kachel
+                  href="/praemien/zuckermais"
+                  titel="Zuckermais - erfasste Personen heute"
+                  wert={String(zmHeuteAnzahl)}
+                  unterzeile={`${zmHeuteSumme.toFixed(2)} € Prämie heute`}
+                />
+                <Kachel
+                  href="/praemien/zuckermais"
+                  titel="Zuckermais - Satz für heute"
+                  wert={zmSatzFehlt ? "Fehlt" : "Hinterlegt"}
+                  unterzeile={
+                    zmSatzFehlt
+                      ? "Norm/Preis nachtragen, sonst 0 € Prämie"
+                      : undefined
+                  }
+                  ton={zmSatzFehlt ? "warn" : "ok"}
+                />
+                <Kachel
+                  href="/praemien/erdbeeren"
+                  titel="Erdbeeren - erfasste Personen heute"
+                  wert={String(ebHeuteAnzahl)}
+                  unterzeile={`${ebHeuteSumme.toFixed(2)} € Prämie heute (alle Parzellen)`}
+                />
+                <Kachel
+                  href="/statistik/zuckermais"
+                  titel="Statistik"
+                  wert="Öffnen"
+                  unterzeile="Tages-/Saisonauswertung Zuckermais & Erdbeeren"
+                />
+                {profile?.role === "admin" && (
+                  <Kachel
+                    href="/praemien/gruppenaufteilung"
+                    titel="Gruppenaufteilung"
+                    wert="Öffnen"
+                    unterzeile="Wer ist welcher Prämien-Erfassung zugeordnet"
+                  />
+                )}
               </div>
             </section>
           )}

@@ -414,10 +414,12 @@ Enthalten:
   sobald dessen Prämien-Erfassung steht
 - Neue Rolle `erntewirtschaft` (Stand 2026-08-09): eigener,
   eingeschränkter Arbeitsbereich mit ausschließlich Zugriff auf Prämien
-  (erfassen, wie zeiterfassung) und Statistik - landet nach dem Login
-  direkt auf Prämien → Zuckermais statt auf dem Dashboard (analog zu
-  zeiterfassung → Stundenerfassung), kein Zugriff auf Personal,
-  Lohnübersicht, Kassenbuch, Management oder Einstellungen
+  (erfassen, wie zeiterfassung), Statistik und ein eigenes Dashboard - kein
+  Zugriff auf Personal, Lohnübersicht, Kassenbuch, Management oder
+  Einstellungen. Eigenes Dashboard (Stand 2026-08-09, `app/dashboard/
+  page.tsx`): Kacheln für Zuckermais/Erdbeeren heute (erfasste Personen,
+  Prämien-Summe), Warnung falls für Zuckermais noch kein Satz für heute
+  hinterlegt ist, Direktlinks zu Statistik und (nur admin) Gruppenaufteilung
 - Rollen/Rechte serverseitig über Postgres Row Level Security
 - Append-only Audit-Log für Personal, Stunden, Vorschüsse, Kassenbuch
 
@@ -475,7 +477,7 @@ nicht nur im Menü versteckt.
 | `lohnabrechnung` | Suche, Lohn, Prämien, Statistik | Lohnübersicht ansehen **und bearbeiten** (Buskosten, Kautionen, "Jetzt Abrechnen"), Vorschüsse einsehen, Prämien ansehen |
 | `pruefer` | Suche, Lohn, Kassenbuch | Nur lesen, außer: Kassenprüfungen freigeben; einzige Nicht-Admin-Rolle mit Audit-Log-Einsicht |
 | `management` | Suche, Lohn, Kassenbuch, Prämien, Statistik, Management | Nur lesende/aggregierte Sicht |
-| `erntewirtschaft` | Suche, Prämien, Statistik | Eigener, eingeschränkter Arbeitsbereich (Nutzer-Vorgabe 2026-08-09) - erfasst Prämien (Kisten/Stunden je Tag, wie zeiterfassung), sieht die Statistik; landet nach dem Login direkt auf Prämien → Zuckermais (kein Dashboard, analog zu zeiterfassung → Stundenerfassung); kein Zugriff auf Personal, Lohnübersicht, Kassenbuch, Management, Einstellungen |
+| `erntewirtschaft` | Start, Suche, Prämien, Statistik | Eigener, eingeschränkter Arbeitsbereich (Nutzer-Vorgabe 2026-08-09) - erfasst Prämien (Kisten/Stunden je Tag, wie zeiterfassung), sieht die Statistik, eigenes Dashboard mit Tageskennzahlen; kein Zugriff auf Personal, Lohnübersicht, Kassenbuch, Management, Einstellungen |
 
 Neuen Benutzer anlegen: Supabase-Dashboard → Authentication → Users →
 "Add user" (E-Mail + Passwort) → User UID kopieren → Table Editor →
