@@ -16,3 +16,11 @@ export function formatEuro(wert: number | null | undefined): string {
   if (wert === null || wert === undefined) return "";
   return wert.toFixed(2).replace(".", ",");
 }
+
+// 12345.6 -> "12.346" (deutsche 1000er-Punkte, auf ganze Zahlen gerundet -
+// für Mengen wie Kolben, wo Nachkommastellen keine praktische Bedeutung
+// haben, siehe components/MaisStatistikKachel.tsx).
+export function formatZahlDE(wert: number | null | undefined): string {
+  if (wert === null || wert === undefined) return "—";
+  return Math.round(wert).toLocaleString("de-DE");
+}

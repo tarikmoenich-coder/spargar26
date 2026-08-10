@@ -419,7 +419,16 @@ Enthalten:
   Einstellungen. Eigenes Dashboard (Stand 2026-08-09, `app/dashboard/
   page.tsx`): Kacheln für Zuckermais/Erdbeeren heute (erfasste Personen,
   Prämien-Summe), Warnung falls für Zuckermais noch kein Satz für heute
-  hinterlegt ist, Direktlinks zu Statistik und (nur admin) Gruppenaufteilung
+  hinterlegt ist, Direktlinks zu Statistik und (nur admin) Gruppenaufteilung.
+  Zusätzlich "Mais-Statistik" (`components/MaisStatistikKachel.tsx`):
+  Tagessumme Kolben als Säulendiagramm über der Saison, darunter die
+  Leistung (Kolben/Std., Tagesschnitt) als Liniendiagramm, gemeinsame
+  Datums-Achse. Bewusst KEIN Zwei-Achsen-Diagramm (eine Grafik mit zwei
+  Y-Skalen wäre bei so unterschiedlichen Größenordnungen irreführend,
+  siehe dataviz-Skill-Anti-Pattern) - stattdessen zwei schlanke, exakt
+  ausgerichtete Diagramme mit einem gemeinsamen Tooltip für beide Werte.
+  Alle Zahlen mit 1000er-Punkten, 0 Nachkommastellen (Nutzer-Vorgabe,
+  `lib/format.ts` `formatZahlDE`)
 - Rollen/Rechte serverseitig über Postgres Row Level Security
 - Append-only Audit-Log für Personal, Stunden, Vorschüsse, Kassenbuch
 

@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { getSupabaseClient } from "@/lib/supabase/client";
 import { useProfile } from "@/lib/useProfile";
+import MaisStatistikKachel from "@/components/MaisStatistikKachel";
 
 const CURRENT_YEAR = new Date().getFullYear();
 // Muss zum Wert auf der Management-Seite passen (app/management/page.tsx).
@@ -566,6 +567,9 @@ export default function DashboardPage() {
                     unterzeile="Wer ist welcher Prämien-Erfassung zugeordnet"
                   />
                 )}
+              </div>
+              <div className="mt-4">
+                <MaisStatistikKachel />
               </div>
             </section>
           )}
