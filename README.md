@@ -323,8 +323,16 @@ Enthalten:
   ein Arbeitstag erfasst ist. Auf der Controlling-Seite zusätzlich eine
   neue, rein proaktive Übersicht "Nächste 10, deren SV-freier Zeitraum
   endet" (unabhängig vom "kritisch"-Status, sortiert nach empfohlenem
-  Austrittsdatum) - ergänzt die reaktive "kritisch"-Liste um eine echte
-  Vorausschau
+  Austrittsdatum, NUR aktive Personen - Nutzer-Vorgabe 2026-08-10) -
+  ergänzt die reaktive "kritisch"-Liste um eine echte Vorausschau. Direkt
+  darunter eine neue, rein dokumentierende Übersicht "SV-Freiheit
+  Diskrepanz": bereits INAKTIVE Personen, bei denen die tatsächliche
+  Beschäftigung nachträglich betrachtet den SV-freien Zeitraum laut
+  Angaben überschritten hat (Beginn zu spät, Ende überschritten, oder
+  Lücke zwischen "Bezahlter Urlaub"/"Freistellung" getroffen) - bewusst
+  ohne die 90-Tage-/15-Wochen-Gründe (die sind für bereits ausgeschiedene
+  Personen keine akute Handlungsaufforderung mehr, nur die SV-frei-
+  Diskrepanz bleibt für die Dokumentation relevant)
 - Eigene Unterseite "Personal → Sozialversicherung" (nur admin/hr):
   SV-Fragebogen ("Fragebogen zur Feststellung der
   Versicherungspflicht/Versicherungsfreiheit rumänischer

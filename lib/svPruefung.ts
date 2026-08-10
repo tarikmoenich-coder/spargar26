@@ -68,3 +68,21 @@ export function resttageText(tage: number): string {
     ? `Überschritten seit ${Math.abs(tage)} Tag(en)`
     : `${tage} Tage`;
 }
+
+// Nur die SV-frei-Zeitraum-spezifischen Diskrepanzen (nicht 90-Tage-/
+// 15-Wochen-Überschreitung) - Nutzer-Vorgabe 2026-08-10: für die
+// nachträgliche "SV-Freiheit Diskrepanz"-Übersicht bei bereits inaktiven
+// Personen relevant ("wenn die Aktiv-Zeit eines Inaktiven immer noch den
+// SV-frei Zeitraum überschreitet"). Spiegelt exakt die SV-frei-Teile der
+// "kritisch"-Formel in employee_sv_pruefung (schema.sql).
+export function svFreiZeitraumUeberschritten(p: SvPruefung): boolean {
+  return (
+    p.ueberschritten_sv_frei_beginn ||
+    p.ueberschritten_sv_frei_ende ||
+    (p.sv_frei_luecke &&
+      !!p.sv_frei_luecke_von &&
+      !!p.sv_frei_luecke_bis &&
+      p.erster_arbeitstag <= p.sv_frei_luecke_bis &&
+      p.letzter_arbeitstag >= p.sv_frei_luecke_von)
+  );
+}

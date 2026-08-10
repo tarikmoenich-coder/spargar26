@@ -15,6 +15,7 @@ import {
   resttageFarbeClass,
   resttageText,
   svFreiheitResttage,
+  svFreiZeitraumUeberschritten,
 } from "@/lib/svPruefung";
 
 const CURRENT_YEAR = new Date().getFullYear();
@@ -108,6 +109,13 @@ export default function ManagementPage() {
   // schon "kritisch" (bereits überschritten). Ergänzt die reaktive
   // "kritisch"-Liste oben um einen Blick nach vorn.
   const [baldEndend, setBaldEndend] = useState<SvPruefung[]>([]);
+  // Nachträgliche Dokumentation (Nutzer-Vorgabe 2026-08-10): inaktive
+  // Personen, deren tatsächliche Beschäftigung den SV-freien Zeitraum
+  // laut Angaben überschritten hat - rein dokumentierend, keine akute
+  // Handlungsaufforderung mehr (die Person ist ja bereits inaktiv).
+  const [svFreiheitDiskrepanz, setSvFreiheitDiskrepanz] = useState<
+    SvPruefung[]
+  >([]);
   const [loading, setLoading] = useState(true);
   const [jahr, setJahr] = useState(CURRENT_YEAR);
 
@@ -144,13 +152,19 @@ export default function ManagementPage() {
         setFaelle(alle.filter((f) => f.kritisch));
         setBaldEndend(
           [...alle]
-            .filter((f) => f.austrittsdatum_empfohlen)
+            // Nutzer-Vorgabe 2026-08-10: Inaktive gehören nicht in die
+            // Vorausschau - die ist für die weitere Personalplanung
+            // gedacht, nicht für bereits ausgeschiedene Personen.
+            .filter((f) => f.aktiv && f.austrittsdatum_empfohlen)
             .sort((a, b) =>
               (a.austrittsdatum_empfohlen ?? "").localeCompare(
                 b.austrittsdatum_empfohlen ?? ""
               )
             )
             .slice(0, 10)
+        );
+        setSvFreiheitDiskrepanz(
+          alle.filter((f) => !f.aktiv && svFreiZeitraumUeberschritten(f))
         );
       }
       setLoading(false);
@@ -429,11 +443,6 @@ export default function ManagementPage() {
                       <td>{f.personal_nr}</td>
                       <td>
                         {f.name}, {f.vorname}
-                        {!f.aktiv && (
-                          <span className="ml-1 text-xs text-neutral-500">
-                            (inaktiv)
-                          </span>
-                        )}
                       </td>
                       <td>{ABRECHNUNGSART_LABELS[f.abrechnungsart]}</td>
                       <td>
@@ -446,6 +455,86 @@ export default function ManagementPage() {
                     </tr>
                   );
                 })}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+
+      <div>
+        <h2 className="mb-2 text-base font-semibold text-emerald-800">
+          SV-Freiheit Diskrepanz
+        </h2>
+        <p className="mb-2 text-sm text-neutral-500">
+          Rein dokumentierend (keine akute Handlungsaufforderung mehr):
+          bereits inaktive Personen, bei denen die tatsächliche
+          Beschäftigung den SV-freien Zeitraum laut Angaben überschritten
+          hat.
+        </p>
+        {loading ? (
+          <p className="text-neutral-500">Lädt…</p>
+        ) : svFreiheitDiskrepanz.length === 0 ? (
+          <p className="text-neutral-500">
+            Keine Diskrepanzen bei inaktiven Personen für {jahr}.
+          </p>
+        ) : (
+          <div className="overflow-x-auto">
+            <table>
+              <thead>
+                <tr>
+                  <th>Pers.-Nr.</th>
+                  <th>Name</th>
+                  <th>1. Arbeitstag</th>
+                  <th>Letzter Arbeitstag</th>
+                  <th title="Aus den Angaben abgeleiteter Zeitraum, in dem eine Beschäftigung in Deutschland sozialversicherungsfrei möglich ist">
+                    SV-freier Zeitraum (Angaben)
+                  </th>
+                  <th>Grund</th>
+                </tr>
+              </thead>
+              <tbody>
+                {svFreiheitDiskrepanz.map((f) => (
+                  <tr key={f.employee_id}>
+                    <td>{f.personal_nr}</td>
+                    <td>
+                      {f.name}, {f.vorname}
+                      <span className="ml-1 text-xs text-neutral-500">
+                        (inaktiv)
+                      </span>
+                    </td>
+                    <td>{formatDatumDE(f.erster_arbeitstag)}</td>
+                    <td>{formatDatumDE(f.letzter_arbeitstag)}</td>
+                    <td className="text-sm">
+                      {f.sv_frei_von || f.sv_frei_bis ? (
+                        <>
+                          {formatDatumDE(f.sv_frei_von)} –{" "}
+                          {f.sv_frei_bis
+                            ? formatDatumDE(f.sv_frei_bis)
+                            : "offen"}
+                        </>
+                      ) : (
+                        <span className="text-neutral-400">keine Angaben</span>
+                      )}
+                    </td>
+                    <td className="text-sm">
+                      {[
+                        f.ueberschritten_sv_frei_beginn
+                          ? "SV-freier Zeitraum (Angaben) beginnt zu spät"
+                          : null,
+                        f.ueberschritten_sv_frei_ende
+                          ? "SV-freier Zeitraum (Angaben) überschritten"
+                          : null,
+                        !f.ueberschritten_sv_frei_beginn &&
+                        !f.ueberschritten_sv_frei_ende &&
+                        f.sv_frei_luecke
+                          ? "Lücke im SV-freien Zeitraum"
+                          : null,
+                      ]
+                        .filter(Boolean)
+                        .join(" + ")}
+                    </td>
+                  </tr>
+                ))}
               </tbody>
             </table>
           </div>
