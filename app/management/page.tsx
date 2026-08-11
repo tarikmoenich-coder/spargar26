@@ -5,6 +5,7 @@ import Link from "next/link";
 import { getSupabaseClient } from "@/lib/supabase/client";
 import {
   ABRECHNUNGSART_LABELS,
+  type AnreiselisteOffenArbeitend,
   type EmployeeUrlaubstage,
   type SeasonSummaryRow,
   type SvPruefung,
@@ -102,6 +103,22 @@ function findeAbweichungen(r: SeasonSummaryRow): Abweichung[] {
   return treffer;
 }
 
+// Klartext-Gründe, warum der Anreiselisten-Status dieser Person noch offen
+// ist. Reihenfolge nach Dringlichkeit: fehlender Arbeitsvertrag und ein
+// nicht bestandener SV-Fragebogen wiegen am schwersten, weil beide die
+// Beschäftigung selbst betreffen (Nutzer-Vorgabe 2026-08-11).
+function offeneGruende(z: AnreiselisteOffenArbeitend): string[] {
+  return [
+    z.arbeitsvertrag_fehlt ? "Arbeitsvertrag nicht gedruckt" : null,
+    z.sv_fragebogen_offen ? "SV-Fragebogen nicht bestanden" : null,
+    z.ausweiskopie_fehlt ? "Ausweiskopie fehlt" : null,
+    z.fuehrerschein_fehlt ? "Führerschein-Kopie fehlt" : null,
+    z.hochzeitsurkunde_fehlt ? "Hochzeitsurkunde fehlt" : null,
+    z.dhh_formular_fehlt ? "Formular Doppelte Haushaltsführung fehlt" : null,
+    z.buskosten_fehlen ? "Buskosten nicht erfasst" : null,
+  ].filter((g): g is string => g !== null);
+}
+
 export default function ManagementPage() {
   const [faelle, setFaelle] = useState<SvPruefung[]>([]);
   // Proaktive Vorausschau (Nutzer-Vorgabe 2026-08-10): die 10 Personen,
@@ -137,6 +154,34 @@ export default function ManagementPage() {
     EmployeeUrlaubstage[]
   >([]);
   const [loadingUrlaub, setLoadingUrlaub] = useState(true);
+
+  // Personen, die schon arbeiten, obwohl auf der Anreiseliste noch etwas
+  // offen ist (Nutzer-Vorgabe 2026-08-11).
+  const [offenArbeitend, setOffenArbeitend] = useState<
+    AnreiselisteOffenArbeitend[]
+  >([]);
+  const [loadingOffen, setLoadingOffen] = useState(true);
+
+  useEffect(() => {
+    async function ladeOffenArbeitend() {
+      setLoadingOffen(true);
+      const supabase = getSupabaseClient();
+      const { data } = await supabase
+        .from("anreiseliste_offen_arbeitend")
+        .select("*")
+        .order("tage_seit_arbeitsbeginn", { ascending: false });
+      // Nur Personen mit mindestens einem offenen Punkt - die Sicht liefert
+      // bewusst alle Anreiselisten-Personen mit Stunden, damit die Auswahl
+      // der relevanten Gründe hier an einer Stelle steht.
+      setOffenArbeitend(
+        ((data as AnreiselisteOffenArbeitend[]) ?? []).filter(
+          (z) => offeneGruende(z).length > 0
+        )
+      );
+      setLoadingOffen(false);
+    }
+    ladeOffenArbeitend();
+  }, []);
 
   useEffect(() => {
     async function load() {
@@ -293,6 +338,81 @@ export default function ManagementPage() {
           className="w-24"
         />
       </label>
+
+      <div>
+        <h2 className="mb-2 text-base font-semibold text-emerald-800">
+          Es arbeiten folgende Personen mit offenem Status
+        </h2>
+        <p className="mb-2 text-sm text-neutral-500">
+          Personen, die noch auf der Anreiseliste stehen (Arbeitsvertrag
+          nicht gedruckt, SV-Fragebogen nicht bestanden, fehlende
+          Unterlagen …), aber bereits Stunden in der Stundenerfassung haben.
+          Saisonübergreifend, nicht nach Saison-Jahr gefiltert.
+        </p>
+        {loadingOffen ? (
+          <p className="text-neutral-500">Lädt…</p>
+        ) : offenArbeitend.length === 0 ? (
+          <p className="text-neutral-500">
+            Niemand arbeitet aktuell mit offenem Anreiselisten-Status.
+          </p>
+        ) : (
+          <div className="overflow-x-auto">
+            <table>
+              <thead>
+                <tr>
+                  <th>Pers.-Nr.</th>
+                  <th>Name</th>
+                  <th>Herkunft</th>
+                  <th>Grund für Status offen</th>
+                  <th>1. Arbeitstag</th>
+                  <th title="Tage seit dem ersten Arbeitstag - so lange arbeitet die Person schon, obwohl noch etwas offen ist">
+                    Tage seit Status offen
+                  </th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody>
+                {offenArbeitend.map((z) => {
+                  const gruende = offeneGruende(z);
+                  return (
+                    <tr key={z.kandidat_id}>
+                      <td>{z.personal_nr}</td>
+                      <td>
+                        {z.name}, {z.vorname}
+                        {!z.aktiv && (
+                          <span className="ml-1 text-xs text-neutral-500">
+                            (inaktiv)
+                          </span>
+                        )}
+                      </td>
+                      <td>{z.herkunft ?? "—"}</td>
+                      <td className="text-sm">{gruende.join(" + ")}</td>
+                      <td>{formatDatumDE(z.erster_arbeitstag)}</td>
+                      <td
+                        className={
+                          z.tage_seit_arbeitsbeginn >= 14
+                            ? "font-medium text-red-600"
+                            : "font-medium text-amber-600"
+                        }
+                      >
+                        {z.tage_seit_arbeitsbeginn}
+                      </td>
+                      <td>
+                        <Link
+                          href="/personal-anreiseliste"
+                          className="btn-secondary text-xs"
+                        >
+                          Zur Anreiseliste →
+                        </Link>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
 
       <div>
         <h2 className="mb-2 text-base font-semibold text-emerald-800">

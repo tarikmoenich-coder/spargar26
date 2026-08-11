@@ -527,6 +527,27 @@ $$;
 -- wo genau das eingesetzt wird.
 -- Bewusst mit derselben Vorrang-Reihenfolge wie in sv_freier_zeitraum_von:
 -- Block 1 und Block 4 liefern echte Von-Bis-Zeiträume und gehen vor.
+-- "Bestanden" = sozialversicherungsfreie Beschäftigung nach der
+-- Berufsmäßigkeits-Regel plausibel möglich. Als Funktion, weil dieselbe
+-- Formel an mehreren Stellen gebraucht wird (sv_fragebogen_auswertung und
+-- anreiseliste_offen_arbeitend weiter unten) - eine zweite handgeschriebene
+-- Kopie würde beim nächsten Regel-Feinschliff auseinanderlaufen.
+create or replace function sv_fragebogen_bestanden(f sv_fragebogen)
+returns boolean language sql immutable as $$
+  select
+    (
+      (
+        coalesce(f.beschaeftigt_heimatland, false)
+        or coalesce(f.selbststaendig, false)
+        or coalesce(f.schule_studium, false)
+        or coalesce(f.rente, false)
+        or coalesce(f.hausmann, false)
+      )
+      and not coalesce(f.arbeitslos, false)
+    )
+    and not f.unvollstaendig_fehlerhaft;
+$$;
+
 -- Bisherige Beschäftigungstage in Deutschland bei anderen Arbeitgebern -
 -- erfassbar entweder als Zeitraum von/bis ODER als reine Tage-Zahl
 -- (Nutzer-Vorgabe 2026-08-11). Ist ein vollständiger Zeitraum angegeben,
@@ -683,17 +704,7 @@ select
   f.erfasst_am,
   f.updated_by,
   f.updated_at,
-  (
-    (
-      coalesce(f.beschaeftigt_heimatland, false)
-      or coalesce(f.selbststaendig, false)
-      or coalesce(f.schule_studium, false)
-      or coalesce(f.rente, false)
-      or coalesce(f.hausmann, false)
-    )
-    and not coalesce(f.arbeitslos, false)
-  )
-  and not f.unvollstaendig_fehlerhaft as bestanden,
+  sv_fragebogen_bestanden(f) as bestanden,
   -- WICHTIG: unvollstaendig_fehlerhaft/_grund stehen HIER (nach bestanden),
   -- nicht in Tabellen-Spaltenreihenfolge vor ausgefuellt_am - das ist die
   -- Position, in der sie live per "create or replace view" angehängt
@@ -2340,6 +2351,92 @@ join lateral (
 where w.erster_eintrag is not null;
 
 grant select on employee_urlaubstage to authenticated;
+
+-- ---------------------------------------------------------------------------
+-- 12e3. View: Personen, die bereits ARBEITEN, obwohl ihr Anreiselisten-
+--       Status noch offen ist (Nutzer-Vorgabe 2026-08-11). Genau der
+--       Zustand, der sonst untergeht: jemand steht noch mit fehlendem
+--       Arbeitsvertrag oder nicht bestandenem SV-Fragebogen auf der
+--       Anreiseliste, trägt aber schon Stunden ein.
+--
+--       "Tage seit Status offen" = Tage seit dem ersten Arbeitstag, also:
+--       wie lange arbeitet die Person schon, obwohl noch etwas fehlt.
+--
+--       Bewusst NICHT über personal_kandidaten_checkliste (die ist
+--       security_invoker und damit admin/hr-only) - diese Sicht läuft mit
+--       den Rechten des Eigentümers, damit auch die Rolle management die
+--       Controlling-Seite vollständig sieht. Sie gibt dafür ausschließlich
+--       Name/Personalnummer und die offenen Punkte aus, KEINE sensiblen
+--       Personaldaten (kein Geburtsdatum, keine IBAN/SV-Nr.) - gleiches
+--       Muster wie employee_letzte_abrechnung.
+-- ---------------------------------------------------------------------------
+create or replace view anreiseliste_offen_arbeitend as
+select
+  k.id as kandidat_id,
+  e.id as employee_id,
+  e.personal_nr,
+  e.name,
+  e.vorname,
+  e.herkunft,
+  e.aktiv,
+  w.erster_arbeitstag,
+  w.letzter_arbeitstag,
+  (current_date - w.erster_arbeitstag) as tage_seit_arbeitsbeginn,
+  not k.gedruckt as arbeitsvertrag_fehlt,
+  not coalesce(
+    (
+      select sv_fragebogen_bestanden(f)
+      from sv_fragebogen f
+      where f.employee_id = e.id
+        and f.saison_jahr = extract(year from w.erster_arbeitstag)::int
+    ),
+    false
+  ) as sv_fragebogen_offen,
+  not k.buskosten_erfasst as buskosten_fehlen,
+  not exists (
+    select 1 from employee_documents d
+    where d.employee_id = e.id and d.kategorie = 'Ausweiskopie'
+  ) as ausweiskopie_fehlt,
+  (
+    k.fuehrerschein_kategorien is not null
+    and array_length(k.fuehrerschein_kategorien, 1) is not null
+    and not exists (
+      select 1 from employee_documents d
+      where d.employee_id = e.id and d.kategorie = 'Führerschein Kopie'
+    )
+  ) as fuehrerschein_fehlt,
+  (
+    coalesce(k.verheiratet_laut_fragebogen, false)
+    and not exists (
+      select 1 from employee_documents d
+      where d.employee_id = e.id and d.kategorie = 'Hochzeitsurkunde'
+    )
+  ) as hochzeitsurkunde_fehlt,
+  (
+    k.lohnsteuerabzug_antrag_gewuenscht
+    and not exists (
+      select 1 from employee_documents d
+      where d.employee_id = e.id
+        and d.kategorie = 'Formular "Doppelte Haushaltsführung"'
+    )
+  ) as dhh_formular_fehlt
+from personal_kandidaten k
+join employees e on e.id = k.aktivierter_employee_id
+join lateral (
+  select
+    min(we.datum) as erster_arbeitstag,
+    max(we.datum) as letzter_arbeitstag
+  from work_entries we
+  where we.employee_id = e.id
+    and (we.stunden > 0 or we.markierung is not null)
+) w on true
+where k.status = 'anreiseliste'
+  -- Nur Personen, die tatsächlich schon gearbeitet haben - erst dann ist
+  -- ein offener Status wirklich kritisch (vorher ist die Anreiseliste ja
+  -- genau der richtige Ort dafür).
+  and w.erster_arbeitstag is not null;
+
+grant select on anreiseliste_offen_arbeitend to authenticated;
 
 -- ---------------------------------------------------------------------------
 -- 12f. View: Vorschuss-Historie je Mitarbeiter für die "Suche"-Seite -

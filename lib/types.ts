@@ -172,6 +172,29 @@ export interface SvPruefung {
   ueberschritten_sv_frei_ende: boolean;
 }
 
+// Aus der Sicht anreiseliste_offen_arbeitend: Personen, die bereits
+// arbeiten, obwohl ihr Anreiselisten-Status noch offen ist
+// (Nutzer-Vorgabe 2026-08-11). Siehe schema.sql.
+export interface AnreiselisteOffenArbeitend {
+  kandidat_id: string;
+  employee_id: string;
+  personal_nr: string;
+  name: string;
+  vorname: string;
+  herkunft: string | null;
+  aktiv: boolean;
+  erster_arbeitstag: string;
+  letzter_arbeitstag: string;
+  tage_seit_arbeitsbeginn: number;
+  arbeitsvertrag_fehlt: boolean;
+  sv_fragebogen_offen: boolean;
+  buskosten_fehlen: boolean;
+  ausweiskopie_fehlt: boolean;
+  fuehrerschein_fehlt: boolean;
+  hochzeitsurkunde_fehlt: boolean;
+  dhh_formular_fehlt: boolean;
+}
+
 // Aus der Sicht employee_urlaubstage - Urlaubstage-Anspruch (2 je vollem
 // Kalendermonat der Beschäftigung) vs. tatsächlich genommene "U"-Tage,
 // siehe ausführlichen Kommentar in schema.sql.

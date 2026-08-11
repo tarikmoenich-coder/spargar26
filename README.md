@@ -455,6 +455,20 @@ Enthalten:
   Bankverbindungs-Nachweis aus der Vorlage neu erzeugen und herunterladen,
   z.B. für einen Nachdruck. Bisher war die Dokumenterzeugung nur einmalig
   über "Anreise vorbereiten" in der Anreiseliste erreichbar
+- "Controlling"-Seite, Abschnitt "Es arbeiten folgende Personen mit offenem
+  Status" (Stand 2026-08-11, ganz oben auf der Seite): Personen, die noch
+  auf der Anreiseliste stehen - Arbeitsvertrag nicht gedruckt,
+  SV-Fragebogen nicht bestanden, fehlende Ausweiskopie/Führerschein-Kopie/
+  Hochzeitsurkunde/DHH-Formular, Buskosten nicht erfasst - aber bereits
+  Stunden in der Stundenerfassung haben. Mit Klartext-Grund und "Tage seit
+  Status offen" (Tage seit dem ersten Arbeitstag, ab 14 Tagen rot statt
+  gelb) sowie Sprung-Link in die Anreiseliste. Bewusst
+  saisonübergreifend, nicht nach Saison-Jahr gefiltert. Die zugrunde
+  liegende Sicht `anreiseliste_offen_arbeitend` läuft bewusst NICHT als
+  security_invoker (sonst wäre sie für die Rolle management leer, da
+  personal_kandidaten admin/hr-only ist) und gibt dafür ausschließlich
+  Name/Personalnummer/Herkunft und die offenen Punkte aus - keine
+  sensiblen Personaldaten
 - "Controlling"-Seite, Abschnitt "Stundenmonitoring": listet alle Personen
   mit mindestens einem Tag über 12,00 Stunden in der Stundenerfassung
   (Saison-Jahr-Filter), aufklappbar je Person mit allen betroffenen Tagen
