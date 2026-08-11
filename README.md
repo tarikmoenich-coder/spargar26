@@ -609,9 +609,16 @@ Enthalten:
   management/erntewirtschaft), analog zu "Prämien" mit eigenen Untermenüs
   Spargel/Erdbeeren/Zuckermais - Tagesstatistik über alle Mitarbeiter
   (Summe Kisten bzw. Steigen/Kolben/Stunden/Prämien, Durchschnitt je
-  Stunde, Kosten je Einheit). Kosten-Formel nutzt einen festen
-  Stundenlohn von 13,90 € (Nutzer-Vorgabe, exakt wie angegeben), nicht den
-  individuellen Stundenlohn je Person. Erdbeeren zusätzlich mit
+  Stunde, Kosten je Einheit). Die Kosten-Formel rechnet mit dem für das
+  jeweilige Saison-Jahr gepflegten Mindestlohn (Einstellungen), nicht mit
+  dem individuellen Stundenlohn je Person - hier ist eine grobe
+  Tages-Kennzahl über alle Mitarbeiter gefragt, keine personenscharfe
+  Abrechnung. Bis 2026-08-11 stand dort ein fest verdrahteter Wert von
+  13,90 €, der mit jeder Mindestlohn-Änderung auseinandergelaufen wäre
+  (Nutzer-Vorgabe: "Da ist immer mein gesetzter Wert für Mindestlohn für
+  die Berechnung relevant"). Ist für ein Jahr kein Mindestlohn hinterlegt,
+  bleibt die Kennzahl bewusst leer, statt mit einem geratenen Wert zu
+  rechnen. Erdbeeren zusätzlich mit
   Saison-Summe je Parzelle (Ertrag in Steigen und kg, Nutzer-Vorgabe: "wie
   viel Ertrag pro Feld kommt runter") und Parzelle-Filter. Spargel folgt,
   sobald dessen Prämien-Erfassung steht

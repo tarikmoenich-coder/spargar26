@@ -1364,27 +1364,35 @@ grant select on zuckermais_praemie_tag to authenticated;
 
 -- Tagesstatistik über alle Mitarbeiter (Nutzer-Vorgabe 2026-08-09, neuer
 -- Menüpunkt "Statistik" - analog zu "Prämien" mit eigenen Untermenüs
--- Spargel/Erdbeeren/Zuckermais, hier erstmal nur Zuckermais). Kosten/Kolben
--- verwendet einen festen Stundenlohn von 13,90 € (Nutzer-Vorgabe, exakt
--- wie angegeben - NICHT der individuelle employees.stundenlohn, da hier
--- eine grobe Tages-Kennzahl über alle Mitarbeiter gefragt ist, keine
--- personenscharfe Abrechnung).
+-- Spargel/Erdbeeren/Zuckermais, hier erstmal nur Zuckermais).
+-- Kosten/Kolben rechnet mit dem für das jeweilige Saisonjahr gepflegten
+-- Mindestlohn (verpflegungssaetze.mindestlohn, Einstellungen-Seite) -
+-- bewusst NICHT mit dem individuellen employees.stundenlohn, da hier eine
+-- grobe Tages-Kennzahl über alle Mitarbeiter gefragt ist, keine
+-- personenscharfe Abrechnung. Bis 2026-08-11 stand hier ein fest
+-- verdrahteter Wert von 13,90 €, der mit jeder Mindestlohn-Änderung
+-- auseinandergelaufen wäre (Nutzer-Vorgabe: "Da ist immer mein gesetzter
+-- Wert für Mindestlohn für die Berechnung relevant"). Ist für ein Jahr kein
+-- Mindestlohn hinterlegt, bleibt die Kennzahl leer statt mit einem
+-- geratenen Wert zu rechnen.
 create or replace view zuckermais_statistik_tag as
 select
-  datum,
-  sum(kisten) as summe_kisten,
-  sum(kolben) as summe_kolben,
-  sum(stunden) as summe_stunden,
-  sum(praemie) as summe_praemie,
-  case when sum(stunden) > 0 then sum(kolben) / sum(stunden) else null end
+  p.datum,
+  sum(p.kisten) as summe_kisten,
+  sum(p.kolben) as summe_kolben,
+  sum(p.stunden) as summe_stunden,
+  sum(p.praemie) as summe_praemie,
+  case when sum(p.stunden) > 0 then sum(p.kolben) / sum(p.stunden) else null end
     as kolben_pro_stunde,
-  case when sum(kolben) > 0
-    then (13.90 * sum(stunden) + sum(praemie)) / sum(kolben)
+  case when sum(p.kolben) > 0 and v.mindestlohn is not null
+    then (v.mindestlohn * sum(p.stunden) + sum(p.praemie)) / sum(p.kolben)
     else null
   end as kosten_pro_kolben
-from zuckermais_praemie_tag
-group by datum
-order by datum desc;
+from zuckermais_praemie_tag p
+left join verpflegungssaetze v
+  on v.saison_jahr = extract(year from p.datum)::int
+group by p.datum, v.mindestlohn
+order by p.datum desc;
 
 alter view zuckermais_statistik_tag set (security_invoker = true);
 grant select on zuckermais_statistik_tag to authenticated;
@@ -1497,26 +1505,29 @@ alter view erdbeeren_praemie_tag set (security_invoker = true);
 grant select on erdbeeren_praemie_tag to authenticated;
 
 -- Tagesstatistik je Parzelle (Nutzer-Vorgabe: Ertrag/Kosten je Feld sind
--- für den Betrieb wichtig) - Kosten/Steige nutzt denselben festen
--- Stundenlohn von 13,90 € wie zuckermais_statistik_tag.
+-- für den Betrieb wichtig) - Kosten/Steige rechnet wie
+-- zuckermais_statistik_tag mit dem gepflegten Mindestlohn des jeweiligen
+-- Saisonjahres, nicht mehr mit einem fest verdrahteten Wert.
 create or replace view erdbeeren_statistik_tag as
 select
-  datum,
-  parzelle_id,
-  parzelle_name,
-  sum(steigen) as summe_steigen,
-  sum(sut) as summe_sut,
-  sum(stunden) as summe_stunden,
-  sum(praemie) as summe_praemie,
-  case when sum(stunden) > 0 then sum(steigen) / sum(stunden) else null end
+  p.datum,
+  p.parzelle_id,
+  p.parzelle_name,
+  sum(p.steigen) as summe_steigen,
+  sum(p.sut) as summe_sut,
+  sum(p.stunden) as summe_stunden,
+  sum(p.praemie) as summe_praemie,
+  case when sum(p.stunden) > 0 then sum(p.steigen) / sum(p.stunden) else null end
     as steigen_pro_stunde,
-  case when sum(steigen) > 0
-    then (13.90 * sum(stunden) + sum(praemie)) / sum(steigen)
+  case when sum(p.steigen) > 0 and v.mindestlohn is not null
+    then (v.mindestlohn * sum(p.stunden) + sum(p.praemie)) / sum(p.steigen)
     else null
   end as kosten_pro_steige
-from erdbeeren_praemie_tag
-group by datum, parzelle_id, parzelle_name
-order by datum desc;
+from erdbeeren_praemie_tag p
+left join verpflegungssaetze v
+  on v.saison_jahr = extract(year from p.datum)::int
+group by p.datum, p.parzelle_id, p.parzelle_name, v.mindestlohn
+order by p.datum desc;
 
 alter view erdbeeren_statistik_tag set (security_invoker = true);
 grant select on erdbeeren_statistik_tag to authenticated;

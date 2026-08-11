@@ -2,9 +2,9 @@
 
 // Statistik Zuckermais (Nutzer-Vorgabe 2026-08-09) - Tagesstatistik über
 // alle Mitarbeiter, aus der Sicht zuckermais_statistik_tag. Kosten/Kolben
-// nutzt einen festen Stundenlohn von 13,90 € (Nutzer-Vorgabe, exakt wie
-// angegeben - nicht der individuelle Stundenlohn je Person), berechnet in
-// der Datenbank-Sicht.
+// rechnet mit dem für das Saisonjahr gepflegten Mindestlohn
+// (Einstellungen), nicht mit einem festen Wert und bewusst nicht mit dem
+// individuellen Stundenlohn je Person - berechnet in der Datenbank-Sicht.
 
 import { useEffect, useState } from "react";
 import { getSupabaseClient } from "@/lib/supabase/client";
@@ -58,7 +58,9 @@ export default function StatistikZuckermaisPage() {
         </h1>
         <p className="text-sm text-neutral-500">
           Tagesstatistik über alle Mitarbeiter. Kosten/Kolben ={" "}
-          (13,90 € × Summe Stunden + Summe Prämien) / Summe Kolben.
+          (Mindestlohn × Summe Stunden + Summe Prämien) / Summe Kolben –
+          gerechnet mit dem Mindestlohn, der für dieses Saison-Jahr unter
+          Einstellungen hinterlegt ist.
         </p>
       </div>
 

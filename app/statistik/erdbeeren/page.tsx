@@ -1,8 +1,9 @@
 "use client";
 
 // Statistik Erdbeeren (Nutzer-Vorgabe 2026-08-09) - Tagesstatistik je
-// Parzelle, aus der Sicht erdbeeren_statistik_tag. Kosten/Steige nutzt
-// einen festen Stundenlohn von 13,90 € (wie bei Zuckermais). Zusätzlich
+// Parzelle, aus der Sicht erdbeeren_statistik_tag. Kosten/Steige rechnet
+// mit dem für das Saisonjahr gepflegten Mindestlohn (Einstellungen), nicht
+// mit einem festen Wert (Nutzer-Vorgabe 2026-08-11). Zusätzlich
 // eine Saison-Summe je Parzelle (Ertrag/Kosten pro Feld sind für den
 // Betrieb wichtig, Nutzer-Vorgabe) - "Ertrag kg" = Summe Steigen × 5
 // (1 Steige = 10 Schalen à 500g = 5 kg).
@@ -104,9 +105,11 @@ export default function StatistikErdbeerenPage() {
           Statistik – Erdbeeren
         </h1>
         <p className="text-sm text-neutral-500">
-          Tagesstatistik je Parzelle. Kosten/Steige = (13,90 € × Summe
-          Stunden + Summe Prämien) / Summe Steigen. Ertrag kg = Summe
-          Steigen × {KG_PRO_STEIGE} kg (1 Steige = 10 Schalen à 500g).
+          Tagesstatistik je Parzelle. Kosten/Steige = (Mindestlohn × Summe
+          Stunden + Summe Prämien) / Summe Steigen – gerechnet mit dem
+          Mindestlohn, der für dieses Saison-Jahr unter Einstellungen
+          hinterlegt ist. Ertrag kg = Summe Steigen × {KG_PRO_STEIGE} kg
+          (1 Steige = 10 Schalen à 500g).
         </p>
       </div>
 
