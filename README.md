@@ -35,7 +35,11 @@ Enthalten:
   und automatisch berechnetem "Aktiv seit" (erster Arbeitstag mit Stunden > 0)
 - Tägliche Stundenerfassung mit Live-Sync zwischen mehreren Nutzern, nach
   Arbeitsgruppen (z.B. Sortierer, Träger) gruppiert mit Sprungleiste und
-  Druckansicht pro Gruppe ("Gruppenstundenzettel"). Zur Kontrolle stehen
+  Druckansicht pro Gruppe ("Gruppenstundenzettel"; die Trennlinien aller
+  Papierformulare sind im Druck bewusst schwarz und kräftiger als am
+  Bildschirm, Stand 2026-08-11 - die Zettel werden handschriftlich
+  ausgefüllt und anschließend kopiert, ein helles Grau verschwindet dabei).
+  Zur Kontrolle stehen
   die Stunden der letzten 3 Tage schreibgeschützt links neben dem
   bearbeitbaren Tag, sowie zusätzlich die 2 kommenden Tage schreibgeschützt
   rechts daneben; Gruppen-Spalte direkt neben der Personalnummer (weniger

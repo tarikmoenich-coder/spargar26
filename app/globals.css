@@ -69,9 +69,17 @@ input[type="number"]::-webkit-inner-spin-button {
   .print-form-table {
     font-size: 13pt;
   }
+  /* Trennlinien bewusst schwarz und kräftiger als am Bildschirm (dort
+     neutral-200): die Zettel werden handschriftlich ausgefüllt und
+     anschließend KOPIERT - ein helles Grau verschwindet dabei
+     (Nutzer-Meldung 2026-08-11). print-color-adjust verhindert, dass der
+     Browser die Linien beim Drucken aufhellt. */
   .print-form-table th,
   .print-form-table td {
     padding: 0.5rem 0.6rem;
+    border: 1.2pt solid #000;
+    print-color-adjust: exact;
+    -webkit-print-color-adjust: exact;
   }
   .print-form-table td {
     height: 3rem;
