@@ -91,6 +91,11 @@ const items: NavItem[] = [
     roles: ["admin", "hr", "management"],
   },
   {
+    href: "/aenderungsprotokoll",
+    label: "Protokoll",
+    roles: ["admin"],
+  },
+  {
     href: "/einstellungen",
     label: "Einstellungen",
     roles: ["admin"],

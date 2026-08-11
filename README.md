@@ -455,6 +455,23 @@ Enthalten:
   Bankverbindungs-Nachweis aus der Vorlage neu erzeugen und herunterladen,
   z.B. für einen Nachdruck. Bisher war die Dokumenterzeugung nur einmalig
   über "Anreise vorbereiten" in der Anreiseliste erreichbar
+- Seite "Protokoll" (nur admin, Stand 2026-08-11): macht das seit Beginn
+  mitlaufende Audit-Log sichtbar - wer hat wann was geändert, mit Filter
+  nach Person (Name/Personalnummer), Bereich und Zeitraum. Aufklappen zeigt
+  die einzelnen Feldänderungen als Vorher/Nachher-Vergleich; rein
+  technische Felder (updated_at, version …) werden dabei ausgeblendet.
+  Abgedeckt sind Personalstamm, Stunden, Vorschüsse, Prämien, Kassenbuch,
+  Kassenprüfung, Dokumente, Monatsabschluss und Personalplanung. Bewusst
+  admin-only, da die Einträge ganze Datensätze und damit auch sensible
+  Felder (IBAN, SV-Nr.) enthalten - die Datenbank-Policy erlaubt zusätzlich
+  der Rolle pruefer den Lesezugriff (bestehende Regelung für die
+  Kassenprüfung), diese Detailansicht bleibt aber admin. Ergänzend zeigt
+  der Personalstamm für admin eine Spalte "Zuletzt geändert" (Datum +
+  Nutzer der letzten Änderung am Stammdatensatz). Bei den Prämien-Rohdaten
+  wurde dabei eine Lücke geschlossen: dort wird als einzigem Bereich
+  tatsächlich gelöscht (ein geleertes Feld entfernt den Eintrag), was
+  bisher nicht protokolliert wurde - der Trigger erfasst jetzt auch
+  "delete"
 - "Controlling"-Seite, Abschnitt "Es arbeiten folgende Personen mit offenem
   Status" (Stand 2026-08-11, ganz oben auf der Seite): Personen, die noch
   auf der Anreiseliste stehen - Arbeitsvertrag nicht gedruckt,
@@ -562,7 +579,8 @@ Enthalten:
   Alle Zahlen mit 1000er-Punkten, 0 Nachkommastellen (Nutzer-Vorgabe,
   `lib/format.ts` `formatZahlDE`)
 - Rollen/Rechte serverseitig über Postgres Row Level Security
-- Append-only Audit-Log für Personal, Stunden, Vorschüsse, Kassenbuch
+- Append-only Audit-Log für Personal, Stunden, Vorschüsse, Kassenbuch -
+  einsehbar über die Seite "Protokoll" (siehe unten)
 
 **Nicht enthalten** (siehe "Nächste Schritte"):
 - Finalisierte Auszahlungsliste/Lohnabrechnungs-Export
@@ -611,7 +629,7 @@ nicht nur im Menü versteckt.
 
 | Rolle | Sichtbare Menüpunkte | Kernrechte |
 |---|---|---|
-| `admin` | Alle | Voller Zugriff auf alles, inkl. Einstellungen, Kassenprüfungen freigeben |
+| `admin` | Alle | Voller Zugriff auf alles, inkl. Einstellungen, Kassenprüfungen freigeben, Änderungsprotokoll (Seite "Protokoll") |
 | `hr` | Personal, Stundenerfassung, Suche, Lohn, Prämien, Statistik, Controlling | Personalstamm + Dokumente voll pflegen (inkl. SV-Nr./IBAN/Ausweiskopien), Sozialversicherung + Lohnsteuer erfassen, Personalplanung + Anreiseliste (Kandidaten, Schwarze Liste, Buskosten) verwalten, Stunden erfassen, Lohnübersicht/Vorschüsse nur ansehen (nicht bearbeiten), Prämien erfassen, Monatsabschluss sperren/öffnen |
 | `zeiterfassung` | Stundenerfassung, Suche, Prämien | Nur Stunden eintragen/ändern; sieht Personal nur mit eingeschränkten Feldern (keine SV-Nr./IBAN etc.); erfasst zusätzlich die Ausgabe von Arbeitskleidung (Stundenerfassung → Arbeitskleidung) sowie Prämien (Kisten/Stunden je Tag) |
 | `kasse` | Suche, Lohn, Kassenbuch | Vorschüsse erfassen/stornieren/korrigieren, Kassenbuch führen, Kassenprüfung durchführen |

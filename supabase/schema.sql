@@ -1779,12 +1779,16 @@ create trigger trg_audit_work_entries
   after insert or update on work_entries
   for each row execute function write_audit_log();
 -- Prämien-Rohdaten fließen direkt (live) in die Lohnberechnung ein - wie
--- work_entries daher ebenfalls protokolliert.
+-- work_entries daher ebenfalls protokolliert. Hier zusätzlich "delete":
+-- anders als bei Stunden/Vorschüssen wird hier tatsächlich gelöscht (ein
+-- geleertes bzw. auf 0 gesetztes Feld entfernt den Eintrag, siehe "Alle
+-- speichern" auf den Prämien-Seiten) - ohne delete-Trigger verschwände
+-- eine lohnrelevante Änderung spurlos aus dem Protokoll.
 create trigger trg_audit_zuckermais_rohdaten
-  after insert or update on zuckermais_rohdaten
+  after insert or update or delete on zuckermais_rohdaten
   for each row execute function write_audit_log();
 create trigger trg_audit_erdbeeren_rohdaten
-  after insert or update on erdbeeren_rohdaten
+  after insert or update or delete on erdbeeren_rohdaten
   for each row execute function write_audit_log();
 create trigger trg_audit_advances
   after insert or update on advances
@@ -1811,6 +1815,64 @@ create trigger trg_audit_periods
 create trigger trg_audit_personal_kandidaten
   after insert or update on personal_kandidaten
   for each row execute function write_audit_log();
+
+-- ---------------------------------------------------------------------------
+-- Aufbereitete Sicht auf das Audit-Log für die Seite "Änderungsprotokoll"
+-- (Nutzer-Vorgabe 2026-08-11). Zwei Dinge, die die Rohtabelle nicht liefert:
+--
+--   1. actor_name statt nur actor_id - sonst steht dort eine UUID.
+--   2. betroffene_employee_id: einheitlicher Personenbezug über ALLE
+--      Bereiche. Bei 'employees' ist die entity_id selbst schon die
+--      Personen-ID, bei Stunden/Vorschüssen/Prämien steckt sie dagegen im
+--      Datensatz (employee_id). Erst damit lässt sich das Protokoll nach
+--      einer Person filtern.
+--
+-- security_invoker = true: die Einträge enthalten ganze Datensätze und
+-- damit auch sensible Felder (IBAN, SV-Nr. bei employees) - die Sicht
+-- läuft deshalb mit den Rechten des aufrufenden Nutzers, sodass die
+-- bestehende audit_log-Policy (admin/pruefer) unverändert greift. Die
+-- Detailansicht in der App ist zusätzlich auf admin beschränkt.
+-- ---------------------------------------------------------------------------
+create or replace view audit_log_ansicht as
+select
+  a.id,
+  a.occurred_at,
+  a.actor_id,
+  p.full_name as actor_name,
+  a.entity,
+  a.entity_id,
+  a.action,
+  a.before_data,
+  a.after_data,
+  case
+    when a.entity = 'employees' then a.entity_id
+    else coalesce(a.after_data, a.before_data) ->> 'employee_id'
+  end as betroffene_employee_id
+from audit_log a
+left join profile_namen p on p.id = a.actor_id;
+
+alter view audit_log_ansicht set (security_invoker = true);
+grant select on audit_log_ansicht to authenticated;
+
+-- Letzte Änderung am STAMMDATENSATZ je Mitarbeiter ("wann hat welcher
+-- Nutzer diese Person zuletzt bearbeitet") - für die Spalte auf der
+-- Personal-Seite. Bewusst nur entity = 'employees': Änderungen an Stunden
+-- oder Vorschüssen der Person sind etwas anderes und stehen im vollen
+-- Protokoll.
+create or replace view employee_letzte_aenderung as
+select distinct on (a.entity_id)
+  a.entity_id as employee_id,
+  a.occurred_at,
+  a.actor_id,
+  p.full_name as actor_name,
+  a.action
+from audit_log a
+left join profile_namen p on p.id = a.actor_id
+where a.entity = 'employees'
+order by a.entity_id, a.occurred_at desc;
+
+alter view employee_letzte_aenderung set (security_invoker = true);
+grant select on employee_letzte_aenderung to authenticated;
 
 -- ---------------------------------------------------------------------------
 -- Trigger: updated_at + version automatisch pflegen (optimistische Sperre)

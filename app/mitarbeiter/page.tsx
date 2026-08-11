@@ -11,6 +11,7 @@ import {
   type FuehrerscheinEintrag,
   type Herkunft,
   type PersonalKandidatChecklisteRow,
+  type EmployeeLetzteAenderung,
   type SvPruefung,
   type VerpflegungsSatz,
 } from "@/lib/types";
@@ -60,6 +61,9 @@ export default function MitarbeiterPage() {
     Record<string, string>
   >({});
   const [svPruefung, setSvPruefung] = useState<Record<string, SvPruefung>>({});
+  const [letzteAenderung, setLetzteAenderung] = useState<
+    Record<string, EmployeeLetzteAenderung>
+  >({});
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [showInactive, setShowInactive] = useState(false);
@@ -134,6 +138,9 @@ export default function MitarbeiterPage() {
   const [dokumenteFehler, setDokumenteFehler] = useState<string | null>(null);
 
   const canEdit = profile?.role === "admin" || profile?.role === "hr";
+  // "Zuletzt geändert" nur für admin (Nutzer-Vorgabe 2026-08-11) - zeigt,
+  // wann welcher Nutzer diesen Stammdatensatz zuletzt bearbeitet hat.
+  const istAdmin = profile?.role === "admin";
   const gruppenLabel: Record<string, string> = Object.fromEntries(
     gruppen.map((g) => [g.gruppe_nr, g.bezeichnung])
   );
@@ -206,6 +213,18 @@ export default function MitarbeiterPage() {
       }
     );
     setLetzteAbrechnung(abrechnungMap);
+    // Nur für admin - die Sicht ist per RLS ohnehin gesperrt, aber so wird
+    // für alle anderen Rollen gar nicht erst angefragt.
+    if (istAdmin) {
+      const { data: aenderungen } = await supabase
+        .from("employee_letzte_aenderung")
+        .select("*");
+      const aenderungMap: Record<string, EmployeeLetzteAenderung> = {};
+      ((aenderungen as EmployeeLetzteAenderung[]) ?? []).forEach((a) => {
+        aenderungMap[a.employee_id] = a;
+      });
+      setLetzteAenderung(aenderungMap);
+    }
     setGruppen((gruppenData as Arbeitsgruppe[]) ?? []);
     setHerkuenfte((herkunftData as Herkunft[]) ?? []);
     setAllePersonalNummern(alleNrData ?? []);
@@ -1087,6 +1106,11 @@ export default function MitarbeiterPage() {
               <th>Dokumente</th>
               <th>Verknüpfung</th>
               <th>Schwarze Liste</th>
+              {istAdmin && (
+                <th title="Letzte Änderung am Stammdatensatz dieser Person - vollständige Historie unter „Protokoll“">
+                  Zuletzt geändert
+                </th>
+              )}
               {canEdit && <th></th>}
             </tr>
           </thead>
@@ -1204,6 +1228,20 @@ export default function MitarbeiterPage() {
                     "—"
                   )}
                 </td>
+                {istAdmin && (
+                  <td className="text-xs">
+                    {letzteAenderung[emp.id] ? (
+                      <>
+                        {formatDatumDE(letzteAenderung[emp.id].occurred_at)}
+                        <div className="text-neutral-500">
+                          {letzteAenderung[emp.id].actor_name ?? "System"}
+                        </div>
+                      </>
+                    ) : (
+                      <span className="text-neutral-400">—</span>
+                    )}
+                  </td>
+                )}
                 {canEdit && (
                   <td className="flex gap-2">
                     <button
@@ -1238,17 +1276,17 @@ export default function MitarbeiterPage() {
               </tr>
               {editingId === emp.id && (
                 <tr>
-                  <td colSpan={22}>{mitarbeiterFormular()}</td>
+                  <td colSpan={istAdmin ? 23 : 22}>{mitarbeiterFormular()}</td>
                 </tr>
               )}
               {statuswechselId === emp.id && (
                 <tr>
-                  <td colSpan={22}>{statuswechselFormular(emp)}</td>
+                  <td colSpan={istAdmin ? 23 : 22}>{statuswechselFormular(emp)}</td>
                 </tr>
               )}
               {dokumenteId === emp.id && (
                 <tr>
-                  <td colSpan={22}>{dokumenteFormular(emp)}</td>
+                  <td colSpan={istAdmin ? 23 : 22}>{dokumenteFormular(emp)}</td>
                 </tr>
               )}
               </Fragment>

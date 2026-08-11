@@ -172,6 +172,33 @@ export interface SvPruefung {
   ueberschritten_sv_frei_ende: boolean;
 }
 
+// Aus der Sicht audit_log_ansicht (Änderungsprotokoll) - siehe schema.sql.
+// before_data/after_data enthalten den kompletten Datensatz vorher/nachher;
+// die geänderten Felder werden erst in der Anzeige daraus ermittelt.
+export interface AuditLogEintrag {
+  id: number;
+  occurred_at: string;
+  actor_id: string | null;
+  actor_name: string | null;
+  entity: string;
+  entity_id: string;
+  action: string;
+  before_data: Record<string, unknown> | null;
+  after_data: Record<string, unknown> | null;
+  betroffene_employee_id: string | null;
+}
+
+// Aus der Sicht employee_letzte_aenderung: wann hat welcher Nutzer diesen
+// Mitarbeiter-Stammdatensatz zuletzt bearbeitet (Spalte auf der
+// Personal-Seite, nur für admin).
+export interface EmployeeLetzteAenderung {
+  employee_id: string;
+  occurred_at: string;
+  actor_id: string | null;
+  actor_name: string | null;
+  action: string;
+}
+
 // Aus der Sicht anreiseliste_offen_arbeitend: Personen, die bereits
 // arbeiten, obwohl ihr Anreiselisten-Status noch offen ist
 // (Nutzer-Vorgabe 2026-08-11). Siehe schema.sql.
