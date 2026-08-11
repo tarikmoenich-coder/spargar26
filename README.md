@@ -476,11 +476,15 @@ Enthalten:
   Kommastellen nie sauber auf 0 aufgeht, entfällt damit ersatzlos.
   Erfassungshilfen für die Größenordnung (2026: 182 Tunnel auf 19 Feldern):
   Sammelanlage "Tunnel 1-16 mit gleicher Länge und Reihenzahl anlegen",
-  "Sorte für Tunnel 1-8 zuweisen", "Tunnel 3-7 auf anderes Feld verschieben"
+  "Sorte für Tunnel 1-8 zuweisen" (setzt die Sorte auf alle Reihen), "Tunnel 3-7 auf anderes Feld verschieben"
   (für den Umzug in Vorbereitung auf die Cotura) und "Aus Vorjahr
   übernehmen" - letzteres ersetzt das Copy/Paste zwischen den Blättern,
   ohne die dort entstandenen #REF!-Bezüge, und erhöht das Standjahr
-  automatisch. Die Folienrollen-Nummer (Cotura) steht vorerst als Textfeld
+  automatisch. Zwei Sorten in einem Tunnel gehen über "+ Sorte" direkt an
+  der Bepflanzung, wobei die Reihenzahl je Sorte angegeben wird (z.B. 4 und
+  4 bei 8 Reihen); leer gelassen belegt eine Sorte alle Reihen. Belegen
+  mehrere Sorten zusammen mehr Reihen als der Tunnel hat, warnt die Zeile -
+  sonst wäre die Pflanzenzahl zu hoch. Die Folienrollen-Nummer (Cotura) steht vorerst als Textfeld
   am Tunnel; ein eigenes Folien-Register mit Zustand und Einsatzhistorie ist
   als zweiter Schritt vorgesehen. Unterreiter "Bestellung": Bedarf je Sorte
   kommt live aus der Planung, dazu Bestellmenge, eigener Bestand und

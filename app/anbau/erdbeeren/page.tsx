@@ -47,6 +47,19 @@ export default function AnbauErdbeerenPage() {
 
   const [offenesFeld, setOffenesFeld] = useState<number | null>(null);
 
+  // Zweite Sorte in einem Tunnel: eigenes kleines Formular je Tunnel, weil
+  // hier - anders als beim Bereichs-Werkzeug - die Reihenzahl mit angegeben
+  // werden muss. Ohne sie würden sich zwei Sorten denselben Tunnel voll
+  // anrechnen und die Pflanzenzahl doppelt zählen.
+  const [sortenFormularTunnel, setSortenFormularTunnel] = useState<
+    number | null
+  >(null);
+  const [nsSorte, setNsSorte] = useState("");
+  const [nsReihen, setNsReihen] = useState("");
+  const [nsStandjahr, setNsStandjahr] = useState("1");
+  const [nsPflanztyp, setNsPflanztyp] = useState<Pflanztyp | "">("");
+  const [nsPflanzdatum, setNsPflanzdatum] = useState("");
+
   // Sammelanlage je Feld
   const [saVon, setSaVon] = useState("1");
   const [saBis, setSaBis] = useState("10");
@@ -286,6 +299,69 @@ export default function AnbauErdbeerenPage() {
     load();
   }
 
+  // Belegte Reihen eines Tunnels - leer gelassene Reihenzahl zählt als
+  // "alle Reihen" (siehe View), deshalb hier genauso behandeln.
+  function belegteReihen(t: ErdbeerenTunnel): number {
+    return (bepflanzung[t.id] ?? []).reduce(
+      (s, b) => s + (b.reihen_anzahl ?? t.reihen_anzahl ?? 0),
+      0
+    );
+  }
+
+  function sortenFormularOeffnen(t: ErdbeerenTunnel) {
+    setSortenFormularTunnel(t.id);
+    setNsSorte("");
+    // Vorschlag: die noch freien Reihen des Tunnels.
+    const frei = (t.reihen_anzahl ?? 0) - belegteReihen(t);
+    setNsReihen(frei > 0 ? String(frei) : "");
+    setNsStandjahr("1");
+    setNsPflanztyp("");
+    setNsPflanzdatum("");
+  }
+
+  async function bepflanzungAnlegen(t: ErdbeerenTunnel) {
+    if (!nsSorte.trim()) {
+      setFehler("Bitte eine Sorte angeben.");
+      return;
+    }
+    setLaeuft(true);
+    setFehler(null);
+    const supabase = getSupabaseClient();
+    const { error } = await supabase.from("erdbeeren_bepflanzung").insert({
+      tunnel_id: t.id,
+      sorte: nsSorte.trim(),
+      reihen_anzahl: nsReihen ? Number(nsReihen) : null,
+      standjahr: nsStandjahr ? Number(nsStandjahr) : null,
+      pflanztyp: nsPflanztyp || null,
+      pflanzdatum: nsPflanzdatum || null,
+    });
+    if (error) setFehler(error.message);
+    else setSortenFormularTunnel(null);
+    setLaeuft(false);
+    load();
+  }
+
+  async function bepflanzungAendern(
+    id: number,
+    feld: "sorte" | "reihen_anzahl" | "standjahr" | "pflanzdatum",
+    wert: string
+  ) {
+    const supabase = getSupabaseClient();
+    const zahlFelder = ["reihen_anzahl", "standjahr"];
+    const { error } = await supabase
+      .from("erdbeeren_bepflanzung")
+      .update({
+        [feld]: zahlFelder.includes(feld)
+          ? wert
+            ? Number(wert)
+            : null
+          : wert || null,
+      })
+      .eq("id", id);
+    if (error) setFehler(error.message);
+    load();
+  }
+
   async function bepflanzungLoeschen(id: number) {
     if (!window.confirm("Diese Bepflanzung wirklich entfernen?")) return;
     const supabase = getSupabaseClient();
@@ -322,10 +398,18 @@ export default function AnbauErdbeerenPage() {
         </h1>
         <p className="text-sm text-neutral-500">
           Je Feld die einzelnen Tunnel mit eigener Länge und Reihenzahl,
-          darunter die Bepflanzung je Sorte (zwei Sorten in einem Tunnel sind
-          zwei Zeilen). Laufende Meter und Pflanzenzahl werden gerechnet –
-          Länge × Reihen × Pflanzen je laufendem Meter. Das Prämiensystem ist
-          davon unberührt: die Erfassung zeigt weiterhin nur die Feldauswahl.
+          darunter die Bepflanzung je Sorte. Laufende Meter und Pflanzenzahl
+          werden gerechnet – Länge × Reihen × Pflanzen je laufendem Meter.
+          <br />
+          <strong>Zwei Sorten in einem Tunnel:</strong> in der Spalte
+          „Bepflanzung" auf „+ Sorte" klicken und die Reihenzahl angeben, die
+          diese Sorte belegt – z.B. 4 und 4 bei einem Tunnel mit 8 Reihen.
+          Bleibt das Reihen-Feld leer, gilt die Sorte für alle Reihen; das ist
+          der Normalfall mit nur einer Sorte. Sind zusammen mehr Reihen
+          belegt, als der Tunnel hat, erscheint eine Warnung.
+          <br />
+          Das Prämiensystem ist davon unberührt: die Erfassung zeigt
+          weiterhin nur die Feldauswahl.
         </p>
       </div>
 
@@ -708,45 +792,178 @@ export default function AnbauErdbeerenPage() {
                                           />
                                         </td>
                                         <td className="text-xs">
-                                          {bList.length === 0 ? (
-                                            <span className="text-neutral-400">
-                                              —
-                                            </span>
-                                          ) : (
-                                            <div className="flex flex-col gap-0.5">
-                                              {bList.map((b) => (
-                                                <div
-                                                  key={b.id}
-                                                  className="flex items-center gap-1"
-                                                >
-                                                  <span>
-                                                    {b.sorte}
-                                                    {b.reihen_anzahl !==
-                                                      t.reihen_anzahl &&
-                                                      ` (${b.reihen_anzahl} R.)`}
-                                                    {b.standjahr &&
-                                                      ` · ${b.standjahr}. Standjahr`}
-                                                    {b.pflanztyp &&
-                                                      ` · ${PFLANZTYP_LABELS[b.pflanztyp]}`}
-                                                  </span>
-                                                  {canEdit && (
-                                                    <button
-                                                      type="button"
-                                                      className="text-neutral-400 hover:text-red-600"
-                                                      title="Entfernen"
-                                                      onClick={() =>
-                                                        bepflanzungLoeschen(
-                                                          b.id
-                                                        )
-                                                      }
-                                                    >
-                                                      ✕
-                                                    </button>
-                                                  )}
+                                          <div className="flex flex-col gap-1">
+                                            {bList.map((b) => (
+                                              <div
+                                                key={b.id}
+                                                className="flex flex-wrap items-center gap-1"
+                                              >
+                                                <input
+                                                  defaultValue={b.sorte}
+                                                  disabled={!canEdit}
+                                                  className="w-28"
+                                                  onBlur={(e) =>
+                                                    bepflanzungAendern(
+                                                      b.id,
+                                                      "sorte",
+                                                      e.target.value
+                                                    )
+                                                  }
+                                                />
+                                                <input
+                                                  type="number"
+                                                  defaultValue={
+                                                    b.reihen_anzahl ?? ""
+                                                  }
+                                                  disabled={!canEdit}
+                                                  className="w-14"
+                                                  placeholder="alle"
+                                                  title="Wie viele Reihen des Tunnels diese Sorte belegt. Leer = alle Reihen."
+                                                  onBlur={(e) =>
+                                                    bepflanzungAendern(
+                                                      b.id,
+                                                      "reihen_anzahl",
+                                                      e.target.value
+                                                    )
+                                                  }
+                                                />
+                                                <span className="text-neutral-500">
+                                                  R.
+                                                  {b.standjahr &&
+                                                    ` · ${b.standjahr}. Stj.`}
+                                                  {b.pflanztyp &&
+                                                    ` · ${PFLANZTYP_LABELS[b.pflanztyp]}`}
+                                                </span>
+                                                {canEdit && (
+                                                  <button
+                                                    type="button"
+                                                    className="text-neutral-400 hover:text-red-600"
+                                                    title="Entfernen"
+                                                    onClick={() =>
+                                                      bepflanzungLoeschen(b.id)
+                                                    }
+                                                  >
+                                                    ✕
+                                                  </button>
+                                                )}
+                                              </div>
+                                            ))}
+
+                                            {/* Reihen-Kontrolle: zwei Sorten
+                                                dürfen zusammen nicht mehr
+                                                Reihen belegen als der Tunnel
+                                                hat - sonst wäre die
+                                                Pflanzenzahl zu hoch. */}
+                                            {t.reihen_anzahl != null &&
+                                              belegteReihen(t) >
+                                                t.reihen_anzahl && (
+                                                <span className="font-medium text-red-600">
+                                                  ⚠ {belegteReihen(t)} von{" "}
+                                                  {t.reihen_anzahl} Reihen
+                                                  belegt
+                                                </span>
+                                              )}
+
+                                            {canEdit &&
+                                              (sortenFormularTunnel === t.id ? (
+                                                <div className="flex flex-wrap items-center gap-1 rounded border border-emerald-300 bg-emerald-50 p-1">
+                                                  <input
+                                                    placeholder="Sorte"
+                                                    value={nsSorte}
+                                                    onChange={(e) =>
+                                                      setNsSorte(e.target.value)
+                                                    }
+                                                    className="w-28"
+                                                    autoFocus
+                                                  />
+                                                  <input
+                                                    type="number"
+                                                    placeholder="Reihen"
+                                                    value={nsReihen}
+                                                    onChange={(e) =>
+                                                      setNsReihen(
+                                                        e.target.value
+                                                      )
+                                                    }
+                                                    className="w-16"
+                                                    title="Wie viele Reihen diese Sorte belegt - vorgeschlagen sind die noch freien"
+                                                  />
+                                                  <input
+                                                    type="number"
+                                                    placeholder="Stj."
+                                                    value={nsStandjahr}
+                                                    onChange={(e) =>
+                                                      setNsStandjahr(
+                                                        e.target.value
+                                                      )
+                                                    }
+                                                    className="w-14"
+                                                  />
+                                                  <select
+                                                    value={nsPflanztyp}
+                                                    onChange={(e) =>
+                                                      setNsPflanztyp(
+                                                        e.target
+                                                          .value as Pflanztyp | ""
+                                                      )
+                                                    }
+                                                  >
+                                                    <option value="">
+                                                      Typ …
+                                                    </option>
+                                                    {PFLANZTYPEN.map((pt) => (
+                                                      <option
+                                                        key={pt}
+                                                        value={pt}
+                                                      >
+                                                        {PFLANZTYP_LABELS[pt]}
+                                                      </option>
+                                                    ))}
+                                                  </select>
+                                                  <input
+                                                    type="date"
+                                                    value={nsPflanzdatum}
+                                                    onChange={(e) =>
+                                                      setNsPflanzdatum(
+                                                        e.target.value
+                                                      )
+                                                    }
+                                                    title="Pflanzdatum"
+                                                  />
+                                                  <button
+                                                    type="button"
+                                                    className="btn text-xs"
+                                                    disabled={laeuft}
+                                                    onClick={() =>
+                                                      bepflanzungAnlegen(t)
+                                                    }
+                                                  >
+                                                    Speichern
+                                                  </button>
+                                                  <button
+                                                    type="button"
+                                                    className="btn-secondary text-xs"
+                                                    onClick={() =>
+                                                      setSortenFormularTunnel(
+                                                        null
+                                                      )
+                                                    }
+                                                  >
+                                                    Abbrechen
+                                                  </button>
                                                 </div>
+                                              ) : (
+                                                <button
+                                                  type="button"
+                                                  className="self-start text-emerald-700 underline"
+                                                  onClick={() =>
+                                                    sortenFormularOeffnen(t)
+                                                  }
+                                                >
+                                                  + Sorte
+                                                </button>
                                               ))}
-                                            </div>
-                                          )}
+                                          </div>
                                         </td>
                                         <td>
                                           {formatZahlDE(
