@@ -171,12 +171,15 @@ w as (
     saison_jahr,
     min(von) as erster_arbeitstag,
     max(bis) as letzter_arbeitstag,
-    sum(tage)::bigint as beschaeftigungstage,
+    -- ::int (nicht bigint): tage_vor_letztem_abschnitt unten wird auf ein
+    -- Datum addiert, und Postgres kennt nur "date + integer", kein
+    -- "date + bigint" (Fehler 42883). sum() liefert von sich aus bigint.
+    sum(tage)::int as beschaeftigungstage,
     count(*)::int as anzahl_abschnitte,
     -- Für das Austrittsdatum: der laufende (zuletzt begonnene) Abschnitt
     -- darf noch so viele Kalendertage laufen, wie vom Budget übrig ist.
     (array_agg(von order by von desc))[1] as beginn_letzter_abschnitt,
-    (sum(tage) - (array_agg(tage order by von desc))[1])::bigint
+    (sum(tage) - (array_agg(tage order by von desc))[1])::int
       as tage_vor_letztem_abschnitt
   from abschnitte
   group by employee_id, saison_jahr
