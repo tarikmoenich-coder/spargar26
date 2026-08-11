@@ -426,7 +426,14 @@ create table sv_fragebogen (
   -- wahrheitsgemäßen (rechtlich bindenden) Angabe der Person verlassen.
   -- Fließt direkt in die kombinierte 90-Tage-Kontrolle ein (siehe
   -- employee_sv_pruefung weiter unten).
+  -- Entweder direkt als Tage-Zahl ODER als Zeitraum von/bis erfassbar
+  -- (Nutzer-Vorgabe 2026-08-11) - je nachdem, was das Lohnprogramm bzw.
+  -- die Person meldet. Bei ausgefülltem Zeitraum werden die Tage daraus
+  -- berechnet und die Zahl unten ignoriert, siehe Funktion
+  -- vorbeschaeftigung_deutschland_tage_effektiv() weiter unten.
   vorbeschaeftigung_deutschland_tage int,
+  vorbeschaeftigung_deutschland_von date,
+  vorbeschaeftigung_deutschland_bis date,
   vorbeschaeftigung_deutschland_arbeitgeber text,
   -- Dokumentiert, falls diese Nachfrage gezielt durch eine Rückmeldung des
   -- Lohnprogramms ausgelöst wurde (statt nur beim regulären Erstantritt) -
@@ -520,6 +527,27 @@ $$;
 -- wo genau das eingesetzt wird.
 -- Bewusst mit derselben Vorrang-Reihenfolge wie in sv_freier_zeitraum_von:
 -- Block 1 und Block 4 liefern echte Von-Bis-Zeiträume und gehen vor.
+-- Bisherige Beschäftigungstage in Deutschland bei anderen Arbeitgebern -
+-- erfassbar entweder als Zeitraum von/bis ODER als reine Tage-Zahl
+-- (Nutzer-Vorgabe 2026-08-11). Ist ein vollständiger Zeitraum angegeben,
+-- hat dieser Vorrang und die Tage werden daraus berechnet (Kalendertage
+-- inklusive beider Randtage, wie bei der 15-Wochen-Grenze auch).
+create or replace function vorbeschaeftigung_deutschland_tage_effektiv(
+  f sv_fragebogen
+)
+returns int language sql immutable as $$
+  select coalesce(
+    case
+      when f.vorbeschaeftigung_deutschland_von is not null
+        and f.vorbeschaeftigung_deutschland_bis is not null
+      then (f.vorbeschaeftigung_deutschland_bis
+            - f.vorbeschaeftigung_deutschland_von + 1)
+    end,
+    f.vorbeschaeftigung_deutschland_tage,
+    0
+  );
+$$;
+
 create or replace function sv_freier_zeitraum_offen(f sv_fragebogen)
 returns boolean language sql immutable as $$
   select
@@ -688,7 +716,14 @@ select
   -- ist dann nur das Nachweis-Datum aus dem Formular, NICHT der Beginn des
   -- SV-freien Zeitraums - der ist der tatsächliche Arbeitsbeginn (siehe
   -- employee_sv_pruefung.sv_frei_von, dort korrekt eingesetzt).
-  sv_freier_zeitraum_offen(f) as sv_frei_offen
+  sv_freier_zeitraum_offen(f) as sv_frei_offen,
+  -- Vorbeschäftigung wahlweise als Zeitraum erfassbar (Nutzer-Vorgabe
+  -- 2026-08-11) - die effektive Tage-Zahl bevorzugt den Zeitraum, falls
+  -- vollständig angegeben. Ans Ende angehängt (42P16).
+  f.vorbeschaeftigung_deutschland_von,
+  f.vorbeschaeftigung_deutschland_bis,
+  vorbeschaeftigung_deutschland_tage_effektiv(f)
+    as vorbeschaeftigung_deutschland_tage_effektiv
 from sv_fragebogen f;
 
 -- security_invoker = true: die Rohantworten sind so sensibel wie andere
@@ -2216,7 +2251,10 @@ join w on w.employee_id = e.id
 -- aufrufenden Nutzers.
 left join lateral (
   select
-    f.vorbeschaeftigung_deutschland_tage,
+    -- Effektive Tage-Zahl: bevorzugt aus dem Zeitraum von/bis berechnet,
+    -- sonst die direkt eingetragene Zahl (Nutzer-Vorgabe 2026-08-11).
+    vorbeschaeftigung_deutschland_tage_effektiv(f)
+      as vorbeschaeftigung_deutschland_tage,
     -- Bei den offenen Zuständen (Hausfrau/Rente/Selbstständigkeit) ist das
     -- "seit"-Datum aus dem Formular nur ein Nachweis, seit wann der Zustand
     -- besteht - der SV-freie Zeitraum beginnt dort mit dem tatsächlichen

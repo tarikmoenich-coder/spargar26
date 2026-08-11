@@ -378,12 +378,17 @@ Enthalten:
   unvollständig/fehlerhaft" mit Begründung - unterscheidet "bereits
   geprüft, aber nicht verwertbar" (z.B. fehlende Angaben/Bestätigung) von
   "noch gar nicht angesehen"; zählt ebenfalls automatisch als nicht
-  bestanden. Eigenes Feld "bisherige
-  Arbeitstage in Deutschland (dieses Kalenderjahr, andere Arbeitgeber)",
-  markierbar als durch eine Lohnprogramm-Rückmeldung ausgelöst - fließt
-  direkt in die 15-Wochen-Kontrolle oben ein (Kern der Regel: das
-  Kalenderjahr zählt über ALLE deutschen Arbeitgeber zusammen, nicht nur
-  die Tage bei uns). Ersetzt weiterhin nicht die rechtliche Prüfung der
+  bestanden. Eigenes Feld "bisherige Beschäftigung in Deutschland (dieses
+  Kalenderjahr, andere Arbeitgeber)", markierbar als durch eine
+  Lohnprogramm-Rückmeldung ausgelöst - fließt direkt in die
+  15-Wochen-Kontrolle oben ein (Kern der Regel: das Kalenderjahr zählt über
+  ALLE deutschen Arbeitgeber zusammen, nicht nur die Tage bei uns).
+  Erfassbar wahlweise als Zeitraum von/bis ODER als reine Tage-Zahl (Stand
+  2026-08-11) - je nachdem, was das Lohnprogramm bzw. die Person meldet.
+  Bei ausgefülltem Zeitraum werden die Tage daraus berechnet (Kalendertage
+  inklusive beider Randtage, gleiche Zählweise wie bei der 15-Wochen-
+  Grenze), live schon beim Ausfüllen angezeigt; das Tage-Feld wird dann
+  gesperrt, damit kein widersprüchlicher Wert stehen bleibt. Ersetzt weiterhin nicht die rechtliche Prüfung der
   Sozialversicherungsbefreiung im Einzelfall selbst (die hier hinterlegte
   Bestanden/Nicht-bestanden-Logik ist unser Verständnis der allgemeinen
   Regel, keine steuerberaterlich geprüfte Rechtsauskunft für den

@@ -260,7 +260,28 @@ export default function SozialversicherungPage() {
                         </span>
                       )}
                     </td>
-                    <td>{f?.vorbeschaeftigung_deutschland_tage ?? "—"}</td>
+                    <td
+                      title={
+                        f?.vorbeschaeftigung_deutschland_von &&
+                        f?.vorbeschaeftigung_deutschland_bis
+                          ? `Aus dem Zeitraum ${formatDatumDE(f.vorbeschaeftigung_deutschland_von)} – ${formatDatumDE(f.vorbeschaeftigung_deutschland_bis)} berechnet`
+                          : undefined
+                      }
+                    >
+                      {!f || f.vorbeschaeftigung_deutschland_tage_effektiv === 0 ? (
+                        <span className="text-neutral-400">—</span>
+                      ) : (
+                        <>
+                          {f.vorbeschaeftigung_deutschland_tage_effektiv}
+                          {f.vorbeschaeftigung_deutschland_von &&
+                            f.vorbeschaeftigung_deutschland_bis && (
+                              <span className="ml-1 text-xs text-neutral-500">
+                                (Zeitraum)
+                              </span>
+                            )}
+                        </>
+                      )}
+                    </td>
                     <td className="text-xs">
                       {svPruefung ? (
                         angewendeteRegel(svPruefung)

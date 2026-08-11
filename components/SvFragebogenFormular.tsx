@@ -85,6 +85,8 @@ const LEERER_ENTWURF: Entwurf = {
   hausmann_seit: null,
   lebensunterhalt_sonstiges: null,
   vorbeschaeftigung_deutschland_tage: null,
+  vorbeschaeftigung_deutschland_von: null,
+  vorbeschaeftigung_deutschland_bis: null,
   vorbeschaeftigung_deutschland_arbeitgeber: null,
   ausgeloest_durch_lohnprogramm_hinweis: false,
   unvollstaendig_fehlerhaft: false,
@@ -139,6 +141,8 @@ function entwurfAusAuswertung(f: SvFragebogenAuswertung): Entwurf {
     hausmann_seit: f.hausmann_seit,
     lebensunterhalt_sonstiges: f.lebensunterhalt_sonstiges,
     vorbeschaeftigung_deutschland_tage: f.vorbeschaeftigung_deutschland_tage,
+    vorbeschaeftigung_deutschland_von: f.vorbeschaeftigung_deutschland_von,
+    vorbeschaeftigung_deutschland_bis: f.vorbeschaeftigung_deutschland_bis,
     vorbeschaeftigung_deutschland_arbeitgeber:
       f.vorbeschaeftigung_deutschland_arbeitgeber,
     ausgeloest_durch_lohnprogramm_hinweis:
@@ -147,6 +151,24 @@ function entwurfAusAuswertung(f: SvFragebogenAuswertung): Entwurf {
     unvollstaendig_fehlerhaft_grund: f.unvollstaendig_fehlerhaft_grund,
     ausgefuellt_am: f.ausgefuellt_am,
   };
+}
+
+// Tage aus dem Vorbeschäftigungs-Zeitraum, null wenn er nicht vollständig
+// ausgefüllt ist. Muss zur SQL-Funktion vorbeschaeftigung_deutschland_
+// tage_effektiv() in schema.sql passen: Kalendertage inklusive beider
+// Randtage. Auf UTC-Mittag verankert, damit die Differenz nicht an einer
+// Sommerzeit-Umstellung um einen Tag danebenliegt.
+function vorbeschaeftigungTageAusZeitraum(e: Entwurf): number | null {
+  const von = e.vorbeschaeftigung_deutschland_von;
+  const bis = e.vorbeschaeftigung_deutschland_bis;
+  if (!von || !bis) return null;
+  const [y1, m1, d1] = von.split("-").map(Number);
+  const [y2, m2, d2] = bis.split("-").map(Number);
+  const tage =
+    Math.round(
+      (Date.UTC(y2, m2 - 1, d2, 12) - Date.UTC(y1, m1 - 1, d1, 12)) / 86400000
+    ) + 1;
+  return tage;
 }
 
 // Live-Vorschau der Auswertung, identisch zur Logik der Sicht
@@ -633,9 +655,48 @@ export default function SvFragebogenFormular({
 
       <div className="rounded border border-amber-300 bg-amber-50 p-3">
         <p className="text-sm font-medium text-amber-900">
-          Bisherige Arbeitstage in Deutschland (dieses Kalenderjahr, bei
-          anderen Arbeitgebern) - zählt für die 90-Tage-Grenze
+          Bisherige Beschäftigung in Deutschland (dieses Kalenderjahr, bei
+          anderen Arbeitgebern) - zählt für die 15-Wochen-Grenze (105 Tage)
         </p>
+        <p className="mt-1 text-xs text-amber-800">
+          Entweder den Zeitraum eintragen (die Tage werden dann daraus
+          berechnet) oder direkt die Anzahl Tage.
+        </p>
+        <div className="mt-2 flex flex-wrap items-center gap-2 text-xs">
+          <label>
+            von{" "}
+            <input
+              type="date"
+              value={entwurf.vorbeschaeftigung_deutschland_von ?? ""}
+              onChange={(e) =>
+                feld(
+                  "vorbeschaeftigung_deutschland_von",
+                  e.target.value || null
+                )
+              }
+              disabled={!canEdit}
+            />
+          </label>
+          <label>
+            bis{" "}
+            <input
+              type="date"
+              value={entwurf.vorbeschaeftigung_deutschland_bis ?? ""}
+              onChange={(e) =>
+                feld(
+                  "vorbeschaeftigung_deutschland_bis",
+                  e.target.value || null
+                )
+              }
+              disabled={!canEdit}
+            />
+          </label>
+          {vorbeschaeftigungTageAusZeitraum(entwurf) !== null && (
+            <span className="font-medium text-amber-900">
+              = {vorbeschaeftigungTageAusZeitraum(entwurf)} Tage
+            </span>
+          )}
+        </div>
         <div className="mt-2 flex flex-wrap items-center gap-2">
           <input
             type="number"
@@ -648,8 +709,19 @@ export default function SvFragebogenFormular({
                 e.target.value ? Number(e.target.value) : null
               )
             }
-            disabled={!canEdit}
+            // Bei vollständigem Zeitraum hat dieser Vorrang (siehe
+            // vorbeschaeftigung_deutschland_tage_effektiv in schema.sql) -
+            // das Feld dann sperren, damit kein widersprüchlicher Wert
+            // stehen bleibt, der stillschweigend ignoriert wird.
+            disabled={
+              !canEdit || vorbeschaeftigungTageAusZeitraum(entwurf) !== null
+            }
             className="w-24"
+            title={
+              vorbeschaeftigungTageAusZeitraum(entwurf) !== null
+                ? "Wird aus dem Zeitraum oben berechnet"
+                : undefined
+            }
           />
           <input
             placeholder="bei welchem Arbeitgeber"

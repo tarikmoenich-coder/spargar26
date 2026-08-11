@@ -249,7 +249,13 @@ export interface SvFragebogen {
 
   lebensunterhalt_sonstiges: string | null;
 
+  // Wahlweise als Tage-Zahl ODER als Zeitraum erfassbar (Nutzer-Vorgabe
+  // 2026-08-11) - bei vollständigem Zeitraum hat dieser Vorrang, die Tage
+  // werden daraus berechnet (siehe vorbeschaeftigung_deutschland_tage_
+  // effektiv in SvFragebogenAuswertung).
   vorbeschaeftigung_deutschland_tage: number | null;
+  vorbeschaeftigung_deutschland_von: string | null;
+  vorbeschaeftigung_deutschland_bis: string | null;
   vorbeschaeftigung_deutschland_arbeitgeber: string | null;
   ausgeloest_durch_lohnprogramm_hinweis: boolean;
 
@@ -280,6 +286,10 @@ export interface SvFragebogenAuswertung extends SvFragebogen {
   // Beginn des SV-freien Zeitraums - der ist der tatsächliche
   // Arbeitsbeginn (siehe SvPruefung.sv_frei_von, dort korrekt eingesetzt).
   sv_frei_offen: boolean;
+  // Effektive Tage-Zahl der Vorbeschäftigung: bevorzugt aus dem Zeitraum
+  // von/bis berechnet, sonst die direkt eingetragene Zahl (0, wenn beides
+  // leer ist). Das ist der Wert, der in die 15-Wochen-Grenze einfließt.
+  vorbeschaeftigung_deutschland_tage_effektiv: number;
 }
 
 // "Bestätigung für den Nachweis der doppelten Haushaltsführung" - analog
