@@ -305,13 +305,30 @@ export const WOHNSITUATION_LABELS: Record<Wohnsituation, string> = {
   keine_angabe: 'Keine Angabe möglich',
 };
 
+// Verfahrensstand des Lohnsteuerabzug-Antrags beim Finanzamt
+// (Nutzer-Vorgabe 2026-08-11, ersetzt das frühere Ja/Nein "antrag_gestellt").
+// WICHTIG: das Ausfüllen des Formulars "Doppelte Haushaltsführung" ist noch
+// KEIN gestellter Antrag - dieser Status wird immer manuell gesetzt.
+export type LohnsteuerStatus =
+  | 'kein_antrag'
+  | 'antrag_gestellt'
+  | 'freibetrag_erteilt'
+  | 'kein_freibetrag';
+
+export const LOHNSTEUER_STATUS_LABELS: Record<LohnsteuerStatus, string> = {
+  kein_antrag: 'Kein Antrag',
+  antrag_gestellt: 'Antrag gestellt',
+  freibetrag_erteilt: 'Freibetrag erteilt',
+  kein_freibetrag: 'Kein Freibetrag',
+};
+
 export interface DoppelteHaushaltsfuehrung {
   id: number;
   employee_id: string;
   saison_jahr: number;
   familienstand: Familienstand | null;
   wohnsituation: Wohnsituation | null;
-  antrag_gestellt: boolean;
+  lohnsteuer_status: LohnsteuerStatus;
   antrag_gestellt_am: string | null;
   ausgefuellt_am: string | null;
   erfasst_von: string | null;

@@ -1,63 +1,41 @@
 "use client";
 
 import { Fragment, useEffect, useState } from "react";
-import Link from "next/link";
 import { getSupabaseClient } from "@/lib/supabase/client";
 import { useProfile } from "@/lib/useProfile";
 import {
   DOKUMENT_KATEGORIEN,
   FUEHRERSCHEIN_KATEGORIEN,
-  FAMILIENSTAND_LABELS,
   type DokumentKategorie,
-  type DoppelteHaushaltsfuehrung,
   type EmployeeDocument,
-  type SvFragebogenAuswertung,
 } from "@/lib/types";
 import { formatDatumDE } from "@/lib/format";
 import PersonalTabs from "@/components/PersonalTabs";
-import DoppelteHaushaltsfuehrungFormular from "@/components/DoppelteHaushaltsfuehrungFormular";
 
 const DOKUMENTE_BUCKET = "mitarbeiter-dokumente";
 const FUEHRERSCHEIN_KATEGORIE: DokumentKategorie = "Führerschein Kopie";
-const CURRENT_YEAR = new Date().getFullYear();
-const EIN_JAHR_MS = 365 * 24 * 60 * 60 * 1000;
 
-// Farbliche Gruppierung der Dokument-Kategorien (Nutzer-Vorgabe
-// 2026-08-08): allgemeine Personaldokumente neutral, Lohnsteuer-Themen
-// sanftes Gelb, Sozialversicherungs-Themen sanftes Orange - damit
-// thematisch zusammengehörige Spalten auf einen Blick erkennbar sind.
-// Reihenfolge hier bestimmt auch die Spaltenreihenfolge in der Tabelle
-// (Kategorien nach Gruppe sortiert statt in DOKUMENT_KATEGORIEN-Reihenfolge).
-const NEUTRAL_KATEGORIEN: DokumentKategorie[] = [
-  "Ausweiskopie",
-  "Führerschein Kopie",
-  "Arbeitsvertrag",
-  "Werks- und Mietvertrag",
-  "Sonstiges",
-];
-const GELB_KATEGORIEN: DokumentKategorie[] = [
-  "Hochzeitsurkunde",
+// Die beiden Fach-Formulare gehören fachlich auf ihre eigene Seite und
+// tauchen hier bewusst NICHT mehr auf (Nutzer-Vorgabe 2026-08-11) - weder
+// als Spalte noch in der Hochlade-Auswahl:
+//   - Formular "Doppelte Haushaltsführung"
+//     → "Personal → Lohnsteuer" (neben Familienstand/Wohnsituation und dem
+//       Verfahrensstand beim Finanzamt)
+//   - Formular zur Feststellung der Versicherungspflicht
+//     → "Personal → Sozialversicherung" (neben den Fragebogen-Angaben)
+// Die Kategorien selbst bleiben bestehen - bereits hochgeladene Dateien
+// gehen nicht verloren, sie werden ab jetzt auf den Fachseiten angezeigt
+// und dort auch neu hochgeladen. Die Hochzeitsurkunde bleibt bewusst HIER
+// (allgemeiner Personalnachweis) und ist zusätzlich auf der Lohnsteuer-
+// Seite sichtbar, wo sie als Nachweis gebraucht wird.
+const AUSGELAGERTE_KATEGORIEN: DokumentKategorie[] = [
   'Formular "Doppelte Haushaltsführung"',
-];
-const ORANGE_KATEGORIEN: DokumentKategorie[] = [
   "Formular zur Feststellung der Versicherungspflicht",
 ];
-const SPALTEN_REIHENFOLGE: DokumentKategorie[] = [
-  ...NEUTRAL_KATEGORIEN,
-  ...GELB_KATEGORIEN,
-  ...ORANGE_KATEGORIEN,
-];
 
-const GELB_BG = "bg-amber-50";
-const GELB_TH = "bg-amber-100";
-const ORANGE_BG = "bg-orange-50";
-const ORANGE_TH = "bg-orange-100";
-
-function spaltenFarbe(k: DokumentKategorie): { bg: string; th: string } | null {
-  if (GELB_KATEGORIEN.includes(k)) return { bg: GELB_BG, th: GELB_TH };
-  if (ORANGE_KATEGORIEN.includes(k)) return { bg: ORANGE_BG, th: ORANGE_TH };
-  return null;
-}
+const SICHTBARE_KATEGORIEN: DokumentKategorie[] = DOKUMENT_KATEGORIEN.filter(
+  (k) => !AUSGELAGERTE_KATEGORIEN.includes(k)
+);
 
 interface Row {
   id: string;
@@ -69,20 +47,6 @@ interface Row {
   aktiv: boolean;
 }
 
-// Hochzeitsurkunde gilt als "ggf. erneut prüfen" markiert, wenn die
-// zuletzt hochgeladene Kopie älter als ein Jahr ist - der Familienstand
-// könnte sich seither geändert haben (Nutzer-Vorgabe 2026-08-08). Nutzt
-// hochgeladen_am als Näherung (kein separates Ausstellungsdatum auf den
-// Dokumenten) - reicht für einen Hinweis, ersetzt keine echte Prüfung.
-function hochzeitsurkundeVeraltet(docs: EmployeeDocument[]): boolean {
-  const urkunden = docs.filter((d) => d.kategorie === "Hochzeitsurkunde");
-  if (urkunden.length === 0) return false;
-  const neuesteDatum = Math.max(
-    ...urkunden.map((d) => new Date(d.hochgeladen_am).getTime())
-  );
-  return Date.now() - neuesteDatum > EIN_JAHR_MS;
-}
-
 export default function PersonalDokumentePage() {
   const { profile } = useProfile();
   const canView = profile?.role === "admin" || profile?.role === "hr";
@@ -91,16 +55,12 @@ export default function PersonalDokumentePage() {
   const [dokumente, setDokumente] = useState<Record<string, EmployeeDocument[]>>(
     {}
   );
-  const [dhh, setDhh] = useState<Record<string, DoppelteHaushaltsfuehrung>>({});
-  const [svFragebogen, setSvFragebogen] = useState<
-    Record<string, SvFragebogenAuswertung>
-  >({});
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
 
   const [offenId, setOffenId] = useState<string | null>(null);
   const [kategorie, setKategorie] = useState<DokumentKategorie>(
-    DOKUMENT_KATEGORIEN[0]
+    SICHTBARE_KATEGORIEN[0]
   );
   const [fuehrerscheinAuswahl, setFuehrerscheinAuswahl] = useState<string[]>(
     []
@@ -110,31 +70,19 @@ export default function PersonalDokumentePage() {
   const [laeuft, setLaeuft] = useState(false);
   const [fehler, setFehler] = useState<string | null>(null);
 
-  // Getrennt vom Upload-Panel (offenId) - eigenes DHH-Formular je Person.
-  const [dhhEditingId, setDhhEditingId] = useState<string | null>(null);
-
   async function load() {
     setLoading(true);
     const supabase = getSupabaseClient();
-    const [{ data: emp }, { data: docs }, { data: dhhData }, { data: svData }] =
-      await Promise.all([
-        supabase
-          .from("employees")
-          .select("id, personal_nr, herkunft, name, vorname, ort, aktiv")
-          .order("name"),
-        supabase
-          .from("employee_documents")
-          .select("*")
-          .order("hochgeladen_am", { ascending: false }),
-        supabase
-          .from("doppelte_haushaltsfuehrung")
-          .select("*")
-          .eq("saison_jahr", CURRENT_YEAR),
-        supabase
-          .from("sv_fragebogen_auswertung")
-          .select("*")
-          .eq("saison_jahr", CURRENT_YEAR),
-      ]);
+    const [{ data: emp }, { data: docs }] = await Promise.all([
+      supabase
+        .from("employees")
+        .select("id, personal_nr, herkunft, name, vorname, ort, aktiv")
+        .order("name"),
+      supabase
+        .from("employee_documents")
+        .select("*")
+        .order("hochgeladen_am", { ascending: false }),
+    ]);
     setEmployees((emp as Row[]) ?? []);
     const map: Record<string, EmployeeDocument[]> = {};
     ((docs as EmployeeDocument[]) ?? []).forEach((d) => {
@@ -142,16 +90,6 @@ export default function PersonalDokumentePage() {
       map[d.employee_id].push(d);
     });
     setDokumente(map);
-    const dhhMap: Record<string, DoppelteHaushaltsfuehrung> = {};
-    ((dhhData as DoppelteHaushaltsfuehrung[]) ?? []).forEach((d) => {
-      dhhMap[d.employee_id] = d;
-    });
-    setDhh(dhhMap);
-    const svMap: Record<string, SvFragebogenAuswertung> = {};
-    ((svData as SvFragebogenAuswertung[]) ?? []).forEach((f) => {
-      svMap[f.employee_id] = f;
-    });
-    setSvFragebogen(svMap);
     setLoading(false);
   }
 
@@ -164,7 +102,7 @@ export default function PersonalDokumentePage() {
     setOffenId((prev) => (prev === empId ? null : empId));
     setFehler(null);
     setDatei(null);
-    setKategorie(DOKUMENT_KATEGORIEN[0]);
+    setKategorie(SICHTBARE_KATEGORIEN[0]);
     setFuehrerscheinAuswahl([]);
   }
 
@@ -266,9 +204,8 @@ export default function PersonalDokumentePage() {
     );
   });
 
-  // 5 Identitäts-Spalten + Dokument-Kategorien + 2 neue DHH-Spalten +
-  // 1 neue SV-Spalte + 1 Aktions-Spalte.
-  const spaltenAnzahl = 5 + DOKUMENT_KATEGORIEN.length + 4;
+  // 5 Identitäts-Spalten + sichtbare Dokument-Kategorien + 1 Aktions-Spalte.
+  const spaltenAnzahl = 5 + SICHTBARE_KATEGORIEN.length + 1;
 
   if (!canView) {
     return (
@@ -288,13 +225,13 @@ export default function PersonalDokumentePage() {
       <div>
         <h1 className="text-lg font-semibold text-emerald-800">Dokumente</h1>
         <p className="text-sm text-neutral-500">
-          Hochgeladene Dokumente je Mitarbeiter und Kategorie. Leere Felder
-          bedeuten: für diese Kategorie wurde noch nichts hochgeladen.
-          Downloads laufen über zeitlich begrenzte Links. Farblich
-          gruppiert: neutral = allgemeine Personaldokumente,{" "}
-          <span className="rounded bg-amber-100 px-1">gelb = Lohnsteuer</span>
-          , <span className="rounded bg-orange-100 px-1">orange = Sozialversicherung</span>{" "}
-          (Stand jeweils Saison-Jahr {CURRENT_YEAR}).
+          Allgemeine Personaldokumente je Mitarbeiter und Kategorie. Leere
+          Felder bedeuten: für diese Kategorie wurde noch nichts hochgeladen.
+          Downloads laufen über zeitlich begrenzte Links. Die beiden
+          Fach-Formulare stehen nicht mehr hier, sondern jeweils bei ihrem
+          Thema: das Formular „Doppelte Haushaltsführung" unter Personal →
+          Lohnsteuer, das Formular zur Feststellung der Versicherungspflicht
+          unter Personal → Sozialversicherung.
         </p>
       </div>
 
@@ -319,28 +256,15 @@ export default function PersonalDokumentePage() {
                 <th>Name</th>
                 <th>Vorname</th>
                 <th>Ort</th>
-                {SPALTEN_REIHENFOLGE.map((k) => {
-                  const farbe = spaltenFarbe(k);
-                  return (
-                    <th key={k} className={farbe?.th}>
-                      {k}
-                    </th>
-                  );
-                })}
-                <th className={GELB_TH}>Doppelte Haushaltsführung - Status</th>
-                <th className={GELB_TH}>Antrag gestellt</th>
-                <th className={ORANGE_TH}>SV-Status</th>
+                {SICHTBARE_KATEGORIEN.map((k) => (
+                  <th key={k}>{k}</th>
+                ))}
                 <th></th>
               </tr>
             </thead>
             <tbody>
               {filtered.map((emp) => {
                 const empDocs = dokumente[emp.id] ?? [];
-                const empDhh = dhh[emp.id];
-                const empSv = svFragebogen[emp.id];
-                const urkundeVeraltet =
-                  empDhh?.familienstand === "verheiratet" &&
-                  hochzeitsurkundeVeraltet(empDocs);
                 return (
                   <Fragment key={emp.id}>
                     <tr className={emp.aktiv ? "" : "opacity-50"}>
@@ -349,13 +273,12 @@ export default function PersonalDokumentePage() {
                       <td>{emp.name}</td>
                       <td>{emp.vorname}</td>
                       <td>{emp.ort}</td>
-                      {SPALTEN_REIHENFOLGE.map((k) => {
-                        const farbe = spaltenFarbe(k);
+                      {SICHTBARE_KATEGORIEN.map((k) => {
                         const treffer = empDocs.filter(
                           (d) => d.kategorie === k
                         );
                         return (
-                          <td key={k} className={`text-sm ${farbe?.bg ?? ""}`}>
+                          <td key={k} className="text-sm">
                             {treffer.length === 0 ? (
                               <span className="text-neutral-300">—</span>
                             ) : (
@@ -374,82 +297,11 @@ export default function PersonalDokumentePage() {
                                       ` (${d.fuehrerschein_kategorien.join(", ")})`}
                                   </button>
                                 ))}
-                                {k === "Hochzeitsurkunde" && urkundeVeraltet && (
-                                  <span
-                                    className="text-xs font-medium text-amber-800"
-                                    title="Letzte Kopie ist älter als ein Jahr - Familienstand ggf. erneut prüfen"
-                                  >
-                                    ⚠ ggf. erneut prüfen
-                                  </span>
-                                )}
                               </div>
                             )}
                           </td>
                         );
                       })}
-                      <td className={`text-sm ${GELB_BG}`}>
-                        {empDhh?.familienstand ? (
-                          FAMILIENSTAND_LABELS[empDhh.familienstand]
-                        ) : (
-                          <span className="text-neutral-400">
-                            Nicht erfasst
-                          </span>
-                        )}
-                        <div>
-                          <button
-                            type="button"
-                            className="btn-secondary text-xs"
-                            onClick={() =>
-                              setDhhEditingId(
-                                dhhEditingId === emp.id ? null : emp.id
-                              )
-                            }
-                          >
-                            {empDhh ? "Bearbeiten" : "Erfassen"}
-                          </button>
-                        </div>
-                      </td>
-                      <td className={`text-sm ${GELB_BG}`}>
-                        {empDhh?.antrag_gestellt ? (
-                          <span className="font-medium text-emerald-700">
-                            ✓ Ja
-                            {empDhh.antrag_gestellt_am &&
-                              ` (${formatDatumDE(empDhh.antrag_gestellt_am)})`}
-                          </span>
-                        ) : (
-                          <span className="text-neutral-400">Nein</span>
-                        )}
-                      </td>
-                      <td className={`text-sm ${ORANGE_BG}`}>
-                        {!empSv ? (
-                          <span className="text-neutral-400">
-                            Nicht erfasst
-                          </span>
-                        ) : empSv.bestanden ? (
-                          <span className="font-medium text-emerald-700">
-                            ✓ Bestanden
-                          </span>
-                        ) : empSv.unvollstaendig_fehlerhaft ? (
-                          <span
-                            className="font-medium text-red-600"
-                            title={empSv.unvollstaendig_fehlerhaft_grund ?? undefined}
-                          >
-                            ⚠ Unvollständig/Fehlerhaft
-                          </span>
-                        ) : (
-                          <span className="font-medium text-red-600">
-                            ⚠ Nicht bestanden
-                          </span>
-                        )}
-                        <div>
-                          <Link
-                            href="/personal-sozialversicherung"
-                            className="text-xs underline"
-                          >
-                            Bearbeiten →
-                          </Link>
-                        </div>
-                      </td>
                       <td>
                         <button
                           type="button"
@@ -460,23 +312,6 @@ export default function PersonalDokumentePage() {
                         </button>
                       </td>
                     </tr>
-                    {dhhEditingId === emp.id && (
-                      <tr>
-                        <td colSpan={spaltenAnzahl}>
-                          <DoppelteHaushaltsfuehrungFormular
-                            employeeId={emp.id}
-                            saisonJahr={CURRENT_YEAR}
-                            canEdit={canView}
-                            titel={`Doppelte Haushaltsführung ${CURRENT_YEAR} - ${emp.name}, ${emp.vorname}`}
-                            onGespeichert={() => {
-                              setDhhEditingId(null);
-                              load();
-                            }}
-                            onAbbrechen={() => setDhhEditingId(null)}
-                          />
-                        </td>
-                      </tr>
-                    )}
                     {offenId === emp.id && (
                       <tr>
                         <td colSpan={spaltenAnzahl} className="bg-neutral-50">
@@ -495,7 +330,7 @@ export default function PersonalDokumentePage() {
                                   setFuehrerscheinAuswahl([]);
                                 }}
                               >
-                                {DOKUMENT_KATEGORIEN.map((k) => (
+                                {SICHTBARE_KATEGORIEN.map((k) => (
                                   <option key={k} value={k}>
                                     {k}
                                   </option>

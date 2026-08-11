@@ -7,7 +7,14 @@ import PersonalTabs from "@/components/PersonalTabs";
 import SvFragebogenFormular, {
   SV_VERGLEICHS_FELDER,
 } from "@/components/SvFragebogenFormular";
-import type { Employee, SvFragebogenAuswertung, SvPruefung } from "@/lib/types";
+import FormularDokumentZelle from "@/components/FormularDokumentZelle";
+import type {
+  DokumentKategorie,
+  Employee,
+  EmployeeDocument,
+  SvFragebogenAuswertung,
+  SvPruefung,
+} from "@/lib/types";
 import { formatDatumDE } from "@/lib/format";
 import {
   angewendeteRegel,
@@ -17,6 +24,11 @@ import {
 } from "@/lib/svPruefung";
 
 const CURRENT_YEAR = new Date().getFullYear();
+// Das gescannte, von einer rumänischen Stelle bestätigte Papierformular -
+// steht seit 2026-08-11 hier statt auf der allgemeinen Dokumente-Seite
+// (Nutzer-Vorgabe: gehört fachlich neben die Fragebogen-Angaben).
+const SV_FORMULAR: DokumentKategorie =
+  "Formular zur Feststellung der Versicherungspflicht";
 
 export default function SozialversicherungPage() {
   const { profile } = useProfile();
@@ -40,6 +52,9 @@ export default function SozialversicherungPage() {
   // ab Arbeitsbeginn korrekt anzuzeigen statt fälschlich "unbefristet"
   // (Nutzer-Vorgabe 2026-08-10).
   const [pruefung, setPruefung] = useState<Record<string, SvPruefung>>({});
+  const [dokumente, setDokumente] = useState<
+    Record<string, EmployeeDocument[]>
+  >({});
 
   const [editingId, setEditingId] = useState<string | null>(null);
 
@@ -48,8 +63,13 @@ export default function SozialversicherungPage() {
     const supabase = getSupabaseClient();
     let query = supabase.from("employees").select("*").order("personal_nr");
     if (!showInactive) query = query.eq("aktiv", true);
-    const [{ data: emps }, { data: frag }, { data: fragVorjahr }, { data: pr }] =
-      await Promise.all([
+    const [
+      { data: emps },
+      { data: frag },
+      { data: fragVorjahr },
+      { data: pr },
+      { data: docs },
+    ] = await Promise.all([
         query,
         supabase
           .from("sv_fragebogen_auswertung")
@@ -63,6 +83,11 @@ export default function SozialversicherungPage() {
           .from("employee_sv_pruefung")
           .select("*")
           .eq("saison_jahr", jahr),
+        supabase
+          .from("employee_documents")
+          .select("*")
+          .eq("kategorie", SV_FORMULAR)
+          .order("hochgeladen_am", { ascending: false }),
       ]);
     setEmployees((emps as Employee[]) ?? []);
     const map: Record<string, SvFragebogenAuswertung> = {};
@@ -80,6 +105,12 @@ export default function SozialversicherungPage() {
       mapPruefung[p.employee_id] = p;
     });
     setPruefung(mapPruefung);
+    const docMap: Record<string, EmployeeDocument[]> = {};
+    ((docs as EmployeeDocument[]) ?? []).forEach((d) => {
+      if (!docMap[d.employee_id]) docMap[d.employee_id] = [];
+      docMap[d.employee_id].push(d);
+    });
+    setDokumente(docMap);
     setLoading(false);
   }
 
@@ -163,6 +194,9 @@ export default function SozialversicherungPage() {
               </th>
               <th>Angaben {jahr}</th>
               <th>Zum Vorjahr ({jahr - 1})</th>
+              <th title="Gescanntes, von einer rumänischen Stelle bestätigtes Papierformular">
+                Formular Versicherungspflicht
+              </th>
               {canEdit && <th></th>}
             </tr>
           </thead>
@@ -234,14 +268,36 @@ export default function SozialversicherungPage() {
                       ) : (
                         <>
                           {formatDatumDE(f.sv_frei_von)} –{" "}
-                          {f.sv_frei_bis ? (
+                          {/* Immer das TATSÄCHLICH geltende Ende zeigen, nie
+                              "unbefristet"/"offen" (Nutzer-Vorgabe
+                              2026-08-10): austrittsdatum_empfohlen vereint
+                              bereits 15-Wochen-Ende, Ende laut Angaben und
+                              (bei Vorbeschäftigung) das 90-Tage-kombiniert-
+                              Ende. Nur wenn noch kein Arbeitstag erfasst ist
+                              UND die Angaben kein Ende nennen, lässt sich
+                              kein Datum bilden - dann der Regeltext. */}
+                          {svPruefung?.austrittsdatum_empfohlen ? (
+                            <span
+                              title={
+                                f.sv_frei_bis &&
+                                svPruefung.austrittsdatum_empfohlen ===
+                                  f.sv_frei_bis
+                                  ? "Ende laut Angaben (liegt vor der 15-Wochen-/90-Tage-Grenze)"
+                                  : "Begrenzt durch die Tage-Grenze (siehe Spalte „Angewendete Regel“), nicht durch die Angaben"
+                              }
+                            >
+                              {formatDatumDE(
+                                svPruefung.austrittsdatum_empfohlen
+                              )}
+                            </span>
+                          ) : f.sv_frei_bis ? (
                             formatDatumDE(f.sv_frei_bis)
                           ) : (
                             <span
                               className="text-neutral-500"
-                              title="Kein Enddatum in den Angaben - siehe Spalte „Ende der SV-Freiheit“ für das tatsächlich geltende, durch die 15-Wochen-/90-Tage-Grenze begrenzte Ende"
+                              title="Enddatum steht erst fest, sobald der erste Arbeitstag erfasst ist - es ergibt sich dann aus der 15-Wochen- bzw. 90-Tage-Grenze ab Arbeitsbeginn"
                             >
-                              offen
+                              15 Wochen ab Arbeitsbeginn
                             </span>
                           )}
                           {f.sv_frei_luecke && (
@@ -302,6 +358,15 @@ export default function SozialversicherungPage() {
                         </span>
                       )}
                     </td>
+                    <td>
+                      <FormularDokumentZelle
+                        employeeId={emp.id}
+                        kategorie={SV_FORMULAR}
+                        dokumente={dokumente[emp.id] ?? []}
+                        canEdit={canEdit}
+                        onGeaendert={load}
+                      />
+                    </td>
                     {canEdit && (
                       <td>
                         <button
@@ -318,7 +383,7 @@ export default function SozialversicherungPage() {
                   </tr>
                   {editingId === emp.id && (
                     <tr>
-                      <td colSpan={10}>
+                      <td colSpan={11}>
                         <SvFragebogenFormular
                           employeeId={emp.id}
                           saisonJahr={jahr}

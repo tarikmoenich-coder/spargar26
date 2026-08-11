@@ -117,31 +117,46 @@ Enthalten:
   sensible Personaldaten): Tabelle wie im Personalstamm (Pers.-Nr.,
   Herkunft, Name, Vorname, Ort), dahinter eine Spalte je Dokument-
   Kategorie (Ausweiskopie, Führerschein Kopie, Arbeitsvertrag,
-  Werks-/Mietvertrag, Sonstiges neutral; Hochzeitsurkunde und Formular
-  "Doppelte Haushaltsführung" sanft gelb hinterlegt als Lohnsteuer-Themen;
-  Formular zur Feststellung der Versicherungspflicht sanft orange als
-  Sozialversicherungs-Thema, Stand 2026-08-08) - leer, wenn noch nichts
-  hochgeladen wurde, sonst anklickbar zum Download. Dateien liegen in
-  einem privaten Supabase-Storage-Bucket, Downloads laufen über zeitlich
-  begrenzte signierte Links. Hochzeitsurkunde bekommt zusätzlich einen
-  Hinweis "ggf. erneut prüfen", wenn die zuletzt hochgeladene Kopie älter
-  als ein Jahr ist und die Person laut diesjähriger "Doppelte
-  Haushaltsführung"-Erfassung verheiratet ist (Familienstand könnte sich
-  geändert haben - reine Erinnerung, keine echte Prüfung).
-- "Bestätigung für den Nachweis der doppelten Haushaltsführung" (gelbe
-  Spalten auf "Personal → Dokumente"): manuelles Eingabeformular je
-  Person und Saison-Jahr, analog zum SV-Fragebogen vom
-  ausgefüllten/gestempelten Papierformular (Gemeinde-Bestätigung)
-  abgetippt - Familienstand, bei nicht verheiratet zusätzlich die
-  Wohnsituation im Heimatland, sowie getrennt davon "Antrag auf
-  Lohnsteuerabzug beim Finanzamt gestellt" mit Datum (unterscheidet sich
-  von `lohnsteuerabzug_antrag_gewuenscht` in der Anreiseliste - das ist
-  nur der Wunsch der Person, dies hier der tatsächliche Stand der
-  Antragstellung). Name/Geburtsdatum/Adresse werden nicht dupliziert,
-  stehen schon im Personalstamm. Der gestempelte Papierbeleg bleibt
-  zusätzlich als Datei-Upload (Formular "Doppelte Haushaltsführung")
-  bestehen - der Stempel der Gemeinde ist der eigentliche Rechtsnachweis
-  und lässt sich nicht digital ersetzen.
+  Werks-/Mietvertrag, Hochzeitsurkunde, Sonstiges) - leer, wenn noch
+  nichts hochgeladen wurde, sonst anklickbar zum Download. Dateien liegen
+  in einem privaten Supabase-Storage-Bucket, Downloads laufen über
+  zeitlich begrenzte signierte Links. Aufgeräumt 2026-08-11
+  (Nutzer-Vorgabe: die Seite war irreführend geworden): die beiden
+  Fach-Formulare und alle fachlichen Status-Spalten stehen nicht mehr
+  hier, sondern jeweils bei ihrem Thema - Formular "Doppelte
+  Haushaltsführung" samt Familienstand/Wohnsituation/Antragsstand unter
+  "Personal → Lohnsteuer", Formular zur Feststellung der
+  Versicherungspflicht samt SV-Status unter "Personal →
+  Sozialversicherung". Die Kategorien selbst bleiben bestehen, bereits
+  hochgeladene Dateien gehen nicht verloren - sie werden ab jetzt auf den
+  Fachseiten angezeigt und dort auch neu hochgeladen. Damit ist diese
+  Seite wieder das, was ihr Name sagt: die allgemeinen Personaldokumente.
+- Eigene Unterseite "Personal → Lohnsteuer" (nur admin/hr, Stand
+  2026-08-11, aufgebaut analog zu "Personal → Sozialversicherung"):
+  bündelt alles zum Antrag auf Lohnsteuerabzug an einer Stelle. Angaben
+  aus der "Bestätigung für den Nachweis der doppelten Haushaltsführung"
+  (manuelles Eingabeformular je Person und Saison-Jahr, analog zum
+  SV-Fragebogen vom ausgefüllten/gestempelten Papierformular der Gemeinde
+  abgetippt): Familienstand und - laut Formular nur bei nicht
+  verheirateten Personen abgefragt - die Wohnsituation im Heimatland.
+  Dazu der Verfahrensstand beim Finanzamt als vierstufiger Status: Kein
+  Antrag / Antrag gestellt / Freibetrag erteilt / Kein Freibetrag, mit
+  Datum (gestellt am bzw. Bescheid vom). **Wichtig (Nutzer-Klarstellung
+  2026-08-11): das Ausfüllen des Formulars ist noch KEIN gestellter
+  Antrag** - das Formular ist nur der Nachweis des eigenen Hausstands im
+  Heimatland, der Status wird deshalb immer manuell gesetzt und nie
+  automatisch abgeleitet. Der Antrag selbst (das eigentliche Schreiben ans
+  Finanzamt) ist noch nicht in der App abgebildet und soll später ergänzt
+  werden. Ebenfalls auf dieser Seite: der gestempelte Papierbeleg als
+  Datei-Upload (der Gemeinde-Stempel ist der eigentliche Rechtsnachweis
+  und lässt sich nicht digital ersetzen) sowie die Hochzeitsurkunde mit
+  dem Hinweis "ggf. erneut prüfen", wenn die zuletzt hochgeladene Kopie
+  älter als ein Jahr ist und die Person laut diesjähriger Erfassung
+  verheiratet ist (reine Erinnerung, keine echte Prüfung). Der Status
+  unterscheidet sich bewusst von `lohnsteuerabzug_antrag_gewuenscht` in
+  der Anreiseliste - das ist nur der Wunsch der Person, dies hier der
+  tatsächliche Verfahrensstand. Name/Geburtsdatum/Adresse werden nicht
+  dupliziert, stehen schon im Personalstamm.
 - Führerschein-Klassen (B, BE, C, CE) werden beim Hochladen einer
   "Führerschein Kopie" abgefragt und wirken sich breit aus: Personal,
   Stundenerfassung und Lohnübersicht zeigen für jede Person mit
@@ -380,16 +395,17 @@ Enthalten:
   "Schulferien während Beschäftigung" angekreuzt ist), bei Hausfrau/
   Hausmann, Rentenbezug und Selbstständigkeit im Heimatland ein offener
   Zeitraum ab dem jeweiligen "seit"-Datum, in den Angaben ohne Enddatum.
-  Fehlkorrektur vermieden (Nutzer-Feedback 2026-08-10): dieser offene
-  Zeitraum wird NIE als "unbefristet" angezeigt, da er immer durch die
-  15-Wochen-Grenze (bzw. bei Vorbeschäftigung/Rückkehr kombiniert die
-  90-Tage-Grenze) begrenzt ist - sobald der tatsächliche Arbeitsbeginn
-  bekannt ist (mind. ein Arbeitstag mit Stunden > 0 erfasst), zeigt die
-  Spalte das daraus berechnete Enddatum mit Regel-Hinweis ("15-Wochen-
-  Grenze ab Arbeitsbeginn" bzw. "laut Angaben"); ist der Arbeitsbeginn noch
-  unbekannt, zeigt sie stattdessen den Regeltext ohne konkretes Datum. Bei
-  Vorbeschäftigung/Rückkehr erscheint zusätzlich ein Hinweis auf die
-  kombinierte 90-Tage-Grenze. Dieser SV-freie Zeitraum wird auf der
+  Fehlkorrektur vermieden (Nutzer-Feedback 2026-08-10, erneut bestätigt
+  2026-08-11): dieser offene Zeitraum wird NIE als "unbefristet"/"offen"
+  angezeigt, da er immer durch die 15-Wochen-Grenze (bzw. bei
+  Vorbeschäftigung/Rückkehr kombiniert die 90-Tage-Grenze) begrenzt ist -
+  sobald der tatsächliche Arbeitsbeginn bekannt ist (mind. ein Arbeitstag
+  mit Stunden > 0 erfasst), zeigt die Spalte immer das konkrete, daraus
+  berechnete Enddatum (`austrittsdatum_empfohlen`, per Tooltip mit dem
+  Hinweis, ob es aus den Angaben oder aus der Tage-Grenze stammt). Nur
+  wenn noch gar kein Arbeitstag erfasst ist UND die Angaben kein Enddatum
+  nennen, lässt sich rechnerisch kein Datum bilden - dann steht dort der
+  Regeltext "15 Wochen ab Arbeitsbeginn" statt eines Datums. Dieser SV-freie Zeitraum wird auf der
   Controlling-Seite gegen den tatsächlichen Beschäftigungszeitraum geprüft
   (siehe dort)
 - "Statuswechsel" im Personalstamm (nur admin/hr, z.B. beim Erreichen der
@@ -558,7 +574,7 @@ nicht nur im Menü versteckt.
 | Rolle | Sichtbare Menüpunkte | Kernrechte |
 |---|---|---|
 | `admin` | Alle | Voller Zugriff auf alles, inkl. Einstellungen, Kassenprüfungen freigeben |
-| `hr` | Personal, Stundenerfassung, Suche, Lohn, Prämien, Statistik, Controlling | Personalstamm + Dokumente voll pflegen (inkl. SV-Nr./IBAN/Ausweiskopien), Personalplanung + Anreiseliste (Kandidaten, Schwarze Liste, Buskosten) verwalten, Stunden erfassen, Lohnübersicht/Vorschüsse nur ansehen (nicht bearbeiten), Prämien erfassen, Monatsabschluss sperren/öffnen |
+| `hr` | Personal, Stundenerfassung, Suche, Lohn, Prämien, Statistik, Controlling | Personalstamm + Dokumente voll pflegen (inkl. SV-Nr./IBAN/Ausweiskopien), Sozialversicherung + Lohnsteuer erfassen, Personalplanung + Anreiseliste (Kandidaten, Schwarze Liste, Buskosten) verwalten, Stunden erfassen, Lohnübersicht/Vorschüsse nur ansehen (nicht bearbeiten), Prämien erfassen, Monatsabschluss sperren/öffnen |
 | `zeiterfassung` | Stundenerfassung, Suche, Prämien | Nur Stunden eintragen/ändern; sieht Personal nur mit eingeschränkten Feldern (keine SV-Nr./IBAN etc.); erfasst zusätzlich die Ausgabe von Arbeitskleidung (Stundenerfassung → Arbeitskleidung) sowie Prämien (Kisten/Stunden je Tag) |
 | `kasse` | Suche, Lohn, Kassenbuch | Vorschüsse erfassen/stornieren/korrigieren, Kassenbuch führen, Kassenprüfung durchführen |
 | `lohnabrechnung` | Suche, Lohn, Prämien, Statistik | Lohnübersicht ansehen **und bearbeiten** (Buskosten, Kautionen, "Jetzt Abrechnen"), Vorschüsse einsehen, Prämien ansehen |

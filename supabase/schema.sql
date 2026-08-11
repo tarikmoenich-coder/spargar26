@@ -695,11 +695,22 @@ create table doppelte_haushaltsfuehrung (
     )
   ),
 
-  -- Antrag auf Lohnsteuerabzug (doppelte Haushaltsführung) beim Finanzamt
-  -- gestellt? Getrennt von "gewünscht" (personal_kandidaten.
-  -- lohnsteuerabzug_antrag_gewuenscht) - das ist der Wunsch der Person,
-  -- dies hier ist der tatsächliche Stand der Antragstellung.
-  antrag_gestellt boolean not null default false,
+  -- Stand des Lohnsteuerabzug-Antrags beim Finanzamt (Nutzer-Vorgabe
+  -- 2026-08-11, ersetzt das frühere Ja/Nein-Feld "antrag_gestellt").
+  -- Getrennt von "gewünscht" (personal_kandidaten.lohnsteuerabzug_antrag_
+  -- gewuenscht) - das ist der Wunsch der Person, dies hier ist der
+  -- tatsächliche Verfahrensstand.
+  -- WICHTIG (Nutzer-Klarstellung): das bloße Ausfüllen des Formulars
+  -- "Doppelte Haushaltsführung" ist NOCH KEIN gestellter Antrag - das
+  -- Formular ist nur der Nachweis des eigenen Hausstands im Heimatland.
+  -- Dieser Status wird deshalb bewusst manuell gesetzt und NIE automatisch
+  -- aus dem Vorhandensein des Formulars abgeleitet.
+  lohnsteuer_status text not null default 'kein_antrag' check (
+    lohnsteuer_status in (
+      'kein_antrag', 'antrag_gestellt', 'freibetrag_erteilt', 'kein_freibetrag'
+    )
+  ),
+  -- Datum zum jeweiligen Status (Antrag gestellt am / Bescheid vom).
   antrag_gestellt_am date,
 
   -- Ort/Datum auf dem Papierformular

@@ -11,9 +11,11 @@ import { getSupabaseClient } from "@/lib/supabase/client";
 import { useProfile } from "@/lib/useProfile";
 import {
   FAMILIENSTAND_LABELS,
+  LOHNSTEUER_STATUS_LABELS,
   WOHNSITUATION_LABELS,
   type DoppelteHaushaltsfuehrung,
   type Familienstand,
+  type LohnsteuerStatus,
   type Wohnsituation,
 } from "@/lib/types";
 
@@ -25,10 +27,25 @@ type Entwurf = Omit<
 const LEERER_ENTWURF: Entwurf = {
   familienstand: null,
   wohnsituation: null,
-  antrag_gestellt: false,
+  lohnsteuer_status: "kein_antrag",
   antrag_gestellt_am: null,
   ausgefuellt_am: null,
 };
+
+// Explizite Feldauswahl statt "{ ...datensatz }" - der geladene Datensatz
+// enthält auch id/employee_id/saison_jahr/erfasst_*/updated_*, die beim
+// Speichern nichts im Entwurf zu suchen haben (gleiche Lehre wie beim
+// SV-Fragebogen-Formular, wo ein Spread zu "Could not find the 'bestanden'
+// column"-Fehlern führte).
+function entwurfAusDatensatz(d: DoppelteHaushaltsfuehrung): Entwurf {
+  return {
+    familienstand: d.familienstand,
+    wohnsituation: d.wohnsituation,
+    lohnsteuer_status: d.lohnsteuer_status,
+    antrag_gestellt_am: d.antrag_gestellt_am,
+    ausgefuellt_am: d.ausgefuellt_am,
+  };
+}
 
 export default function DoppelteHaushaltsfuehrungFormular({
   employeeId,
@@ -61,7 +78,11 @@ export default function DoppelteHaushaltsfuehrungFormular({
         .eq("employee_id", employeeId)
         .eq("saison_jahr", saisonJahr)
         .maybeSingle();
-      setEntwurf(data ? { ...(data as DoppelteHaushaltsfuehrung) } : LEERER_ENTWURF);
+      setEntwurf(
+        data
+          ? entwurfAusDatensatz(data as DoppelteHaushaltsfuehrung)
+          : LEERER_ENTWURF
+      );
       setLaden(false);
     }
     load();
@@ -151,19 +172,34 @@ export default function DoppelteHaushaltsfuehrungFormular({
       )}
 
       <div className="rounded border border-neutral-200 bg-white p-3">
-        <label className="flex items-center gap-2 text-sm font-medium">
-          <input
-            type="checkbox"
-            checked={entwurf.antrag_gestellt}
-            onChange={(e) => feld("antrag_gestellt", e.target.checked)}
+        <label className="block text-sm font-medium">
+          Antrag auf Lohnsteuerabzug beim Finanzamt{" "}
+          <select
+            value={entwurf.lohnsteuer_status}
+            onChange={(e) =>
+              feld("lohnsteuer_status", e.target.value as LohnsteuerStatus)
+            }
             disabled={!canEdit}
-          />
-          Antrag auf Lohnsteuerabzug (doppelte Haushaltsführung) beim
-          Finanzamt gestellt
+          >
+            {(Object.keys(LOHNSTEUER_STATUS_LABELS) as LohnsteuerStatus[]).map(
+              (k) => (
+                <option key={k} value={k}>
+                  {LOHNSTEUER_STATUS_LABELS[k]}
+                </option>
+              )
+            )}
+          </select>
         </label>
-        {entwurf.antrag_gestellt && (
+        <p className="mt-1 text-xs text-neutral-500">
+          Wird immer manuell gesetzt: das Ausfüllen dieses Formulars ist noch
+          kein gestellter Antrag – es ist nur der Nachweis des eigenen
+          Hausstands im Heimatland.
+        </p>
+        {entwurf.lohnsteuer_status !== "kein_antrag" && (
           <label className="mt-2 block text-xs">
-            gestellt am{" "}
+            {entwurf.lohnsteuer_status === "antrag_gestellt"
+              ? "gestellt am"
+              : "Bescheid vom"}{" "}
             <input
               type="date"
               value={entwurf.antrag_gestellt_am ?? ""}
