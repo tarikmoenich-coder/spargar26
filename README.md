@@ -489,7 +489,16 @@ Enthalten:
   als zweiter Schritt vorgesehen. Unterreiter "Bestellung": Bedarf je Sorte
   kommt live aus der Planung, dazu Bestellmenge, eigener Bestand und
   Reserve-Satz je Sorte - ersetzt die Handarbeit in den Excel-Zeilen 29-36
-  samt der dort negativ geführten Restbestände. **Das Prämiensystem bleibt
+  samt der dort negativ geführten Restbestände. Unterreiter "Felder": die
+  Stammdaten der Erdbeer-Felder (Name, Größe, aktiv). Standen vorher unter
+  "Prämien → Erdbeeren", was seit der Anbauplanung nicht mehr passt
+  (Nutzer-Vorgabe 2026-08-11: "In Prämien dürfen nur die Sätze verwaltet
+  werden, nicht aber die Parzellen"). Bewusst schlank - Sorte und
+  Pflanzenzahl standen dort früher ebenfalls, ergeben sich jetzt aber aus
+  der Planung je Tunnel und wären als Zweitangabe nur eine zweite Wahrheit.
+  Je Feld ist sichtbar, für welche Saisons eine Planung besteht. Die Rolle
+  erntewirtschaft darf Felder ab jetzt selbst anlegen/ändern (vorher nur
+  admin), sonst wäre die eigene Planungsseite nicht bedienbar. **Das Prämiensystem bleibt
   davon unberührt** (Nutzer-Vorgabe): Rohdaten und Norm-/Bonus-Sätze hängen
   weiterhin nur an der Parzelle, die Prämien-Erfassung zeigt unverändert die
   Feldauswahl.

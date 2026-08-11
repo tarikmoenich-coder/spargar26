@@ -66,13 +66,10 @@ export default function PraemienErdbeerenPage() {
   const [fehler, setFehler] = useState<string | null>(null);
   const [druckModus, setDruckModus] = useState(false);
 
-  // Neue Parzelle anlegen (nur admin)
-  const [neuName, setNeuName] = useState("");
-  const [neuGroesse, setNeuGroesse] = useState("");
-  const [neuSorte, setNeuSorte] = useState("");
-  const [neuPflanzen, setNeuPflanzen] = useState("");
-  const [parzelleSpeichern, setParzelleSpeichern] = useState(false);
-  const [parzelleFehler, setParzelleFehler] = useState<string | null>(null);
+  // Die Felder selbst werden seit 2026-08-11 unter "Anbau → Felder"
+  // gepflegt, nicht mehr hier (Nutzer-Vorgabe: in Prämien gehören nur die
+  // Sätze hin, weil die Anbauplanung woanders stattfindet). Hier werden
+  // sie nur noch zur Auswahl geladen.
 
   // Neuen Satz für die aktuell gewählte Parzelle anlegen (nur admin)
   const [neuGueltigAb, setNeuGueltigAb] = useState(heuteIso());
@@ -275,37 +272,6 @@ export default function PraemienErdbeerenPage() {
     load();
   }
 
-  async function neueParzelleSpeichern() {
-    if (!neuName.trim()) {
-      setParzelleFehler("Name ist ein Pflichtfeld.");
-      return;
-    }
-    setParzelleSpeichern(true);
-    setParzelleFehler(null);
-    const supabase = getSupabaseClient();
-    const { data, error } = await supabase
-      .from("erdbeeren_parzellen")
-      .insert({
-        name: neuName.trim(),
-        groesse_ha: neuGroesse ? Number(neuGroesse) : null,
-        sorte: neuSorte.trim() || null,
-        anzahl_pflanzen: neuPflanzen ? Number(neuPflanzen) : null,
-      })
-      .select()
-      .single();
-    setParzelleSpeichern(false);
-    if (error) {
-      setParzelleFehler(error.message);
-      return;
-    }
-    setNeuName("");
-    setNeuGroesse("");
-    setNeuSorte("");
-    setNeuPflanzen("");
-    await ladeParzellen();
-    if (data) setParzelleId((data as ErdbeerenParzelle).id);
-  }
-
   async function neuenSatzSpeichern() {
     if (parzelleId === null) return;
     if (!neuNorm || !neuBonus) {
@@ -451,89 +417,6 @@ export default function PraemienErdbeerenPage() {
             Tagesliste drucken{" "}
             {druckZeilen.length > 0 ? `(${druckZeilen.length})` : ""}
           </button>
-        </div>
-      )}
-
-      {/* Parzellen verwalten (nur admin) - Stammdaten für spätere
-          Ertragsstatistik (Anzahl Pflanzen/Hektar). Bewusst direkt unter
-          der Datumsauswahl (Nutzer-Vorgabe 2026-08-09), nicht unten auf
-          der Seite. */}
-      {isAdmin && (
-        <div className="rounded border border-neutral-200 bg-white p-3 print:hidden">
-          <h2 className="text-sm font-semibold text-emerald-800">
-            Parzellen verwalten
-          </h2>
-          <div className="mt-2 flex flex-wrap items-end gap-2">
-            <label className="text-sm">
-              Name{" "}
-              <input
-                className="w-32"
-                value={neuName}
-                onChange={(e) => setNeuName(e.target.value)}
-              />
-            </label>
-            <label className="text-sm">
-              Größe (ha){" "}
-              <input
-                type="number"
-                step="0.01"
-                className="w-20"
-                value={neuGroesse}
-                onChange={(e) => setNeuGroesse(e.target.value)}
-              />
-            </label>
-            <label className="text-sm">
-              Sorte{" "}
-              <input
-                className="w-28"
-                value={neuSorte}
-                onChange={(e) => setNeuSorte(e.target.value)}
-              />
-            </label>
-            <label className="text-sm">
-              Anzahl Pflanzen{" "}
-              <input
-                type="number"
-                min={0}
-                className="w-24"
-                value={neuPflanzen}
-                onChange={(e) => setNeuPflanzen(e.target.value)}
-              />
-            </label>
-            <button
-              type="button"
-              className="btn text-xs"
-              disabled={parzelleSpeichern}
-              onClick={neueParzelleSpeichern}
-            >
-              Parzelle anlegen
-            </button>
-          </div>
-          {parzelleFehler && (
-            <p className="mt-1 text-sm text-red-600">{parzelleFehler}</p>
-          )}
-          {parzellen.length > 0 && (
-            <table className="mt-3">
-              <thead>
-                <tr>
-                  <th>Name</th>
-                  <th>Größe (ha)</th>
-                  <th>Sorte</th>
-                  <th>Anzahl Pflanzen</th>
-                </tr>
-              </thead>
-              <tbody>
-                {parzellen.map((p) => (
-                  <tr key={p.id}>
-                    <td>{p.name}</td>
-                    <td>{p.groesse_ha ?? "—"}</td>
-                    <td>{p.sorte ?? "—"}</td>
-                    <td>{p.anzahl_pflanzen ?? "—"}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          )}
         </div>
       )}
 

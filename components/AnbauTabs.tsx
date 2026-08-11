@@ -10,6 +10,7 @@ import { useEffect, useRef } from "react";
 const tabs = [
   { href: "/anbau/erdbeeren", label: "Erdbeeren" },
   { href: "/anbau/bestellung", label: "Bestellung" },
+  { href: "/anbau/felder", label: "Felder" },
 ];
 
 export default function AnbauTabs() {

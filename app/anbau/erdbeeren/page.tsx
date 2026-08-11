@@ -1023,8 +1023,7 @@ export default function AnbauErdbeerenPage() {
             ))}
           </div>
           <p className="mt-2 text-xs text-neutral-500">
-            Die Felder selbst werden weiterhin unter Prämien → Erdbeeren →
-            „Parzellen verwalten" angelegt.
+            Neue Felder werden im Reiter „Felder" angelegt.
           </p>
         </div>
       )}

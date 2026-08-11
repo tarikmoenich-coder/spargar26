@@ -3148,8 +3148,13 @@ create policy "zuckermais_saetze_write" on zuckermais_saetze for all
 -- lesen dürfen.
 create policy "erdbeeren_parzellen_select" on erdbeeren_parzellen for select
   using (auth.uid() is not null);
+-- Felder werden seit 2026-08-11 unter "Anbau -> Felder" gepflegt (vorher
+-- unter Prämien) - deshalb hier dieselbe Rolle wie bei den übrigen
+-- Anbau-Tabellen: admin UND erntewirtschaft. Ohne das könnte die
+-- Erntewirtschaft ihre eigene Planungsseite nicht bedienen.
 create policy "erdbeeren_parzellen_write" on erdbeeren_parzellen for all
-  using (is_admin()) with check (is_admin());
+  using (current_role_name() in ('admin', 'erntewirtschaft'))
+  with check (current_role_name() in ('admin', 'erntewirtschaft'));
 -- Anbauplanung (Nutzer-Vorgabe 2026-08-11): admin und erntewirtschaft
 -- pflegen sie - die Erntewirtschaft plant den Anbau, admin hat ohnehin
 -- Vollzugriff. Lesen dürfen alle Angemeldeten, damit die Planung z.B. in
