@@ -457,6 +457,38 @@ Enthalten:
   Bankverbindungs-Nachweis aus der Vorlage neu erzeugen und herunterladen,
   z.B. für einen Nachdruck. Bisher war die Dokumenterzeugung nur einmalig
   über "Anreise vorbereiten" in der Anreiseliste erreichbar
+- Menüpunkt "Anbau" (nur admin/erntewirtschaft, Stand 2026-08-11):
+  Anbauplanung Erdbeeren als Ersatz für die gewachsene Excel
+  "Erdbeerpflanzplanung.xlsx" (14 Jahresblätter, jedes per Copy/Paste aus
+  dem Vorjahr). Struktur Feld → Anbau-Jahrgang → Tunnel → Bepflanzung:
+  jeder Tunnel hat seine eigene Länge und Reihenzahl, und zwei Sorten in
+  einem Tunnel sind einfach zwei Bepflanzungszeilen. Das löst drei Probleme
+  der Excel auf einmal: dort sind die neun Sorten SPALTEN (pro Zeile meist
+  nur 1-2 gefüllt, jede neue Sorte = Strukturänderung in allen Blättern,
+  Spaltenzahl dadurch von 24 auf 47 gewachsen); eine ZEILE ist mal ein
+  ganzes Feld, mal nur ein Teilstück ("Brücke" 3x mit 230/210/138 m,
+  "Vogel" 2x, "Dünenfeld" 2x - 24 Planzeilen für 19 echte Felder), weil
+  unterschiedlich lange Tunnel nicht abbildbar sind; und die Spalte "Tunnel"
+  ist nur eine Anzahl, Länge und Reihenzahl gelten pauschal für alle.
+  Laufende Meter und Pflanzenzahl werden gerechnet (Länge × Reihen ×
+  Pflanzen je laufendem Meter - in der Excel Spalte I mit 4,37 im Feld bzw.
+  8 im Glashaus) statt getippt; die dortige Kontrollspalte AF, die wegen
+  Kommastellen nie sauber auf 0 aufgeht, entfällt damit ersatzlos.
+  Erfassungshilfen für die Größenordnung (2026: 182 Tunnel auf 19 Feldern):
+  Sammelanlage "Tunnel 1-16 mit gleicher Länge und Reihenzahl anlegen",
+  "Sorte für Tunnel 1-8 zuweisen", "Tunnel 3-7 auf anderes Feld verschieben"
+  (für den Umzug in Vorbereitung auf die Cotura) und "Aus Vorjahr
+  übernehmen" - letzteres ersetzt das Copy/Paste zwischen den Blättern,
+  ohne die dort entstandenen #REF!-Bezüge, und erhöht das Standjahr
+  automatisch. Die Folienrollen-Nummer (Cotura) steht vorerst als Textfeld
+  am Tunnel; ein eigenes Folien-Register mit Zustand und Einsatzhistorie ist
+  als zweiter Schritt vorgesehen. Unterreiter "Bestellung": Bedarf je Sorte
+  kommt live aus der Planung, dazu Bestellmenge, eigener Bestand und
+  Reserve-Satz je Sorte - ersetzt die Handarbeit in den Excel-Zeilen 29-36
+  samt der dort negativ geführten Restbestände. **Das Prämiensystem bleibt
+  davon unberührt** (Nutzer-Vorgabe): Rohdaten und Norm-/Bonus-Sätze hängen
+  weiterhin nur an der Parzelle, die Prämien-Erfassung zeigt unverändert die
+  Feldauswahl.
 - Seite "Protokoll" (nur admin, Stand 2026-08-11): macht das seit Beginn
   mitlaufende Audit-Log sichtbar - wer hat wann was geändert, mit Filter
   nach Person (Name/Personalnummer), Bereich und Zeitraum. Aufklappen zeigt
@@ -638,7 +670,7 @@ nicht nur im Menü versteckt.
 | `lohnabrechnung` | Suche, Lohn, Prämien, Statistik | Lohnübersicht ansehen **und bearbeiten** (Buskosten, Kautionen, "Jetzt Abrechnen"), Vorschüsse einsehen, Prämien ansehen |
 | `pruefer` | Suche, Lohn, Kassenbuch | Nur lesen, außer: Kassenprüfungen freigeben; einzige Nicht-Admin-Rolle mit Audit-Log-Einsicht |
 | `management` | Suche, Lohn, Kassenbuch, Prämien, Statistik, Controlling | Nur lesende/aggregierte Sicht |
-| `erntewirtschaft` | Start, Suche, Prämien, Statistik | Eigener, eingeschränkter Arbeitsbereich (Nutzer-Vorgabe 2026-08-09) - erfasst Prämien (Kisten/Stunden je Tag, wie zeiterfassung), sieht die Statistik, eigenes Dashboard mit Tageskennzahlen; kein Zugriff auf Personal, Lohnübersicht, Kassenbuch, Controlling, Einstellungen |
+| `erntewirtschaft` | Start, Suche, Prämien, Anbau, Statistik | Eigener, eingeschränkter Arbeitsbereich (Nutzer-Vorgabe 2026-08-09) - erfasst Prämien (Kisten/Stunden je Tag, wie zeiterfassung), sieht die Statistik, eigenes Dashboard mit Tageskennzahlen; kein Zugriff auf Personal, Lohnübersicht, Kassenbuch, Controlling, Einstellungen |
 
 Neuen Benutzer anlegen: Supabase-Dashboard → Authentication → Users →
 "Add user" (E-Mail + Passwort) → User UID kopieren → Table Editor →

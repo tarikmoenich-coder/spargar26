@@ -75,6 +75,14 @@ const items: NavItem[] = [
     auchAktivBei: ["/praemien"],
   },
   {
+    href: "/anbau/erdbeeren",
+    label: "Anbau",
+    // Nutzer-Vorgabe 2026-08-11: nur admin und erntewirtschaft - die
+    // Anbauplanung ist deren Arbeitsbereich.
+    roles: ["admin", "erntewirtschaft"],
+    auchAktivBei: ["/anbau"],
+  },
+  {
     href: "/statistik/zuckermais",
     label: "Statistik",
     roles: ["admin", "hr", "lohnabrechnung", "management", "erntewirtschaft"],

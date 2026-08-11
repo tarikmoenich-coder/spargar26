@@ -673,6 +673,9 @@ export interface ErdbeerenParzelle {
   id: number;
   name: string;
   groesse_ha: number | null;
+  // Kurzangaben aus der Zeit vor der Anbauplanung (Stand 2026-08-11).
+  // Gepflegt wird das jetzt unter "Anbau" je Tunnel und Sorte - diese
+  // beiden Felder bleiben nur, um bestehende Einträge nicht zu verlieren.
   sorte: string | null;
   anzahl_pflanzen: number | null;
   aktiv: boolean;
@@ -680,6 +683,123 @@ export interface ErdbeerenParzelle {
   erstellt_am: string;
   updated_by: string | null;
   updated_at: string;
+}
+
+// ---------------------------------------------------------------------------
+// Erdbeeren-Anbauplanung (Nutzer-Vorgabe 2026-08-11, Menüpunkt "Anbau" -
+// nur admin/erntewirtschaft). Ersetzt die Excel "Erdbeerpflanzplanung".
+// Struktur: Feld > Anbau-Jahrgang > Tunnel > Bepflanzung, siehe schema.sql.
+// ---------------------------------------------------------------------------
+export const PFLANZTYPEN = [
+  'frigo',
+  'gruenpflanze',
+  'topfgruen',
+  'warteboden',
+  'sonstiges',
+] as const;
+export type Pflanztyp = (typeof PFLANZTYPEN)[number];
+
+export const PFLANZTYP_LABELS: Record<Pflanztyp, string> = {
+  frigo: 'Frigo',
+  gruenpflanze: 'Grünpflanze',
+  topfgruen: 'Topfgrün',
+  warteboden: 'Warteboden',
+  sonstiges: 'Sonstiges',
+};
+
+export interface ErdbeerenAnbau {
+  id: number;
+  parzelle_id: number;
+  saison_jahr: number;
+  erntefenster_von: string | null;
+  erntefenster_bis: string | null;
+  ertrag_erwartet_steigen: number | null;
+  rodung_geplant: string | null;
+  notiz: string | null;
+}
+
+export interface ErdbeerenTunnel {
+  id: number;
+  anbau_id: number;
+  nummer: string;
+  laenge_m: number | null;
+  reihen_anzahl: number | null;
+  // Pflanzen je laufendem Meter - daraus rechnet sich die Pflanzenzahl
+  // (in der Excel Spalte I: 4,37 im Feld, 8 im Glashaus).
+  pflanzen_pro_lfm: number | null;
+  // Rollennummer der Folie; eigenes Folien-Register kommt später.
+  cotura_nr: string | null;
+  notiz: string | null;
+}
+
+export interface ErdbeerenBepflanzung {
+  id: number;
+  tunnel_id: number;
+  sorte: string;
+  // Leer = alle Reihen des Tunnels (der häufige Fall mit einer Sorte).
+  reihen_anzahl: number | null;
+  pflanzdatum: string | null;
+  standjahr: number | null;
+  pflanztyp: Pflanztyp | null;
+  notiz: string | null;
+}
+
+// Aus der Sicht erdbeeren_bepflanzung_berechnet - laufende Meter und
+// Pflanzenzahl gerechnet statt getippt.
+export interface ErdbeerenBepflanzungBerechnet extends ErdbeerenBepflanzung {
+  anbau_id: number;
+  parzelle_id: number;
+  saison_jahr: number;
+  parzelle_name: string;
+  tunnel_nummer: string;
+  laenge_m: number | null;
+  cotura_nr: string | null;
+  laufende_meter: number;
+  anzahl_pflanzen: number;
+}
+
+// Aus der Sicht erdbeeren_anbau_uebersicht - Kennzahlen je Feld und Saison.
+export interface ErdbeerenAnbauUebersicht {
+  anbau_id: number;
+  parzelle_id: number;
+  parzelle_name: string;
+  groesse_ha: number | null;
+  saison_jahr: number;
+  erntefenster_von: string | null;
+  erntefenster_bis: string | null;
+  ertrag_erwartet_steigen: number | null;
+  rodung_geplant: string | null;
+  notiz: string | null;
+  anzahl_tunnel: number;
+  laufende_meter: number;
+  anzahl_pflanzen: number;
+  sorten: string | null;
+}
+
+export interface ErdbeerenBestellung {
+  id: number;
+  saison_jahr: number;
+  sorte: string;
+  bestellt_anzahl: number | null;
+  eigene_anzahl: number | null;
+  reserve_prozent: number;
+  lieferant: string | null;
+  notiz: string | null;
+}
+
+// Aus der Sicht erdbeeren_bestellung_uebersicht - Bedarf aus der Planung
+// gegen die eingetragenen Bestellmengen (ersetzt Excel-Zeilen 29-36).
+export interface ErdbeerenBestellungUebersicht {
+  saison_jahr: number;
+  sorte: string;
+  bedarf_pflanzen: number;
+  reserve_prozent: number;
+  bedarf_mit_reserve: number;
+  bestellt_anzahl: number | null;
+  eigene_anzahl: number | null;
+  lieferant: string | null;
+  // Positiv = fehlt noch, negativ = zu viel bestellt.
+  differenz: number;
 }
 
 export interface ErdbeerenParzellenSatz {
