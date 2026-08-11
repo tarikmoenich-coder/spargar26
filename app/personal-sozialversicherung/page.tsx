@@ -181,15 +181,16 @@ export default function SozialversicherungPage() {
             <tr>
               <th>Pers.-Nr.</th>
               <th>Name</th>
+              <th>Herkunft</th>
               <th>Status {jahr}</th>
               <th>Vorbeschäftigung Deutschland (Tage)</th>
-              <th title="Ohne Vorbeschäftigung gilt die 15-Wochen-Grenze (Normalfall), mit Vorbeschäftigung/Rückkehr zusätzlich die kombinierte 90-Tage-Grenze">
+              <th title="15 Wochen = 105 Kalendertage je Kalenderjahr, über alle Beschäftigungsabschnitte und alle deutschen Arbeitgeber zusammengerechnet">
                 Angewendete Regel
               </th>
               <th title="Aus den Angaben abgeleiteter Zeitraum, in dem eine Beschäftigung in Deutschland sozialversicherungsfrei möglich ist">
                 SV-freier Zeitraum
               </th>
-              <th title="Resttage bis zum empfohlenen Austrittsdatum (frühestes von 15-Wochen-Ende, SV-frei-Ende laut Angaben und ggf. 90-Tage-kombiniert-Ende) - erst berechenbar, sobald mindestens ein Arbeitstag erfasst ist">
+              <th title="Resttage bis zum empfohlenen Austrittsdatum (das frühere von 15-Wochen-Ende und SV-frei-Ende laut Angaben) - erst berechenbar, sobald mindestens ein Arbeitstag erfasst ist">
                 Ende der SV-Freiheit (Tage)
               </th>
               <th>Angaben {jahr}</th>
@@ -226,6 +227,7 @@ export default function SozialversicherungPage() {
                     <td>
                       {emp.name}, {emp.vorname}
                     </td>
+                    <td>{emp.herkunft ?? "—"}</td>
                     <td>
                       {emp.abrechnungsart === "sozialversicherungspflichtig" ? (
                         // Eine SV-Freiheits-Feststellung ergibt für bereits
@@ -260,7 +262,13 @@ export default function SozialversicherungPage() {
                     </td>
                     <td>{f?.vorbeschaeftigung_deutschland_tage ?? "—"}</td>
                     <td className="text-xs">
-                      {f ? angewendeteRegel(f.vorbeschaeftigung_deutschland_tage) : "—"}
+                      {svPruefung ? (
+                        angewendeteRegel(svPruefung)
+                      ) : (
+                        <span className="text-neutral-400">
+                          15 Wochen (105 Tage)
+                        </span>
+                      )}
                     </td>
                     <td className="text-xs">
                       {!f || !f.sv_frei_von ? (
@@ -407,7 +415,7 @@ export default function SozialversicherungPage() {
                   </tr>
                   {editingId === emp.id && (
                     <tr>
-                      <td colSpan={11}>
+                      <td colSpan={12}>
                         <SvFragebogenFormular
                           employeeId={emp.id}
                           saisonJahr={jahr}

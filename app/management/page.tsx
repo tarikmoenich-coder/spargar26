@@ -272,13 +272,15 @@ export default function ManagementPage() {
           Controlling
         </h1>
         <p className="text-sm text-neutral-500">
-          90-Tage-/15-Wochen-Kontrolle: Personen, bei denen die Grenze für
-          sozialversicherungsfreie kurzfristige Beschäftigung bereits
-          überschritten ist – jetzt zusätzlich abgeglichen mit dem SV-freien
-          Zeitraum laut den Angaben auf „Personal → Sozialversicherung"
-          (Bezahlter Urlaub/Freistellung bzw. Schulferien/offener Zeitraum).
-          Reine Tage-/Wochen-/Datums-Prüfung – ersetzt nicht die rechtliche
-          Prüfung der Sozialversicherungsbefreiung selbst.
+          15-Wochen-Kontrolle (105 Kalendertage je Kalenderjahr): Personen,
+          bei denen die Grenze für sozialversicherungsfreie kurzfristige
+          Beschäftigung bereits überschritten ist. Mehrere Einsätze im selben
+          Jahr werden zusammengerechnet – Pausen dazwischen zählen nicht mit,
+          ein Abschnitt endet jeweils mit der Abrechnung. Zusätzlich
+          abgeglichen mit dem SV-freien Zeitraum laut den Angaben auf
+          „Personal → Sozialversicherung". Reine Tage-/Datums-Prüfung –
+          ersetzt nicht die rechtliche Prüfung der
+          Sozialversicherungsbefreiung selbst.
         </p>
       </div>
 
@@ -294,7 +296,7 @@ export default function ManagementPage() {
 
       <div>
         <h2 className="mb-2 text-base font-semibold text-emerald-800">
-          90-Tage-/15-Wochen-Kontrolle
+          15-Wochen-Kontrolle (105 Tage)
         </h2>
         {loading ? (
           <p className="text-neutral-500">Lädt…</p>
@@ -312,20 +314,23 @@ export default function ManagementPage() {
                   <th>Abrechnungsart</th>
                   <th>1. Arbeitstag</th>
                   <th>Letzter Arbeitstag</th>
-                  <th title="Kalendertage des Beschäftigungszeitraums (1. bis letzter Arbeitstag bei uns), nicht nur Tage mit Stunden > 0">
+                  <th title="Summe der Kalendertage aller Beschäftigungsabschnitte bei uns in diesem Kalenderjahr - Pausen zwischen zwei Einsätzen zählen nicht mit">
                     Beschäftigungstage (bei uns)
                   </th>
-                  <th title="Bisherige Arbeitstage in Deutschland bei anderen Arbeitgebern laut SV-Fragebogen (Personal → Sozialversicherung)">
+                  <th title="Anzahl getrennter Beschäftigungsabschnitte (getrennt jeweils durch eine Abrechnung). 1 = durchgehend.">
+                    Abschnitte
+                  </th>
+                  <th title="Bisherige Beschäftigungstage in Deutschland bei anderen Arbeitgebern laut SV-Fragebogen (Personal → Sozialversicherung)">
                     Vorbeschäftigung Deutschland
                   </th>
                   <th>Kombinierte Tage</th>
-                  <th title="Nur relevant bei Vorbeschäftigung > 0 - sonst gilt nur die 15-Wochen-Grenze">
-                    Rest bis 90 Tage (kombiniert)
+                  <th title="105 Kalendertage (15 Wochen) je Kalenderjahr, über alle Abschnitte und alle deutschen Arbeitgeber zusammengerechnet">
+                    Rest bis 105 Tage
                   </th>
                   <th title="SV-freier Zeitraum laut Angaben (Personal → Sozialversicherung), abgeleitet aus Bezahlter Urlaub/Freistellung bzw. Schulferien/offenem Zeitraum">
                     SV-freier Zeitraum (Angaben)
                   </th>
-                  <th title="Das frühere von 15-Wochen-Ende und dem Ende des SV-freien Zeitraums laut Angaben. Die 90-Tage-Grenze links gilt nur zusätzlich, falls die Person nach einer Auszahlung vor Erreichen der 90 Tage erneut kommt.">
+                  <th title="Das frühere von 15-Wochen-Ende und dem Ende des SV-freien Zeitraums laut Angaben">
                     Austrittsdatum (empfohlen)
                   </th>
                   <th>Grund</th>
@@ -348,15 +353,16 @@ export default function ManagementPage() {
                     <td>{formatDatumDE(f.erster_arbeitstag)}</td>
                     <td>{formatDatumDE(f.letzter_arbeitstag)}</td>
                     <td>{f.beschaeftigungstage}</td>
+                    <td
+                      className={
+                        f.anzahl_abschnitte > 1 ? "font-medium text-amber-600" : ""
+                      }
+                    >
+                      {f.anzahl_abschnitte}
+                    </td>
                     <td>{f.vorbeschaeftigung_deutschland_tage}</td>
                     <td>{f.kombinierte_tage}</td>
-                    <td>
-                      {f.vorbeschaeftigung_deutschland_tage > 0 ? (
-                        f.rest_bis_90_tage_kombiniert
-                      ) : (
-                        <span className="text-neutral-400">—</span>
-                      )}
-                    </td>
+                    <td>{f.rest_bis_105_tage}</td>
                     <td className="text-sm">
                       {f.sv_frei_von || f.sv_frei_bis ? (
                         <>
@@ -382,10 +388,10 @@ export default function ManagementPage() {
                     <td>{formatDatumDE(f.austrittsdatum_empfohlen)}</td>
                     <td className="text-sm">
                       {[
-                        f.ueberschritten_15_wochen ? "15-Wochen-Grenze" : null,
-                        f.vorbeschaeftigung_deutschland_tage > 0 &&
-                        f.kombinierte_tage > 90
-                          ? "90-Tage-Grenze (mit Vorbeschäftigung)"
+                        f.ueberschritten_105_tage
+                          ? f.vorbeschaeftigung_deutschland_tage > 0
+                            ? "15-Wochen-Grenze (mit Vorbeschäftigung)"
+                            : "15-Wochen-Grenze"
                           : null,
                         f.ueberschritten_sv_frei_beginn
                           ? "SV-freier Zeitraum (Angaben) beginnt zu spät"
@@ -449,7 +455,7 @@ export default function ManagementPage() {
                       </td>
                       <td>{ABRECHNUNGSART_LABELS[f.abrechnungsart]}</td>
                       <td>
-                        {angewendeteRegel(f.vorbeschaeftigung_deutschland_tage)}
+                        {angewendeteRegel(f)}
                       </td>
                       <td>{formatDatumDE(f.austrittsdatum_empfohlen)}</td>
                       <td className={tage !== null ? resttageFarbeClass(tage) : ""}>

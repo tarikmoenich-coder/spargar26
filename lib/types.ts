@@ -132,45 +132,44 @@ export interface SvPruefung {
   saison_jahr: number;
   erster_arbeitstag: string;
   letzter_arbeitstag: string;
-  // Bis 2026-08-10 "arbeitstage_ueber0" (nur Tage mit Stunden > 0) - jetzt
-  // Kalendertage des Beschäftigungszeitraums (1. bis letzter Arbeitstag,
-  // Nutzer-Korrektur 2026-08-10), umbenannt weil der alte Name sonst
-  // irreführend wäre.
+  // Summe der Kalendertage ALLER Beschäftigungsabschnitte dieses
+  // Kalenderjahres - nicht die Spanne vom ersten bis zum letzten Tag
+  // (Nutzer-Recherche 2026-08-11: die 15 Wochen müssen nicht am Stück
+  // laufen, alle kurzfristigen Beschäftigungen eines Kalenderjahres werden
+  // zusammengerechnet). Ein Abschnitt endet mit einer Abrechnung, siehe
+  // employee_sv_pruefung in schema.sql.
   beschaeftigungstage: number;
-  rest_bis_90_tage: number;
-  austrittsdatum_15_wochen: string;
-  wochen_seit_start: number;
-  ueberschritten_90_tage: boolean;
-  ueberschritten_15_wochen: boolean;
-  // Bisherige Arbeitstage in Deutschland laut SV-Fragebogen (bei anderen
-  // Arbeitgebern, dieses Kalenderjahr) - fließt in kombinierte_tage/
-  // rest_bis_90_tage_kombiniert und kritisch mit ein.
+  // Anzahl der getrennten Beschäftigungsabschnitte (1 = durchgehend).
+  anzahl_abschnitte: number;
+  // Bisherige Beschäftigungstage in Deutschland laut SV-Fragebogen (bei
+  // anderen Arbeitgebern, dieses Kalenderjahr) - rechtlich zählt das
+  // Kalenderjahr über ALLE deutschen Arbeitgeber zusammen.
   vorbeschaeftigung_deutschland_tage: number;
   kombinierte_tage: number;
-  rest_bis_90_tage_kombiniert: number;
+  rest_bis_105_tage: number;
+  ueberschritten_105_tage: boolean;
+  // Letzter Tag, an dem die Person nach der 15-Wochen-Regel (105
+  // Kalendertage) noch SV-frei beschäftigt sein darf.
+  austrittsdatum_105_tage: string;
+  // Das frühere von austrittsdatum_105_tage und dem Ende des SV-freien
+  // Zeitraums laut Angaben.
+  austrittsdatum_empfohlen: string | null;
   kritisch: boolean;
   // Sozialversicherungsfreier Zeitraum laut SV-Fragebogen-Angaben
   // (Nutzer-Vorgabe 2026-08-10) - siehe ausführlichen Kommentar in
   // schema.sql bei den sv_freier_zeitraum_*-Funktionen. sv_frei_bis ist
   // null bei offenen Zeiträumen (Rente/Hausmann/Selbstständigkeit).
-  austrittsdatum_empfohlen: string | null;
   sv_frei_von: string | null;
   sv_frei_bis: string | null;
   sv_frei_luecke: boolean;
   sv_frei_luecke_von: string | null;
   sv_frei_luecke_bis: string | null;
-  ueberschritten_sv_frei_beginn: boolean;
-  ueberschritten_sv_frei_ende: boolean;
-  // Exaktes Enddatum der kombinierten 90-Tage-Grenze im Rückkehr-Fall
-  // (Nutzer-Vorgabe 2026-08-10) - null, wenn keine Vorbeschäftigung
-  // gemeldet ist. Fließt bereits in austrittsdatum_empfohlen ein, hier
-  // zusätzlich einzeln für die transparente Anzeige "welche Regel war
-  // bindend".
-  austrittsdatum_90_tage_kombiniert: string | null;
   // "Offener Zustand" (Hausfrau/Hausmann, Rente, Selbstständigkeit): dann
   // ist sv_frei_von oben bereits der tatsächliche Arbeitsbeginn statt des
   // reinen Nachweis-Datums aus dem Formular (Nutzer-Korrektur 2026-08-11).
   sv_frei_offen: boolean;
+  ueberschritten_sv_frei_beginn: boolean;
+  ueberschritten_sv_frei_ende: boolean;
 }
 
 // Aus der Sicht employee_urlaubstage - Urlaubstage-Anspruch (2 je vollem

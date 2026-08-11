@@ -30,18 +30,27 @@ function tageZwischen(vonIso: string, bisIso: string): number {
   return Math.round((t2 - t1) / 86400000);
 }
 
-// Welche Tage-Grenze zusätzlich zur SV-frei-Prüfung bindend ist
-// (Nutzer-Vorgabe 2026-08-10): ohne gemeldete Vorbeschäftigung in
-// Deutschland gilt die 15-Wochen-Grenze (Normalfall - "anfänglich gehen
-// wir immer davon aus, dass ein Mitarbeiter 15 Wochen am Stück bleibt");
-// mit Vorbeschäftigung/Rückkehr im selben Kalenderjahr gilt zusätzlich die
-// kombinierte 90-Tage-Grenze.
-export function angewendeteRegel(
-  vorbeschaeftigungTage: number | null | undefined
-): string {
-  return (vorbeschaeftigungTage ?? 0) > 0
-    ? "90-Tage-Grenze (kombiniert)"
-    : "15-Wochen-Grenze";
+// Die maßgebliche Tage-Grenze für sozialversicherungsfreie
+// Saisonbeschäftigung in der Landwirtschaft: 15 Wochen = 105 Kalendertage
+// je Kalenderjahr. Die 90-Arbeitstage-Grenze wurde 2026-08-11 entfernt -
+// sie gilt nur für Beschäftigungen an weniger als 5 Tagen pro Woche, was im
+// Betrieb nicht vorkommt (Nutzer-Recherche).
+export const TAGE_GRENZE = 105;
+
+// Beschreibt, woraus sich das Gesamtbudget zusammensetzt - mit
+// Vorbeschäftigung bei anderen deutschen Arbeitgebern bzw. mit mehreren
+// eigenen Beschäftigungsabschnitten wird zusammengerechnet.
+export function angewendeteRegel(p: SvPruefung): string {
+  const teile: string[] = [];
+  if (p.anzahl_abschnitte > 1) {
+    teile.push(`${p.anzahl_abschnitte} Abschnitte`);
+  }
+  if (p.vorbeschaeftigung_deutschland_tage > 0) {
+    teile.push(`+ ${p.vorbeschaeftigung_deutschland_tage} Tage Vorbeschäftigung`);
+  }
+  return teile.length === 0
+    ? "15 Wochen (105 Tage)"
+    : `15 Wochen (105 Tage), ${teile.join(" ")}`;
 }
 
 // Resttage bis zum (bereits serverseitig korrekt zusammengeführten)

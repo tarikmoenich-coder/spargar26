@@ -985,6 +985,35 @@ create table season_bonuses (
   unique (employee_id, saison_jahr)
 );
 
+-- ---------------------------------------------------------------------------
+-- Historie aller Abrechnungen je Person und Saison (Nutzer-Vorgabe
+-- 2026-08-11). season_bonuses selbst hat unique (employee_id, saison_jahr)
+-- und überschreibt abgerechnet_am bei jeder erneuten Abrechnung - für die
+-- SV-Prüfung brauchen wir aber ALLE Abrechnungszeitpunkte:
+--
+-- Die Abrechnung IST das Ende eines Beschäftigungsabschnitts (saison_
+-- abrechnen_batch setzt dabei employees.aktiv = false). Da die 15-Wochen-
+-- Grenze über das Kalenderjahr zusammengerechnet wird und NICHT am Stück
+-- laufen muss (Nutzer-Recherche 2026-08-11), müssen die einzelnen
+-- Abschnitte einer wiederkehrenden Person getrennt gezählt werden - sonst
+-- würde die Pause zwischen zwei Einsätzen fälschlich mitzählen. Genau
+-- dafür ist diese Tabelle da (siehe employee_sv_pruefung weiter unten).
+--
+-- Rein dokumentierend/additiv: wird nur von saison_abrechnen_batch
+-- geschrieben, nie geändert oder gelöscht.
+-- ---------------------------------------------------------------------------
+create table saison_abrechnungen (
+  id bigint generated always as identity primary key,
+  employee_id uuid not null references employees (id) on delete restrict,
+  saison_jahr int not null,
+  abgerechnet_am timestamptz not null default now(),
+  abgerechnet_von uuid references profiles (id),
+  auszahlungsbeleg_id bigint references auszahlungsbelege (id)
+);
+
+create index idx_saison_abrechnungen_employee
+  on saison_abrechnungen (employee_id, saison_jahr, abgerechnet_am);
+
 -- "Jetzt Abrechnen" auf der Lohnübersicht (Mehrfachauswahl): erstellt EINEN
 -- Auszahlungsbeleg für die ganze Aktion (analog zu Vorschüssen/Kassenbuch),
 -- markiert jede übergebene Person als abgerechnet, friert ihren Stand als
@@ -1041,6 +1070,15 @@ begin
         abgerechnet_von = auth.uid(),
         snapshot = excluded.snapshot,
         auszahlungsbeleg_id = neuer_beleg_id;
+
+      -- Zusätzlich in die Historie (siehe saison_abrechnungen oben):
+      -- season_bonuses überschreibt abgerechnet_am bei erneutem Abrechnen,
+      -- die SV-Prüfung braucht aber jeden einzelnen Abschnitts-Endzeitpunkt.
+      insert into saison_abrechnungen (
+        employee_id, saison_jahr, abgerechnet_am, abgerechnet_von,
+        auszahlungsbeleg_id
+      )
+      values (emp_id, p_saison_jahr, now(), auth.uid(), neuer_beleg_id);
 
       update employees set aktiv = false where id = emp_id;
     end if;
@@ -2007,14 +2045,93 @@ group by ab.id, ab.belegnummer, ab.saison_jahr, ab.zahlungsart, ab.erstellt_am, 
 grant select on auszahlungsbeleg_summary to authenticated;
 
 -- ---------------------------------------------------------------------------
--- 12e. View: SV-Freiheit-Prüfung je Mitarbeiter/Saisonjahr (90-Tage- bzw.
---      15-Wochen-Regel für landwirtschaftliche Saisonarbeit - OI-004).
---      Reine Tage-/Wochen-Zählung, ersetzt NICHT die rechtliche Prüfung der
+-- 12e. View: SV-Freiheit-Prüfung je Mitarbeiter/Saisonjahr - 15-Wochen-Regel
+--      (105 Kalendertage) für landwirtschaftliche Saisonarbeit, OI-004.
+--
+--      GRUNDLEGEND ÜBERARBEITET 2026-08-11 nach Nutzer-Recherche. Zwei
+--      Korrekturen gegenüber dem bisherigen Stand:
+--
+--      1. Die 90-Arbeitstage-Grenze wurde ENTFERNT. Sie gilt laut Quelle
+--         nur für Beschäftigungen an WENIGER als 5 Tagen pro Woche - das
+--         kommt im Betrieb nicht vor (Nutzer: "findet praktisch keine
+--         Anwendung"). Maßgeblich sind allein die 15 Wochen = 105
+--         Kalendertage.
+--
+--      2. Die 105 Tage müssen NICHT am Stück laufen: alle kurzfristigen
+--         Beschäftigungen eines Kalenderjahres werden zusammengerechnet.
+--         Bisher zählte die reine Spanne vom ersten bis zum letzten
+--         Arbeitstag - eine Pause zwischen zwei Einsätzen zählte damit
+--         fälschlich mit. Jetzt werden die einzelnen Abschnitte summiert.
+--
+--      Abschnitts-Erkennung (Nutzer-Vorgabe): eine ABRECHNUNG beendet den
+--      Beschäftigungsabschnitt - saison_abrechnen_batch setzt dabei auch
+--      employees.aktiv = false, die Person reist ab. Kommt sie später
+--      zurück, beginnt ein neuer Abschnitt. Dafür gibt es die Historie
+--      saison_abrechnungen (season_bonuses selbst überschreibt
+--      abgerechnet_am bei jeder erneuten Abrechnung, siehe dort).
+--      Freie Tage, Wochenenden und Urlaub INNERHALB eines Abschnitts zählen
+--      bewusst mit - das Beschäftigungsverhältnis läuft ja weiter.
+--
+--      Beschäftigungstag = Tag mit Stunden ODER mit Markierung (z.B. "U"
+--      für Urlaub) - Nutzer-Vorgabe 2026-08-11: während Urlaub besteht das
+--      Beschäftigungsverhältnis fort, die Zeit zählt auf die 15 Wochen.
+--
+--      Reine Tage-Zählung, ersetzt NICHT die rechtliche Prüfung der
 --      Sozialversicherungsbefreiung selbst (eigenes Formular nötig).
---      Arbeitszeitraum = 1. bis letzter Tag mit Stunden > 0 (nicht nur
---      "anwesend" - reine Anwesenheit ohne Arbeit zählt hier nicht).
+--
+--      Bewusst "drop + create" statt "create or replace": es ändern sich
+--      Spaltennamen UND -reihenfolge, was "create or replace view" mit
+--      Fehler 42P16 ablehnen würde. Keine andere Sicht hängt an dieser hier
+--      (nur das Frontend liest sie), daher unproblematisch.
 -- ---------------------------------------------------------------------------
-create or replace view employee_sv_pruefung as
+drop view if exists employee_sv_pruefung;
+
+create view employee_sv_pruefung as
+with beschaeftigungstage_roh as (
+  select
+    we.employee_id,
+    we.datum,
+    extract(year from we.datum)::int as saison_jahr,
+    -- Abschnitts-Nummer = Anzahl der Abrechnungen VOR diesem Tag. "<"
+    -- statt "<=": an dem Tag, an dem abgerechnet wird, gearbeitete Stunden
+    -- gehören noch zum alten Abschnitt.
+    (
+      select count(*)
+      from saison_abrechnungen sa
+      where sa.employee_id = we.employee_id
+        and sa.saison_jahr = extract(year from we.datum)::int
+        and sa.abgerechnet_am::date < we.datum
+    ) as abschnitt_nr
+  from work_entries we
+  where we.stunden > 0 or we.markierung is not null
+),
+abschnitte as (
+  select
+    employee_id,
+    saison_jahr,
+    abschnitt_nr,
+    min(datum) as von,
+    max(datum) as bis,
+    (max(datum) - min(datum) + 1) as tage
+  from beschaeftigungstage_roh
+  group by employee_id, saison_jahr, abschnitt_nr
+),
+w as (
+  select
+    employee_id,
+    saison_jahr,
+    min(von) as erster_arbeitstag,
+    max(bis) as letzter_arbeitstag,
+    sum(tage)::bigint as beschaeftigungstage,
+    count(*)::int as anzahl_abschnitte,
+    -- Für das Austrittsdatum: der laufende (zuletzt begonnene) Abschnitt
+    -- darf noch so viele Kalendertage laufen, wie vom Budget übrig ist.
+    (array_agg(von order by von desc))[1] as beginn_letzter_abschnitt,
+    (sum(tage) - (array_agg(tage order by von desc))[1])::bigint
+      as tage_vor_letztem_abschnitt
+  from abschnitte
+  group by employee_id, saison_jahr
+)
 select
   e.id as employee_id,
   e.personal_nr,
@@ -2025,40 +2142,51 @@ select
   w.saison_jahr,
   w.erster_arbeitstag,
   w.letzter_arbeitstag,
-  -- Bis 2026-08-10 hieß diese Spalte "arbeitstage_ueber0" und zählte nur
-  -- Tage mit tatsächlich geleisteten Stunden. Nutzer-Korrektur 2026-08-10:
-  -- für die 90-Tage-Grenze zählen die KALENDERTAGE des Beschäftigungs-
-  -- zeitraums (1. bis letzter Arbeitstag, inklusive freier Tage dazwischen)
-  -- - exakt dieselbe Kalendertage-Logik wie bei der 15-Wochen-Grenze, nur
-  -- mit 90 statt 105 Tagen Budget. Umbenannt für Ehrlichkeit (der alte
-  -- Name "Arbeitstage" wäre jetzt irreführend) - dafür zwingend per
-  -- "alter view ... rename column" VOR diesem "create or replace view"
-  -- (sonst 42P16, siehe Migration).
+  -- Summe der Kalendertage ALLER Beschäftigungsabschnitte dieses
+  -- Kalenderjahres (nicht die Spanne vom ersten bis zum letzten Tag).
   w.beschaeftigungstage,
-  greatest(0, 90 - w.beschaeftigungstage) as rest_bis_90_tage,
-  (w.erster_arbeitstag + 104) as austrittsdatum_15_wochen,
-  floor((w.letzter_arbeitstag - w.erster_arbeitstag) / 7.0)::int as wochen_seit_start,
-  (w.beschaeftigungstage > 90) as ueberschritten_90_tage,
-  (w.letzter_arbeitstag > (w.erster_arbeitstag + 104)) as ueberschritten_15_wochen,
+  w.anzahl_abschnitte,
+  -- Bisherige Beschäftigungstage in DEUTSCHLAND bei anderen Arbeitgebern
+  -- laut SV-Fragebogen. Rechtlich zählt das Kalenderjahr über ALLE
+  -- deutschen Arbeitgeber zusammen, nicht nur die Tage bei uns.
+  coalesce(fb.vorbeschaeftigung_deutschland_tage, 0)
+    as vorbeschaeftigung_deutschland_tage,
+  (w.beschaeftigungstage + coalesce(fb.vorbeschaeftigung_deutschland_tage, 0))
+    as kombinierte_tage,
+  greatest(
+    0,
+    105 - (w.beschaeftigungstage + coalesce(fb.vorbeschaeftigung_deutschland_tage, 0))
+  ) as rest_bis_105_tage,
   (
-    w.letzter_arbeitstag > (w.erster_arbeitstag + 104)
-    -- Nutzer-Vorgabe 2026-08-10: die 90-Tage-Grenze ist NUR im
-    -- Wiederkehr-Fall bindend (Vorbeschäftigung > 0) - "anfänglich gehen
-    -- wir immer davon aus, dass ein Mitarbeiter 15 Wochen am Stück
-    -- bleibt". Ohne diese Bedingung würde die 90-Tage-Grenze (90
-    -- Kalendertage < 105 Kalendertage) IMMER vor der 15-Wochen-Grenze
-    -- greifen, auch ganz ohne Vorbeschäftigung - das war bis zur
-    -- Kalendertage-Umstellung unauffällig (Arbeitstage mit Stunden > 0
-    -- lagen bei üblichem Arbeitsmuster nahe an der 15-Wochen-Grenze),
-    -- würde jetzt aber jede Person fälschlich kritisch markieren.
-    or (
-      coalesce(fb.vorbeschaeftigung_deutschland_tage, 0) > 0
-      and (w.beschaeftigungstage + fb.vorbeschaeftigung_deutschland_tage) > 90
-    )
-    -- SV-freier Zeitraum laut Angaben deckt den tatsächlichen
-    -- Beschäftigungszeitraum nicht ab, oder dieser fällt in eine Lücke
-    -- zwischen "Bezahlter Urlaub" und "Freistellung" (Nutzer-Vorgabe
-    -- 2026-08-10: "aktiv als kritisch markieren").
+    (w.beschaeftigungstage + coalesce(fb.vorbeschaeftigung_deutschland_tage, 0)) > 105
+  ) as ueberschritten_105_tage,
+  -- Letzter Tag, an dem die Person nach der 15-Wochen-Regel noch
+  -- SV-frei beschäftigt sein darf: der laufende Abschnitt darf genau so
+  -- lange laufen, wie das Budget nach Abzug früherer Abschnitte und der
+  -- Vorbeschäftigung noch hergibt.
+  (
+    w.beginn_letzter_abschnitt
+    + (105 - w.tage_vor_letztem_abschnitt
+         - coalesce(fb.vorbeschaeftigung_deutschland_tage, 0))
+    - 1
+  ) as austrittsdatum_105_tage,
+  -- Empfohlenes Austrittsdatum: das frühere von der 15-Wochen-Grenze und
+  -- dem Ende des SV-freien Zeitraums laut Angaben (least() ignoriert
+  -- NULL, sv_frei_bis ist bei offenen Zuständen NULL).
+  least(
+    (
+      w.beginn_letzter_abschnitt
+      + (105 - w.tage_vor_letztem_abschnitt
+           - coalesce(fb.vorbeschaeftigung_deutschland_tage, 0))
+      - 1
+    ),
+    fb.sv_frei_bis
+  ) as austrittsdatum_empfohlen,
+  (
+    (w.beschaeftigungstage + coalesce(fb.vorbeschaeftigung_deutschland_tage, 0)) > 105
+    -- SV-freier Zeitraum laut Angaben deckt die tatsächliche Beschäftigung
+    -- nicht ab, oder diese fällt in eine Lücke zwischen "Bezahlter Urlaub"
+    -- und "Freistellung" (Nutzer-Vorgabe 2026-08-10: als kritisch werten).
     or (fb.sv_frei_von is not null and w.erster_arbeitstag < fb.sv_frei_von)
     or (fb.sv_frei_bis is not null and w.letzter_arbeitstag > fb.sv_frei_bis)
     or (
@@ -2067,99 +2195,30 @@ select
       and w.letzter_arbeitstag >= fb.sv_frei_luecke_von
     )
   ) as kritisch,
-  -- Neue Spalten ans Ende angehängt (nicht dazwischen!) - "create or
-  -- replace view" erlaubt nur das Anhängen neuer Spalten am Ende, sonst
-  -- Fehler 42P16 "cannot change name of view column".
-  -- Bisherige Arbeitstage in DEUTSCHLAND im Kalenderjahr laut SV-Fragebogen
-  -- (nicht Ausland - das zählt nicht für die Tage-Grenze, siehe Kommentar
-  -- bei sv_fragebogen.vorbeschaeftigung_deutschland_tage). Rechtlich zählt
-  -- das Kalenderjahr über ALLE deutschen Arbeitgeber zusammen, nicht nur
-  -- die Tage bei uns (Nutzer-Korrektur 2026-08-08).
-  coalesce(fb.vorbeschaeftigung_deutschland_tage, 0)
-    as vorbeschaeftigung_deutschland_tage,
-  w.beschaeftigungstage + coalesce(fb.vorbeschaeftigung_deutschland_tage, 0)
-    as kombinierte_tage,
-  greatest(
-    0,
-    90 - (w.beschaeftigungstage + coalesce(fb.vorbeschaeftigung_deutschland_tage, 0))
-  ) as rest_bis_90_tage_kombiniert,
-  -- Empfohlenes Austrittsdatum (Nutzer-Vorgabe 2026-08-10): normalerweise
-  -- ist die 15-Wochen-Grenze maßgeblich ("anfänglich gehen wir immer davon
-  -- aus, dass ein Mitarbeiter 15 Wochen am Stück bleibt") - liegt das Ende
-  -- des SV-freien Zeitraums laut Angaben davor, ist DAS maßgeblich. Im
-  -- Wiederkehr-Fall (Vorbeschäftigung > 0) fließt zusätzlich das exakte
-  -- 90-Tage-kombiniert-Enddatum ein (Nutzer-Vorgabe 2026-08-10: soll in
-  -- "empfohlen" einfließen, nicht mehr nur separat) - least() ignoriert
-  -- NULL-Werte (sv_frei_bis ist bei offenen Zeiträumen wie Rente/Hausmann/
-  -- Selbstständigkeit NULL; das 90-Tage-Datum ist NULL, wenn keine
-  -- Vorbeschäftigung gemeldet ist).
-  least(
-    (w.erster_arbeitstag + 104),
-    fb.sv_frei_bis,
-    case when coalesce(fb.vorbeschaeftigung_deutschland_tage, 0) > 0
-      then w.erster_arbeitstag + (89 - fb.vorbeschaeftigung_deutschland_tage)
-    end
-  ) as austrittsdatum_empfohlen,
   fb.sv_frei_von,
   fb.sv_frei_bis,
   coalesce(fb.sv_frei_luecke, false) as sv_frei_luecke,
   fb.sv_frei_luecke_von,
   fb.sv_frei_luecke_bis,
+  coalesce(fb.sv_frei_offen, false) as sv_frei_offen,
   (fb.sv_frei_von is not null and w.erster_arbeitstag < fb.sv_frei_von)
     as ueberschritten_sv_frei_beginn,
   (fb.sv_frei_bis is not null and w.letzter_arbeitstag > fb.sv_frei_bis)
-    as ueberschritten_sv_frei_ende,
-  -- Exaktes Enddatum der kombinierten 90-Tage-Grenze im Wiederkehr-Fall
-  -- (Nutzer-Vorgabe 2026-08-10, wörtlich hergeleitet): Startdatum dieser
-  -- (zweiten) Beschäftigung + (89 - bereits gemeldete Vorbeschäftigungs-
-  -- tage). NULL, wenn keine Vorbeschäftigung gemeldet ist (dann rechtlich
-  -- ohne Bedeutung, siehe kritisch oben) - eigene Spalte zusätzlich zur
-  -- Einbindung in austrittsdatum_empfohlen oben, für die transparente
-  -- Anzeige "welche Regel war bindend".
-  case when coalesce(fb.vorbeschaeftigung_deutschland_tage, 0) > 0
-    then w.erster_arbeitstag + (89 - fb.vorbeschaeftigung_deutschland_tage)
-  end as austrittsdatum_90_tage_kombiniert,
-  -- "Offener Zustand" (Hausfrau/Rente/Selbstständigkeit) - dann ist
-  -- sv_frei_von oben bereits der Arbeitsbeginn statt des Nachweis-Datums
-  -- aus dem Formular (siehe Kommentar im fb-Join unten). Ans Ende
-  -- angehängt, nicht dazwischen (42P16).
-  coalesce(fb.sv_frei_offen, false) as sv_frei_offen
+    as ueberschritten_sv_frei_ende
 from employees e
-join lateral (
-  select
-    extract(year from we.datum)::int as saison_jahr,
-    min(we.datum) filter (where we.stunden > 0) as erster_arbeitstag,
-    max(we.datum) filter (where we.stunden > 0) as letzter_arbeitstag,
-    -- ::bigint: Datumsdifferenz liefert in Postgres "integer", die
-    -- Vorgänger-Spalte "arbeitstage_ueber0" war aber "bigint" (aus
-    -- count()) - "create or replace view" verbietet auch einen
-    -- Typwechsel an derselben Position (Fehler 42P16), nicht nur eine
-    -- Namensänderung.
-    (
-      max(we.datum) filter (where we.stunden > 0)
-      - min(we.datum) filter (where we.stunden > 0) + 1
-    )::bigint as beschaeftigungstage
-  from work_entries we
-  where we.employee_id = e.id
-  group by extract(year from we.datum)
-) w on true
+join w on w.employee_id = e.id
 -- Bewusst direkt gegen die Rohtabelle (nicht über die security_invoker-
 -- Sicht sv_fragebogen_auswertung), damit hier eindeutig mit den Rechten
 -- des Sicht-Eigentümers gelesen wird, unabhängig von der Rolle des
--- aufrufenden Nutzers - exakt wie beim Lesen von work_entries/employees
--- oben in dieser Sicht.
+-- aufrufenden Nutzers.
 left join lateral (
   select
     f.vorbeschaeftigung_deutschland_tage,
-    -- Nutzer-Korrektur 2026-08-11: bei den offenen Zuständen (Hausfrau/
-    -- Rente/Selbstständigkeit) ist das "seit"-Datum aus dem Formular nur
-    -- ein Nachweis, seit wann der Zustand besteht - der SV-freie Zeitraum
-    -- beginnt dort mit dem tatsächlichen Arbeitsbeginn ("aktiv seit").
-    -- Bei Block 1 (Bezahlter Urlaub/Freistellung) und Block 4
-    -- (Schulferien) bleibt es beim echten Von-Datum aus den Angaben, sonst
-    -- könnte die Prüfung "Zeitraum beginnt zu spät" nie mehr auslösen.
-    -- Hier - und nicht erst in der SELECT-Liste - eingesetzt, damit
-    -- Anzeige UND kritisch-Formel garantiert denselben Wert verwenden.
+    -- Bei den offenen Zuständen (Hausfrau/Rente/Selbstständigkeit) ist das
+    -- "seit"-Datum aus dem Formular nur ein Nachweis, seit wann der Zustand
+    -- besteht - der SV-freie Zeitraum beginnt dort mit dem tatsächlichen
+    -- Arbeitsbeginn. Bei Block 1/4 bleibt es beim Von-Datum aus den
+    -- Angaben, sonst könnte "beginnt zu spät" nie auslösen.
     case when sv_freier_zeitraum_offen(f) then w.erster_arbeitstag
       else sv_freier_zeitraum_von(f) end as sv_frei_von,
     sv_freier_zeitraum_bis(f) as sv_frei_bis,
@@ -2170,11 +2229,10 @@ left join lateral (
   from sv_fragebogen f
   where f.employee_id = e.id and f.saison_jahr = w.saison_jahr
 ) fb on true
-where w.erster_arbeitstag is not null
-  -- Die 90-Tage-/15-Wochen-Regel ist die Obergrenze für SOZIALVERSICHERUNGS-
-  -- FREIE Beschäftigung - für bereits sozialversicherungspflichtige Personen
-  -- ist diese Prüfung gegenstandslos (Nutzer-Hinweis 2026-08-06).
-  and e.abrechnungsart <> 'sozialversicherungspflichtig';
+-- Die 15-Wochen-Regel ist die Obergrenze für SOZIALVERSICHERUNGSFREIE
+-- Beschäftigung - für bereits sozialversicherungspflichtige Personen ist
+-- diese Prüfung gegenstandslos (Nutzer-Hinweis 2026-08-06).
+where e.abrechnungsart <> 'sozialversicherungspflichtig';
 
 grant select on employee_sv_pruefung to authenticated;
 
@@ -2296,6 +2354,7 @@ alter table employees enable row level security;
 alter table work_entries enable row level security;
 alter table periods enable row level security;
 alter table season_bonuses enable row level security;
+alter table saison_abrechnungen enable row level security;
 alter table auszahlungsbelege enable row level security;
 alter table kautionsuebergaben enable row level security;
 alter table kautionsuebergabe_personen enable row level security;
@@ -2440,6 +2499,14 @@ create policy "season_bonuses_rw" on season_bonuses for all
 -- auszahlungsbelege: nur lesend per Policy - Schreiben ausschließlich über
 -- die security-definer Funktion saison_abrechnen_batch (wie Audit-Log).
 create policy "auszahlungsbelege_select" on auszahlungsbelege for select
+  using (auth.uid() is not null);
+-- saison_abrechnungen: gleiches Muster - nur lesend per Policy, geschrieben
+-- ausschließlich von saison_abrechnen_batch. Enthält bewusst KEINE Beträge
+-- (nur Zeitpunkt + Belegverweis), deshalb wie auszahlungsbelege für alle
+-- angemeldeten Rollen lesbar - die SV-Prüfung braucht das, und hr/management
+-- dürfen die reinen Abrechnungszeitpunkte ohnehin sehen (siehe auch
+-- employee_letzte_abrechnung).
+create policy "saison_abrechnungen_select" on saison_abrechnungen for select
   using (auth.uid() is not null);
 
 -- Kautionsübergabe: admin/lohnabrechnung (Auszahlungen-Seite) und kasse

@@ -21,7 +21,7 @@ Enthalten:
   Wörterbuch je Sprache) - kein Aufwand für ungenutzte Sprachen/Seiten
 - Rollenabhängiges Dashboard ("Start", auch neue Startseite nach dem
   Login): kompakte, klickbare Kacheln mit dem, was gerade Aufmerksamkeit
-  braucht - hr sieht offene Anreiseliste-Punkte und die 90-Tage-/
+  braucht - hr sieht offene Anreiseliste-Punkte und die
   15-Wochen-Kontrolle, kasse den aktuellen Kassensaldo, Stand der letzten
   Kassenprüfung und Bewegungen seit der letzten Prüfung, lohnabrechnung
   Abweichungen bei Auszahlungen und die Anzahl aktiver Personen, pruefer
@@ -283,71 +283,78 @@ Enthalten:
   selbst Auskunft geben können
 - Freitext-Notiz je Tag auf der Stundenerfassung (z.B. "krank", "zu
   spät") - erscheint auch auf der "Suche"-Seite
-- 90-Tage-/15-Wochen-Kontrolle (SV-Freiheit landwirtschaftliche
-  Saisonarbeit, OI-004): Spalten auf der Personal-Seite (Rest bis 90 Tage,
-  theoretisches Austrittsdatum, Status) sowie eine "Controlling"-Seite mit
-  allen kritischen Fällen. Tage-/Wochen-Zählung auf Basis "1. bis letzter
-  Arbeitstag mit Stunden > 0" bei uns, PLUS bisherige Arbeitstage bei
-  anderen Arbeitgebern in Deutschland laut SV-Fragebogen (siehe unten,
-  "Rest bis 90 Tage" auf der Personal-Seite zeigt den kombinierten Wert,
-  Controlling-Seite zeigt beide Werte einzeln). Gilt nur für Personen, die
-  noch NICHT sozialversicherungspflichtig sind (die Grenze ist die
-  Obergrenze für sozialversicherungsFREIE Beschäftigung, für bereits
-  Pflichtige gegenstandslos). Stand 2026-08-10: die Controlling-Seite
-  gleicht den tatsächlichen Beschäftigungszeitraum zusätzlich mit dem
-  SV-freien Zeitraum laut den SV-Fragebogen-Angaben ab (siehe unten) -
-  beginnt die Beschäftigung vor dessen Anfang, geht sie über dessen Ende
-  hinaus, oder fällt sie in eine Lücke zwischen "Bezahlter Urlaub" und
-  "Freistellung", zählt das genauso als kritisch wie eine Überschreitung
-  der 90-Tage-/15-Wochen-Grenze (eigene Spalte "SV-freier Zeitraum
-  (Angaben)" plus Grund-Text in der Tabelle). Das "normale" empfohlene
-  Austrittsdatum ist jetzt das frühere von 15-Wochen-Ende und dem Ende des
-  SV-freien Zeitraums laut Angaben (Spalte "Austrittsdatum (empfohlen)" -
-  auch auf der Personal-Seite selbst korrigiert, zeigt dort jetzt für JEDE
-  Person dieses frühere Datum statt nur der reinen 15-Wochen-Grenze); die
-  bisherige 90-Tage-Kombinationsprüfung bleibt unverändert und greift
-  zusätzlich nur im Wiederkehr-Fall (Person kommt nach einer Auszahlung vor
-  Erreichen der 90 Tage erneut). Wichtig zum Verständnis der
-  "Controlling"-Seite: die dortige "kritisch"-Liste ist bewusst reaktiv, wie
-  schon bei der 90-Tage-/15-Wochen-Regel selbst - eine Person landet erst
-  dort, sobald tatsächlich AN oder NACH dem Grenzdatum gearbeitet wurde
-  (nicht schon am Tag, an dem die Grenze erreicht wird). Wer wissen will,
-  wann eine Person die Grenze erreicht, bevor es kritisch wird, sieht das
-  proaktiv in der Spalte "Austrittsdatum (empfohlen)" auf der Personal-Seite.
-  Stand 2026-08-10, Nutzer-Korrektur: die 90-Tage-Grenze zählt jetzt
-  KALENDERTAGE des Beschäftigungszeitraums (1. bis letzter Arbeitstag,
-  inkl. freier Tage dazwischen - Spalte "Beschäftigungstage", vorher
-  "Arbeitstage > 0" mit reinen Tagen mit Stunden > 0), exakt wie die
-  15-Wochen-Grenze, nur mit 90 statt 105 Tagen Budget. Damit die 90-Tage-
-  Grenze (90 Kalendertage) nicht immer schon vor der 15-Wochen-Grenze
-  (105 Kalendertage) greift, ist sie jetzt AUSSCHLIESSLICH im
-  Wiederkehr-Fall bindend (Vorbeschäftigung > 0 laut SV-Fragebogen) - ohne
-  gemeldete Vorbeschäftigung gilt nur noch die 15-Wochen-Grenze. Im
-  Wiederkehr-Fall wird zusätzlich ein EXAKTES Enddatum berechnet
-  (Startdatum der aktuellen Beschäftigung + (89 − bereits gemeldete
-  Vorbeschäftigungstage)) und fließt jetzt mit in "Austrittsdatum
-  (empfohlen)" ein (das früheste von 15-Wochen-Ende, SV-frei-Ende laut
-  Angaben und 90-Tage-kombiniert-Ende). "Rest bis 90 Tage" auf der
-  Personal-Seite zeigt "—", wenn keine Vorbeschäftigung gemeldet ist (die
-  Zahl wäre sonst irreführend, da sie ohne rechtliche Bedeutung wäre).
-  Auf "Personal → Sozialversicherung" (siehe unten) zwei neue Spalten:
-  "Angewendete Regel" (15-Wochen- oder 90-Tage-Grenze, je nach gemeldeter
-  Vorbeschäftigung) und "Ende der SV-Freiheit (Tage)" - Resttage bis zum
-  empfohlenen Austrittsdatum, gelb unter 7 Tagen, rot bei bereits
-  überschrittenen (negativen) Tagen; erst berechenbar, sobald mindestens
-  ein Arbeitstag erfasst ist. Auf der Controlling-Seite zusätzlich eine
-  neue, rein proaktive Übersicht "Nächste 10, deren SV-freier Zeitraum
-  endet" (unabhängig vom "kritisch"-Status, sortiert nach empfohlenem
-  Austrittsdatum, NUR aktive Personen - Nutzer-Vorgabe 2026-08-10) -
-  ergänzt die reaktive "kritisch"-Liste um eine echte Vorausschau. Direkt
-  darunter eine neue, rein dokumentierende Übersicht "SV-Freiheit
-  Diskrepanz": bereits INAKTIVE Personen, bei denen die tatsächliche
-  Beschäftigung nachträglich betrachtet den SV-freien Zeitraum laut
-  Angaben überschritten hat (Beginn zu spät, Ende überschritten, oder
+- 15-Wochen-Kontrolle (SV-Freiheit landwirtschaftliche Saisonarbeit,
+  OI-004): Spalten auf der Personal-Seite (Rest bis 105 Tage,
+  Austrittsdatum (empfohlen), SV-Status) sowie eine "Controlling"-Seite mit
+  allen kritischen Fällen. Gilt nur für Personen, die noch NICHT
+  sozialversicherungspflichtig sind (die Grenze ist die Obergrenze für
+  sozialversicherungsFREIE Beschäftigung, für bereits Pflichtige
+  gegenstandslos).
+  **Grundlegend überarbeitet 2026-08-11 nach Nutzer-Recherche** - zwei
+  Korrekturen gegenüber dem vorherigen Stand:
+  1. Die **90-Arbeitstage-Grenze wurde entfernt**. Sie gilt nur für
+     Beschäftigungen an weniger als 5 Tagen pro Woche, was im Betrieb nicht
+     vorkommt ("findet praktisch keine Anwendung"). Maßgeblich sind allein
+     die 15 Wochen = **105 Kalendertage** je Kalenderjahr. Damit entfällt
+     auch die vorherige Kopplung "90-Tage-Grenze nur bei Vorbeschäftigung".
+  2. Die 105 Tage müssen **nicht am Stück** laufen: alle kurzfristigen
+     Beschäftigungen eines Kalenderjahres werden zusammengerechnet. Vorher
+     zählte die reine Spanne vom ersten bis zum letzten Arbeitstag - eine
+     Pause zwischen zwei Einsätzen zählte damit fälschlich mit. Jetzt
+     werden die einzelnen Abschnitte summiert (Spalte "Beschäftigungstage",
+     dazu "Abschnitte" als Anzahl).
+  Abschnitts-Erkennung (Nutzer-Vorgabe): eine **Abrechnung beendet den
+  Beschäftigungsabschnitt** - "Jetzt Abrechnen" setzt ohnehin schon
+  `employees.aktiv = false`, die Person reist ab. Kommt sie später zurück,
+  beginnt ein neuer Abschnitt. Dafür gibt es die neue Historie-Tabelle
+  `saison_abrechnungen`: `season_bonuses` hat `unique (employee_id,
+  saison_jahr)` und überschreibt `abgerechnet_am` bei jeder erneuten
+  Abrechnung, für die Abschnittsbildung braucht es aber jeden einzelnen
+  Zeitpunkt. Freie Tage, Wochenenden und Urlaub INNERHALB eines Abschnitts
+  zählen bewusst mit - das Beschäftigungsverhältnis läuft ja weiter.
+  Ein Beschäftigungstag ist ab jetzt ein Tag mit Stunden ODER mit
+  Markierung (z.B. "U" für Urlaub, Nutzer-Vorgabe 2026-08-11: während
+  Urlaub besteht das Beschäftigungsverhältnis fort) - vorher zählten nur
+  Tage mit Stunden > 0.
+  Bisherige Beschäftigungstage bei anderen deutschen Arbeitgebern laut
+  SV-Fragebogen werden weiterhin dazugerechnet (rechtlich zählt das
+  Kalenderjahr über ALLE deutschen Arbeitgeber zusammen).
+  Zusätzlich gleicht die Controlling-Seite den tatsächlichen
+  Beschäftigungszeitraum mit dem SV-freien Zeitraum laut den
+  SV-Fragebogen-Angaben ab (siehe unten) - beginnt die Beschäftigung vor
+  dessen Anfang, geht sie über dessen Ende hinaus, oder fällt sie in eine
+  Lücke zwischen "Bezahlter Urlaub" und "Freistellung", zählt das genauso
+  als kritisch wie eine Überschreitung der 105 Tage. Das empfohlene
+  Austrittsdatum ist das frühere von 15-Wochen-Ende und dem Ende des
+  SV-freien Zeitraums laut Angaben; das 15-Wochen-Ende berücksichtigt dabei
+  bereits verbrauchte Tage aus früheren Abschnitten und die
+  Vorbeschäftigung (der laufende Abschnitt darf noch genau so lange laufen,
+  wie das Budget hergibt).
+  Wichtig zum Verständnis der "Controlling"-Seite: die dortige
+  "kritisch"-Liste ist bewusst reaktiv - eine Person landet erst dort,
+  sobald tatsächlich AN oder NACH dem Grenzdatum gearbeitet wurde (nicht
+  schon am Tag, an dem die Grenze erreicht wird). Wer wissen will, wann
+  eine Person die Grenze erreicht, bevor es kritisch wird, sieht das
+  proaktiv in der Spalte "Austrittsdatum (empfohlen)" auf der
+  Personal-Seite.
+  Auf "Personal → Sozialversicherung" (siehe unten) zwei Spalten dazu:
+  "Angewendete Regel" (15 Wochen/105 Tage, mit Hinweis auf mehrere
+  Abschnitte bzw. Vorbeschäftigung) und "Ende der SV-Freiheit (Tage)" -
+  Resttage bis zum empfohlenen Austrittsdatum, gelb unter 7 Tagen, rot bei
+  bereits überschrittenen (negativen) Tagen; erst berechenbar, sobald
+  mindestens ein Arbeitstag erfasst ist. Auf der Controlling-Seite
+  zusätzlich eine rein proaktive Übersicht "Nächste 10, deren SV-freier
+  Zeitraum endet" (unabhängig vom "kritisch"-Status, sortiert nach
+  empfohlenem Austrittsdatum, NUR aktive Personen - Nutzer-Vorgabe
+  2026-08-10) - ergänzt die reaktive "kritisch"-Liste um eine echte
+  Vorausschau. Direkt darunter eine rein dokumentierende Übersicht
+  "SV-Freiheit Diskrepanz": bereits INAKTIVE Personen, bei denen die
+  tatsächliche Beschäftigung nachträglich betrachtet den SV-freien Zeitraum
+  laut Angaben überschritten hat (Beginn zu spät, Ende überschritten, oder
   Lücke zwischen "Bezahlter Urlaub"/"Freistellung" getroffen) - bewusst
-  ohne die 90-Tage-/15-Wochen-Gründe (die sind für bereits ausgeschiedene
-  Personen keine akute Handlungsaufforderung mehr, nur die SV-frei-
-  Diskrepanz bleibt für die Dokumentation relevant)
+  ohne die 15-Wochen-Gründe (die sind für bereits ausgeschiedene Personen
+  keine akute Handlungsaufforderung mehr, nur die SV-frei-Diskrepanz bleibt
+  für die Dokumentation relevant)
 - Eigene Unterseite "Personal → Sozialversicherung" (nur admin/hr):
   SV-Fragebogen ("Fragebogen zur Feststellung der
   Versicherungspflicht/Versicherungsfreiheit rumänischer
@@ -374,14 +381,15 @@ Enthalten:
   bestanden. Eigenes Feld "bisherige
   Arbeitstage in Deutschland (dieses Kalenderjahr, andere Arbeitgeber)",
   markierbar als durch eine Lohnprogramm-Rückmeldung ausgelöst - fließt
-  direkt in die 90-Tage-Kontrolle oben ein (Kern der Regel: das
+  direkt in die 15-Wochen-Kontrolle oben ein (Kern der Regel: das
   Kalenderjahr zählt über ALLE deutschen Arbeitgeber zusammen, nicht nur
   die Tage bei uns). Ersetzt weiterhin nicht die rechtliche Prüfung der
   Sozialversicherungsbefreiung im Einzelfall selbst (die hier hinterlegte
   Bestanden/Nicht-bestanden-Logik ist unser Verständnis der allgemeinen
   Regel, keine steuerberaterlich geprüfte Rechtsauskunft für den
   Einzelfall). Suche nach Name/Personalnummer wie im Personalstamm (Stand
-  2026-08-09). Status-Anzeige verfeinert (Stand 2026-08-09): bei
+  2026-08-09), dazu eine Spalte "Herkunft" direkt neben dem Namen (aus den
+  Personalstammdaten, Stand 2026-08-11). Status-Anzeige verfeinert (Stand 2026-08-09): bei
   Abrechnungsart "sozialversicherungspflichtig" zeigt die Spalte direkt
   "SV-Pflicht." statt einer Bestanden/Nicht-bestanden-Auswertung (eine
   SV-Freiheits-Feststellung ergibt für bereits SV-pflichtig Beschäftigte
@@ -404,8 +412,8 @@ Enthalten:
   Prüfung "SV-freier Zeitraum beginnt zu spät" überhaupt noch auslösen.
   Fehlkorrektur vermieden (Nutzer-Feedback 2026-08-10, erneut bestätigt
   2026-08-11): dieser offene Zeitraum wird NIE als "unbefristet"/"offen"
-  angezeigt, da er immer durch die 15-Wochen-Grenze (bzw. bei
-  Vorbeschäftigung/Rückkehr kombiniert die 90-Tage-Grenze) begrenzt ist -
+  angezeigt, da er immer durch die 15-Wochen-Grenze (105 Kalendertage)
+  begrenzt ist -
   sobald der tatsächliche Arbeitsbeginn bekannt ist (mind. ein Arbeitstag
   mit Stunden > 0 erfasst), zeigt die Spalte immer das konkrete, daraus
   berechnete Enddatum (`austrittsdatum_empfohlen`, per Tooltip mit dem
@@ -416,7 +424,7 @@ Enthalten:
   Controlling-Seite gegen den tatsächlichen Beschäftigungszeitraum geprüft
   (siehe dort)
 - "Statuswechsel" im Personalstamm (nur admin/hr, z.B. beim Erreichen der
-  90-Tage-/15-Wochen-Grenze): legt eine neue, verknüpfte Person mit "a" an
+  15-Wochen-Grenze): legt eine neue, verknüpfte Person mit "a" an
   der Personalnummer an (z.B. "342" → "342a") mit wählbarer neuer
   Abrechnungsart und Stichtag, deaktiviert die alte Nummer (keine
   Löschung, ADR-011) und hängt deren hochgeladene Dokumente auf die neue
@@ -625,14 +633,17 @@ Die App läuft dann auf http://localhost:3000.
 Diese Punkte betreffen die Datenqualität/Rechtssicherheit und lassen sich
 nicht ohne dich bzw. eine Steuerberatung klären:
 
-- OI-004: Die Tage-/Wochen-Zählung (90 Tage bzw. 15 Wochen - der
-  Excel-Text "14 Wochen" war ein Tippfehler, korrekt sind 15) ist
+- OI-004: Die Tage-Zählung (15 Wochen = 105 Kalendertage - der Excel-Text
+  "14 Wochen" war ein Tippfehler, korrekt sind 15; die 90-Arbeitstage-
+  Grenze gilt nur bei weniger als 5 Arbeitstagen pro Woche und wurde
+  deshalb 2026-08-11 entfernt) ist
   umgesetzt (Personal-Seite + Controlling-Seite), inkl. SV-Fragebogen
   (Personal → Sozialversicherung, Stand 2026-08-08: manuelles
   Eingabeformular je Person/Saison-Jahr mit Vorjahresvergleich,
   Bestanden/Nicht-bestanden-Auswertung nach der allgemeinen
   Berufsmäßigkeits-Regel als Warnung, sowie Einrechnung bisheriger
-  Arbeitstage bei anderen deutschen Arbeitgebern in die 90-Tage-Kontrolle).
+  Beschäftigungstage bei anderen deutschen Arbeitgebern in die
+  15-Wochen-Kontrolle).
   Offen: rechtsverbindliche Prüfung im Einzelfall bleibt beim Nutzer/einer
   Steuerberatung - die App-Logik ist unser Verständnis der allgemeinen
   Regel, keine geprüfte Rechtsauskunft; außerdem weiterhin offen, ob "90

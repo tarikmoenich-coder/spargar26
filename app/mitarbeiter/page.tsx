@@ -1075,10 +1075,10 @@ export default function MitarbeiterPage() {
               <th>Abrechnungsart</th>
               <th>Aktiv seit</th>
               <th>Zuletzt abgerechnet am</th>
-              <th title="Nur relevant bei gemeldeter Vorbeschäftigung in Deutschland (siehe Personal → Sozialversicherung) - sonst gilt nur die 15-Wochen-Grenze rechts. Kalendertage des Beschäftigungszeitraums (nicht nur Tage mit Stunden > 0) plus gemeldete Vorbeschäftigungstage, von 90 abgezogen.">
-                Rest bis 90 Tage
+              <th title="15 Wochen = 105 Kalendertage je Kalenderjahr. Summe aller Beschäftigungsabschnitte bei uns (Pausen zählen nicht mit) plus gemeldete Vorbeschäftigung bei anderen deutschen Arbeitgebern.">
+                Rest bis 105 Tage
               </th>
-              <th title="Das früheste von 15-Wochen-Ende, dem Ende des SV-freien Zeitraums laut Angaben, und (bei Vorbeschäftigung) dem exakten 90-Tage-kombiniert-Ende (Personal → Sozialversicherung).">
+              <th title="Das frühere von 15-Wochen-Ende und dem Ende des SV-freien Zeitraums laut Angaben (Personal → Sozialversicherung).">
                 Austrittsdatum (empfohlen)
               </th>
               <th>SV-Status</th>
@@ -1124,15 +1124,24 @@ export default function MitarbeiterPage() {
                 <td>{formatDatumDE(letzteAbrechnung[emp.id])}</td>
                 <td
                   title={
-                    sv && sv.vorbeschaeftigung_deutschland_tage > 0
-                      ? `${sv.beschaeftigungstage} Kalendertage bei uns + ${sv.vorbeschaeftigung_deutschland_tage} Tage laut SV-Fragebogen bei anderen Arbeitgebern in Deutschland`
+                    sv
+                      ? `${sv.beschaeftigungstage} Kalendertage bei uns` +
+                        (sv.anzahl_abschnitte > 1
+                          ? ` (${sv.anzahl_abschnitte} Abschnitte, Pausen nicht mitgezählt)`
+                          : "") +
+                        (sv.vorbeschaeftigung_deutschland_tage > 0
+                          ? ` + ${sv.vorbeschaeftigung_deutschland_tage} Tage laut SV-Fragebogen bei anderen Arbeitgebern in Deutschland`
+                          : "")
                       : undefined
                   }
                 >
-                  {sv && sv.vorbeschaeftigung_deutschland_tage > 0 ? (
+                  {sv ? (
                     <>
-                      {sv.rest_bis_90_tage_kombiniert}
-                      <span className="ml-1 text-xs text-amber-600">*</span>
+                      {sv.rest_bis_105_tage}
+                      {(sv.vorbeschaeftigung_deutschland_tage > 0 ||
+                        sv.anzahl_abschnitte > 1) && (
+                        <span className="ml-1 text-xs text-amber-600">*</span>
+                      )}
                     </>
                   ) : (
                     <span className="text-neutral-400">—</span>
