@@ -510,6 +510,31 @@ returns date language sql immutable as $$
   end;
 $$;
 
+-- true bei den "offenen Zuständen" (Blöcke 2/5/6: Selbstständigkeit, Rente,
+-- Hausfrau/Hausmann) - dort ist das "seit"-Datum auf dem Formular NUR ein
+-- Nachweis, seit wann der Zustand besteht, KEIN Beginn eines SV-freien
+-- Zeitraums (Nutzer-Korrektur 2026-08-11: "Das Startdatum ist immer das
+-- 'aktiv seit' Datum der Person. Anders macht das auch keinen Sinn.").
+-- Der SV-freie Zeitraum beginnt in diesen Fällen deshalb mit dem
+-- tatsächlichen Arbeitsbeginn - siehe employee_sv_pruefung weiter unten,
+-- wo genau das eingesetzt wird.
+-- Bewusst mit derselben Vorrang-Reihenfolge wie in sv_freier_zeitraum_von:
+-- Block 1 und Block 4 liefern echte Von-Bis-Zeiträume und gehen vor.
+create or replace function sv_freier_zeitraum_offen(f sv_fragebogen)
+returns boolean language sql immutable as $$
+  select
+    not coalesce(f.beschaeftigt_heimatland, false)
+    and not (
+      coalesce(f.schule_studium, false)
+      and coalesce(f.schulferien_waehrend_beschaeftigung, false)
+    )
+    and (
+      coalesce(f.hausmann, false)
+      or coalesce(f.rente, false)
+      or coalesce(f.selbststaendig, false)
+    );
+$$;
+
 create or replace function sv_freier_zeitraum_bis(f sv_fragebogen)
 returns date language sql immutable as $$
   select case
@@ -658,7 +683,12 @@ select
   sv_freier_zeitraum_bis(f) as sv_frei_bis,
   sv_freier_zeitraum_luecke(f) as sv_frei_luecke,
   sv_freier_zeitraum_luecke_von(f) as sv_frei_luecke_von,
-  sv_freier_zeitraum_luecke_bis(f) as sv_frei_luecke_bis
+  sv_freier_zeitraum_luecke_bis(f) as sv_frei_luecke_bis,
+  -- "Offener Zustand" (Hausfrau/Rente/Selbstständigkeit): sv_frei_von oben
+  -- ist dann nur das Nachweis-Datum aus dem Formular, NICHT der Beginn des
+  -- SV-freien Zeitraums - der ist der tatsächliche Arbeitsbeginn (siehe
+  -- employee_sv_pruefung.sv_frei_von, dort korrekt eingesetzt).
+  sv_freier_zeitraum_offen(f) as sv_frei_offen
 from sv_fragebogen f;
 
 -- security_invoker = true: die Rohantworten sind so sensibel wie andere
@@ -2088,7 +2118,12 @@ select
   -- Anzeige "welche Regel war bindend".
   case when coalesce(fb.vorbeschaeftigung_deutschland_tage, 0) > 0
     then w.erster_arbeitstag + (89 - fb.vorbeschaeftigung_deutschland_tage)
-  end as austrittsdatum_90_tage_kombiniert
+  end as austrittsdatum_90_tage_kombiniert,
+  -- "Offener Zustand" (Hausfrau/Rente/Selbstständigkeit) - dann ist
+  -- sv_frei_von oben bereits der Arbeitsbeginn statt des Nachweis-Datums
+  -- aus dem Formular (siehe Kommentar im fb-Join unten). Ans Ende
+  -- angehängt, nicht dazwischen (42P16).
+  coalesce(fb.sv_frei_offen, false) as sv_frei_offen
 from employees e
 join lateral (
   select
@@ -2116,11 +2151,22 @@ join lateral (
 left join lateral (
   select
     f.vorbeschaeftigung_deutschland_tage,
-    sv_freier_zeitraum_von(f) as sv_frei_von,
+    -- Nutzer-Korrektur 2026-08-11: bei den offenen Zuständen (Hausfrau/
+    -- Rente/Selbstständigkeit) ist das "seit"-Datum aus dem Formular nur
+    -- ein Nachweis, seit wann der Zustand besteht - der SV-freie Zeitraum
+    -- beginnt dort mit dem tatsächlichen Arbeitsbeginn ("aktiv seit").
+    -- Bei Block 1 (Bezahlter Urlaub/Freistellung) und Block 4
+    -- (Schulferien) bleibt es beim echten Von-Datum aus den Angaben, sonst
+    -- könnte die Prüfung "Zeitraum beginnt zu spät" nie mehr auslösen.
+    -- Hier - und nicht erst in der SELECT-Liste - eingesetzt, damit
+    -- Anzeige UND kritisch-Formel garantiert denselben Wert verwenden.
+    case when sv_freier_zeitraum_offen(f) then w.erster_arbeitstag
+      else sv_freier_zeitraum_von(f) end as sv_frei_von,
     sv_freier_zeitraum_bis(f) as sv_frei_bis,
     sv_freier_zeitraum_luecke(f) as sv_frei_luecke,
     sv_freier_zeitraum_luecke_von(f) as sv_frei_luecke_von,
-    sv_freier_zeitraum_luecke_bis(f) as sv_frei_luecke_bis
+    sv_freier_zeitraum_luecke_bis(f) as sv_frei_luecke_bis,
+    sv_freier_zeitraum_offen(f) as sv_frei_offen
   from sv_fragebogen f
   where f.employee_id = e.id and f.saison_jahr = w.saison_jahr
 ) fb on true

@@ -267,7 +267,31 @@ export default function SozialversicherungPage() {
                         <span className="text-neutral-400">—</span>
                       ) : (
                         <>
-                          {formatDatumDE(f.sv_frei_von)} –{" "}
+                          {/* Bei den offenen Zuständen (Hausfrau/Rente/
+                              Selbstständigkeit) ist f.sv_frei_von nur das
+                              Nachweis-Datum aus dem Formular - der Zeitraum
+                              beginnt dort mit dem Arbeitsbeginn
+                              (Nutzer-Korrektur 2026-08-11). Die Sicht
+                              employee_sv_pruefung liefert genau das bereits
+                              richtig; ohne erfassten Arbeitstag gibt es sie
+                              noch nicht, dann der Regeltext. */}
+                          {f.sv_frei_offen ? (
+                            svPruefung?.sv_frei_von ? (
+                              <span title="Beginn = erster Arbeitstag; das Datum im Formular weist nur nach, seit wann der Zustand besteht">
+                                {formatDatumDE(svPruefung.sv_frei_von)}
+                              </span>
+                            ) : (
+                              <span
+                                className="text-neutral-500"
+                                title="Beginnt mit dem ersten Arbeitstag - steht fest, sobald Stunden erfasst sind"
+                              >
+                                ab Arbeitsbeginn
+                              </span>
+                            )
+                          ) : (
+                            formatDatumDE(f.sv_frei_von)
+                          )}{" "}
+                          –{" "}
                           {/* Immer das TATSÄCHLICH geltende Ende zeigen, nie
                               "unbefristet"/"offen" (Nutzer-Vorgabe
                               2026-08-10): austrittsdatum_empfohlen vereint

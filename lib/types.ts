@@ -167,6 +167,10 @@ export interface SvPruefung {
   // zusätzlich einzeln für die transparente Anzeige "welche Regel war
   // bindend".
   austrittsdatum_90_tage_kombiniert: string | null;
+  // "Offener Zustand" (Hausfrau/Hausmann, Rente, Selbstständigkeit): dann
+  // ist sv_frei_von oben bereits der tatsächliche Arbeitsbeginn statt des
+  // reinen Nachweis-Datums aus dem Formular (Nutzer-Korrektur 2026-08-11).
+  sv_frei_offen: boolean;
 }
 
 // Aus der Sicht employee_urlaubstage - Urlaubstage-Anspruch (2 je vollem
@@ -272,6 +276,11 @@ export interface SvFragebogenAuswertung extends SvFragebogen {
   sv_frei_luecke: boolean;
   sv_frei_luecke_von: string | null;
   sv_frei_luecke_bis: string | null;
+  // "Offener Zustand" (Hausfrau/Hausmann, Rente, Selbstständigkeit): dann
+  // ist sv_frei_von hier nur das Nachweis-Datum aus dem Formular, NICHT der
+  // Beginn des SV-freien Zeitraums - der ist der tatsächliche
+  // Arbeitsbeginn (siehe SvPruefung.sv_frei_von, dort korrekt eingesetzt).
+  sv_frei_offen: boolean;
 }
 
 // "Bestätigung für den Nachweis der doppelten Haushaltsführung" - analog

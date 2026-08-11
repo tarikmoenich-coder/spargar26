@@ -394,7 +394,14 @@ Enthalten:
   angezeigt), bei Schule/Studium der Schulferienzeitraum (nur wenn
   "Schulferien während Beschäftigung" angekreuzt ist), bei Hausfrau/
   Hausmann, Rentenbezug und Selbstständigkeit im Heimatland ein offener
-  Zeitraum ab dem jeweiligen "seit"-Datum, in den Angaben ohne Enddatum.
+  Zeitraum, in den Angaben ohne Enddatum. Wichtige Korrektur 2026-08-11
+  (Nutzer): bei diesen drei offenen Zuständen beginnt der SV-freie Zeitraum
+  mit dem tatsächlichen Arbeitsbeginn ("aktiv seit"), NICHT mit dem
+  "seit"-Datum aus dem Formular - dieses weist nur nach, seit wann der
+  Zustand besteht ("Anders macht das auch keinen Sinn"). Bei Beschäftigung
+  im Heimatland und bei Schulferien bleibt es dagegen beim echten Von-Datum
+  aus den Angaben, denn das sind echte Von-Bis-Zeiträume: nur so kann die
+  Prüfung "SV-freier Zeitraum beginnt zu spät" überhaupt noch auslösen.
   Fehlkorrektur vermieden (Nutzer-Feedback 2026-08-10, erneut bestätigt
   2026-08-11): dieser offene Zeitraum wird NIE als "unbefristet"/"offen"
   angezeigt, da er immer durch die 15-Wochen-Grenze (bzw. bei
