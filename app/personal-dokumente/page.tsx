@@ -15,27 +15,15 @@ import PersonalTabs from "@/components/PersonalTabs";
 const DOKUMENTE_BUCKET = "mitarbeiter-dokumente";
 const FUEHRERSCHEIN_KATEGORIE: DokumentKategorie = "Führerschein Kopie";
 
-// Die beiden Fach-Formulare gehören fachlich auf ihre eigene Seite und
-// tauchen hier bewusst NICHT mehr auf (Nutzer-Vorgabe 2026-08-11) - weder
-// als Spalte noch in der Hochlade-Auswahl:
-//   - Formular "Doppelte Haushaltsführung"
-//     → "Personal → Lohnsteuer" (neben Familienstand/Wohnsituation und dem
-//       Verfahrensstand beim Finanzamt)
-//   - Formular zur Feststellung der Versicherungspflicht
-//     → "Personal → Sozialversicherung" (neben den Fragebogen-Angaben)
-// Die Kategorien selbst bleiben bestehen - bereits hochgeladene Dateien
-// gehen nicht verloren, sie werden ab jetzt auf den Fachseiten angezeigt
-// und dort auch neu hochgeladen. Die Hochzeitsurkunde bleibt bewusst HIER
-// (allgemeiner Personalnachweis) und ist zusätzlich auf der Lohnsteuer-
-// Seite sichtbar, wo sie als Nachweis gebraucht wird.
-const AUSGELAGERTE_KATEGORIEN: DokumentKategorie[] = [
-  'Formular "Doppelte Haushaltsführung"',
-  "Formular zur Feststellung der Versicherungspflicht",
-];
-
-const SICHTBARE_KATEGORIEN: DokumentKategorie[] = DOKUMENT_KATEGORIEN.filter(
-  (k) => !AUSGELAGERTE_KATEGORIEN.includes(k)
-);
+// Die beiden Fach-Formulare ("Doppelte Haushaltsführung" und "Feststellung
+// der Versicherungspflicht") wurden 2026-08-11 als Dokument-Kategorie ganz
+// entfernt: sie werden nicht mehr hochgeladen, sondern ausschließlich über
+// ihre Eingabemaske erfasst (Personal → Lohnsteuer bzw.
+// Sozialversicherung). Die dort erfassten Angaben sind der Nachweis, und
+// die Anreiseliste-Checkliste prüft entsprechend diese Angaben.
+// Die Hochzeitsurkunde bleibt hier (allgemeiner Personalnachweis) und ist
+// zusätzlich auf der Lohnsteuer-Seite sichtbar, wo sie gebraucht wird.
+const SICHTBARE_KATEGORIEN: DokumentKategorie[] = [...DOKUMENT_KATEGORIEN];
 
 interface Row {
   id: string;
@@ -228,10 +216,10 @@ export default function PersonalDokumentePage() {
           Allgemeine Personaldokumente je Mitarbeiter und Kategorie. Leere
           Felder bedeuten: für diese Kategorie wurde noch nichts hochgeladen.
           Downloads laufen über zeitlich begrenzte Links. Die beiden
-          Fach-Formulare stehen nicht mehr hier, sondern jeweils bei ihrem
-          Thema: das Formular „Doppelte Haushaltsführung" unter Personal →
-          Lohnsteuer, das Formular zur Feststellung der Versicherungspflicht
-          unter Personal → Sozialversicherung.
+          Fach-Formulare („Doppelte Haushaltsführung" und „Feststellung der
+          Versicherungspflicht") werden nicht mehr hochgeladen, sondern
+          ausschließlich über ihre Eingabemaske erfasst – unter Personal →
+          Lohnsteuer bzw. Personal → Sozialversicherung.
         </p>
       </div>
 

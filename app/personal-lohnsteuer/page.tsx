@@ -4,7 +4,9 @@
 // analog zu "Personal → Sozialversicherung". Bündelt alles zum
 // Lohnsteuerabzug-Antrag an einer Stelle - Angaben aus der "Bestätigung für
 // den Nachweis der doppelten Haushaltsführung" (Familienstand, Wohnsituation),
-// den Verfahrensstand beim Finanzamt und das gescannte Papierformular.
+// und den Verfahrensstand beim Finanzamt. Das Formular selbst wird NICHT
+// hochgeladen (Nutzer-Vorgabe 2026-08-11) - die hier erfassten Angaben
+// sind der Nachweis.
 // Diese Themen standen vorher verstreut auf der allgemeinen Dokumente-Seite.
 
 import { Fragment, useEffect, useState } from "react";
@@ -26,7 +28,10 @@ import {
 import { formatDatumDE } from "@/lib/format";
 
 const CURRENT_YEAR = new Date().getFullYear();
-const DHH_FORMULAR: DokumentKategorie = 'Formular "Doppelte Haushaltsführung"';
+// Das Formular "Doppelte Haushaltsführung" wird seit 2026-08-11 NICHT mehr
+// als Datei hochgeladen (Nutzer-Vorgabe) - die über das Eingabeformular
+// erfassten Angaben sind der Nachweis. Die Hochzeitsurkunde bleibt ein
+// echter Upload, sie ist ein fremdes Dokument.
 const HOCHZEITSURKUNDE: DokumentKategorie = "Hochzeitsurkunde";
 const EIN_JAHR_MS = 365 * 24 * 60 * 60 * 1000;
 
@@ -94,7 +99,7 @@ export default function LohnsteuerPage() {
         supabase
           .from("employee_documents")
           .select("*")
-          .in("kategorie", [DHH_FORMULAR, HOCHZEITSURKUNDE])
+          .eq("kategorie", HOCHZEITSURKUNDE)
           .order("hochgeladen_am", { ascending: false }),
       ]);
     setEmployees((emps as Employee[]) ?? []);
@@ -185,9 +190,6 @@ export default function LohnsteuerPage() {
                   Status {jahr}
                 </th>
                 <th>Datum</th>
-                <th title="Gescanntes, von der Gemeinde bestätigtes Papierformular">
-                  Formular „Doppelte Haushaltsführung"
-                </th>
                 <th title="Nachweis bei verheirateten Personen">
                   Hochzeitsurkunde
                 </th>
@@ -247,15 +249,6 @@ export default function LohnsteuerPage() {
                       <td>
                         <FormularDokumentZelle
                           employeeId={emp.id}
-                          kategorie={DHH_FORMULAR}
-                          dokumente={empDocs}
-                          canEdit={canEdit}
-                          onGeaendert={load}
-                        />
-                      </td>
-                      <td>
-                        <FormularDokumentZelle
-                          employeeId={emp.id}
                           kategorie={HOCHZEITSURKUNDE}
                           dokumente={empDocs}
                           canEdit={canEdit}
@@ -287,7 +280,7 @@ export default function LohnsteuerPage() {
                     </tr>
                     {editingId === emp.id && (
                       <tr>
-                        <td colSpan={canEdit ? 9 : 8}>
+                        <td colSpan={canEdit ? 8 : 7}>
                           <DoppelteHaushaltsfuehrungFormular
                             employeeId={emp.id}
                             saisonJahr={jahr}

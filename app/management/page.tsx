@@ -114,7 +114,7 @@ function offeneGruende(z: AnreiselisteOffenArbeitend): string[] {
     z.ausweiskopie_fehlt ? "Ausweiskopie fehlt" : null,
     z.fuehrerschein_fehlt ? "Führerschein-Kopie fehlt" : null,
     z.hochzeitsurkunde_fehlt ? "Hochzeitsurkunde fehlt" : null,
-    z.dhh_formular_fehlt ? "Formular Doppelte Haushaltsführung fehlt" : null,
+    z.dhh_angaben_fehlen ? "Angaben Doppelte Haushaltsführung fehlen" : null,
     z.buskosten_fehlen ? "Buskosten nicht erfasst" : null,
   ].filter((g): g is string => g !== null);
 }

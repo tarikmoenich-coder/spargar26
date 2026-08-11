@@ -7,11 +7,8 @@ import PersonalTabs from "@/components/PersonalTabs";
 import SvFragebogenFormular, {
   SV_VERGLEICHS_FELDER,
 } from "@/components/SvFragebogenFormular";
-import FormularDokumentZelle from "@/components/FormularDokumentZelle";
 import type {
-  DokumentKategorie,
   Employee,
-  EmployeeDocument,
   SvFragebogenAuswertung,
   SvPruefung,
 } from "@/lib/types";
@@ -24,11 +21,9 @@ import {
 } from "@/lib/svPruefung";
 
 const CURRENT_YEAR = new Date().getFullYear();
-// Das gescannte, von einer rumänischen Stelle bestätigte Papierformular -
-// steht seit 2026-08-11 hier statt auf der allgemeinen Dokumente-Seite
-// (Nutzer-Vorgabe: gehört fachlich neben die Fragebogen-Angaben).
-const SV_FORMULAR: DokumentKategorie =
-  "Formular zur Feststellung der Versicherungspflicht";
+// Das Formular zur Feststellung der Versicherungspflicht wird seit
+// 2026-08-11 NICHT mehr hochgeladen (Nutzer-Vorgabe) - der über das
+// Fragebogen-Formular erfasste Inhalt ist der Nachweis.
 
 export default function SozialversicherungPage() {
   const { profile } = useProfile();
@@ -52,9 +47,6 @@ export default function SozialversicherungPage() {
   // ab Arbeitsbeginn korrekt anzuzeigen statt fälschlich "unbefristet"
   // (Nutzer-Vorgabe 2026-08-10).
   const [pruefung, setPruefung] = useState<Record<string, SvPruefung>>({});
-  const [dokumente, setDokumente] = useState<
-    Record<string, EmployeeDocument[]>
-  >({});
 
   const [editingId, setEditingId] = useState<string | null>(null);
 
@@ -63,13 +55,8 @@ export default function SozialversicherungPage() {
     const supabase = getSupabaseClient();
     let query = supabase.from("employees").select("*").order("personal_nr");
     if (!showInactive) query = query.eq("aktiv", true);
-    const [
-      { data: emps },
-      { data: frag },
-      { data: fragVorjahr },
-      { data: pr },
-      { data: docs },
-    ] = await Promise.all([
+    const [{ data: emps }, { data: frag }, { data: fragVorjahr }, { data: pr }] =
+      await Promise.all([
         query,
         supabase
           .from("sv_fragebogen_auswertung")
@@ -83,11 +70,6 @@ export default function SozialversicherungPage() {
           .from("employee_sv_pruefung")
           .select("*")
           .eq("saison_jahr", jahr),
-        supabase
-          .from("employee_documents")
-          .select("*")
-          .eq("kategorie", SV_FORMULAR)
-          .order("hochgeladen_am", { ascending: false }),
       ]);
     setEmployees((emps as Employee[]) ?? []);
     const map: Record<string, SvFragebogenAuswertung> = {};
@@ -105,12 +87,6 @@ export default function SozialversicherungPage() {
       mapPruefung[p.employee_id] = p;
     });
     setPruefung(mapPruefung);
-    const docMap: Record<string, EmployeeDocument[]> = {};
-    ((docs as EmployeeDocument[]) ?? []).forEach((d) => {
-      if (!docMap[d.employee_id]) docMap[d.employee_id] = [];
-      docMap[d.employee_id].push(d);
-    });
-    setDokumente(docMap);
     setLoading(false);
   }
 
@@ -195,9 +171,6 @@ export default function SozialversicherungPage() {
               </th>
               <th>Angaben {jahr}</th>
               <th>Zum Vorjahr ({jahr - 1})</th>
-              <th title="Gescanntes, von einer rumänischen Stelle bestätigtes Papierformular">
-                Formular Versicherungspflicht
-              </th>
               {canEdit && <th></th>}
             </tr>
           </thead>
@@ -411,15 +384,6 @@ export default function SozialversicherungPage() {
                         </span>
                       )}
                     </td>
-                    <td>
-                      <FormularDokumentZelle
-                        employeeId={emp.id}
-                        kategorie={SV_FORMULAR}
-                        dokumente={dokumente[emp.id] ?? []}
-                        canEdit={canEdit}
-                        onGeaendert={load}
-                      />
-                    </td>
                     {canEdit && (
                       <td>
                         <button
@@ -436,7 +400,7 @@ export default function SozialversicherungPage() {
                   </tr>
                   {editingId === emp.id && (
                     <tr>
-                      <td colSpan={12}>
+                      <td colSpan={11}>
                         <SvFragebogenFormular
                           employeeId={emp.id}
                           saisonJahr={jahr}

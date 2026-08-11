@@ -106,9 +106,13 @@ Enthalten:
   "Nicht erfasst"/"Nicht bestanden"/"Bestanden" sofort sichtbar, ggf.
   verheiratet, ggf. Lohnsteuerabzug-Antrag gewünscht, sowie Buskosten
   (Hinfahrt) eingetragen (fließt automatisch in season_bonuses/die
-  Lohnübersicht ein). Ob Ausweiskopie/Führerscheinkopie/Hochzeitsurkunde/
-  Formular "Doppelte Haushaltsführung" hochgeladen sind, wird live gegen
-  "Personal → Dokumente" geprüft (nicht doppelt gepflegt). Erst wenn alles
+  Lohnübersicht ein). Ob Ausweiskopie/Führerscheinkopie/Hochzeitsurkunde
+  hochgeladen sind, wird live gegen "Personal → Dokumente" geprüft (nicht
+  doppelt gepflegt); die beiden Fach-Formulare werden dagegen NICHT
+  hochgeladen, sondern über ihre Eingabemaske erfasst (Stand 2026-08-11) -
+  geprüft wird entsprechend, ob die Angaben erfasst sind: beim
+  Lohnsteuerabzug der Familienstand auf "Personal → Lohnsteuer", beim
+  SV-Fragebogen ohnehin schon immer der Datensatz selbst. Erst wenn alles
   erfüllt ist (inkl. SV-Fragebogen "Bestanden"), springt der Status von
   "Offen" auf "Vollständig" - auch als Spalte im Personalstamm sichtbar,
   live berechnet statt gespeichert, damit nichts veraltet stehen bleiben
@@ -127,14 +131,14 @@ Enthalten:
   zeitlich begrenzte signierte Links. Aufgeräumt 2026-08-11
   (Nutzer-Vorgabe: die Seite war irreführend geworden): die beiden
   Fach-Formulare und alle fachlichen Status-Spalten stehen nicht mehr
-  hier, sondern jeweils bei ihrem Thema - Formular "Doppelte
-  Haushaltsführung" samt Familienstand/Wohnsituation/Antragsstand unter
-  "Personal → Lohnsteuer", Formular zur Feststellung der
-  Versicherungspflicht samt SV-Status unter "Personal →
-  Sozialversicherung". Die Kategorien selbst bleiben bestehen, bereits
-  hochgeladene Dateien gehen nicht verloren - sie werden ab jetzt auf den
-  Fachseiten angezeigt und dort auch neu hochgeladen. Damit ist diese
-  Seite wieder das, was ihr Name sagt: die allgemeinen Personaldokumente.
+  hier, sondern jeweils bei ihrem Thema - Familienstand/Wohnsituation/
+  Antragsstand unter "Personal → Lohnsteuer", SV-Status unter "Personal →
+  Sozialversicherung". Die beiden Formulare selbst wurden als
+  Dokument-Kategorie ganz entfernt (Nutzer-Vorgabe, zweiter Schritt am
+  selben Tag): sie werden nicht mehr hochgeladen, sondern ausschließlich
+  über ihre Eingabemaske erfasst - die dort erfassten Angaben sind der
+  Nachweis. Damit ist diese Seite wieder das, was ihr Name sagt: die
+  allgemeinen Personaldokumente.
 - Eigene Unterseite "Personal → Lohnsteuer" (nur admin/hr, Stand
   2026-08-11, aufgebaut analog zu "Personal → Sozialversicherung"):
   bündelt alles zum Antrag auf Lohnsteuerabzug an einer Stelle. Angaben
@@ -151,9 +155,7 @@ Enthalten:
   Heimatland, der Status wird deshalb immer manuell gesetzt und nie
   automatisch abgeleitet. Der Antrag selbst (das eigentliche Schreiben ans
   Finanzamt) ist noch nicht in der App abgebildet und soll später ergänzt
-  werden. Ebenfalls auf dieser Seite: der gestempelte Papierbeleg als
-  Datei-Upload (der Gemeinde-Stempel ist der eigentliche Rechtsnachweis
-  und lässt sich nicht digital ersetzen) sowie die Hochzeitsurkunde mit
+  werden. Ebenfalls auf dieser Seite: die Hochzeitsurkunde mit
   dem Hinweis "ggf. erneut prüfen", wenn die zuletzt hochgeladene Kopie
   älter als ein Jahr ist und die Person laut diesjähriger Erfassung
   verheiratet ist (reine Erinnerung, keine echte Prüfung). Der Status

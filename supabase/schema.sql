@@ -232,10 +232,15 @@ create table employee_documents (
     'Führerschein Kopie',
     'Arbeitsvertrag',
     'Werks- und Mietvertrag',
-    'Formular "Doppelte Haushaltsführung"',
-    'Formular zur Feststellung der Versicherungspflicht',
     'Sonstiges'
   )),
+  -- Entfernt 2026-08-11 (Nutzer-Vorgabe): Formular "Doppelte
+  -- Haushaltsführung" und Formular zur Feststellung der
+  -- Versicherungspflicht werden NICHT mehr hochgeladen. Beide werden
+  -- ausschließlich über ihre Eingabemaske erfasst (Personal → Lohnsteuer
+  -- bzw. Sozialversicherung); die erfassten Angaben sind der Nachweis.
+  -- Die Anreiseliste-Checkliste prüft entsprechend die Angaben statt eines
+  -- Dokuments (siehe personal_kandidaten_checkliste weiter unten).
   dateiname text not null,
   -- Pfad im Storage-Bucket "mitarbeiter-dokumente", z.B.
   -- "<employee_id>/<zeitstempel>_<dateiname>".
@@ -836,12 +841,18 @@ select
         and d.kategorie = 'Hochzeitsurkunde'
     )
   ) as hochzeitsurkunde_erfuellt,
+  -- Prüft seit 2026-08-11 die ERFASSTEN ANGABEN statt eines hochgeladenen
+  -- Formulars (Nutzer-Vorgabe: "Diese Dokumente sollen nur noch über die
+  -- Eingabemaske abgefragt werden ... ein Dateiupload ist nicht mehr
+  -- notwendig"). Erfüllt, sobald auf "Personal → Lohnsteuer" der
+  -- Familienstand erfasst ist - das ist die Kernangabe des Formulars.
   (
     k.lohnsteuerabzug_antrag_gewuenscht = false
     or exists (
-      select 1 from employee_documents d
+      select 1 from doppelte_haushaltsfuehrung d
       where d.employee_id = k.aktivierter_employee_id
-        and d.kategorie = 'Formular "Doppelte Haushaltsführung"'
+        and d.saison_jahr = extract(year from k.geplante_ankunft)::int
+        and d.familienstand is not null
     )
   ) as lohnsteuerabzug_erfuellt,
   -- SV-Fragebogen (Nutzer-Vorgabe 2026-08-08: löst das alte manuelle
@@ -2432,7 +2443,12 @@ grant select on employee_urlaubstage to authenticated;
 --       Personaldaten (kein Geburtsdatum, keine IBAN/SV-Nr.) - gleiches
 --       Muster wie employee_letzte_abrechnung.
 -- ---------------------------------------------------------------------------
-create or replace view anreiseliste_offen_arbeitend as
+-- drop + create statt "create or replace": die Spalte dhh_formular_fehlt
+-- heißt seit 2026-08-11 dhh_angaben_fehlen, und eine Namensänderung lehnt
+-- "create or replace view" mit Fehler 42P16 ab.
+drop view if exists anreiseliste_offen_arbeitend;
+
+create view anreiseliste_offen_arbeitend as
 select
   k.id as kandidat_id,
   e.id as employee_id,
@@ -2474,14 +2490,18 @@ select
       where d.employee_id = e.id and d.kategorie = 'Hochzeitsurkunde'
     )
   ) as hochzeitsurkunde_fehlt,
+  -- Angaben zur doppelten Haushaltsführung (Personal → Lohnsteuer) - seit
+  -- 2026-08-11 wird die erfasste Angabe geprüft, nicht mehr ein
+  -- hochgeladenes Formular.
   (
     k.lohnsteuerabzug_antrag_gewuenscht
     and not exists (
-      select 1 from employee_documents d
+      select 1 from doppelte_haushaltsfuehrung d
       where d.employee_id = e.id
-        and d.kategorie = 'Formular "Doppelte Haushaltsführung"'
+        and d.saison_jahr = extract(year from w.erster_arbeitstag)::int
+        and d.familienstand is not null
     )
-  ) as dhh_formular_fehlt
+  ) as dhh_angaben_fehlen
 from personal_kandidaten k
 join employees e on e.id = k.aktivierter_employee_id
 join lateral (

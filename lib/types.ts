@@ -46,10 +46,15 @@ export const DOKUMENT_KATEGORIEN = [
   'Führerschein Kopie',
   'Arbeitsvertrag',
   'Werks- und Mietvertrag',
-  'Formular "Doppelte Haushaltsführung"',
-  'Formular zur Feststellung der Versicherungspflicht',
   'Sonstiges',
 ] as const;
+// Entfernt 2026-08-11 (Nutzer-Vorgabe): Formular "Doppelte
+// Haushaltsführung" und Formular zur Feststellung der Versicherungspflicht
+// werden NICHT mehr als Datei hochgeladen. Beide werden ausschließlich über
+// die jeweilige Eingabemaske erfasst (Personal → Lohnsteuer bzw.
+// Sozialversicherung) - die erfassten Angaben sind der Nachweis, nicht der
+// Scan. Die Anreiseliste-Checkliste prüft entsprechend die Angaben statt
+// eines Dokuments.
 
 export type DokumentKategorie = (typeof DOKUMENT_KATEGORIEN)[number];
 
@@ -219,7 +224,7 @@ export interface AnreiselisteOffenArbeitend {
   ausweiskopie_fehlt: boolean;
   fuehrerschein_fehlt: boolean;
   hochzeitsurkunde_fehlt: boolean;
-  dhh_formular_fehlt: boolean;
+  dhh_angaben_fehlen: boolean;
 }
 
 // Aus der Sicht employee_urlaubstage - Urlaubstage-Anspruch (2 je vollem
