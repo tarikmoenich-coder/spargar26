@@ -1587,6 +1587,12 @@ create table erdbeeren_tunnel (
   -- Rollennummer der Folie (Cotura). Vorerst nur dokumentierend, das
   -- eigene Folien-Register kommt später.
   cotura_nr text,
+  -- Reihenfolge in der Liste = räumliche Anordnung auf dem Feld
+  -- (Nutzer-Vorgabe 2026-08-11). Bewusst nicht nach Nummer sortiert: in
+  -- der alten Excel sind die Tunnel nach Länge gruppiert, was mit der
+  -- tatsächlichen Anordnung nichts zu tun hat. Frei sortierbar per Ziehen
+  -- oder Pfeiltasten.
+  position int,
   notiz text,
   erstellt_von uuid references profiles (id) default auth.uid(),
   erstellt_am timestamptz not null default now(),
@@ -1773,13 +1779,21 @@ returns int language plpgsql security invoker as $$
 declare
   i int;
   angelegt int := 0;
+  naechste_position int;
 begin
+  -- Neue Tunnel hinten anhängen, damit eine bestehende Sortierung erhalten
+  -- bleibt.
+  select coalesce(max(position), 0) into naechste_position
+  from erdbeeren_tunnel where anbau_id = p_anbau_id;
+
   for i in p_von..p_bis loop
+    naechste_position := naechste_position + 1;
     insert into erdbeeren_tunnel (
-      anbau_id, nummer, laenge_m, reihen_anzahl, pflanzen_pro_lfm
+      anbau_id, nummer, laenge_m, reihen_anzahl, pflanzen_pro_lfm, position
     )
     values (
-      p_anbau_id, i::text, p_laenge_m, p_reihen_anzahl, p_pflanzen_pro_lfm
+      p_anbau_id, i::text, p_laenge_m, p_reihen_anzahl, p_pflanzen_pro_lfm,
+      naechste_position
     )
     on conflict (anbau_id, nummer) do nothing;
     if found then angelegt := angelegt + 1; end if;
@@ -1826,12 +1840,12 @@ begin
     loop
       insert into erdbeeren_tunnel (
         anbau_id, nummer, laenge_m, reihen_anzahl, pflanzen_pro_lfm,
-        cotura_nr, notiz
+        cotura_nr, notiz, position
       )
       values (
         v_neu_anbau_id, v_alt_tunnel.nummer, v_alt_tunnel.laenge_m,
         v_alt_tunnel.reihen_anzahl, v_alt_tunnel.pflanzen_pro_lfm,
-        v_alt_tunnel.cotura_nr, v_alt_tunnel.notiz
+        v_alt_tunnel.cotura_nr, v_alt_tunnel.notiz, v_alt_tunnel.position
       )
       returning id into v_neu_tunnel_id;
 

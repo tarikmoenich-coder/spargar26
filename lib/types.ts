@@ -730,6 +730,10 @@ export interface ErdbeerenTunnel {
   // Rollennummer der Folie; eigenes Folien-Register kommt später.
   cotura_nr: string | null;
   notiz: string | null;
+  // Reihenfolge in der Liste = räumliche Anordnung auf dem Feld
+  // (Nutzer-Vorgabe 2026-08-11) - frei sortierbar, bewusst unabhängig von
+  // der Tunnelnummer.
+  position: number | null;
 }
 
 export interface ErdbeerenBepflanzung {

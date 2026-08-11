@@ -484,7 +484,14 @@ Enthalten:
   der Bepflanzung, wobei die Reihenzahl je Sorte angegeben wird (z.B. 4 und
   4 bei 8 Reihen); leer gelassen belegt eine Sorte alle Reihen. Belegen
   mehrere Sorten zusammen mehr Reihen als der Tunnel hat, warnt die Zeile -
-  sonst wäre die Pflanzenzahl zu hoch. Die Folienrollen-Nummer (Cotura) steht vorerst als Textfeld
+  sonst wäre die Pflanzenzahl zu hoch. Die Tunnel sind frei sortierbar
+  (Ziehen oder Pfeile, Stand 2026-08-11), damit die Reihenfolge in der
+  Liste die tatsächliche Anordnung auf dem Feld abbildet - in der Excel
+  waren sie nur nach Länge gruppiert, was mit der Anordnung nichts zu tun
+  hat; die Tunnelnummer bleibt davon unberührt. Der Tunnel-Bereich steht
+  bewusst UNTER der Feldtabelle statt als aufgeklappte Zeile mittendrin,
+  damit die Feldübersicht beim Arbeiten vollständig sichtbar bleibt.
+  Die Folienrollen-Nummer (Cotura) steht vorerst als Textfeld
   am Tunnel; ein eigenes Folien-Register mit Zustand und Einsatzhistorie ist
   als zweiter Schritt vorgesehen. Unterreiter "Bestellung": Bedarf je Sorte
   kommt live aus der Planung, dazu Bestellmenge, eigener Bestand und
