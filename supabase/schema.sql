@@ -1804,6 +1804,22 @@ $$;
 
 grant execute on function erdbeeren_tunnel_sammelanlage(bigint, int, int, numeric, int, numeric) to authenticated;
 
+-- Setzt die Reihenfolge einer Tunnel-Liste in einem Aufruf: die Position
+-- ergibt sich aus der Reihenfolge im übergebenen Array.
+-- Bewusst als Funktion statt als upsert vom Client aus: erdbeeren_tunnel
+-- hat NOT-NULL-Spalten (anbau_id, nummer), ein upsert mit nur id+position
+-- würde deshalb als INSERT scheitern (Vorfall 2026-08-11 - das Ziehen sah
+-- so aus, als passiere gar nichts).
+create or replace function erdbeeren_tunnel_reihenfolge_setzen(p_ids bigint[])
+returns void language sql security invoker as $$
+  update erdbeeren_tunnel t
+  set position = pos.idx
+  from unnest(p_ids) with ordinality as pos(id, idx)
+  where t.id = pos.id;
+$$;
+
+grant execute on function erdbeeren_tunnel_reihenfolge_setzen(bigint[]) to authenticated;
+
 -- Übernimmt einen kompletten Jahrgang eines Feldes ins Zieljahr (Felder,
 -- Tunnel mit Maßen, Bepflanzung ohne Pflanzdatum) - ersetzt das Copy/Paste
 -- zwischen den Excel-Blättern, aber ohne die dort entstandenen #REF!-

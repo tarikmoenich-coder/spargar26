@@ -1,24 +1,34 @@
--- Migration 2026-08-11: Tunnel frei sortierbar
+-- Migration 2026-08-11 (Fix): Tunnel-Reihenfolge
 --
--- Nutzer-Vorgabe: "Bei der Anbauplanung waere es schon hilfreich, wenn ich
--- die Tunnel einfach 'nehmen' und nach oben oder unten ziehen koennte,
--- damit praktisch die Anordnung auf dem Feld auch die Anordnung in der
--- Liste widerspiegelt. Die Reihenfolge in der Excel stimmt ja ueberhaupt
--- nicht, da die Tunnel nur nach ihrer Gemeinsamkeit: Der Laenge gruppiert
--- sind."
+-- Zwei Nutzer-Meldungen, zwei Ursachen:
 --
--- Neue Spalte position; sortiert wird ab jetzt danach statt nach der
--- Tunnelnummer. Bestehende Tunnel werden nach ihrer bisherigen
--- Sortierung (Nummer, natuerlich sortiert) initialisiert, damit sich
--- optisch zunaechst nichts aendert.
+-- 1. "Could not find the 'position' column of 'erdbeeren_tunnel' in the
+--    schema cache" -> die Spalte war noch gar nicht angelegt, weil
+--    migration_2026-08-11_tunnel_reihenfolge.sql noch nicht ausgefuehrt
+--    war. Diese Migration hier legt sie deshalb selbst an (if not exists),
+--    damit sie unabhaengig davon laeuft - die andere kann danach trotzdem
+--    gefahrlos ausgefuehrt werden oder entfallen.
 --
--- In der Supabase SQL-Konsole ausfuehren.
+-- 2. "Das Greifen und ziehen an sich geht, aber die Tunnel bleiben nicht an
+--    der Stelle" -> das Frontend schrieb die neuen Positionen per upsert
+--    mit nur {id, position}. PostgREST macht daraus ein INSERT ... ON
+--    CONFLICT, und der INSERT-Teil scheitert an den NOT-NULL-Spalten
+--    anbau_id und nummer. Die Fehlermeldung erschien ausserdem ganz oben
+--    auf der Seite, waehrend man unten in der Tunnel-Liste arbeitet -
+--    deshalb wirkte es, als passiere gar nichts. Fix: eigene Funktion, die
+--    die Reihenfolge in einem Aufruf setzt.
+--
+-- In der Supabase SQL-Konsole ausfuehren. Laeuft in einem Zug und ist
+-- wiederholbar.
 
+-- 1) Spalte fuer die Reihenfolge (= raeumliche Anordnung auf dem Feld).
+-- Bewusst unabhaengig von der Tunnelnummer: in der alten Excel sind die
+-- Tunnel nach Laenge gruppiert, was mit der Anordnung nichts zu tun hat.
 alter table erdbeeren_tunnel add column if not exists position int;
 
--- Bestehende Tunnel je Feld durchnummerieren. "nummer" ist Text, deshalb
--- vor dem Sortieren in eine Zahl wandeln, wo das moeglich ist - sonst
--- stuende "10" vor "2".
+-- Bestehende Tunnel je Feld durchnummerieren, damit sich optisch zunaechst
+-- nichts aendert. "nummer" ist Text, deshalb vor dem Sortieren in eine Zahl
+-- wandeln, wo das moeglich ist - sonst stuende "10" vor "2".
 with sortiert as (
   select
     id,
@@ -36,7 +46,19 @@ set position = s.pos
 from sortiert s
 where s.id = t.id and t.position is null;
 
--- Sammelanlage: neue Tunnel hinten anhaengen, damit eine bestehende
+-- 2) Reihenfolge in einem Aufruf setzen: die Position ergibt sich aus der
+-- Reihenfolge im uebergebenen Array.
+create or replace function erdbeeren_tunnel_reihenfolge_setzen(p_ids bigint[])
+returns void language sql security invoker as $$
+  update erdbeeren_tunnel t
+  set position = pos.idx
+  from unnest(p_ids) with ordinality as pos(id, idx)
+  where t.id = pos.id;
+$$;
+
+grant execute on function erdbeeren_tunnel_reihenfolge_setzen(bigint[]) to authenticated;
+
+-- 3) Sammelanlage: neue Tunnel hinten anhaengen, damit eine bestehende
 -- Sortierung erhalten bleibt.
 create or replace function erdbeeren_tunnel_sammelanlage(
   p_anbau_id bigint,
@@ -72,7 +94,6 @@ end;
 $$;
 
 grant execute on function erdbeeren_tunnel_sammelanlage(bigint, int, int, numeric, int, numeric) to authenticated;
-
 -- Vorjahr-Uebernahme: Sortierung mit uebernehmen.
 create or replace function erdbeeren_anbau_vorjahr_uebernehmen(
   p_saison_jahr int,

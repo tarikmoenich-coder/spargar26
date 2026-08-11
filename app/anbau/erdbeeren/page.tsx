@@ -321,12 +321,15 @@ export default function AnbauErdbeerenPage() {
     // Sofort anzeigen, nicht erst nach dem Speichern - sonst "springt" die
     // Zeile beim Ziehen sichtbar zurück.
     setTunnel((prev) => ({ ...prev, [liste[0].anbau_id]: liste }));
-    const { error } = await supabase.from("erdbeeren_tunnel").upsert(
-      liste.map((t, i) => ({ id: t.id, position: i + 1 })),
-      { onConflict: "id" }
+    // Bewusst über eine Funktion statt per upsert: erdbeeren_tunnel hat
+    // NOT-NULL-Spalten (anbau_id, nummer), ein upsert mit nur id+position
+    // würde als INSERT scheitern (Vorfall 2026-08-11).
+    const { error } = await supabase.rpc(
+      "erdbeeren_tunnel_reihenfolge_setzen",
+      { p_ids: liste.map((t) => t.id) }
     );
     if (error) {
-      setFehler(error.message);
+      setFehler(`Reihenfolge konnte nicht gespeichert werden: ${error.message}`);
       load();
     }
   }
@@ -590,6 +593,17 @@ export default function AnbauErdbeerenPage() {
               Schließen
             </button>
           </div>
+
+          {/* Fehler auch hier zeigen, nicht nur ganz oben - beim Sortieren
+              und Bearbeiten schaut man in diesen Bereich und würde eine
+              Meldung am Seitenanfang schlicht nicht sehen (Nutzer-Meldung
+              2026-08-11: "es passiert einfach nichts"). */}
+          {fehler && (
+            <p className="rounded border border-red-300 bg-red-50 p-2 text-sm text-red-700">
+              {fehler}
+            </p>
+          )}
+
               {canEdit && (
                 <div className="flex flex-col gap-3 rounded border border-neutral-200 bg-white p-3 text-xs">
                   <div className="flex flex-wrap items-end gap-2">
@@ -820,11 +834,20 @@ export default function AnbauErdbeerenPage() {
                         <tr
                           key={t.id}
                           draggable={canEdit}
-                          onDragStart={() => setZiehtIndex(index)}
+                          onDragStart={(e) => {
+                            setZiehtIndex(index);
+                            // Ohne gesetzte Daten startet Firefox den
+                            // Ziehvorgang gar nicht erst.
+                            e.dataTransfer.effectAllowed = "move";
+                            e.dataTransfer.setData("text/plain", String(t.id));
+                          }}
                           onDragEnd={() => setZiehtIndex(null)}
                           // Ohne preventDefault lehnt der Browser das
                           // Fallenlassen ab.
-                          onDragOver={(e) => e.preventDefault()}
+                          onDragOver={(e) => {
+                            e.preventDefault();
+                            e.dataTransfer.dropEffect = "move";
+                          }}
                           onDrop={() => {
                             if (ziehtIndex === null || ziehtIndex === index) {
                               return;
