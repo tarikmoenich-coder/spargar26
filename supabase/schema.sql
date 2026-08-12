@@ -1774,6 +1774,12 @@ join erdbeeren_tunnel t on t.id = b.tunnel_id
 join erdbeeren_anbau a on a.id = t.anbau_id
 join erdbeeren_parzellen p on p.id = a.parzelle_id;
 
+-- security_invoker = true: unbedenklich, da alle drei zugrunde liegenden
+-- Tabellen (erdbeeren_bepflanzung/_tunnel/_anbau/_parzellen) ohnehin per
+-- RLS für jede angemeldete Rolle lesbar sind ("auth.uid() is not null") -
+-- kein Unterschied im Ergebnis, silenced nur den Supabase-Security-Advisor-
+-- Hinweis "Security Definer View".
+alter view erdbeeren_bepflanzung_berechnet set (security_invoker = true);
 grant select on erdbeeren_bepflanzung_berechnet to authenticated;
 
 -- Bestellübersicht je Saison und Sorte: Bedarf aus der Planung, dagegen die
@@ -1809,6 +1815,8 @@ from (
 full outer join erdbeeren_bestellung best
   on best.saison_jahr = bed.saison_jahr and best.sorte = bed.sorte;
 
+-- security_invoker = true: gleicher Grund wie bei erdbeeren_bepflanzung_berechnet.
+alter view erdbeeren_bestellung_uebersicht set (security_invoker = true);
 grant select on erdbeeren_bestellung_uebersicht to authenticated;
 
 -- Kennzahlen je Feld und Saison - die Zusammenfassung, die in der Excel
@@ -1844,6 +1852,8 @@ group by
   a.erntefenster_von, a.erntefenster_bis, a.ertrag_erwartet_steigen,
   a.rodung_geplant, a.notiz;
 
+-- security_invoker = true: gleicher Grund wie bei erdbeeren_bepflanzung_berechnet.
+alter view erdbeeren_anbau_uebersicht set (security_invoker = true);
 grant select on erdbeeren_anbau_uebersicht to authenticated;
 
 -- Legt für ein Feld auf einen Schlag mehrere gleichartige Tunnel an
@@ -2567,7 +2577,17 @@ select
     - steuer.zimmer_kaution - steuer.kleidung_betrag
     as auszahlungsbetrag,
   steuer.kleidung_betrag
-from steuer;
+from steuer
+-- Sicherheitsfix 2026-08-12 (Supabase-Advisor "Security Definer View"):
+-- diese Sicht liest bewusst mit den Rechten des Eigentümers (u.a.
+-- season_bonuses, das per RLS auf admin/lohnabrechnung beschränkt ist),
+-- damit auch kasse/pruefer/management die Lohnübersicht vollständig sehen
+-- können. Ohne diese WHERE-Zeile wäre die Sicht aber für JEDE angemeldete
+-- Rolle per REST-API abrufbar gewesen - auch zeiterfassung/erntewirtschaft,
+-- die "Lohn" im Menü (components/Nav.tsx) nie zu sehen bekommen. Die
+-- Rollenliste hier spiegelt exakt die Nav-Berechtigung für "/uebersicht".
+where current_role_name() in
+  ('admin', 'hr', 'kasse', 'lohnabrechnung', 'pruefer', 'management');
 
 grant select on season_summary to authenticated;
 
@@ -2608,6 +2628,12 @@ select
 from employees e
 join work_entries we on we.employee_id = e.id
 left join verpflegungssaetze v on v.saison_jahr = extract(year from we.datum)::int
+-- Sicherheitsfix 2026-08-12 (Supabase-Advisor "Security Definer View"):
+-- gleicher Grund wie bei season_summary - verpflegungssaetze ist per RLS
+-- admin-only, diese Sicht braucht die Eigentümer-Rechte dafür, darf aber
+-- nicht an zeiterfassung/erntewirtschaft durchgereicht werden.
+where current_role_name() in
+  ('admin', 'hr', 'kasse', 'lohnabrechnung', 'pruefer', 'management')
 group by
   e.id, e.personal_nr, e.name, e.vorname, e.gruppe_nr, e.aktiv,
   extract(year from we.datum), extract(month from we.datum),
@@ -2652,6 +2678,13 @@ from auszahlungsbelege ab
 join season_bonuses sb on sb.auszahlungsbeleg_id = ab.id
 left join season_summary ss
   on ss.employee_id = sb.employee_id and ss.saison_jahr = sb.saison_jahr
+-- Sicherheitsfix 2026-08-12 (Supabase-Advisor "Security Definer View"):
+-- gleicher Grund wie bei season_summary - season_bonuses ist per RLS
+-- admin/lohnabrechnung-only, diese Sicht braucht die Eigentümer-Rechte
+-- dafür, darf aber nicht an zeiterfassung/erntewirtschaft durchgereicht
+-- werden.
+where current_role_name() in
+  ('admin', 'hr', 'kasse', 'lohnabrechnung', 'pruefer', 'management')
 group by ab.id, ab.belegnummer, ab.saison_jahr, ab.zahlungsart, ab.erstellt_am, ab.erstellt_von;
 
 grant select on auszahlungsbeleg_summary to authenticated;
@@ -2850,7 +2883,17 @@ left join lateral (
 -- Die 15-Wochen-Regel ist die Obergrenze für SOZIALVERSICHERUNGSFREIE
 -- Beschäftigung - für bereits sozialversicherungspflichtige Personen ist
 -- diese Prüfung gegenstandslos (Nutzer-Hinweis 2026-08-06).
-where e.abrechnungsart <> 'sozialversicherungspflichtig';
+--
+-- Sicherheitsfix 2026-08-12 (Supabase-Advisor "Security Definer View"):
+-- diese Sicht liest bewusst mit den Rechten des Eigentümers direkt gegen
+-- sv_fragebogen (siehe Kommentar oben bei "fb"), das per RLS admin/hr-only
+-- ist - "so sensibel wie SV-Nr./IBAN" (siehe sv_fragebogen_admin_hr_all
+-- weiter unten). Ohne diese Zeile wäre die abgeleitete SV-Einschätzung
+-- trotzdem für JEDE angemeldete Rolle abrufbar gewesen. Rollenliste
+-- entspricht den tatsächlichen Nutzern (Personal/Controlling, siehe
+-- app/mitarbeiter, app/personal-sozialversicherung, app/management).
+where e.abrechnungsart <> 'sozialversicherungspflichtig'
+  and current_role_name() in ('admin', 'hr', 'management');
 
 grant select on employee_sv_pruefung to authenticated;
 
@@ -2916,6 +2959,10 @@ join lateral (
 ) monate on true
 where w.erster_eintrag is not null;
 
+-- security_invoker = true: unbedenklich, employees und work_entries sind
+-- ohnehin für jede angemeldete Rolle per RLS lesbar - kein Unterschied im
+-- Ergebnis, silenced nur den Supabase-Security-Advisor-Hinweis.
+alter view employee_urlaubstage set (security_invoker = true);
 grant select on employee_urlaubstage to authenticated;
 
 -- ---------------------------------------------------------------------------

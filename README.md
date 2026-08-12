@@ -666,6 +666,18 @@ Enthalten:
   jetzt `security definer` laufende Funktion `naechste_belegnummer()`
   (gleiches "kontrollierte Ausnahme"-Muster wie an anderer Stelle im
   Schema). Migration: `migration_2026-08-11_beleg_zaehler_rls.sql`
+- Sicherheitsfix 2026-08-12: Supabase-Advisor-Warnung "Security Definer
+  View" für 14 Sichten geprüft. 6 sind bewusst so gebaut (zeigen nur eine
+  schmale, unkritische Auswahl wie Namen/Stückzahlen) - unverändert. 4
+  waren unbedenklich (Basistabellen ohnehin für alle lesbar) - nur
+  `security_invoker = true` ergänzt. 4 hatten eine echte Lücke -
+  `season_summary`, `season_summary_monat`, `auszahlungsbeleg_summary`
+  (volle Lohndaten) und `employee_sv_pruefung` (SV-rechtliche
+  Einschätzung) waren technisch für jede angemeldete Rolle per REST-API
+  abrufbar, obwohl die App diese Seiten nur bestimmten Rollen zeigt -
+  jetzt mit `current_role_name() in (...)` direkt in der Sicht abgesichert,
+  passend zur bestehenden Menü-Berechtigung. Migration:
+  `migration_2026-08-12_security_definer_views.sql`
 
 **Nicht enthalten** (siehe "Nächste Schritte"):
 - Finalisierte Auszahlungsliste/Lohnabrechnungs-Export
