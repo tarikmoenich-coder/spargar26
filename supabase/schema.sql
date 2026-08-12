@@ -1979,8 +1979,31 @@ create table beleg_zaehler (
   naechste_nummer int not null default 1
 );
 
+-- RLS-Sicherheitshinweis 2026-08-11 (Supabase-Scan "rls_disabled_in_public"):
+-- diese Tabelle hatte bis dahin KEINE Row-Level-Security - ohne eigene
+-- Policy und ohne RLS wäre sie über die REST-API direkt lesbar/schreibbar
+-- gewesen (Supabase gewährt anon/authenticated standardmäßig Tabellen-
+-- Grants, RLS ist die einzige Schranke davor). Fix: RLS aktiviert, aber
+-- bewusst OHNE jede Policy - damit ist die Tabelle für alle Rollen
+-- vollständig gesperrt, außer über die SECURITY-DEFINER-Funktion
+-- naechste_belegnummer() weiter unten (läuft mit den Rechten des
+-- Funktions-Eigentümers, der als Tabellen-Eigentümer RLS automatisch
+-- umgeht - gleiches Muster wie kandidat_buskosten_setzen/
+-- saison_abrechnen_batch oben). Das ist auch der einzige vorgesehene
+-- Zugriffsweg: die Zähler dürfen nie direkt verändert werden, nur über
+-- diese Funktion atomar hochgezählt.
+alter table beleg_zaehler enable row level security;
+
+-- security definer + fester search_path (wie bei current_role_name() oben):
+-- naechste_belegnummer() wird direkt vom Client per .rpc() aufgerufen
+-- (Auszahlungen/Kasse/Vorschuesse-Seite) und muss trotz RLS auf
+-- beleg_zaehler funktionieren. Bewusst OHNE eigene Rollenprüfung - die
+-- Funktion selbst tut nichts Sensibles (liefert nur die nächste laufende
+-- Nummer, ändert keine Beträge/Personendaten), die eigentliche Berechtigung
+-- prüft die jeweils aufrufende Seite/Tabellen-Policy beim Einfügen des
+-- damit erzeugten Belegs.
 create or replace function naechste_belegnummer(prefix_monat text)
-returns text language plpgsql as $$
+returns text language plpgsql security definer set search_path = public as $$
 declare
   neue_nr int;
 begin
@@ -1993,6 +2016,8 @@ begin
   return prefix_monat || '-' || lpad(neue_nr::text, 3, '0');
 end;
 $$;
+
+grant execute on function naechste_belegnummer(text) to authenticated;
 
 -- ---------------------------------------------------------------------------
 -- 8. Vorschüsse (Sheet "Vorschüsse")

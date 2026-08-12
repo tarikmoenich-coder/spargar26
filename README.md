@@ -659,6 +659,13 @@ Enthalten:
 - Rollen/Rechte serverseitig über Postgres Row Level Security
 - Append-only Audit-Log für Personal, Stunden, Vorschüsse, Kassenbuch -
   einsehbar über die Seite "Protokoll" (siehe unten)
+- Sicherheitsfix 2026-08-11: `beleg_zaehler` (zentrale Belegnummern-Vergabe)
+  war die einzige Tabelle im Schema ohne aktiviertes RLS - ausgelöst durch
+  eine Supabase-Sicherheitswarnung (`rls_disabled_in_public`). Jetzt per
+  RLS ohne jede Policy vollständig gesperrt, Zugriff nur noch über die
+  jetzt `security definer` laufende Funktion `naechste_belegnummer()`
+  (gleiches "kontrollierte Ausnahme"-Muster wie an anderer Stelle im
+  Schema). Migration: `migration_2026-08-11_beleg_zaehler_rls.sql`
 
 **Nicht enthalten** (siehe "Nächste Schritte"):
 - Finalisierte Auszahlungsliste/Lohnabrechnungs-Export
