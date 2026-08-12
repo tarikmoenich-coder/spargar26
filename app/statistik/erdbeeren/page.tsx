@@ -7,12 +7,28 @@
 // eine Saison-Summe je Parzelle (Ertrag/Kosten pro Feld sind für den
 // Betrieb wichtig, Nutzer-Vorgabe) - "Ertrag kg" = Summe Steigen × 5
 // (1 Steige = 10 Schalen à 500g = 5 kg).
+//
+// Gruppen-Kosten je Tag (Nutzer-Vorgabe 2026-08-12), aus der Sicht
+// erdbeeren_gruppenkosten_tag: rechnet statt mit den Prämien-Stunden mit
+// den Stunden aus der ALLGEMEINEN Stundenerfassung aller Arbeitsgruppen,
+// die unter Einstellungen der Kultur "Erdbeeren" zugeordnet sind - bewusst
+// nur auf Tages-, nicht auf Parzellen-Ebene, da die Stundenerfassung keine
+// einzelne Parzelle kennt.
+//
+// Die Saison-Summen-Zeile der Tagesstatistik rechnet mit dem Mindestlohn-
+// Wert der Sicht selbst (zeilen[0]?.mindestlohn), NICHT mehr mit einem
+// fest verdrahteten Wert - das Frontend darf verpflegungssaetze selbst
+// nicht direkt lesen (admin-only per RLS).
 
 import { useEffect, useState } from "react";
 import { getSupabaseClient } from "@/lib/supabase/client";
 import StatistikTabs from "@/components/StatistikTabs";
 import { formatDatumDE } from "@/lib/format";
-import type { ErdbeerenParzelle, ErdbeerenStatistikTag } from "@/lib/types";
+import type {
+  ErdbeerenGruppenkostenTag,
+  ErdbeerenParzelle,
+  ErdbeerenStatistikTag,
+} from "@/lib/types";
 
 const CURRENT_YEAR = new Date().getFullYear();
 const KG_PRO_STEIGE = 5;
@@ -35,12 +51,13 @@ export default function StatistikErdbeerenPage() {
   const [parzellen, setParzellen] = useState<ErdbeerenParzelle[]>([]);
   const [parzelleFilter, setParzelleFilter] = useState<number | "">("");
   const [zeilen, setZeilen] = useState<ErdbeerenStatistikTag[]>([]);
+  const [gruppenZeilen, setGruppenZeilen] = useState<ErdbeerenGruppenkostenTag[]>([]);
   const [loading, setLoading] = useState(true);
 
   async function load() {
     setLoading(true);
     const supabase = getSupabaseClient();
-    const [{ data: p }, { data }] = await Promise.all([
+    const [{ data: p }, { data }, { data: gz }] = await Promise.all([
       supabase.from("erdbeeren_parzellen").select("*").order("name"),
       supabase
         .from("erdbeeren_statistik_tag")
@@ -48,9 +65,16 @@ export default function StatistikErdbeerenPage() {
         .gte("datum", `${jahr}-01-01`)
         .lte("datum", `${jahr}-12-31`)
         .order("datum", { ascending: false }),
+      supabase
+        .from("erdbeeren_gruppenkosten_tag")
+        .select("*")
+        .gte("datum", `${jahr}-01-01`)
+        .lte("datum", `${jahr}-12-31`)
+        .order("datum", { ascending: false }),
     ]);
     setParzellen((p as ErdbeerenParzelle[]) ?? []);
     setZeilen((data as ErdbeerenStatistikTag[]) ?? []);
+    setGruppenZeilen((gz as ErdbeerenGruppenkostenTag[]) ?? []);
     setLoading(false);
   }
 
@@ -67,10 +91,33 @@ export default function StatistikErdbeerenPage() {
   const summeSut = gefiltert.reduce((s, z) => s + Number(z.summe_sut), 0);
   const summeStunden = gefiltert.reduce((s, z) => s + Number(z.summe_stunden), 0);
   const summePraemie = gefiltert.reduce((s, z) => s + Number(z.summe_praemie), 0);
+  // Mindestlohn kommt aus der Sicht selbst mit (das Frontend darf
+  // verpflegungssaetze nicht direkt lesen).
+  const mindestlohn =
+    gefiltert.find((z) => z.mindestlohn != null)?.mindestlohn ?? null;
   const gesamtSteigenProStunde =
     summeStunden > 0 ? summeSteigen / summeStunden : null;
   const gesamtKostenProSteige =
-    summeSteigen > 0 ? (13.9 * summeStunden + summePraemie) / summeSteigen : null;
+    summeSteigen > 0 && mindestlohn != null
+      ? (mindestlohn * summeStunden + summePraemie) / summeSteigen
+      : null;
+
+  // Gruppen-Kosten je Tag (unabhängig vom Parzellen-Filter oben - die
+  // Stundenerfassung kennt keine einzelne Parzelle).
+  const summeGruppenSteigen = gruppenZeilen.reduce(
+    (s, z) => s + Number(z.summe_steigen),
+    0
+  );
+  const summeGruppenStunden = gruppenZeilen.reduce(
+    (s, z) => s + Number(z.gruppen_stunden ?? 0),
+    0
+  );
+  const gruppenMindestlohn =
+    gruppenZeilen.find((z) => z.mindestlohn != null)?.mindestlohn ?? null;
+  const gesamtKostenProSteigeGruppen =
+    summeGruppenSteigen > 0 && gruppenMindestlohn != null
+      ? (gruppenMindestlohn * summeGruppenStunden) / summeGruppenSteigen
+      : null;
 
   // Saison-Summe je Parzelle - für die Frage "wieviel Ertrag pro Feld
   // kommt runter" (Nutzer-Vorgabe), unabhängig vom Parzellen-Filter oben.
@@ -109,7 +156,12 @@ export default function StatistikErdbeerenPage() {
           Stunden + Summe Prämien) / Summe Steigen – gerechnet mit dem
           Mindestlohn, der für dieses Saison-Jahr unter Einstellungen
           hinterlegt ist. Ertrag kg = Summe Steigen × {KG_PRO_STEIGE} kg
-          (1 Steige = 10 Schalen à 500g).
+          (1 Steige = 10 Schalen à 500g). Kosten/Steige (Gruppen) =
+          Mindestlohn × Gruppen-Stunden / Summe Steigen (alle Parzellen) –
+          Gruppen-Stunden sind die Stunden aus der allgemeinen
+          Stundenerfassung aller Arbeitsgruppen, die unter Einstellungen
+          der Kultur "Erdbeeren" zugeordnet sind (auch Personen, die nicht
+          einzeln in der Prämien-Erfassung stehen).
         </p>
       </div>
 
@@ -227,6 +279,57 @@ export default function StatistikErdbeerenPage() {
                       <td>{fmt(summePraemie)}</td>
                       <td>{fmt(gesamtSteigenProStunde)}</td>
                       <td>{fmt(gesamtKostenProSteige, 4)}</td>
+                    </tr>
+                  </tfoot>
+                </table>
+              </div>
+            )}
+          </div>
+
+          <div>
+            <h2 className="mb-2 text-base font-semibold text-emerald-800">
+              Gruppen-Kosten je Tag {jahr}
+            </h2>
+            <p className="mb-2 text-sm text-neutral-500">
+              Unabhängig vom Parzellen-Filter oben (alle Parzellen
+              zusammen) - die Stundenerfassung kennt keine einzelne
+              Parzelle.
+            </p>
+            {gruppenZeilen.length === 0 ? (
+              <p className="text-neutral-500">
+                Keine Arbeitsgruppe ist der Kultur "Erdbeeren" zugeordnet
+                (Einstellungen → Arbeitsgruppen), oder keine Einträge für{" "}
+                {jahr}.
+              </p>
+            ) : (
+              <div className="overflow-x-auto">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>Datum</th>
+                      <th>Summe Steigen (alle Parzellen)</th>
+                      <th>Gruppen-Stunden</th>
+                      <th>Kosten/Steige (Gruppen) €</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {gruppenZeilen.map((z) => (
+                      <tr key={z.datum}>
+                        <td>{formatDatumDE(z.datum)}</td>
+                        <td>{fmt(z.summe_steigen)}</td>
+                        <td>{fmt(z.gruppen_stunden)}</td>
+                        <td className="font-medium">
+                          {fmt(z.kosten_pro_steige_gruppen, 4)}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                  <tfoot>
+                    <tr className="font-semibold">
+                      <td>Saison {jahr}</td>
+                      <td>{fmt(summeGruppenSteigen)}</td>
+                      <td>{fmt(summeGruppenStunden)}</td>
+                      <td>{fmt(gesamtKostenProSteigeGruppen, 4)}</td>
                     </tr>
                   </tfoot>
                 </table>

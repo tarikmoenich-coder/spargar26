@@ -563,10 +563,19 @@ export interface VerpflegungsSatz {
   kleidung_stiefel: number | null;
 }
 
+export const KULTUREN = ["zuckermais", "erdbeeren", "spargel"] as const;
+export type Kultur = (typeof KULTUREN)[number];
+export const KULTUR_LABELS: Record<Kultur, string> = {
+  zuckermais: "Zuckermais",
+  erdbeeren: "Erdbeeren",
+  spargel: "Spargel",
+};
+
 export interface Arbeitsgruppe {
   gruppe_nr: string;
   bezeichnung: string;
   reihenfolge: number;
+  kultur: Kultur | null;
 }
 
 export interface Herkunft {
@@ -664,6 +673,11 @@ export interface ZuckermaisStatistikTag {
   summe_praemie: number;
   kolben_pro_stunde: number | null;
   kosten_pro_kolben: number | null;
+  // Stunden aus der allgemeinen Stundenerfassung der Zuckermais-Gruppen
+  // (Einstellungen → Arbeitsgruppen), Nutzer-Vorgabe 2026-08-12.
+  gruppen_stunden: number | null;
+  kosten_pro_kolben_gruppen: number | null;
+  mindestlohn: number | null;
 }
 
 // Prämien Erdbeeren (Nutzer-Vorgabe 2026-08-09) - Norm/Bonus je Parzelle
@@ -862,6 +876,20 @@ export interface ErdbeerenStatistikTag {
   summe_praemie: number;
   steigen_pro_stunde: number | null;
   kosten_pro_steige: number | null;
+  mindestlohn: number | null;
+}
+
+// Aus der Sicht erdbeeren_gruppenkosten_tag - Stunden der Erdbeeren-
+// Gruppen aus der allgemeinen Stundenerfassung × Mindestlohn, umgelegt auf
+// die Gesamt-Erntemenge des Tages (alle Parzellen) - Nutzer-Vorgabe
+// 2026-08-12, ergänzend zu ErdbeerenStatistikTag (das ist je Parzelle und
+// nutzt die enger gefassten Prämien-Stunden).
+export interface ErdbeerenGruppenkostenTag {
+  datum: string;
+  summe_steigen: number;
+  mindestlohn: number | null;
+  gruppen_stunden: number | null;
+  kosten_pro_steige_gruppen: number | null;
 }
 
 // Kautionsübergabe an den Hausmeister (Nutzer-Vorgabe 2026-08-09) - ein

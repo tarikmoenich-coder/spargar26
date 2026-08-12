@@ -105,6 +105,16 @@ create table arbeitsgruppen (
   -- Anzeige-/Druckreihenfolge der Gruppen (nicht alphabetisch nach gruppe_nr,
   -- da z.B. "10" vor "2" sortiert würde).
   reihenfolge int not null default 0,
+  -- Zuordnung zur Kultur (Nutzer-Vorgabe 2026-08-12): optional, da nicht
+  -- jede Gruppe einer einzelnen Kultur zugeordnet ist. Ermöglicht, die in
+  -- der allgemeinen Stundenerfassung erfassten Stunden dieser Gruppe ×
+  -- Mindestlohn auf die an diesem Tag geerntete Menge dieser Kultur
+  -- umzulegen (siehe zuckermais_statistik_tag/erdbeeren_gruppenkosten_tag)
+  -- - zusätzlich zu den bereits bestehenden, enger gefassten Prämien-
+  -- Stunden (nur die tatsächlich in der Prämien-Erfassung eingetragenen
+  -- Personen). Bewusst nur EINE Kultur je Gruppe, kein Array - eine Gruppe
+  -- wie "Sortierer" arbeitet in der Praxis an einer Kultur.
+  kultur text check (kultur in ('zuckermais', 'erdbeeren', 'spargel')),
   created_at timestamptz not null default now()
 );
 
@@ -1447,6 +1457,14 @@ grant select on zuckermais_praemie_tag to authenticated;
 -- Wert für Mindestlohn für die Berechnung relevant"). Ist für ein Jahr kein
 -- Mindestlohn hinterlegt, bleibt die Kennzahl leer statt mit einem
 -- geratenen Wert zu rechnen.
+-- Sicherheitsfix 2026-08-12: diese Sicht war bislang security_invoker =
+-- true, verpflegungssaetze (Mindestlohn) ist aber per RLS admin-only
+-- lesbar - dadurch lief v.mindestlohn für JEDE andere Rolle als admin
+-- lautlos auf NULL, kosten_pro_kolben war für hr/lohnabrechnung/
+-- management/erntewirtschaft (siehe components/Nav.tsx "Statistik") also
+-- immer leer, obwohl die Statistik-Seite gerade für diese Rollen gedacht
+-- ist. Jetzt (wie season_summary_monat) mit Eigentümer-Rechten + eigener
+-- Rollen-Prüfung statt security_invoker.
 create or replace view zuckermais_statistik_tag as
 select
   p.datum,
@@ -1459,14 +1477,46 @@ select
   case when sum(p.kolben) > 0 and v.mindestlohn is not null
     then (v.mindestlohn * sum(p.stunden) + sum(p.praemie)) / sum(p.kolben)
     else null
-  end as kosten_pro_kolben
+  end as kosten_pro_kolben,
+  -- Gruppen-Stunden (Nutzer-Vorgabe 2026-08-12): Stunden aus der
+  -- ALLGEMEINEN Stundenerfassung (nicht aus den oben verwendeten
+  -- Prämien-Stunden) von Mitarbeitern, deren aktuelle Arbeitsgruppe der
+  -- Kultur "zuckermais" zugeordnet ist (Einstellungen → Arbeitsgruppen) -
+  -- damit zählen z.B. auch Sortierer/Träger mit, die nicht einzeln in der
+  -- Prämien-Erfassung stehen.
+  gs.gruppen_stunden,
+  case when sum(p.kolben) > 0 and v.mindestlohn is not null and gs.gruppen_stunden is not null
+    then (v.mindestlohn * gs.gruppen_stunden) / sum(p.kolben)
+    else null
+  end as kosten_pro_kolben_gruppen,
+  -- Roher Mindestlohn-Wert mit ausgegeben (Nutzer-Vorgabe 2026-08-12,
+  -- Nebeneffekt der Sicherheitsprüfung): das Frontend kann verpflegungssaetze
+  -- selbst nicht direkt lesen (admin-only per RLS), braucht den Wert aber
+  -- für die client-seitige Saison-Summen-Zeile - vorher stand dort ein fest
+  -- verdrahteter Wert von 13,90 €, der ebenfalls veraltet war.
+  v.mindestlohn
 from zuckermais_praemie_tag p
 left join verpflegungssaetze v
   on v.saison_jahr = extract(year from p.datum)::int
-group by p.datum, v.mindestlohn
+left join lateral (
+  select sum(we.stunden) as gruppen_stunden
+  from work_entries we
+  join employees e on e.id = we.employee_id
+  join arbeitsgruppen ag on ag.gruppe_nr = e.gruppe_nr
+  where ag.kultur = 'zuckermais'
+    and we.datum = p.datum
+    and we.stunden is not null
+) gs on true
+where current_role_name() in
+  ('admin', 'hr', 'lohnabrechnung', 'management', 'erntewirtschaft')
+group by p.datum, v.mindestlohn, gs.gruppen_stunden
 order by p.datum desc;
 
-alter view zuckermais_statistik_tag set (security_invoker = true);
+-- Nicht mehr security_invoker (siehe Kommentar oben) - Rollen-Prüfung
+-- läuft jetzt über die WHERE-Klausel und entspricht exakt
+-- components/Nav.tsx "Statistik".
+alter view zuckermais_statistik_tag reset (security_invoker);
+
 grant select on zuckermais_statistik_tag to authenticated;
 
 -- ---------------------------------------------------------------------------
@@ -1580,6 +1630,12 @@ grant select on erdbeeren_praemie_tag to authenticated;
 -- für den Betrieb wichtig) - Kosten/Steige rechnet wie
 -- zuckermais_statistik_tag mit dem gepflegten Mindestlohn des jeweiligen
 -- Saisonjahres, nicht mehr mit einem fest verdrahteten Wert.
+--
+-- Sicherheitsfix 2026-08-12: wie zuckermais_statistik_tag - war
+-- security_invoker = true, verpflegungssaetze ist aber admin-only per RLS,
+-- kosten_pro_steige war dadurch für hr/lohnabrechnung/management/
+-- erntewirtschaft lautlos immer leer. Jetzt mit Eigentümer-Rechten +
+-- eigener Rollen-Prüfung (entspricht components/Nav.tsx "Statistik").
 create or replace view erdbeeren_statistik_tag as
 select
   p.datum,
@@ -1594,15 +1650,63 @@ select
   case when sum(p.steigen) > 0 and v.mindestlohn is not null
     then (v.mindestlohn * sum(p.stunden) + sum(p.praemie)) / sum(p.steigen)
     else null
-  end as kosten_pro_steige
+  end as kosten_pro_steige,
+  -- Roher Mindestlohn-Wert mit ausgegeben - gleicher Grund wie bei
+  -- zuckermais_statistik_tag.
+  v.mindestlohn
 from erdbeeren_praemie_tag p
 left join verpflegungssaetze v
   on v.saison_jahr = extract(year from p.datum)::int
+where current_role_name() in
+  ('admin', 'hr', 'lohnabrechnung', 'management', 'erntewirtschaft')
 group by p.datum, p.parzelle_id, p.parzelle_name, v.mindestlohn
 order by p.datum desc;
 
-alter view erdbeeren_statistik_tag set (security_invoker = true);
+alter view erdbeeren_statistik_tag reset (security_invoker);
 grant select on erdbeeren_statistik_tag to authenticated;
+
+-- Gruppen-Kosten je Tag (Nutzer-Vorgabe 2026-08-12): Stunden aus der
+-- ALLGEMEINEN Stundenerfassung (nicht die Prämien-Stunden oben) von
+-- Mitarbeitern, deren aktuelle Arbeitsgruppe der Kultur "erdbeeren"
+-- zugeordnet ist (Einstellungen → Arbeitsgruppen), × Mindestlohn,
+-- umgelegt auf die an diesem Tag geerntete Gesamtmenge (alle Parzellen
+-- zusammen - die Stundenerfassung kennt keine einzelne Parzelle, anders
+-- als erdbeeren_rohdaten). Bewusst eine EIGENE Sicht statt zusätzlicher
+-- Spalten in erdbeeren_statistik_tag: die ist je Parzelle gruppiert, die
+-- Gruppen-Stunden sind das aber nicht - eine zusätzliche Spalte dort
+-- würde bei mehreren Parzellen am selben Tag denselben Wert mehrfach
+-- zeigen und beim Aufsummieren verfälschen.
+create or replace view erdbeeren_gruppenkosten_tag as
+select
+  d.datum,
+  d.summe_steigen,
+  v.mindestlohn,
+  gs.gruppen_stunden,
+  case when d.summe_steigen > 0 and v.mindestlohn is not null and gs.gruppen_stunden is not null
+    then (v.mindestlohn * gs.gruppen_stunden) / d.summe_steigen
+    else null
+  end as kosten_pro_steige_gruppen
+from (
+  select datum, sum(steigen) as summe_steigen
+  from erdbeeren_rohdaten
+  group by datum
+) d
+left join verpflegungssaetze v
+  on v.saison_jahr = extract(year from d.datum)::int
+left join lateral (
+  select sum(we.stunden) as gruppen_stunden
+  from work_entries we
+  join employees e on e.id = we.employee_id
+  join arbeitsgruppen ag on ag.gruppe_nr = e.gruppe_nr
+  where ag.kultur = 'erdbeeren'
+    and we.datum = d.datum
+    and we.stunden is not null
+) gs on true
+where current_role_name() in
+  ('admin', 'hr', 'lohnabrechnung', 'management', 'erntewirtschaft')
+order by d.datum desc;
+
+grant select on erdbeeren_gruppenkosten_tag to authenticated;
 
 -- ---------------------------------------------------------------------------
 -- 10c. Erdbeeren-ANBAUPLANUNG (Nutzer-Vorgabe 2026-08-11) - löst die

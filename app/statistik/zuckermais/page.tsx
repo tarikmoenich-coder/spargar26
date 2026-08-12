@@ -5,6 +5,18 @@
 // rechnet mit dem für das Saisonjahr gepflegten Mindestlohn
 // (Einstellungen), nicht mit einem festen Wert und bewusst nicht mit dem
 // individuellen Stundenlohn je Person - berechnet in der Datenbank-Sicht.
+//
+// Kosten/Kolben (Gruppen) - Nutzer-Vorgabe 2026-08-12: zusätzliche Spalte,
+// rechnet statt mit den Prämien-Stunden mit den Stunden aus der
+// ALLGEMEINEN Stundenerfassung aller Arbeitsgruppen, die unter
+// Einstellungen der Kultur "Zuckermais" zugeordnet sind - damit zählen
+// z.B. auch Sortierer/Träger mit, die nicht einzeln in der Prämien-
+// Erfassung stehen.
+//
+// Die Saison-Summen-Zeile rechnet mit dem Mindestlohn-Wert der Sicht
+// selbst (zeilen[0]?.mindestlohn), NICHT mehr mit einem fest verdrahteten
+// Wert - das Frontend darf verpflegungssaetze selbst nicht direkt lesen
+// (admin-only per RLS).
 
 import { useEffect, useState } from "react";
 import { getSupabaseClient } from "@/lib/supabase/client";
@@ -45,9 +57,23 @@ export default function StatistikZuckermaisPage() {
   const summeKolben = zeilen.reduce((s, z) => s + Number(z.summe_kolben), 0);
   const summeStunden = zeilen.reduce((s, z) => s + Number(z.summe_stunden), 0);
   const summePraemie = zeilen.reduce((s, z) => s + Number(z.summe_praemie), 0);
+  const summeGruppenStunden = zeilen.reduce(
+    (s, z) => s + Number(z.gruppen_stunden ?? 0),
+    0
+  );
+  // Mindestlohn kommt aus der Sicht selbst mit (das Frontend darf
+  // verpflegungssaetze nicht direkt lesen) - alle Zeilen desselben
+  // Saison-Jahrs tragen denselben Wert.
+  const mindestlohn = zeilen.find((z) => z.mindestlohn != null)?.mindestlohn ?? null;
   const gesamtKolbenProStunde = summeStunden > 0 ? summeKolben / summeStunden : null;
   const gesamtKostenProKolben =
-    summeKolben > 0 ? (13.9 * summeStunden + summePraemie) / summeKolben : null;
+    summeKolben > 0 && mindestlohn != null
+      ? (mindestlohn * summeStunden + summePraemie) / summeKolben
+      : null;
+  const gesamtKostenProKolbenGruppen =
+    summeKolben > 0 && mindestlohn != null
+      ? (mindestlohn * summeGruppenStunden) / summeKolben
+      : null;
 
   return (
     <div className="flex flex-col gap-4">
@@ -60,7 +86,11 @@ export default function StatistikZuckermaisPage() {
           Tagesstatistik über alle Mitarbeiter. Kosten/Kolben ={" "}
           (Mindestlohn × Summe Stunden + Summe Prämien) / Summe Kolben –
           gerechnet mit dem Mindestlohn, der für dieses Saison-Jahr unter
-          Einstellungen hinterlegt ist.
+          Einstellungen hinterlegt ist. Kosten/Kolben (Gruppen) = Mindestlohn
+          × Gruppen-Stunden / Summe Kolben – Gruppen-Stunden sind die Stunden
+          aus der allgemeinen Stundenerfassung aller Arbeitsgruppen, die
+          unter Einstellungen der Kultur "Zuckermais" zugeordnet sind (auch
+          Personen, die nicht einzeln in der Prämien-Erfassung stehen).
         </p>
       </div>
 
@@ -90,6 +120,8 @@ export default function StatistikZuckermaisPage() {
                 <th>Summe Prämien €</th>
                 <th>Durchschnitt Kolben/Std.</th>
                 <th>Kosten/Kolben €</th>
+                <th>Gruppen-Stunden</th>
+                <th>Kosten/Kolben (Gruppen) €</th>
               </tr>
             </thead>
             <tbody>
@@ -102,6 +134,10 @@ export default function StatistikZuckermaisPage() {
                   <td>{fmt(z.summe_praemie)}</td>
                   <td>{fmt(z.kolben_pro_stunde)}</td>
                   <td className="font-medium">{fmt(z.kosten_pro_kolben, 4)}</td>
+                  <td>{fmt(z.gruppen_stunden)}</td>
+                  <td className="font-medium">
+                    {fmt(z.kosten_pro_kolben_gruppen, 4)}
+                  </td>
                 </tr>
               ))}
             </tbody>
@@ -114,6 +150,8 @@ export default function StatistikZuckermaisPage() {
                 <td>{fmt(summePraemie)}</td>
                 <td>{fmt(gesamtKolbenProStunde)}</td>
                 <td>{fmt(gesamtKostenProKolben, 4)}</td>
+                <td>{fmt(summeGruppenStunden)}</td>
+                <td>{fmt(gesamtKostenProKolbenGruppen, 4)}</td>
               </tr>
             </tfoot>
           </table>

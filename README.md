@@ -639,6 +639,22 @@ Enthalten:
   Saison-Summe je Parzelle (Ertrag in Steigen und kg, Nutzer-Vorgabe: "wie
   viel Ertrag pro Feld kommt runter") und Parzelle-Filter. Spargel folgt,
   sobald dessen Prämien-Erfassung steht
+- Arbeitsgruppen ↔ Kultur (Stand 2026-08-12): Arbeitsgruppen (Einstellungen)
+  können optional einer Kultur (Zuckermais/Erdbeeren/Spargel) zugeordnet
+  werden. Auf den Statistik-Seiten erscheint dadurch zusätzlich "Kosten/
+  Kolben (Gruppen)" bzw. "Kosten/Steige (Gruppen)" - rechnet mit den
+  Stunden aus der ALLGEMEINEN Stundenerfassung dieser Gruppen (× Mindestlohn
+  ÷ Erntemenge des Tages), nicht nur mit den in der Prämien-Erfassung
+  eingetragenen Stunden - damit zählen z.B. auch Sortierer/Träger mit, die
+  nicht einzeln in der Prämien-Erfassung stehen. Bei Erdbeeren als eigene
+  Sicht `erdbeeren_gruppenkosten_tag` (Tages-, nicht Parzellen-Ebene, da die
+  Stundenerfassung keine Parzelle kennt). Nebenbefund dabei behoben:
+  `zuckermais_statistik_tag`/`erdbeeren_statistik_tag` konnten den
+  Mindestlohn wegen ihres `security_invoker`-Zustands für alle Rollen außer
+  admin gar nicht lesen (verpflegungssaetze ist admin-only per RLS) -
+  Kosten/Kolben bzw. Kosten/Steige waren für hr/lohnabrechnung/management/
+  erntewirtschaft seit 2026-08-11 lautlos leer. Migration:
+  `migration_2026-08-12_gruppen_kultur.sql`
 - Neue Rolle `erntewirtschaft` (Stand 2026-08-09): eigener,
   eingeschränkter Arbeitsbereich mit ausschließlich Zugriff auf Prämien
   (erfassen, wie zeiterfassung), Statistik und ein eigenes Dashboard - kein

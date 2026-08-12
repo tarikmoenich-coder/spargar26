@@ -3,11 +3,22 @@
 import { useEffect, useState } from "react";
 import { getSupabaseClient } from "@/lib/supabase/client";
 import { useProfile } from "@/lib/useProfile";
-import type { Arbeitsgruppe, Herkunft, VerpflegungsSatz } from "@/lib/types";
+import {
+  KULTUREN,
+  KULTUR_LABELS,
+  type Arbeitsgruppe,
+  type Herkunft,
+  type VerpflegungsSatz,
+} from "@/lib/types";
 
 const CURRENT_YEAR = new Date().getFullYear();
 
-const emptyGruppenForm = { gruppe_nr: "", bezeichnung: "", reihenfolge: "0" };
+const emptyGruppenForm = {
+  gruppe_nr: "",
+  bezeichnung: "",
+  reihenfolge: "0",
+  kultur: "",
+};
 const emptyHerkunftForm = { wert: "", reihenfolge: "0" };
 
 export default function EinstellungenPage() {
@@ -106,6 +117,7 @@ export default function EinstellungenPage() {
       gruppe_nr: g.gruppe_nr,
       bezeichnung: g.bezeichnung,
       reihenfolge: g.reihenfolge.toString(),
+      kultur: g.kultur ?? "",
     });
   }
 
@@ -123,6 +135,7 @@ export default function EinstellungenPage() {
       gruppe_nr: gruppenForm.gruppe_nr,
       bezeichnung: gruppenForm.bezeichnung,
       reihenfolge: Number(gruppenForm.reihenfolge) || 0,
+      kultur: gruppenForm.kultur || null,
     });
     setGruppenSaving(false);
     if (error) {
@@ -303,14 +316,19 @@ export default function EinstellungenPage() {
           Gruppen (z.B. Sortierer, Träger, Schälmannschaft) für die
           übersichtliche Gruppierung auf der Stundenerfassung und die
           gedruckten Gruppenstundenzettel. Die Reihenfolge bestimmt die
-          Anzeige-/Druckreihenfolge der Gruppen.
+          Anzeige-/Druckreihenfolge der Gruppen. Die optionale Kultur
+          ordnet die in dieser Gruppe erfassten Stunden einer Kultur zu -
+          auf der jeweiligen Statistik-Seite werden diese Stunden ×
+          Mindestlohn zusätzlich auf die an diesem Tag geerntete Menge
+          umgelegt (ergänzend zu den Prämien-Stunden der tatsächlich in der
+          Prämien-Erfassung stehenden Personen).
         </p>
       </div>
 
       {isAdmin && (
         <form
           onSubmit={handleGruppenSubmit}
-          className="grid grid-cols-2 gap-3 rounded border border-neutral-200 bg-white p-4 sm:grid-cols-4"
+          className="grid grid-cols-2 gap-3 rounded border border-neutral-200 bg-white p-4 sm:grid-cols-5"
         >
           <input
             placeholder="Gruppen-Nr."
@@ -337,6 +355,19 @@ export default function EinstellungenPage() {
               setGruppenForm({ ...gruppenForm, reihenfolge: e.target.value })
             }
           />
+          <select
+            value={gruppenForm.kultur}
+            onChange={(e) =>
+              setGruppenForm({ ...gruppenForm, kultur: e.target.value })
+            }
+          >
+            <option value="">Kultur: keine</option>
+            {KULTUREN.map((k) => (
+              <option key={k} value={k}>
+                {KULTUR_LABELS[k]}
+              </option>
+            ))}
+          </select>
           <div className="col-span-full flex items-center gap-2">
             <button type="submit" className="btn" disabled={gruppenSaving}>
               {editingGruppeNr ? "Speichern" : "Anlegen"}
@@ -364,6 +395,7 @@ export default function EinstellungenPage() {
               <th>Gruppen-Nr.</th>
               <th>Bezeichnung</th>
               <th>Reihenfolge</th>
+              <th>Kultur</th>
               {isAdmin && <th></th>}
             </tr>
           </thead>
@@ -373,6 +405,7 @@ export default function EinstellungenPage() {
                 <td>{g.gruppe_nr}</td>
                 <td>{g.bezeichnung}</td>
                 <td>{g.reihenfolge}</td>
+                <td>{g.kultur ? KULTUR_LABELS[g.kultur] : "—"}</td>
                 {isAdmin && (
                   <td>
                     <button
