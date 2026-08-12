@@ -1681,17 +1681,21 @@ grant select on erdbeeren_statistik_tag to authenticated;
 -- mehrfach zeigen und beim Aufsummieren verfälschen. Quelle für Steigen/
 -- Prämien ist erdbeeren_praemie_tag (nicht die Rohtabelle direkt), damit
 -- die Tagesprämie über alle Parzellen hinweg mitgezählt wird.
+-- Spaltenreihenfolge bewusst so belassen (summe_praemie ans ENDE
+-- angehängt, nicht vor mindestlohn eingefügt) - CREATE OR REPLACE VIEW
+-- erlaubt nur ein Anhängen neuer Spalten, siehe 42P16-Lehre an anderer
+-- Stelle im Schema.
 create or replace view erdbeeren_gruppenkosten_tag as
 select
   d.datum,
   d.summe_steigen,
-  d.summe_praemie,
   v.mindestlohn,
   gs.gruppen_stunden,
   case when d.summe_steigen > 0 and v.mindestlohn is not null and gs.gruppen_stunden is not null
     then (v.mindestlohn * gs.gruppen_stunden + d.summe_praemie) / d.summe_steigen
     else null
-  end as kosten_pro_steige_gruppen
+  end as kosten_pro_steige_gruppen,
+  d.summe_praemie
 from (
   select datum, sum(steigen) as summe_steigen, sum(praemie) as summe_praemie
   from erdbeeren_praemie_tag
