@@ -33,7 +33,66 @@
 alter view erdbeeren_bepflanzung_berechnet set (security_invoker = true);
 alter view erdbeeren_bestellung_uebersicht set (security_invoker = true);
 alter view erdbeeren_anbau_uebersicht set (security_invoker = true);
+
+-- employee_urlaubstage fehlte offenbar noch (die Migration vom 2026-08-09
+-- dafür wurde anscheinend nie ausgeführt - "relation does not exist" beim
+-- ersten Versuch dieser Migration). Deshalb hier "create or replace" statt
+-- nur "alter view", damit die Migration unabhängig vom bisherigen Stand
+-- funktioniert. Nebeneffekt: die "Urlaubstage überzogen"-Liste auf der
+-- Controlling-Seite (app/management/page.tsx) lief seit 2026-08-09 lautlos
+-- ins Leere (Fehler wird dort mit "if (!error)" verschluckt) - ab jetzt
+-- gefüllt.
+create or replace view employee_urlaubstage as
+select
+  e.id as employee_id,
+  e.personal_nr,
+  e.name,
+  e.vorname,
+  e.aktiv,
+  w.saison_jahr,
+  w.erster_eintrag,
+  w.letzter_eintrag,
+  w.u_tage,
+  greatest(0, monate.anzahl)::int as volle_kalendermonate,
+  greatest(0, monate.anzahl)::int * 2 as urlaubsanspruch_tage,
+  (w.u_tage > greatest(0, monate.anzahl) * 2) as ueberzogen
+from employees e
+join lateral (
+  select
+    extract(year from we.datum)::int as saison_jahr,
+    min(we.datum) filter (where we.stunden is not null or we.markierung is not null) as erster_eintrag,
+    max(we.datum) filter (where we.stunden is not null or we.markierung is not null) as letzter_eintrag,
+    count(*) filter (where we.markierung = 'U') as u_tage
+  from work_entries we
+  where we.employee_id = e.id
+  group by extract(year from we.datum)
+) w on true
+join lateral (
+  select
+    (
+      extract(year from end_adj) - extract(year from start_adj)
+    ) * 12
+    + (extract(month from end_adj) - extract(month from start_adj))
+    + 1 as anzahl
+  from (
+    select
+      case
+        when extract(day from w.erster_eintrag) = 1
+          then date_trunc('month', w.erster_eintrag)
+        else date_trunc('month', w.erster_eintrag) + interval '1 month'
+      end as start_adj,
+      case
+        when w.letzter_eintrag
+          = (date_trunc('month', w.letzter_eintrag) + interval '1 month' - interval '1 day')::date
+          then date_trunc('month', w.letzter_eintrag)
+        else date_trunc('month', w.letzter_eintrag) - interval '1 month'
+      end as end_adj
+  ) x
+) monate on true
+where w.erster_eintrag is not null;
+
 alter view employee_urlaubstage set (security_invoker = true);
+grant select on employee_urlaubstage to authenticated;
 
 -- --- Gruppe: echte Lücke, Rollen-Prüfung ergänzt ---------------------------
 
