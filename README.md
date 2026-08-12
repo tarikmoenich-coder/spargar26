@@ -654,7 +654,12 @@ Enthalten:
   admin gar nicht lesen (verpflegungssaetze ist admin-only per RLS) -
   Kosten/Kolben bzw. Kosten/Steige waren für hr/lohnabrechnung/management/
   erntewirtschaft seit 2026-08-11 lautlos leer. Migration:
-  `migration_2026-08-12_gruppen_kultur.sql`
+  `migration_2026-08-12_gruppen_kultur.sql`. Nachtrag noch am selben Tag:
+  auf Nutzer-Wunsch mit Abstand und eigener Überschrift "Kulturkosten"
+  dargestellt (zweizeiliger Tabellenkopf bei Zuckermais, eigene Tabelle bei
+  Erdbeeren), und die Formel enthält jetzt zusätzlich die Tagesprämien
+  ("die fehlen bei der Betrachtung der reinen Gruppenkosten") - Migration
+  `migration_2026-08-12_kulturkosten_praemien.sql`
 - Neue Rolle `erntewirtschaft` (Stand 2026-08-09): eigener,
   eingeschränkter Arbeitsbereich mit ausschließlich Zugriff auf Prämien
   (erfassen, wie zeiterfassung), Statistik und ein eigenes Dashboard - kein

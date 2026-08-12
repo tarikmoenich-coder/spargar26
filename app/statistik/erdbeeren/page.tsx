@@ -8,12 +8,14 @@
 // Betrieb wichtig, Nutzer-Vorgabe) - "Ertrag kg" = Summe Steigen × 5
 // (1 Steige = 10 Schalen à 500g = 5 kg).
 //
-// Gruppen-Kosten je Tag (Nutzer-Vorgabe 2026-08-12), aus der Sicht
+// "Kulturkosten" je Tag (Nutzer-Vorgabe 2026-08-12), aus der Sicht
 // erdbeeren_gruppenkosten_tag: rechnet statt mit den Prämien-Stunden mit
 // den Stunden aus der ALLGEMEINEN Stundenerfassung aller Arbeitsgruppen,
-// die unter Einstellungen der Kultur "Erdbeeren" zugeordnet sind - bewusst
-// nur auf Tages-, nicht auf Parzellen-Ebene, da die Stundenerfassung keine
-// einzelne Parzelle kennt.
+// die unter Einstellungen der Kultur "Erdbeeren" zugeordnet sind, PLUS die
+// Tagesprämien (sonst fehlen sie bei Betrachtung der reinen
+// Gruppenkosten, Nutzer-Hinweis) - bewusst nur auf Tages-, nicht auf
+// Parzellen-Ebene, da die Stundenerfassung keine einzelne Parzelle kennt.
+// Mit Abstand und eigener Überschrift dargestellt (Nutzer-Vorgabe).
 //
 // Die Saison-Summen-Zeile der Tagesstatistik rechnet mit dem Mindestlohn-
 // Wert der Sicht selbst (zeilen[0]?.mindestlohn), NICHT mehr mit einem
@@ -114,9 +116,14 @@ export default function StatistikErdbeerenPage() {
   );
   const gruppenMindestlohn =
     gruppenZeilen.find((z) => z.mindestlohn != null)?.mindestlohn ?? null;
+  const summeGruppenPraemie = gruppenZeilen.reduce(
+    (s, z) => s + Number(z.summe_praemie ?? 0),
+    0
+  );
   const gesamtKostenProSteigeGruppen =
     summeGruppenSteigen > 0 && gruppenMindestlohn != null
-      ? (gruppenMindestlohn * summeGruppenStunden) / summeGruppenSteigen
+      ? (gruppenMindestlohn * summeGruppenStunden + summeGruppenPraemie) /
+        summeGruppenSteigen
       : null;
 
   // Saison-Summe je Parzelle - für die Frage "wieviel Ertrag pro Feld
@@ -156,12 +163,12 @@ export default function StatistikErdbeerenPage() {
           Stunden + Summe Prämien) / Summe Steigen – gerechnet mit dem
           Mindestlohn, der für dieses Saison-Jahr unter Einstellungen
           hinterlegt ist. Ertrag kg = Summe Steigen × {KG_PRO_STEIGE} kg
-          (1 Steige = 10 Schalen à 500g). Kosten/Steige (Gruppen) =
-          Mindestlohn × Gruppen-Stunden / Summe Steigen (alle Parzellen) –
-          Gruppen-Stunden sind die Stunden aus der allgemeinen
-          Stundenerfassung aller Arbeitsgruppen, die unter Einstellungen
-          der Kultur "Erdbeeren" zugeordnet sind (auch Personen, die nicht
-          einzeln in der Prämien-Erfassung stehen).
+          (1 Steige = 10 Schalen à 500g). Kulturkosten (Kosten/Steige,
+          Gruppen) = (Mindestlohn × Gruppen-Stunden + Summe Prämien) / Summe
+          Steigen (alle Parzellen) – Gruppen-Stunden sind die Stunden aus
+          der allgemeinen Stundenerfassung aller Arbeitsgruppen, die unter
+          Einstellungen der Kultur "Erdbeeren" zugeordnet sind (auch
+          Personen, die nicht einzeln in der Prämien-Erfassung stehen).
         </p>
       </div>
 
@@ -286,9 +293,9 @@ export default function StatistikErdbeerenPage() {
             )}
           </div>
 
-          <div>
+          <div className="mt-4 border-t-2 border-neutral-300 pt-4">
             <h2 className="mb-2 text-base font-semibold text-emerald-800">
-              Gruppen-Kosten je Tag {jahr}
+              Kulturkosten je Tag {jahr}
             </h2>
             <p className="mb-2 text-sm text-neutral-500">
               Unabhängig vom Parzellen-Filter oben (alle Parzellen
@@ -308,6 +315,7 @@ export default function StatistikErdbeerenPage() {
                     <tr>
                       <th>Datum</th>
                       <th>Summe Steigen (alle Parzellen)</th>
+                      <th>Summe Prämien €</th>
                       <th>Gruppen-Stunden</th>
                       <th>Kosten/Steige (Gruppen) €</th>
                     </tr>
@@ -317,6 +325,7 @@ export default function StatistikErdbeerenPage() {
                       <tr key={z.datum}>
                         <td>{formatDatumDE(z.datum)}</td>
                         <td>{fmt(z.summe_steigen)}</td>
+                        <td>{fmt(z.summe_praemie)}</td>
                         <td>{fmt(z.gruppen_stunden)}</td>
                         <td className="font-medium">
                           {fmt(z.kosten_pro_steige_gruppen, 4)}
@@ -328,6 +337,7 @@ export default function StatistikErdbeerenPage() {
                     <tr className="font-semibold">
                       <td>Saison {jahr}</td>
                       <td>{fmt(summeGruppenSteigen)}</td>
+                      <td>{fmt(summeGruppenPraemie)}</td>
                       <td>{fmt(summeGruppenStunden)}</td>
                       <td>{fmt(gesamtKostenProSteigeGruppen, 4)}</td>
                     </tr>

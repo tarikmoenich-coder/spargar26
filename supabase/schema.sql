@@ -1478,15 +1478,17 @@ select
     then (v.mindestlohn * sum(p.stunden) + sum(p.praemie)) / sum(p.kolben)
     else null
   end as kosten_pro_kolben,
-  -- Gruppen-Stunden (Nutzer-Vorgabe 2026-08-12): Stunden aus der
-  -- ALLGEMEINEN Stundenerfassung (nicht aus den oben verwendeten
+  -- "Kulturkosten" (Nutzer-Vorgabe 2026-08-12, ergänzt 2026-08-12): Stunden
+  -- aus der ALLGEMEINEN Stundenerfassung (nicht aus den oben verwendeten
   -- Prämien-Stunden) von Mitarbeitern, deren aktuelle Arbeitsgruppe der
   -- Kultur "zuckermais" zugeordnet ist (Einstellungen → Arbeitsgruppen) -
   -- damit zählen z.B. auch Sortierer/Träger mit, die nicht einzeln in der
-  -- Prämien-Erfassung stehen.
+  -- Prämien-Erfassung stehen. Die Tagesprämien (summe_praemie) fließen mit
+  -- ein wie bei kosten_pro_kolben oben - sonst fehlen sie bei Betrachtung
+  -- der reinen Gruppenkosten (Nutzer-Hinweis).
   gs.gruppen_stunden,
   case when sum(p.kolben) > 0 and v.mindestlohn is not null and gs.gruppen_stunden is not null
-    then (v.mindestlohn * gs.gruppen_stunden) / sum(p.kolben)
+    then (v.mindestlohn * gs.gruppen_stunden + sum(p.praemie)) / sum(p.kolben)
     else null
   end as kosten_pro_kolben_gruppen,
   -- Roher Mindestlohn-Wert mit ausgegeben (Nutzer-Vorgabe 2026-08-12,
@@ -1665,30 +1667,34 @@ order by p.datum desc;
 alter view erdbeeren_statistik_tag reset (security_invoker);
 grant select on erdbeeren_statistik_tag to authenticated;
 
--- Gruppen-Kosten je Tag (Nutzer-Vorgabe 2026-08-12): Stunden aus der
+-- "Kulturkosten" je Tag (Nutzer-Vorgabe 2026-08-12): Stunden aus der
 -- ALLGEMEINEN Stundenerfassung (nicht die Prämien-Stunden oben) von
 -- Mitarbeitern, deren aktuelle Arbeitsgruppe der Kultur "erdbeeren"
--- zugeordnet ist (Einstellungen → Arbeitsgruppen), × Mindestlohn,
--- umgelegt auf die an diesem Tag geerntete Gesamtmenge (alle Parzellen
--- zusammen - die Stundenerfassung kennt keine einzelne Parzelle, anders
--- als erdbeeren_rohdaten). Bewusst eine EIGENE Sicht statt zusätzlicher
--- Spalten in erdbeeren_statistik_tag: die ist je Parzelle gruppiert, die
--- Gruppen-Stunden sind das aber nicht - eine zusätzliche Spalte dort
--- würde bei mehreren Parzellen am selben Tag denselben Wert mehrfach
--- zeigen und beim Aufsummieren verfälschen.
+-- zugeordnet ist (Einstellungen → Arbeitsgruppen), × Mindestlohn PLUS die
+-- Tagesprämien (Nutzer-Hinweis: "die fehlen bei der Betrachtung der reinen
+-- Gruppenkosten"), umgelegt auf die an diesem Tag geerntete Gesamtmenge
+-- (alle Parzellen zusammen - die Stundenerfassung kennt keine einzelne
+-- Parzelle, anders als erdbeeren_rohdaten). Bewusst eine EIGENE Sicht statt
+-- zusätzlicher Spalten in erdbeeren_statistik_tag: die ist je Parzelle
+-- gruppiert, die Gruppen-Stunden sind das aber nicht - eine zusätzliche
+-- Spalte dort würde bei mehreren Parzellen am selben Tag denselben Wert
+-- mehrfach zeigen und beim Aufsummieren verfälschen. Quelle für Steigen/
+-- Prämien ist erdbeeren_praemie_tag (nicht die Rohtabelle direkt), damit
+-- die Tagesprämie über alle Parzellen hinweg mitgezählt wird.
 create or replace view erdbeeren_gruppenkosten_tag as
 select
   d.datum,
   d.summe_steigen,
+  d.summe_praemie,
   v.mindestlohn,
   gs.gruppen_stunden,
   case when d.summe_steigen > 0 and v.mindestlohn is not null and gs.gruppen_stunden is not null
-    then (v.mindestlohn * gs.gruppen_stunden) / d.summe_steigen
+    then (v.mindestlohn * gs.gruppen_stunden + d.summe_praemie) / d.summe_steigen
     else null
   end as kosten_pro_steige_gruppen
 from (
-  select datum, sum(steigen) as summe_steigen
-  from erdbeeren_rohdaten
+  select datum, sum(steigen) as summe_steigen, sum(praemie) as summe_praemie
+  from erdbeeren_praemie_tag
   group by datum
 ) d
 left join verpflegungssaetze v

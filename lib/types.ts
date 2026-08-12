@@ -887,6 +887,7 @@ export interface ErdbeerenStatistikTag {
 export interface ErdbeerenGruppenkostenTag {
   datum: string;
   summe_steigen: number;
+  summe_praemie: number;
   mindestlohn: number | null;
   gruppen_stunden: number | null;
   kosten_pro_steige_gruppen: number | null;
