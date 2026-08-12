@@ -1187,6 +1187,78 @@ $$;
 
 grant execute on function kandidat_buskosten_setzen(uuid, numeric) to authenticated;
 
+-- ---------------------------------------------------------------------------
+-- Statuswechsel im Personalstamm (z.B. sozialversicherungsfrei ->
+-- -pflichtig bei Erreichen der 15-Wochen-Grenze): legt eine neue,
+-- verknüpfte Personalnummer an (siehe app/mitarbeiter/page.tsx,
+-- statuswechselDurchfuehren) und deaktiviert die alte. Diese beiden
+-- Funktionen übertragen dabei die Stunden ab dem Stichtag auf die neue
+-- Nummer (Nutzer-Vorgabe 2026-08-11): ab dem Stichtag gilt die neue
+-- Abrechnungsart, die Stunden müssen deshalb mitwandern, damit sie korrekt
+-- abgerechnet werden. Vorschüsse und Prämien bleiben bewusst UNBERÜHRT -
+-- sie hängen an der Auszahlung, nicht am Beschäftigungszeitraum.
+--
+-- Bewusst SECURITY INVOKER (nicht DEFINER wie bei den übrigen
+-- "kontrollierten Ausnahmeweg"-Funktionen oben): admin/hr dürfen
+-- work_entries ohnehin direkt schreiben, hier geht es nur darum, eine
+-- gesperrten-Monat-Prüfung ATOMAR vor der eigentlichen Übertragung zu
+-- machen (Nutzer-Entscheidung: Statuswechsel bei gesperrtem Monat komplett
+-- verweigern, nicht nur die betroffenen Tage stillschweigend an der alten
+-- Nummer stehen lassen). Die bestehende work_entries_update-Policy sperrt
+-- Monatsabschluss-gesperrte Monate "ausnahmslos für alle Rollen inkl.
+-- admin" - das gilt hier unverändert mit, ein SECURITY DEFINER würde diese
+-- Regel aufweichen.
+create or replace function statuswechsel_gesperrter_monat(
+  p_employee_id uuid,
+  p_stichtag date
+)
+returns text language sql security invoker stable as $$
+  select to_char(min(we.datum), 'MM/YYYY')
+  from work_entries we
+  join periods p
+    on p.saison_jahr = extract(year from we.datum)::int
+    and p.monat = extract(month from we.datum)::int
+  where we.employee_id = p_employee_id
+    and we.datum >= p_stichtag
+    and p.gesperrt;
+$$;
+
+grant execute on function statuswechsel_gesperrter_monat(uuid, date) to authenticated;
+
+create or replace function statuswechsel_stunden_uebertragen(
+  p_alt_employee_id uuid,
+  p_neu_employee_id uuid,
+  p_stichtag date
+)
+returns int language plpgsql security invoker as $$
+declare
+  v_gesperrter_monat text;
+  v_anzahl int;
+begin
+  if current_role_name() not in ('admin', 'hr') then
+    raise exception 'Keine Berechtigung für Statuswechsel';
+  end if;
+
+  -- Erneute Prüfung (nicht nur clientseitig vor dem Anlegen der neuen
+  -- Nummer) - verweigert die Übertragung vollständig, statt Stunden in
+  -- gesperrten Monaten unbemerkt an der alten Nummer stehen zu lassen.
+  v_gesperrter_monat := statuswechsel_gesperrter_monat(p_alt_employee_id, p_stichtag);
+  if v_gesperrter_monat is not null then
+    raise exception 'Monat % ist bereits per Monatsabschluss gesperrt - bitte zuerst entsperren, bevor der Statuswechsel durchgeführt wird.', v_gesperrter_monat;
+  end if;
+
+  update work_entries
+  set employee_id = p_neu_employee_id
+  where employee_id = p_alt_employee_id
+    and datum >= p_stichtag;
+
+  get diagnostics v_anzahl = row_count;
+  return v_anzahl;
+end;
+$$;
+
+grant execute on function statuswechsel_stunden_uebertragen(uuid, uuid, date) to authenticated;
+
 -- Arbeitskleidung-Ausgabe (Nutzer-Vorgabe 2026-08-09): landet in
 -- season_bonuses.kleidung_*_anzahl (fließt automatisch in die
 -- Lohnübersicht ein, siehe season_summary), ist dort aber laut

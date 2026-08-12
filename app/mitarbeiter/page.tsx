@@ -534,6 +534,12 @@ export default function MitarbeiterPage() {
   async function statuswechselDurchfuehren() {
     const alt = employees.find((e) => e.id === statuswechselId);
     if (!alt) return;
+    if (!statuswechselStichtag) {
+      setStatuswechselFehler(
+        "Bitte einen Stichtag angeben - ab diesem Datum werden die Stunden auf die neue Personalnummer übertragen."
+      );
+      return;
+    }
     const neuePersonalNr = `${alt.personal_nr}a`;
     const konflikt = allePersonalNummern.find(
       (r) => r.personal_nr.trim().toLowerCase() === neuePersonalNr.toLowerCase()
@@ -547,6 +553,27 @@ export default function MitarbeiterPage() {
     setStatuswechselLaufend(true);
     setStatuswechselFehler(null);
     const supabase = getSupabaseClient();
+
+    // Erst prüfen, ob der zu übertragende Zeitraum einen per Monatsabschluss
+    // gesperrten Monat trifft - dann wird gar keine neue Personalnummer
+    // angelegt (Nutzer-Vorgabe 2026-08-11: Statuswechsel bei gesperrtem
+    // Monat komplett verweigern, nicht nur teilweise durchführen).
+    const { data: gesperrterMonat, error: pruefFehler } = await supabase.rpc(
+      "statuswechsel_gesperrter_monat",
+      { p_employee_id: alt.id, p_stichtag: statuswechselStichtag }
+    );
+    if (pruefFehler) {
+      setStatuswechselFehler(pruefFehler.message);
+      setStatuswechselLaufend(false);
+      return;
+    }
+    if (gesperrterMonat) {
+      setStatuswechselFehler(
+        `Monat ${gesperrterMonat} ist bereits per Monatsabschluss gesperrt - bitte zuerst unter „Stundenerfassung" entsperren, bevor der Statuswechsel durchgeführt wird.`
+      );
+      setStatuswechselLaufend(false);
+      return;
+    }
 
     const { data: neu, error: insertError } = await supabase
       .from("employees")
@@ -583,6 +610,35 @@ export default function MitarbeiterPage() {
       return;
     }
 
+    // Stunden AB DEM STICHTAG auf die neue Nummer übertragen (Nutzer-
+    // Vorgabe 2026-08-11): ab dem Stichtag gilt die neue Abrechnungsart,
+    // die Stunden müssen deshalb mitwandern, damit sie korrekt abgerechnet
+    // werden. Vorschüsse und Prämien bleiben bewusst UNBERÜHRT - sie hängen
+    // an der Auszahlung, nicht am Beschäftigungszeitraum. Die Funktion
+    // prüft den gesperrten Monat sicherheitshalber noch einmal selbst
+    // (Race Condition zwischen der Prüfung oben und hier ist mit einer
+    // manuellen Admin-Aktion praktisch ausgeschlossen, aber nicht
+    // unmöglich) - schlägt sie fehl, existiert die neue Personalnummer
+    // zwar schon, aber noch ganz ohne Stunden; einfach den gemeldeten
+    // Monat entsperren und den Statuswechsel-Dialog erneut mit demselben
+    // Stichtag ausführen.
+    const { data: uebertragen, error: uebertragFehler } = await supabase.rpc(
+      "statuswechsel_stunden_uebertragen",
+      {
+        p_alt_employee_id: alt.id,
+        p_neu_employee_id: neu.id,
+        p_stichtag: statuswechselStichtag,
+      }
+    );
+    if (uebertragFehler) {
+      setStatuswechselFehler(
+        `Neue Personalnummer ${neuePersonalNr} wurde angelegt, aber die Stunden konnten nicht übertragen werden: ${uebertragFehler.message}`
+      );
+      setStatuswechselLaufend(false);
+      load();
+      return;
+    }
+
     // Hochgeladene Dokumente (Ausweiskopie etc.) auf die neue Nummer
     // umhängen - dieselben Dokumente derselben Person, kein Duplizieren.
     await supabase
@@ -594,6 +650,9 @@ export default function MitarbeiterPage() {
 
     setStatuswechselLaufend(false);
     setStatuswechselId(null);
+    window.alert(
+      `Statuswechsel abgeschlossen: ${uebertragen ?? 0} Tag(e) mit Stunden auf ${neuePersonalNr} übertragen.`
+    );
     load();
   }
 
@@ -835,8 +894,14 @@ export default function MitarbeiterPage() {
           <p className="text-xs text-neutral-600">
             Legt eine neue, verknüpfte Person mit der Personalnummer „
             {statuswechselPerson.personal_nr}a" an und deaktiviert{" "}
-            {statuswechselPerson.personal_nr}. Stunden/Vorschüsse/Boni davor
-            und danach bleiben strikt getrennt.
+            {statuswechselPerson.personal_nr}. Stunden AB DEM STICHTAG werden
+            auf die neue Nummer übertragen (sie unterliegen dann der neuen
+            Abrechnungsart), Stunden davor bleiben an{" "}
+            {statuswechselPerson.personal_nr} stehen. Vorschüsse und
+            Prämien/Boni bleiben unverändert bei {statuswechselPerson.personal_nr} -
+            sie hängen an der Auszahlung, nicht am Beschäftigungszeitraum.
+            Liegt im zu übertragenden Zeitraum ein per Monatsabschluss
+            gesperrter Monat, wird der Statuswechsel verweigert.
           </p>
           <div className="flex flex-wrap items-end gap-3">
             <label className="flex flex-col gap-0.5 text-xs text-neutral-500">
@@ -867,7 +932,7 @@ export default function MitarbeiterPage() {
             <button
               type="button"
               className="btn"
-              disabled={statuswechselLaufend}
+              disabled={statuswechselLaufend || !statuswechselStichtag}
               onClick={statuswechselDurchfuehren}
             >
               Statuswechsel durchführen

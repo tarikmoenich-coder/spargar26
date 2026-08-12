@@ -193,6 +193,14 @@ export default function SozialversicherungPage() {
                 : [];
               const svPruefung = pruefung[emp.id];
               const resttage = svPruefung ? svFreiheitResttage(svPruefung) : null;
+              // Bei bereits sozialversicherungspflichtiger Abrechnung sind
+              // ALLE Prüfungen auf SV-Freiheit gegenstandslos - die Person
+              // ist ja pflichtversichert (Nutzer-Vorgabe 2026-08-11). Ein
+              // vorhandener Fragebogen aus der Zeit davor darf dann keine
+              // Zeiträume oder Regeln mehr anzeigen, sonst wirkt es, als
+              // gäbe es noch etwas zu prüfen.
+              const svPflichtig =
+                emp.abrechnungsart === "sozialversicherungspflichtig";
               return (
                 <Fragment key={emp.id}>
                   <tr className={emp.aktiv ? "" : "opacity-50"}>
@@ -241,7 +249,10 @@ export default function SozialversicherungPage() {
                           : undefined
                       }
                     >
-                      {!f || f.vorbeschaeftigung_deutschland_tage_effektiv === 0 ? (
+                      {svPflichtig ? (
+                        <span className="text-neutral-400">entfällt</span>
+                      ) : !f ||
+                        f.vorbeschaeftigung_deutschland_tage_effektiv === 0 ? (
                         <span className="text-neutral-400">—</span>
                       ) : (
                         <>
@@ -256,7 +267,14 @@ export default function SozialversicherungPage() {
                       )}
                     </td>
                     <td className="text-xs">
-                      {svPruefung ? (
+                      {svPflichtig ? (
+                        <span
+                          className="text-neutral-400"
+                          title="Die Person ist sozialversicherungspflichtig - eine Tage-Grenze für SV-Freiheit gibt es hier nicht"
+                        >
+                          entfällt
+                        </span>
+                      ) : svPruefung ? (
                         angewendeteRegel(svPruefung)
                       ) : (
                         <span className="text-neutral-400">
@@ -265,7 +283,14 @@ export default function SozialversicherungPage() {
                       )}
                     </td>
                     <td className="text-xs">
-                      {!f || !f.sv_frei_von ? (
+                      {svPflichtig ? (
+                        <span
+                          className="text-neutral-400"
+                          title="Die Person ist sozialversicherungspflichtig - ein SV-freier Zeitraum ist damit gegenstandslos"
+                        >
+                          entfällt
+                        </span>
+                      ) : !f || !f.sv_frei_von ? (
                         <span className="text-neutral-400">—</span>
                       ) : (
                         <>
@@ -339,8 +364,16 @@ export default function SozialversicherungPage() {
                         </>
                       )}
                     </td>
-                    <td className={resttage !== null ? resttageFarbeClass(resttage) : "text-xs"}>
-                      {!f ? (
+                    <td
+                      className={
+                        !svPflichtig && resttage !== null
+                          ? resttageFarbeClass(resttage)
+                          : "text-xs"
+                      }
+                    >
+                      {svPflichtig ? (
+                        <span className="text-neutral-400">entfällt</span>
+                      ) : !f ? (
                         <span className="text-neutral-400">—</span>
                       ) : resttage !== null ? (
                         resttageText(resttage)

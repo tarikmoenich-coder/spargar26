@@ -43,14 +43,19 @@ export const TAGE_GRENZE = 105;
 export function angewendeteRegel(p: SvPruefung): string {
   const teile: string[] = [];
   if (p.anzahl_abschnitte > 1) {
-    teile.push(`${p.anzahl_abschnitte} Abschnitte`);
+    teile.push(`verteilt auf ${p.anzahl_abschnitte} Abschnitte`);
   }
   if (p.vorbeschaeftigung_deutschland_tage > 0) {
-    teile.push(`+ ${p.vorbeschaeftigung_deutschland_tage} Tage Vorbeschäftigung`);
+    // "abzgl." statt "+" (Nutzer-Hinweis 2026-08-11): die Vorbeschäftigung
+    // wird vom Budget ABGEZOGEN, ein Pluszeichen las sich so, als käme sie
+    // zu den 105 Tagen hinzu.
+    teile.push(
+      `abzgl. ${p.vorbeschaeftigung_deutschland_tage} Tage Vorbeschäftigung`
+    );
   }
   return teile.length === 0
     ? "15 Wochen (105 Tage)"
-    : `15 Wochen (105 Tage), ${teile.join(" ")}`;
+    : `15 Wochen (105 Tage), ${teile.join(", ")}`;
 }
 
 // Resttage bis zum (bereits serverseitig korrekt zusammengeführten)

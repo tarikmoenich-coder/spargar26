@@ -345,10 +345,17 @@ Enthalten:
   Personal-Seite.
   Auf "Personal → Sozialversicherung" (siehe unten) zwei Spalten dazu:
   "Angewendete Regel" (15 Wochen/105 Tage, mit Hinweis auf mehrere
-  Abschnitte bzw. Vorbeschäftigung) und "Ende der SV-Freiheit (Tage)" -
+  Abschnitte bzw. "abzgl. X Tage Vorbeschäftigung" - Stand 2026-08-11:
+  vorher stand dort irreführend "+ X Tage", dabei wird die Vorbeschäftigung
+  vom 105-Tage-Budget ABGEZOGEN) und "Ende der SV-Freiheit (Tage)" -
   Resttage bis zum empfohlenen Austrittsdatum, gelb unter 7 Tagen, rot bei
   bereits überschrittenen (negativen) Tagen; erst berechenbar, sobald
-  mindestens ein Arbeitstag erfasst ist. Auf der Controlling-Seite
+  mindestens ein Arbeitstag erfasst ist. Bei Abrechnungsart
+  "sozialversicherungspflichtig" zeigen "Angewendete Regel", "SV-freier
+  Zeitraum", "Ende der SV-Freiheit" und "Vorbeschäftigung Deutschland"
+  jetzt "entfällt" statt einer Zahl/Regel (Stand 2026-08-11) - für bereits
+  SV-pflichtige Personen sind alle SV-Freiheits-Prüfungen gegenstandslos,
+  auch wenn (z.B. aus der Zeit davor) noch ein SV-Fragebogen existiert. Auf der Controlling-Seite
   zusätzlich eine rein proaktive Übersicht "Nächste 10, deren SV-freier
   Zeitraum endet" (unabhängig vom "kritisch"-Status, sortiert nach
   empfohlenem Austrittsdatum, NUR aktive Personen - Nutzer-Vorgabe
@@ -437,11 +444,21 @@ Enthalten:
 - "Statuswechsel" im Personalstamm (nur admin/hr, z.B. beim Erreichen der
   15-Wochen-Grenze): legt eine neue, verknüpfte Person mit "a" an
   der Personalnummer an (z.B. "342" → "342a") mit wählbarer neuer
-  Abrechnungsart und Stichtag, deaktiviert die alte Nummer (keine
-  Löschung, ADR-011) und hängt deren hochgeladene Dokumente auf die neue
-  Nummer um. Stunden/Vorschüsse/Boni bleiben dadurch strikt getrennt (zwei
-  eigene Zeilen in der Lohnübersicht, je eigene Netto-Berechnung passend
-  zur jeweiligen Abrechnungsart) - beide Nummern bleiben über eine
+  Abrechnungsart und Stichtag (Pflichtfeld), deaktiviert die alte Nummer
+  (keine Löschung, ADR-011) und hängt deren hochgeladene Dokumente auf die
+  neue Nummer um. Stand 2026-08-11 (Nutzer-Korrektur - vorher blieben
+  Stunden nach dem Stichtag fälschlich an der alten, jetzt inaktiven
+  Nummer stehen): Stunden AB DEM STICHTAG werden automatisch auf die neue
+  Nummer übertragen, weil ab dann die neue Abrechnungsart gilt; Stunden
+  davor bleiben an der alten Nummer. Vorschüsse und Prämien/Boni bleiben
+  bewusst bei der alten Nummer unverändert - sie hängen an der Auszahlung,
+  nicht am Beschäftigungszeitraum. Liegt der zu übertragende Zeitraum in
+  einem per Monatsabschluss bereits gesperrten Monat, wird der
+  Statuswechsel komplett verweigert (nicht nur teilweise durchgeführt) -
+  klare Fehlermeldung, welcher Monat zuerst entsperrt werden muss; das gilt
+  ausnahmslos für alle Rollen inkl. admin, wie beim Monatsabschluss selbst.
+  Zwei eigene Zeilen in der Lohnübersicht, je eigene Netto-Berechnung
+  passend zur jeweiligen Abrechnungsart - beide Nummern bleiben über eine
   "Verknüpfung"-Spalte im Personalstamm als dieselbe Person erkennbar.
   Nur verfügbar, solange die Person noch nicht sozialversicherungspflichtig
   ist (ein Wechsel weg davon ist nicht möglich/sinnvoll)
