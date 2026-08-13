@@ -7,6 +7,7 @@ import PersonalTabs from "@/components/PersonalTabs";
 import SvFragebogenFormular, {
   SV_VERGLEICHS_FELDER,
 } from "@/components/SvFragebogenFormular";
+import AbrechnungsHistorie from "@/components/AbrechnungsHistorie";
 import type {
   Employee,
   SvFragebogenAuswertung,
@@ -445,6 +446,13 @@ export default function SozialversicherungPage() {
                           }}
                           onAbbrechen={() => setEditingId(null)}
                         />
+                        {!svPflichtig && (
+                          <AbrechnungsHistorie
+                            employeeId={emp.id}
+                            saisonJahr={jahr}
+                            canEdit={canEdit}
+                          />
+                        )}
                       </td>
                     </tr>
                   )}

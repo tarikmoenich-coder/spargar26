@@ -1157,6 +1157,68 @@ $$;
 
 grant execute on function saison_abrechnen_batch(uuid[], int, text) to authenticated;
 
+-- ---------------------------------------------------------------------------
+-- Historische Abrechnung nachtragen (Nutzer-Vorgabe 2026-08-13): beim
+-- App-Start waren bereits Mitarbeiter/Stunden importiert, aber die App
+-- kennt keine vor dem App-Start REAL erfolgten Abrechnungen (über das
+-- alte Excel-System) - die 15-Wochen-Abschnitts-Erkennung in
+-- employee_sv_pruefung erkennt Abschnitte AUSSCHLIESSLICH über
+-- saison_abrechnungen-Einträge (siehe Kommentar dort). Ohne Nachtrag
+-- rechnet die App fälschlich mit einem einzigen, nie unterbrochenen
+-- Abschnitt seit dem ersten importierten Arbeitstag.
+--
+-- Diese Funktion legt NUR einen solchen "Uhr zurückgesetzt"-Marker an,
+-- OHNE Auszahlungsbeleg/season_bonuses/employees.aktiv anzufassen (die
+-- Person arbeitet ja aktuell aktiv weiter, und das reale Geld ist bereits
+-- über das alte System abgerechnet - keine Doppelbuchung in der App).
+-- Bewusst getrennt von saison_abrechnen_batch(), das eine gerade
+-- stattfindende, echte Abrechnung abbildet. auszahlungsbeleg_id bleibt
+-- NULL - das unterscheidet einen Nachtrag von einer echten
+-- App-Abrechnung, siehe saison_abrechnung_nachtrag_entfernen unten.
+create or replace function saison_abrechnung_nachtragen(
+  p_employee_id uuid,
+  p_saison_jahr int,
+  p_abgerechnet_am date
+)
+returns bigint language plpgsql security definer as $$
+declare
+  neue_id bigint;
+begin
+  if current_role_name() not in ('admin', 'hr') then
+    raise exception 'Keine Berechtigung, eine historische Abrechnung nachzutragen';
+  end if;
+
+  insert into saison_abrechnungen (employee_id, saison_jahr, abgerechnet_am, abgerechnet_von)
+  values (p_employee_id, p_saison_jahr, p_abgerechnet_am::timestamptz, auth.uid())
+  returning id into neue_id;
+
+  return neue_id;
+end;
+$$;
+
+grant execute on function saison_abrechnung_nachtragen(uuid, int, date) to authenticated;
+
+-- Gegenstück zum Rückgängigmachen eines Nachtrags (z.B. bei Tippfehler) -
+-- löscht bewusst NUR Einträge OHNE Auszahlungsbeleg, damit eine echte
+-- App-Abrechnung darüber niemals entfernt werden kann.
+create or replace function saison_abrechnung_nachtrag_entfernen(p_id bigint)
+returns void language plpgsql security definer as $$
+begin
+  if current_role_name() not in ('admin', 'hr') then
+    raise exception 'Keine Berechtigung, einen Abrechnungs-Nachtrag zu entfernen';
+  end if;
+
+  delete from saison_abrechnungen
+  where id = p_id and auszahlungsbeleg_id is null;
+
+  if not found then
+    raise exception 'Eintrag nicht gefunden oder ist eine echte Abrechnung (kann nicht entfernt werden)';
+  end if;
+end;
+$$;
+
+grant execute on function saison_abrechnung_nachtrag_entfernen(bigint) to authenticated;
+
 -- Anreiseliste: Buskosten (Hinfahrt) für einen Kandidaten setzen. Landet in
 -- season_bonuses.bus_hin (fließt automatisch in die Lohnübersicht ein), ist
 -- dort aber laut season_bonuses_rw nur admin/lohnabrechnung erlaubt - die

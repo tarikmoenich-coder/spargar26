@@ -441,6 +441,25 @@ Enthalten:
   Regeltext "15 Wochen ab Arbeitsbeginn" statt eines Datums. Dieser SV-freie Zeitraum wird auf der
   Controlling-Seite gegen den tatsächlichen Beschäftigungszeitraum geprüft
   (siehe dort)
+- "Abschnitts-Historie" auf Personal → Sozialversicherung (Stand
+  2026-08-13, nur admin/hr, je Person aufklappbar): löst das Problem beim
+  In-Betrieb-Nehmen der App - Mitarbeiter/Stunden wurden importiert, aber
+  reale Abrechnungen VOR App-Start (altes Excel-System) sind der App
+  unbekannt. Die 15-Wochen-Abschnitts-Erkennung erkennt Abschnitte
+  ausschließlich über `saison_abrechnungen`-Einträge, ohne Nachtrag
+  rechnet die App fälschlich mit einem einzigen, nie unterbrochenen
+  Abschnitt seit dem ersten importierten Arbeitstag. Neue Funktionen
+  `saison_abrechnung_nachtragen`/`_entfernen` (admin/hr-only) legen NUR
+  einen "Uhr zurückgesetzt"-Marker in `saison_abrechnungen` an - OHNE
+  Auszahlungsbeleg/Beträge/`employees.aktiv` anzufassen (die Person
+  arbeitet ja aktuell weiter, das reale Geld ist bereits über das alte
+  System abgerechnet). Die bestehende 105-Tage-Logik selbst bleibt
+  unverändert - sie bekommt nur die fehlende historische Information.
+  `auszahlungsbeleg_id` unterscheidet einen Nachtrag ("manuell
+  nachgetragen", entfernbar) von einer echten App-Abrechnung ("echte
+  Abrechnung in der App", nicht über dieses Werkzeug löschbar). Neue
+  Komponente `components/AbrechnungsHistorie.tsx`. Migration:
+  `migration_2026-08-13_historische_abrechnung.sql`
 - Bugfix 2026-08-13: ein versehentlich gesetzter Haken samt Datum (z.B.
   "unbezahlter Urlaub") im SV-Fragebogen ließ sich nach dem Speichern
   nicht mehr entfernen - Fehler "invalid input syntax for type date: ''".

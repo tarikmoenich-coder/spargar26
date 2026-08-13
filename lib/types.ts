@@ -124,6 +124,20 @@ export interface Employee {
   version?: number;
 }
 
+// Eintrag der Abschnitts-Historie (saison_abrechnungen) - jeder Eintrag
+// setzt die 105-Tage-Uhr der SV-Prüfung zurück. auszahlungsbeleg_id
+// gesetzt = echte "Jetzt Abrechnen"-Aktion in der App, NULL = manuell
+// nachgetragener historischer Abschnitt (Nutzer-Vorgabe 2026-08-13, siehe
+// saison_abrechnung_nachtragen in schema.sql).
+export interface SaisonAbrechnung {
+  id: number;
+  employee_id: string;
+  saison_jahr: number;
+  abgerechnet_am: string;
+  abgerechnet_von: string | null;
+  auszahlungsbeleg_id: number | null;
+}
+
 // 90-Tage-/15-Wochen-Prüfung (SV-Freiheit landwirtschaftliche Saisonarbeit,
 // OI-004). Reine Tage-/Wochen-Zählung - ersetzt nicht die rechtliche Prüfung
 // selbst (eigenes Formular nötig).
