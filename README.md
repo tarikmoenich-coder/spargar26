@@ -441,6 +441,14 @@ Enthalten:
   Regeltext "15 Wochen ab Arbeitsbeginn" statt eines Datums. Dieser SV-freie Zeitraum wird auf der
   Controlling-Seite gegen den tatsächlichen Beschäftigungszeitraum geprüft
   (siehe dort)
+- Bugfix 2026-08-13: ein versehentlich gesetzter Haken samt Datum (z.B.
+  "unbezahlter Urlaub") im SV-Fragebogen ließ sich nach dem Speichern
+  nicht mehr entfernen - Fehler "invalid input syntax for type date: ''".
+  Betraf systematisch alle ~15 Datumsfelder in `SvFragebogenFormular.tsx`:
+  ein geleertes `<input type="date">` liefert `""`, nicht `null`, das
+  wurde ungefiltert an die `date`-Spalte geschickt. Alle betroffenen
+  `onChange`-Handler auf `e.target.value || null` umgestellt - keine
+  Migration nötig, reine Frontend-Änderung
 - "Statuswechsel" im Personalstamm (nur admin/hr, z.B. beim Erreichen der
   15-Wochen-Grenze): legt eine neue, verknüpfte Person mit "a" an
   der Personalnummer an (z.B. "342" → "342a") mit wählbarer neuer

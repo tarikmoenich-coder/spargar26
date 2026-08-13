@@ -426,13 +426,17 @@ export default function SvFragebogenFormular({
                 <input
                   type="date"
                   value={entwurf.bezahlter_urlaub_von ?? ""}
-                  onChange={(e) => feld("bezahlter_urlaub_von", e.target.value)}
+                  onChange={(e) =>
+                    feld("bezahlter_urlaub_von", e.target.value || null)
+                  }
                   disabled={!canEdit}
                 />
                 <input
                   type="date"
                   value={entwurf.bezahlter_urlaub_bis ?? ""}
-                  onChange={(e) => feld("bezahlter_urlaub_bis", e.target.value)}
+                  onChange={(e) =>
+                    feld("bezahlter_urlaub_bis", e.target.value || null)
+                  }
                   disabled={!canEdit}
                 />
               </>
@@ -451,13 +455,17 @@ export default function SvFragebogenFormular({
                 <input
                   type="date"
                   value={entwurf.unbezahlter_urlaub_von ?? ""}
-                  onChange={(e) => feld("unbezahlter_urlaub_von", e.target.value)}
+                  onChange={(e) =>
+                    feld("unbezahlter_urlaub_von", e.target.value || null)
+                  }
                   disabled={!canEdit}
                 />
                 <input
                   type="date"
                   value={entwurf.unbezahlter_urlaub_bis ?? ""}
-                  onChange={(e) => feld("unbezahlter_urlaub_bis", e.target.value)}
+                  onChange={(e) =>
+                    feld("unbezahlter_urlaub_bis", e.target.value || null)
+                  }
                   disabled={!canEdit}
                 />
               </>
@@ -476,13 +484,17 @@ export default function SvFragebogenFormular({
                 <input
                   type="date"
                   value={entwurf.freistellung_von ?? ""}
-                  onChange={(e) => feld("freistellung_von", e.target.value)}
+                  onChange={(e) =>
+                    feld("freistellung_von", e.target.value || null)
+                  }
                   disabled={!canEdit}
                 />
                 <input
                   type="date"
                   value={entwurf.freistellung_bis ?? ""}
-                  onChange={(e) => feld("freistellung_bis", e.target.value)}
+                  onChange={(e) =>
+                    feld("freistellung_bis", e.target.value || null)
+                  }
                   disabled={!canEdit}
                 />
                 <input
@@ -505,7 +517,9 @@ export default function SvFragebogenFormular({
               type="date"
               title="seit"
               value={entwurf.selbststaendig_seit ?? ""}
-              onChange={(e) => feld("selbststaendig_seit", e.target.value)}
+              onChange={(e) =>
+                feld("selbststaendig_seit", e.target.value || null)
+              }
               disabled={!canEdit}
             />
             <input
@@ -526,7 +540,9 @@ export default function SvFragebogenFormular({
               type="date"
               title="seit"
               value={entwurf.arbeitslos_seit ?? ""}
-              onChange={(e) => feld("arbeitslos_seit", e.target.value)}
+              onChange={(e) =>
+                feld("arbeitslos_seit", e.target.value || null)
+              }
               disabled={!canEdit}
             />
             <input
@@ -553,7 +569,7 @@ export default function SvFragebogenFormular({
               type="date"
               title="seit"
               value={entwurf.schule_seit ?? ""}
-              onChange={(e) => feld("schule_seit", e.target.value)}
+              onChange={(e) => feld("schule_seit", e.target.value || null)}
               disabled={!canEdit}
             />
             <input
@@ -566,7 +582,7 @@ export default function SvFragebogenFormular({
               type="date"
               title="voraussichtliches Ende"
               value={entwurf.schule_ende ?? ""}
-              onChange={(e) => feld("schule_ende", e.target.value)}
+              onChange={(e) => feld("schule_ende", e.target.value || null)}
               disabled={!canEdit}
             />
             <label className="flex items-center gap-1 text-xs">
@@ -585,13 +601,17 @@ export default function SvFragebogenFormular({
                 <input
                   type="date"
                   value={entwurf.schulferien_von ?? ""}
-                  onChange={(e) => feld("schulferien_von", e.target.value)}
+                  onChange={(e) =>
+                    feld("schulferien_von", e.target.value || null)
+                  }
                   disabled={!canEdit}
                 />
                 <input
                   type="date"
                   value={entwurf.schulferien_bis ?? ""}
-                  onChange={(e) => feld("schulferien_bis", e.target.value)}
+                  onChange={(e) =>
+                    feld("schulferien_bis", e.target.value || null)
+                  }
                   disabled={!canEdit}
                 />
               </>
@@ -608,7 +628,7 @@ export default function SvFragebogenFormular({
               type="date"
               title="seit"
               value={entwurf.rente_seit ?? ""}
-              onChange={(e) => feld("rente_seit", e.target.value)}
+              onChange={(e) => feld("rente_seit", e.target.value || null)}
               disabled={!canEdit}
             />
             <input
@@ -634,7 +654,7 @@ export default function SvFragebogenFormular({
             type="date"
             title="seit"
             value={entwurf.hausmann_seit ?? ""}
-            onChange={(e) => feld("hausmann_seit", e.target.value)}
+            onChange={(e) => feld("hausmann_seit", e.target.value || null)}
             disabled={!canEdit}
           />
         )}
@@ -891,7 +911,7 @@ export default function SvFragebogenFormular({
         <input
           type="date"
           value={entwurf.ausgefuellt_am ?? ""}
-          onChange={(e) => feld("ausgefuellt_am", e.target.value)}
+          onChange={(e) => feld("ausgefuellt_am", e.target.value || null)}
           disabled={!canEdit}
         />
       </label>
