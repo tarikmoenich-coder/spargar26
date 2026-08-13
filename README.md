@@ -459,7 +459,12 @@ Enthalten:
   nachgetragen", entfernbar) von einer echten App-Abrechnung ("echte
   Abrechnung in der App", nicht über dieses Werkzeug löschbar). Neue
   Komponente `components/AbrechnungsHistorie.tsx`. Migration:
-  `migration_2026-08-13_historische_abrechnung.sql`
+  `migration_2026-08-13_historische_abrechnung.sql`. Bugfix noch am
+  selben Tag: die Historie war fälschlich ausgeblendet bei Personen mit
+  Abrechnungsart "sozialversicherungspflichtig" - genau die, bei denen die
+  fehlende historische Abrechnung am ehesten zu einer voreiligen Umstellung
+  geführt haben dürfte. Jetzt immer sichtbar (reines Fakten-Protokoll,
+  keine SV-Freiheits-Prüfung)
 - Bugfix 2026-08-13: ein versehentlich gesetzter Haken samt Datum (z.B.
   "unbezahlter Urlaub") im SV-Fragebogen ließ sich nach dem Speichern
   nicht mehr entfernen - Fehler "invalid input syntax for type date: ''".

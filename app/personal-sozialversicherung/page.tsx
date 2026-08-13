@@ -446,13 +446,20 @@ export default function SozialversicherungPage() {
                           }}
                           onAbbrechen={() => setEditingId(null)}
                         />
-                        {!svPflichtig && (
-                          <AbrechnungsHistorie
-                            employeeId={emp.id}
-                            saisonJahr={jahr}
-                            canEdit={canEdit}
-                          />
-                        )}
+                        {/* Bewusst IMMER anzeigen, unabhängig von
+                            svPflichtig - die Abschnitts-Historie ist ein
+                            reines Fakten-Protokoll (wann wurde real
+                            abgerechnet), keine SV-Freiheits-Prüfung. Genau
+                            die Personen, die wegen der fehlenden
+                            historischen Abrechnung fälschlich schon auf
+                            "sozialversicherungspflichtig" umgestellt
+                            wurden, brauchen dieses Werkzeug am dringendsten
+                            - ein Ausblenden wäre hier kontraproduktiv. */}
+                        <AbrechnungsHistorie
+                          employeeId={emp.id}
+                          saisonJahr={jahr}
+                          canEdit={canEdit}
+                        />
                       </td>
                     </tr>
                   )}
