@@ -65,6 +65,10 @@ export default function UebersichtPage() {
   const [rows, setRows] = useState<SeasonSummaryRow[]>([]);
   const [gruppen, setGruppen] = useState<Arbeitsgruppe[]>([]);
   const [gruppeFilter, setGruppeFilter] = useState("");
+  // Suchfilter nach Name/Personalnummer (Nutzer-Vorgabe 2026-08-14, wie
+  // schon auf "Personal") - wirkt zusätzlich zum Gruppen-Filter, auf beide
+  // Ansichten (Saison-Summe und Monats-Kontrolle).
+  const [search, setSearch] = useState("");
   // Standardmäßig ausgeblendet (Nutzer-Vorgabe 2026-08-09) - bereits
   // abgerechnete/inaktive Personen sollen die Lohnübersicht nicht
   // zumüllen. Gleiches Muster wie "inaktive anzeigen" im Personalstamm.
@@ -262,6 +266,22 @@ export default function UebersichtPage() {
 
   const gruppenByNr = new Map(gruppen.map((g) => [g.gruppe_nr, g]));
 
+  // Vor gefilterteRows definiert, damit sowohl die Saison- als auch die
+  // Monats-Ansicht (weiter unten) dieselbe Suche nutzen können.
+  const passtZurSuche = (r: {
+    personal_nr: string;
+    name: string;
+    vorname: string;
+  }) => {
+    if (!search) return true;
+    const q = search.toLowerCase();
+    return (
+      r.name.toLowerCase().includes(q) ||
+      r.vorname.toLowerCase().includes(q) ||
+      r.personal_nr.toLowerCase().includes(q)
+    );
+  };
+
   // Damit eine Mitarbeiterin z.B. alle zur Abrechnung vorgesehenen Personen
   // vorab in eine Gruppe (z.B. "101 - Abrechnen") packen kann und diese hier
   // gefiltert und komplett auf einmal markiert werden können.
@@ -273,7 +293,8 @@ export default function UebersichtPage() {
         : gruppeFilter === OHNE_GRUPPE_KEY
           ? !r.gruppe_nr
           : r.gruppe_nr === gruppeFilter
-    );
+    )
+    .filter(passtZurSuche);
 
   // Druck: nach dem Öffnen des Druckdialogs (oder Abbruch) zurücksetzen.
   useEffect(() => {
@@ -442,9 +463,14 @@ export default function UebersichtPage() {
   const passtZurGruppe = (gruppe_nr: string | null) =>
     !gruppeFilter ||
     (gruppeFilter === OHNE_GRUPPE_KEY ? !gruppe_nr : gruppe_nr === gruppeFilter);
-  const gefilterteMonatsRows = monatsRows.filter((r) => passtZurGruppe(r.gruppe_nr));
+  const gefilterteMonatsRows = monatsRows
+    .filter((r) => passtZurGruppe(r.gruppe_nr))
+    .filter(passtZurSuche);
   const fehlendeImMonat = alleAktiven.filter(
-    (m) => !monatsRowsById.has(m.id) && passtZurGruppe(m.gruppe_nr)
+    (m) =>
+      !monatsRowsById.has(m.id) &&
+      passtZurGruppe(m.gruppe_nr) &&
+      passtZurSuche(m)
   );
 
   return (
@@ -477,6 +503,12 @@ export default function UebersichtPage() {
       </div>
 
       <div className="sticky top-[calc(3.5rem+var(--subtabs-h,2.5rem))] z-30 flex flex-wrap items-center gap-3 bg-neutral-50 py-2 print:hidden">
+        <input
+          placeholder="Suche nach Name oder Personalnummer…"
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          className="w-64"
+        />
         <label className="text-sm">
           Saison-Jahr{" "}
           <input

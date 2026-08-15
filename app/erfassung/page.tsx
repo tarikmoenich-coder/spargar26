@@ -113,6 +113,11 @@ function ErfassungInner() {
   });
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [gruppen, setGruppen] = useState<Arbeitsgruppe[]>([]);
+  // Suchfilter nach Name/Personalnummer (Nutzer-Vorgabe 2026-08-14, wie
+  // schon auf "Personal"/"Lohnübersicht") - wirkt vor der Gruppierung, die
+  // Sprungleiste/Gruppen-Summen zeigen dadurch automatisch nur noch die
+  // gefilterten Personen.
+  const [search, setSearch] = useState("");
   const [entries, setEntries] = useState<Record<string, WorkEntry>>({});
   // Nur zur Kontrolle/Übersicht: Stunden der 3 vorherigen Tage, nicht
   // bearbeitbar - Bearbeitung bleibt auf das oben gewählte Datum beschränkt.
@@ -513,7 +518,17 @@ function ErfassungInner() {
     );
   }
 
-  const gruppierungen = gruppiere(employees, gruppen);
+  const gefilterteEmployees = employees.filter((e) => {
+    if (!search) return true;
+    const q = search.toLowerCase();
+    return (
+      e.name.toLowerCase().includes(q) ||
+      e.vorname.toLowerCase().includes(q) ||
+      e.personal_nr.toLowerCase().includes(q)
+    );
+  });
+
+  const gruppierungen = gruppiere(gefilterteEmployees, gruppen);
 
   const gesamtStunden = Object.values(entries).reduce(
     (sum, e) => sum + (e.stunden ?? 0),
@@ -538,7 +553,13 @@ function ErfassungInner() {
       </div>
 
       <div className="sticky top-[calc(3.5rem+var(--subtabs-h,2.5rem))] z-30 flex flex-col gap-2 bg-neutral-50 py-2 print:hidden">
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center gap-3">
+          <input
+            placeholder="Suche nach Name oder Personalnummer…"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className="w-64"
+          />
           <label className="text-sm">
             {t("gemeinsam.datum")}{" "}
             <span className="inline-flex items-center gap-1">

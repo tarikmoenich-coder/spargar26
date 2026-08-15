@@ -35,6 +35,10 @@ Enthalten:
   und automatisch berechnetem "Aktiv seit" (erster Arbeitstag mit Stunden > 0)
 - Tägliche Stundenerfassung mit Live-Sync zwischen mehreren Nutzern, nach
   Arbeitsgruppen (z.B. Sortierer, Träger) gruppiert mit Sprungleiste und
+  Suchfeld nach Name/Personalnummer (Stand 2026-08-14, wie im
+  Personalstamm/der Lohnübersicht - wirkt vor der Gruppierung, Sprungleiste
+  und Gruppen-Summen zeigen dadurch automatisch nur die gefundenen
+  Personen) und
   Druckansicht pro Gruppe ("Gruppenstundenzettel"; die Trennlinien aller
   Papierformulare sind im Druck bewusst schwarz und kräftiger als am
   Bildschirm, Stand 2026-08-11 - die Zettel werden handschriftlich
@@ -193,7 +197,10 @@ Enthalten:
   um alle zur Abrechnung vorgesehenen Personen vorab in eine Gruppe wie
   "101 - Abrechnen" zu packen und dort gesammelt zu markieren. Inaktive
   Personen sind standardmäßig ausgeblendet (Checkbox "inaktive anzeigen",
-  gleiches Muster wie im Personalstamm, Stand 2026-08-09)
+  gleiches Muster wie im Personalstamm, Stand 2026-08-09). Zusätzlich ein
+  Suchfeld nach Name/Personalnummer (Stand 2026-08-14, wie im
+  Personalstamm) - wirkt zusammen mit dem Gruppen-Filter, auf beide
+  Ansichten (Saison-Summe und Monats-Kontrolle)
 - Einstellungen-Seite (nur admin): Verpflegungs-/Unterkunft-Satz pro Tag
   sowie Mindestlohn, versioniert je Saisonjahr, Default 10€/10€. Der
   Mindestlohn wird beim Neuanlegen einer Person (Personalstamm oder
