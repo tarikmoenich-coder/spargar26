@@ -5,6 +5,7 @@
 // serverseitige Herleitung von austrittsdatum_empfohlen.
 
 import type { SvPruefung } from "./types";
+import { formatDatumDE } from "./format";
 
 // Heutiges Datum als LOKALES Kalenderdatum (nicht UTC!) - wichtig, siehe
 // Lehre aus dem xlsx-Datum-Timezone-Bug: new Date().toISOString() würde
@@ -43,7 +44,14 @@ export const TAGE_GRENZE = 105;
 export function angewendeteRegel(p: SvPruefung): string {
   const teile: string[] = [];
   if (p.anzahl_abschnitte > 1) {
-    teile.push(`verteilt auf ${p.anzahl_abschnitte} Abschnitte`);
+    // Nutzer-Vorgabe 2026-08-14: "Die verschiedenen Abschnitte müssen
+    // transparent benannt und gerechnet werden" - deshalb nicht nur die
+    // Anzahl, sondern auch WANN der aktuell laufende Abschnitt begonnen
+    // hat (maßgeblich für die 105-Tage-Berechnung, nicht der allererste
+    // Tag der Saison - siehe aktueller_abschnitt_seit in schema.sql).
+    teile.push(
+      `verteilt auf ${p.anzahl_abschnitte} Abschnitte, aktueller Abschnitt seit ${formatDatumDE(p.aktueller_abschnitt_seit)}`
+    );
   }
   if (p.vorbeschaeftigung_deutschland_tage > 0) {
     // "abzgl." statt "+" (Nutzer-Hinweis 2026-08-11): die Vorbeschäftigung

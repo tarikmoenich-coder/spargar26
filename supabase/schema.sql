@@ -2591,12 +2591,39 @@ create trigger trg_personal_kandidaten_updated_at before update on personal_kand
 -- 12a. View: erster erfasster Arbeitstag je Mitarbeiter ("Aktiv seit" auf
 --      der Personal-Seite) - erster Tag mit Stunden > 0, unabhängig vom
 --      Saisonjahr.
--- ---------------------------------------------------------------------------
+--
+--      Korrektur 2026-08-14 (Nutzer: "Die verschiedenen Abschnitte müssen
+--      transparent benannt und gerechnet werden"): folgte bisher NICHT der
+--      vorgaenger_employee_id-Kette (Statuswechsel) - bei einer Person mit
+--      neuer Personalnummer nach Statuswechsel zeigte "Aktiv seit" den
+--      Stichtag des Wechsels, nicht den tatsächlichen, oft viel früheren
+--      echten Beschäftigungsbeginn. "Aktiv seit" ist eine Eigenschaft der
+--      PERSON, nicht der einzelnen Personalnummer - jetzt über eine
+--      rekursive Abfrage auf die gesamte Vorgänger-Kette bezogen. Jede
+--      Personalnummer derselben Kette (alt und neu) zeigt danach denselben
+--      Wert: den frühesten Arbeitstag über die gesamte Kette hinweg.
 create or replace view employee_erster_arbeitstag as
-select employee_id, min(datum) as erster_arbeitstag
-from work_entries
-where stunden > 0
-group by employee_id;
+with recursive kette as (
+  -- Wurzel: Personen ohne Vorgänger sind ihre eigene Kette.
+  select id as employee_id, id as wurzel_id
+  from employees
+  where vorgaenger_employee_id is null
+  union all
+  -- Jede Nachfolge-Personalnummer erbt die Wurzel ihres Vorgängers.
+  select e.id as employee_id, k.wurzel_id
+  from employees e
+  join kette k on k.employee_id = e.vorgaenger_employee_id
+),
+je_wurzel as (
+  select k.wurzel_id, min(we.datum) as erster_arbeitstag
+  from kette k
+  join work_entries we on we.employee_id = k.employee_id
+  where we.stunden > 0
+  group by k.wurzel_id
+)
+select k.employee_id, jw.erster_arbeitstag
+from kette k
+join je_wurzel jw on jw.wurzel_id = k.wurzel_id;
 
 alter view employee_erster_arbeitstag set (security_invoker = true);
 grant select on employee_erster_arbeitstag to authenticated;
@@ -2907,7 +2934,17 @@ grant select on auszahlungsbeleg_summary to authenticated;
 -- ---------------------------------------------------------------------------
 drop view if exists employee_sv_pruefung;
 
-create view employee_sv_pruefung as
+-- Erweiterung 2026-08-14 (Nutzer: "Die verschiedenen Abschnitte müssen
+-- transparent benannt und gerechnet werden"): w.beginn_letzter_abschnitt
+-- wurde bisher nur INTERN für austrittsdatum_105_tage/_empfohlen genutzt,
+-- aber nie selbst angezeigt - ohne ihn war für den Nutzer nicht sichtbar,
+-- wann der GERADE LAUFENDE Abschnitt begonnen hat, wenn es (durch
+-- Statuswechsel oder nachgetragene historische Abrechnungen) mehrere
+-- Abschnitte in einer Saison gibt. w.erster_arbeitstag zeigt weiterhin den
+-- allerersten Tag der Saison über ALLE Abschnitte - bewusst unverändert
+-- gelassen, nur um aktueller_abschnitt_seit ergänzt (ans Ende angehängt,
+-- 42P16-sicher).
+create or replace view employee_sv_pruefung as
 with beschaeftigungstage_roh as (
   select
     we.employee_id,
@@ -3028,7 +3065,11 @@ select
   (fb.sv_frei_von is not null and w.erster_arbeitstag < fb.sv_frei_von)
     as ueberschritten_sv_frei_beginn,
   (fb.sv_frei_bis is not null and w.letzter_arbeitstag > fb.sv_frei_bis)
-    as ueberschritten_sv_frei_ende
+    as ueberschritten_sv_frei_ende,
+  -- Beginn des GERADE LAUFENDEN (letzten) Abschnitts - anders als
+  -- erster_arbeitstag (allererster Tag der ganzen Saison) maßgeblich für
+  -- die 105-Tage-Berechnung des aktuellen Abschnitts, siehe Kommentar oben.
+  w.beginn_letzter_abschnitt as aktueller_abschnitt_seit
 from employees e
 join w on w.employee_id = e.id
 -- Bewusst direkt gegen die Rohtabelle (nicht über die security_invoker-

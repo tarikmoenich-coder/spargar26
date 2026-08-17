@@ -472,6 +472,16 @@ Enthalten:
   fehlende historische Abrechnung am ehesten zu einer voreiligen Umstellung
   geführt haben dürfte. Jetzt immer sichtbar (reines Fakten-Protokoll,
   keine SV-Freiheits-Prüfung)
+- Klarheits-Pass 2026-08-14 (Nutzer: "Die verschiedenen Abschnitte müssen
+  transparent benannt und gerechnet werden"): "Aktiv seit" im Personalstamm
+  folgt jetzt der Vorgänger-Kette (springt nach einem Statuswechsel nicht
+  mehr fälschlich auf den Wechsel-Stichtag); neue Spalte "Aktueller
+  Abschnitt seit" auf Controlling zeigt den Beginn des gerade laufenden
+  (nicht des allerersten) Beschäftigungsabschnitts - taucht auch in
+  "Angewendete Regel" auf der SV-Seite auf. Tooltips ergänzt, die
+  gleichnamige, aber unterschiedlich berechnete Spalten (z.B. "1.
+  Arbeitstag" auf Controlling vs. auf der Anreiseliste-Kontrolle)
+  unterscheiden
 - Bugfix 2026-08-13: ein versehentlich gesetzter Haken samt Datum (z.B.
   "unbezahlter Urlaub") im SV-Fragebogen ließ sich nach dem Speichern
   nicht mehr entfernen - Fehler "invalid input syntax for type date: ''".

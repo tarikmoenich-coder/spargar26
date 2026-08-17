@@ -364,7 +364,9 @@ export default function ManagementPage() {
                   <th>Name</th>
                   <th>Herkunft</th>
                   <th>Grund für Status offen</th>
-                  <th>1. Arbeitstag</th>
+                  <th title="Erster Arbeitstag dieser Personalnummer (nicht saisonübergreifend wie 'Aktiv seit' im Personalstamm) - hier geht es um die Dringlichkeit der fehlenden Anreiselisten-Punkte, nicht um die SV-Prüfung">
+                    1. Arbeitstag
+                  </th>
                   <th title="Tage seit dem ersten Arbeitstag - so lange arbeitet die Person schon, obwohl noch etwas offen ist">
                     Tage seit Status offen
                   </th>
@@ -432,13 +434,18 @@ export default function ManagementPage() {
                   <th>Pers.-Nr.</th>
                   <th>Name</th>
                   <th>Abrechnungsart</th>
-                  <th>1. Arbeitstag</th>
+                  <th title="Allererster Arbeitstag in diesem Kalenderjahr, über ALLE Abschnitte hinweg - nicht der Beginn des aktuellen Abschnitts (siehe dort)">
+                    1. Arbeitstag (Saison)
+                  </th>
                   <th>Letzter Arbeitstag</th>
                   <th title="Summe der Kalendertage aller Beschäftigungsabschnitte bei uns in diesem Kalenderjahr - Pausen zwischen zwei Einsätzen zählen nicht mit">
                     Beschäftigungstage (bei uns)
                   </th>
-                  <th title="Anzahl getrennter Beschäftigungsabschnitte (getrennt jeweils durch eine Abrechnung). 1 = durchgehend.">
+                  <th title="Anzahl getrennter Beschäftigungsabschnitte (getrennt jeweils durch eine Abrechnung - echt in der App oder manuell nachgetragen, siehe Personal → Sozialversicherung). 1 = durchgehend.">
                     Abschnitte
+                  </th>
+                  <th title="Beginn des GERADE LAUFENDEN Abschnitts - maßgeblich für die 105-Tage-Berechnung, nicht der allererste Tag der Saison (siehe Spalte '1. Arbeitstag (Saison)')">
+                    Aktueller Abschnitt seit
                   </th>
                   <th title="Bisherige Beschäftigungstage in Deutschland bei anderen Arbeitgebern laut SV-Fragebogen (Personal → Sozialversicherung)">
                     Vorbeschäftigung Deutschland
@@ -480,6 +487,7 @@ export default function ManagementPage() {
                     >
                       {f.anzahl_abschnitte}
                     </td>
+                    <td>{formatDatumDE(f.aktueller_abschnitt_seit)}</td>
                     <td>{f.vorbeschaeftigung_deutschland_tage}</td>
                     <td>{f.kombinierte_tage}</td>
                     <td>{f.rest_bis_105_tage}</td>
@@ -613,7 +621,9 @@ export default function ManagementPage() {
                 <tr>
                   <th>Pers.-Nr.</th>
                   <th>Name</th>
-                  <th>1. Arbeitstag</th>
+                  <th title="Allererster Arbeitstag in diesem Kalenderjahr, über ALLE Abschnitte hinweg">
+                    1. Arbeitstag (Saison)
+                  </th>
                   <th>Letzter Arbeitstag</th>
                   <th title="Aus den Angaben abgeleiteter Zeitraum, in dem eine Beschäftigung in Deutschland sozialversicherungsfrei möglich ist">
                     SV-freier Zeitraum (Angaben)

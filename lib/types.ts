@@ -189,6 +189,12 @@ export interface SvPruefung {
   sv_frei_offen: boolean;
   ueberschritten_sv_frei_beginn: boolean;
   ueberschritten_sv_frei_ende: boolean;
+  // Beginn des gerade laufenden (letzten) Abschnitts - anders als
+  // erster_arbeitstag (allererster Tag der ganzen Saison, über alle
+  // Abschnitte) maßgeblich für die 105-Tage-Berechnung des AKTUELLEN
+  // Abschnitts (Nutzer-Vorgabe 2026-08-14: "Die verschiedenen Abschnitte
+  // müssen transparent benannt und gerechnet werden").
+  aktueller_abschnitt_seit: string;
 }
 
 // Aus der Sicht audit_log_ansicht (Änderungsprotokoll) - siehe schema.sql.
