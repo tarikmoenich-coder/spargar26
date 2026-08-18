@@ -195,6 +195,15 @@ export interface SvPruefung {
   // Abschnitts (Nutzer-Vorgabe 2026-08-14: "Die verschiedenen Abschnitte
   // müssen transparent benannt und gerechnet werden").
   aktueller_abschnitt_seit: string;
+  // Bugfix 2026-08-15: ob TATSÄCHLICH ein Beschäftigungsabschnitt die
+  // deklarierte Lücke (sv_frei_luecke_von/bis) überschneidet - anders als
+  // sv_frei_luecke, das nur aussagt, DASS die Angaben eine Lücke enthalten
+  // (unabhängig davon, ob je gearbeitet wurde). Ersetzt die frühere,
+  // fehleranfällige Prüfung gegen erster_arbeitstag/letzter_arbeitstag
+  // (die Spanne über ALLE Abschnitte hinweg, fälschlich "kritisch" bei
+  // einer Lücke ZWISCHEN zwei echten Abschnitten ohne tatsächliche
+  // Überschneidung).
+  ueberschritten_sv_frei_luecke: boolean;
 }
 
 // Aus der Sicht audit_log_ansicht (Änderungsprotokoll) - siehe schema.sql.

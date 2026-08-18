@@ -3060,10 +3060,20 @@ select
     -- und "Freistellung" (Nutzer-Vorgabe 2026-08-10: als kritisch werten).
     or (fb.sv_frei_von is not null and w.erster_arbeitstag < fb.sv_frei_von)
     or (fb.sv_frei_bis is not null and w.letzter_arbeitstag > fb.sv_frei_bis)
-    or (
-      coalesce(fb.sv_frei_luecke, false)
-      and w.erster_arbeitstag <= fb.sv_frei_luecke_bis
-      and w.letzter_arbeitstag >= fb.sv_frei_luecke_von
+    -- Bugfix 2026-08-15 (Nutzer-Testfall mit zwei Abschnitten und einer
+    -- Lücke dazwischen, die fälschlich als "kritisch" markiert wurde):
+    -- NICHT mehr gegen w.erster_arbeitstag/letzter_arbeitstag prüfen (die
+    -- Spanne über ALLE Abschnitte hinweg) - das reißt die Lücke auf, sobald
+    -- irgendein früherer und irgendein späterer Abschnitt existieren, ganz
+    -- gleich ob dazwischen tatsächlich gearbeitet wurde. Stattdessen: gibt
+    -- es einen EINZELNEN Abschnitt, der die Lücke wirklich überschneidet?
+    or exists (
+      select 1 from abschnitte ab
+      where ab.employee_id = e.id
+        and ab.saison_jahr = w.saison_jahr
+        and coalesce(fb.sv_frei_luecke, false)
+        and ab.von <= fb.sv_frei_luecke_bis
+        and ab.bis >= fb.sv_frei_luecke_von
     )
   ) as kritisch,
   fb.sv_frei_von,
@@ -3079,7 +3089,22 @@ select
   -- Beginn des GERADE LAUFENDEN (letzten) Abschnitts - anders als
   -- erster_arbeitstag (allererster Tag der ganzen Saison) maßgeblich für
   -- die 105-Tage-Berechnung des aktuellen Abschnitts, siehe Kommentar oben.
-  w.beginn_letzter_abschnitt as aktueller_abschnitt_seit
+  w.beginn_letzter_abschnitt as aktueller_abschnitt_seit,
+  -- Eigens ausgegeben (Bugfix 2026-08-15, siehe Kommentar bei "kritisch"
+  -- oben): ob TATSÄCHLICH ein Beschäftigungsabschnitt die deklarierte
+  -- Lücke überschneidet - im Unterschied zu sv_frei_luecke weiter oben,
+  -- das nur aussagt, DASS die Angaben selbst eine Lücke enthalten
+  -- (unabhängig davon, ob je gearbeitet wurde). Ersetzt die bisherige,
+  -- fehleranfällige Berechnung in lib/svPruefung.ts
+  -- (svFreiZeitraumUeberschritten) und in app/management/page.tsx.
+  exists (
+    select 1 from abschnitte ab
+    where ab.employee_id = e.id
+      and ab.saison_jahr = w.saison_jahr
+      and coalesce(fb.sv_frei_luecke, false)
+      and ab.von <= fb.sv_frei_luecke_bis
+      and ab.bis >= fb.sv_frei_luecke_von
+  ) as ueberschritten_sv_frei_luecke
 from employees e
 join w on w.employee_id = e.id
 -- Bewusst direkt gegen die Rohtabelle (nicht über die security_invoker-

@@ -527,9 +527,7 @@ export default function ManagementPage() {
                         f.ueberschritten_sv_frei_ende
                           ? "SV-freier Zeitraum (Angaben) überschritten"
                           : null,
-                        f.sv_frei_luecke &&
-                        !f.ueberschritten_sv_frei_beginn &&
-                        !f.ueberschritten_sv_frei_ende
+                        f.ueberschritten_sv_frei_luecke
                           ? "Lücke im SV-freien Zeitraum"
                           : null,
                       ]
@@ -663,9 +661,7 @@ export default function ManagementPage() {
                         f.ueberschritten_sv_frei_ende
                           ? "SV-freier Zeitraum (Angaben) überschritten"
                           : null,
-                        !f.ueberschritten_sv_frei_beginn &&
-                        !f.ueberschritten_sv_frei_ende &&
-                        f.sv_frei_luecke
+                        f.ueberschritten_sv_frei_luecke
                           ? "Lücke im SV-freien Zeitraum"
                           : null,
                       ]

@@ -493,6 +493,14 @@ Enthalten:
   gleichnamige, aber unterschiedlich berechnete Spalten (z.B. "1.
   Arbeitstag" auf Controlling vs. auf der Anreiseliste-Kontrolle)
   unterscheiden
+- Bugfix 2026-08-15: bei mehreren Beschäftigungsabschnitten mit einer
+  echten Pause dazwischen konnte die App fälschlich "SV-Status:
+  Überschritten" zeigen, wenn diese Pause zufällig mit einer im
+  SV-Fragebogen deklarierten Lücke (zwischen Bezahltem Urlaub und
+  Freistellung) zusammenfiel - obwohl an den betroffenen Tagen nie
+  gearbeitet wurde. Die Prüfung verglich bisher gegen die Spanne über
+  ALLE Abschnitte einer Saison hinweg statt zu prüfen, ob ein einzelner
+  Abschnitt die Lücke wirklich überschneidet
 - Bugfix 2026-08-13: ein versehentlich gesetzter Haken samt Datum (z.B.
   "unbezahlter Urlaub") im SV-Fragebogen ließ sich nach dem Speichern
   nicht mehr entfernen - Fehler "invalid input syntax for type date: ''".

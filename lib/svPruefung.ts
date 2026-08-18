@@ -98,13 +98,16 @@ export function resttageText(tage: number): string {
 // SV-frei Zeitraum überschreitet"). Spiegelt exakt die SV-frei-Teile der
 // "kritisch"-Formel in employee_sv_pruefung (schema.sql).
 export function svFreiZeitraumUeberschritten(p: SvPruefung): boolean {
+  // Bugfix 2026-08-15: die Lücke-Prüfung lief hier bisher clientseitig
+  // gegen erster_arbeitstag/letzter_arbeitstag (Spanne über ALLE
+  // Abschnitte hinweg) - dadurch schlug sie fälschlich an, sobald
+  // irgendein früherer UND irgendein späterer Abschnitt existierten, egal
+  // ob die Lücke selbst je bearbeitet wurde. Jetzt server-seitig korrekt
+  // je EINZELNEM Abschnitt geprüft, siehe ueberschritten_sv_frei_luecke
+  // in employee_sv_pruefung (schema.sql).
   return (
     p.ueberschritten_sv_frei_beginn ||
     p.ueberschritten_sv_frei_ende ||
-    (p.sv_frei_luecke &&
-      !!p.sv_frei_luecke_von &&
-      !!p.sv_frei_luecke_bis &&
-      p.erster_arbeitstag <= p.sv_frei_luecke_bis &&
-      p.letzter_arbeitstag >= p.sv_frei_luecke_von)
+    p.ueberschritten_sv_frei_luecke
   );
 }
