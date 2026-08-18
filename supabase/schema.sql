@@ -2855,17 +2855,29 @@ group by
 grant select on season_summary_monat to authenticated;
 
 -- ---------------------------------------------------------------------------
--- 12c. View: letztes Abrechnungsdatum je Mitarbeiter, für die Personal-Seite
---      ("Zuletzt abgerechnet am"). Bewusst NICHT security_invoker: zeigt nur
---      das Datum (keine Beträge), damit auch hr - die season_bonuses selbst
---      nicht lesen darf - diesen einen Wert sieht.
+-- 12c. View: letztes bekanntes Abrechnungsdatum je Mitarbeiter, für die
+--      Personal-Seite ("Zuletzt abgerechnet am").
+--
+--      Quelle 2026-08-15 umgestellt von season_bonuses auf
+--      saison_abrechnungen - Nutzer-Nachfrage: "sollte doch jetzt das von
+--      mir nachgetragene historische Abrechnungsdatum enthalten oder?".
+--      saison_abrechnungen ist ein striktes Superset: jede ECHTE "Jetzt
+--      Abrechnen"-Aktion schreibt dort ZUSÄTZLICH mit (siehe
+--      saison_abrechnen_batch), enthält aber zusätzlich auch die manuell
+--      nachgetragenen historischen Abrechnungen (siehe
+--      saison_abrechnung_nachtragen) - genau die fehlten hier bisher.
+--      security_invoker jetzt möglich (anders als vorher bei
+--      season_bonuses, das admin/lohnabrechnung-only ist):
+--      saison_abrechnungen ist bereits für alle angemeldeten Rollen lesbar
+--      (saison_abrechnungen_select), keine "kontrollierte Ausnahme" mehr
+--      nötig.
 -- ---------------------------------------------------------------------------
 create or replace view employee_letzte_abrechnung as
 select employee_id, max(abgerechnet_am) as abgerechnet_am
-from season_bonuses
-where abgerechnet_am is not null
+from saison_abrechnungen
 group by employee_id;
 
+alter view employee_letzte_abrechnung set (security_invoker = true);
 grant select on employee_letzte_abrechnung to authenticated;
 
 -- ---------------------------------------------------------------------------

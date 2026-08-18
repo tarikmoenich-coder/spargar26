@@ -352,12 +352,35 @@ export default function SozialversicherungPage() {
                               15 Wochen ab Arbeitsbeginn
                             </span>
                           )}
+                          {/* Nutzer-Feedback 2026-08-15: "Wie kann das sein,
+                              wenn der SV-freie Zeitraum nur bis zum
+                              19.07.2026 geht?" - die Lücke wurde als
+                              eigener, konkurrierender Zeitraum gelesen
+                              statt als Ausnahme INNERHALB des oben
+                              gezeigten Zeitraums. Deshalb jetzt "Davon
+                              NICHT SV-frei" statt nur "Lücke", und
+                              Farbe/Text unterscheiden, ob in dieser Lücke
+                              tatsächlich gearbeitet wurde (dann zählt sie
+                              wirklich, siehe ueberschritten_sv_frei_luecke)
+                              oder ob sie bisher nur eine Angaben-Lücke ohne
+                              echte Auswirkung ist. */}
                           {f.sv_frei_luecke && (
                             <div
-                              className="text-amber-700"
-                              title="Lücke zwischen Bezahltem Urlaub und Freistellung - in diesem Zeitraum nicht SV-frei"
+                              className={
+                                svPruefung?.ueberschritten_sv_frei_luecke
+                                  ? "font-medium text-red-600"
+                                  : "text-amber-700"
+                              }
+                              title={
+                                svPruefung?.ueberschritten_sv_frei_luecke
+                                  ? "Innerhalb des oben gezeigten Zeitraums, aber NICHT SV-frei (zwischen Bezahltem Urlaub und Freistellung) - in diesem Teil-Zeitraum wurde tatsächlich gearbeitet"
+                                  : "Innerhalb des oben gezeigten Zeitraums, aber NICHT SV-frei (zwischen Bezahltem Urlaub und Freistellung) - bisher wurde in diesem Teil-Zeitraum nicht gearbeitet"
+                              }
                             >
-                              ⚠ Lücke:{" "}
+                              {svPruefung?.ueberschritten_sv_frei_luecke
+                                ? "⚠ "
+                                : ""}
+                              Davon NICHT SV-frei:{" "}
                               {formatDatumDE(f.sv_frei_luecke_von)} –{" "}
                               {formatDatumDE(f.sv_frei_luecke_bis)}
                             </div>

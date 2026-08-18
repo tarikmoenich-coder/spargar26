@@ -1160,7 +1160,7 @@ export default function MitarbeiterPage() {
               <th title="Allererster erfasster Arbeitstag dieser Person - folgt bei einem Statuswechsel (neue Personalnummer) der Vorgänger-Kette zurück, springt also nicht künstlich auf den Wechsel-Stichtag">
                 Aktiv seit
               </th>
-              <th title="Letzte ECHTE Abrechnung über 'Jetzt Abrechnen' in der App - nicht zu verwechseln mit einer manuell nachgetragenen historischen Abrechnung (siehe Personal → Sozialversicherung → Abschnitts-Historie)">
+              <th title="Letzter bekannter Abrechnungszeitpunkt - entweder eine echte 'Jetzt Abrechnen'-Aktion in der App, oder ein manuell nachgetragener historischer Zeitpunkt (siehe Personal → Sozialversicherung → Abschnitts-Historie)">
                 Zuletzt abgerechnet am
               </th>
               <th title="15 Wochen = 105 Kalendertage je Kalenderjahr. Summe aller Beschäftigungsabschnitte bei uns (Pausen zählen nicht mit) plus gemeldete Vorbeschäftigung bei anderen deutschen Arbeitgebern.">

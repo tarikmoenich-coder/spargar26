@@ -501,6 +501,15 @@ Enthalten:
   gearbeitet wurde. Die Prüfung verglich bisher gegen die Spanne über
   ALLE Abschnitte einer Saison hinweg statt zu prüfen, ob ein einzelner
   Abschnitt die Lücke wirklich überschneidet
+- Anpassungen 2026-08-15 nach Nutzer-Feedback: "Zuletzt abgerechnet am" im
+  Personalstamm zeigt jetzt auch manuell nachgetragene historische
+  Abrechnungen (nicht mehr nur echte "Jetzt Abrechnen"-Aktionen), Quelle
+  umgestellt von `season_bonuses` auf das umfassendere
+  `saison_abrechnungen`. Die "⚠ Lücke"-Anzeige auf Personal →
+  Sozialversicherung heißt jetzt "Davon NICHT SV-frei" (macht klarer, dass
+  es eine Ausnahme INNERHALB des angezeigten Zeitraums ist, kein eigener
+  konkurrierender Zeitraum), mit Farbe/Dringlichkeit je nachdem, ob in der
+  Lücke tatsächlich gearbeitet wurde
 - Bugfix 2026-08-13: ein versehentlich gesetzter Haken samt Datum (z.B.
   "unbezahlter Urlaub") im SV-Fragebogen ließ sich nach dem Speichern
   nicht mehr entfernen - Fehler "invalid input syntax for type date: ''".
