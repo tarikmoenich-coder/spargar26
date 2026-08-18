@@ -206,6 +206,20 @@ export interface SvPruefung {
   ueberschritten_sv_frei_luecke: boolean;
 }
 
+// Aus der Sicht employee_sv_abschnitte - ein Beschäftigungsabschnitt
+// (getrennt durch je eine Abrechnung, echt oder nachgetragen) je
+// Mitarbeiter/Saisonjahr. Bisher nur intern in employee_sv_pruefung
+// berechnet, jetzt eigenständig abfragbar für die Tage-Aufschlüsselung
+// (Nutzer-Vorgabe 2026-08-15: "Wie sähe das aus?").
+export interface SvAbschnitt {
+  employee_id: string;
+  saison_jahr: number;
+  abschnitt_nr: number;
+  von: string;
+  bis: string;
+  tage: number;
+}
+
 // Aus der Sicht audit_log_ansicht (Änderungsprotokoll) - siehe schema.sql.
 // before_data/after_data enthalten den kompletten Datensatz vorher/nachher;
 // die geänderten Felder werden erst in der Anzeige daraus ermittelt.

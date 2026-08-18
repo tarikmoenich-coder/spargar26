@@ -510,6 +510,17 @@ Enthalten:
   es eine Ausnahme INNERHALB des angezeigten Zeitraums ist, kein eigener
   konkurrierender Zeitraum), mit Farbe/Dringlichkeit je nachdem, ob in der
   Lücke tatsächlich gearbeitet wurde
+- Tage-Aufschlüsselung als Tooltip (Stand 2026-08-15, Nutzer-Vorgabe nach
+  wiederholter Nachfrage "Wie sähe das aus?"): "Rest bis 105 Tage"
+  (Personal, Controlling) und "Angewendete Regel" (Personal →
+  Sozialversicherung) zeigen jetzt beim Überfahren mit der Maus genau, wie
+  sich die Zahl zusammensetzt - jeder Beschäftigungsabschnitt einzeln mit
+  Zeitraum, plus Vorbeschäftigung, plus Summe. Neue Sicht
+  `employee_sv_abschnitte` (vorher nur intern in `employee_sv_pruefung`
+  berechnet) ist jetzt die einzige Quelle der Abschnitts-Logik für beide
+  Sichten
+- Arbeitsvertrag_Vorlage.docx aktualisiert (2026-08-15, vom Nutzer in Word
+  bearbeitet) - Platzhalter geprüft und alle 8 intakt
 - Bugfix 2026-08-13: ein versehentlich gesetzter Haken samt Datum (z.B.
   "unbezahlter Urlaub") im SV-Fragebogen ließ sich nach dem Speichern
   nicht mehr entfernen - Fehler "invalid input syntax for type date: ''".

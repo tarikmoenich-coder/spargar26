@@ -8,6 +8,7 @@ import {
   type AnreiselisteOffenArbeitend,
   type EmployeeUrlaubstage,
   type SeasonSummaryRow,
+  type SvAbschnitt,
   type SvPruefung,
 } from "@/lib/types";
 import { formatDatumDE } from "@/lib/format";
@@ -17,6 +18,7 @@ import {
   resttageText,
   svFreiheitResttage,
   svFreiZeitraumUeberschritten,
+  tageAufschluesselung,
 } from "@/lib/svPruefung";
 
 const CURRENT_YEAR = new Date().getFullYear();
@@ -121,6 +123,10 @@ function offeneGruende(z: AnreiselisteOffenArbeitend): string[] {
 
 export default function ManagementPage() {
   const [faelle, setFaelle] = useState<SvPruefung[]>([]);
+  // Für die Tage-Aufschlüsselung im Tooltip bei "Rest bis 105 Tage"
+  // (Nutzer-Vorgabe 2026-08-15) - ungruppiert, tageAufschluesselung()
+  // filtert selbst je Person.
+  const [svAbschnitte, setSvAbschnitte] = useState<SvAbschnitt[]>([]);
   // Proaktive Vorausschau (Nutzer-Vorgabe 2026-08-10): die 10 Personen,
   // deren SV-freier Zeitraum als nächstes endet - unabhängig davon, ob
   // schon "kritisch" (bereits überschritten). Ergänzt die reaktive
@@ -190,11 +196,18 @@ export default function ManagementPage() {
       // Eine Abfrage für beide Listen: alle Fälle des Jahres, kritisch
       // oder nicht - die kritische Liste UND die "bald endend"-Vorausschau
       // werden client-seitig aus derselben Grundmenge abgeleitet.
-      const { data, error } = await supabase
-        .from("employee_sv_pruefung")
-        .select("*")
-        .eq("saison_jahr", jahr)
-        .order("beschaeftigungstage", { ascending: false });
+      const [{ data, error }, { data: abschnitteData }] = await Promise.all([
+        supabase
+          .from("employee_sv_pruefung")
+          .select("*")
+          .eq("saison_jahr", jahr)
+          .order("beschaeftigungstage", { ascending: false }),
+        supabase
+          .from("employee_sv_abschnitte")
+          .select("*")
+          .eq("saison_jahr", jahr),
+      ]);
+      setSvAbschnitte((abschnitteData as SvAbschnitt[]) ?? []);
       const alle = (data as SvPruefung[]) ?? [];
       if (!error) {
         setFaelle(alle.filter((f) => f.kritisch));
@@ -490,7 +503,9 @@ export default function ManagementPage() {
                     <td>{formatDatumDE(f.aktueller_abschnitt_seit)}</td>
                     <td>{f.vorbeschaeftigung_deutschland_tage}</td>
                     <td>{f.kombinierte_tage}</td>
-                    <td>{f.rest_bis_105_tage}</td>
+                    <td title={tageAufschluesselung(f, svAbschnitte)}>
+                      {f.rest_bis_105_tage}
+                    </td>
                     <td className="text-sm">
                       {f.sv_frei_von || f.sv_frei_bis ? (
                         <>

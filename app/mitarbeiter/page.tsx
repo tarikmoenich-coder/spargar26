@@ -12,9 +12,11 @@ import {
   type Herkunft,
   type PersonalKandidatChecklisteRow,
   type EmployeeLetzteAenderung,
+  type SvAbschnitt,
   type SvPruefung,
   type VerpflegungsSatz,
 } from "@/lib/types";
+import { tageAufschluesselung } from "@/lib/svPruefung";
 import {
   ANZAHL_PERSONALNUMMERN_KREISE,
   kreisBereich,
@@ -61,6 +63,10 @@ export default function MitarbeiterPage() {
     Record<string, string>
   >({});
   const [svPruefung, setSvPruefung] = useState<Record<string, SvPruefung>>({});
+  // Für die Tage-Aufschlüsselung im Tooltip bei "Rest bis 105 Tage"
+  // (Nutzer-Vorgabe 2026-08-15) - ungruppiert, tageAufschluesselung()
+  // filtert selbst je Person.
+  const [svAbschnitte, setSvAbschnitte] = useState<SvAbschnitt[]>([]);
   const [letzteAenderung, setLetzteAenderung] = useState<
     Record<string, EmployeeLetzteAenderung>
   >({});
@@ -175,6 +181,7 @@ export default function MitarbeiterPage() {
       { data: herkunftData },
       { data: alleNrData },
       { data: svData },
+      { data: svAbschnitteData },
       { data: fsData },
       { data: vSatzData },
       { data: checklisteData },
@@ -187,6 +194,10 @@ export default function MitarbeiterPage() {
       supabase.from("employees").select("id, personal_nr, name, vorname"),
       supabase
         .from("employee_sv_pruefung")
+        .select("*")
+        .eq("saison_jahr", CURRENT_YEAR),
+      supabase
+        .from("employee_sv_abschnitte")
         .select("*")
         .eq("saison_jahr", CURRENT_YEAR),
       supabase.from("employee_fuehrerschein_kategorien").select("*"),
@@ -249,6 +260,7 @@ export default function MitarbeiterPage() {
       svMap[row.employee_id] = row;
     });
     setSvPruefung(svMap);
+    setSvAbschnitte((svAbschnitteData as SvAbschnitt[]) ?? []);
     const fsMap: Record<string, string[]> = {};
     (fsData as FuehrerscheinEintrag[] | null ?? []).forEach((row) => {
       fsMap[row.employee_id] = row.fuehrerschein_kategorien;
@@ -1216,17 +1228,7 @@ export default function MitarbeiterPage() {
                 <td>{formatDatumDE(aktivSeit[emp.id])}</td>
                 <td>{formatDatumDE(letzteAbrechnung[emp.id])}</td>
                 <td
-                  title={
-                    sv
-                      ? `${sv.beschaeftigungstage} Kalendertage bei uns` +
-                        (sv.anzahl_abschnitte > 1
-                          ? ` (${sv.anzahl_abschnitte} Abschnitte, Pausen nicht mitgezählt)`
-                          : "") +
-                        (sv.vorbeschaeftigung_deutschland_tage > 0
-                          ? ` + ${sv.vorbeschaeftigung_deutschland_tage} Tage laut SV-Fragebogen bei anderen Arbeitgebern in Deutschland`
-                          : "")
-                      : undefined
-                  }
+                  title={sv ? tageAufschluesselung(sv, svAbschnitte) : undefined}
                 >
                   {sv ? (
                     <>

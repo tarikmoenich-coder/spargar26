@@ -4,7 +4,7 @@
 // an einer Stelle steht. Siehe schema.sql (employee_sv_pruefung) für die
 // serverseitige Herleitung von austrittsdatum_empfohlen.
 
-import type { SvPruefung } from "./types";
+import type { SvAbschnitt, SvPruefung } from "./types";
 import { formatDatumDE } from "./format";
 
 // Heutiges Datum als LOKALES Kalenderdatum (nicht UTC!) - wichtig, siehe
@@ -110,4 +110,33 @@ export function svFreiZeitraumUeberschritten(p: SvPruefung): boolean {
     p.ueberschritten_sv_frei_ende ||
     p.ueberschritten_sv_frei_luecke
   );
+}
+
+// Textuelle Aufschlüsselung, wie sich die 105-Tage-Zahl zusammensetzt -
+// als Tooltip-Text (Nutzer-Vorgabe 2026-08-15, nach wiederholter
+// Verwirrung über die Herleitung von "Rest bis 105 Tage"/"Angewendete
+// Regel"): jeder Beschäftigungsabschnitt einzeln mit Zeitraum und
+// Tage-Zahl, plus Vorbeschäftigung, plus die Summe. `abschnitte` ist die
+// KOMPLETTE, ungefilterte Liste aus employee_sv_abschnitte - die Funktion
+// filtert selbst auf diese Person/Saison.
+export function tageAufschluesselung(
+  p: SvPruefung,
+  abschnitte: SvAbschnitt[]
+): string {
+  const zeilen = abschnitte
+    .filter(
+      (a) => a.employee_id === p.employee_id && a.saison_jahr === p.saison_jahr
+    )
+    .sort((a, b) => a.von.localeCompare(b.von))
+    .map((a) => {
+      const aktuell = a.von === p.aktueller_abschnitt_seit ? " (aktuell)" : "";
+      return `${formatDatumDE(a.von)}–${formatDatumDE(a.bis)}${aktuell}: ${a.tage} Tage`;
+    });
+  if (p.vorbeschaeftigung_deutschland_tage > 0) {
+    zeilen.push(
+      `Vorbeschäftigung Deutschland: ${p.vorbeschaeftigung_deutschland_tage} Tage`
+    );
+  }
+  zeilen.push(`Summe: ${p.kombinierte_tage} von 105 Tagen`);
+  return "So setzen sich die Tage zusammen:\n" + zeilen.join("\n");
 }

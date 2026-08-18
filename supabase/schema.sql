@@ -2956,17 +2956,16 @@ grant select on auszahlungsbeleg_summary to authenticated;
 -- ---------------------------------------------------------------------------
 drop view if exists employee_sv_pruefung;
 
--- Erweiterung 2026-08-14 (Nutzer: "Die verschiedenen Abschnitte müssen
--- transparent benannt und gerechnet werden"): w.beginn_letzter_abschnitt
--- wurde bisher nur INTERN für austrittsdatum_105_tage/_empfohlen genutzt,
--- aber nie selbst angezeigt - ohne ihn war für den Nutzer nicht sichtbar,
--- wann der GERADE LAUFENDE Abschnitt begonnen hat, wenn es (durch
--- Statuswechsel oder nachgetragene historische Abrechnungen) mehrere
--- Abschnitte in einer Saison gibt. w.erster_arbeitstag zeigt weiterhin den
--- allerersten Tag der Saison über ALLE Abschnitte - bewusst unverändert
--- gelassen, nur um aktueller_abschnitt_seit ergänzt (ans Ende angehängt,
--- 42P16-sicher).
-create or replace view employee_sv_pruefung as
+-- ---------------------------------------------------------------------------
+-- 12e0. View: Beschäftigungsabschnitte einzeln, je Mitarbeiter/Saisonjahr/
+--       Abschnitt-Nummer - bisher nur als CTE INNERHALB employee_sv_pruefung
+--       verwendet, jetzt eine eigene Sicht (Nutzer-Vorgabe 2026-08-15: "Wie
+--       sähe das aus?" zur Tage-Aufschlüsselung der 105-Tage-Grenze -
+--       braucht die einzelnen Abschnitte, nicht nur die Summe). Einzige
+--       Quelle der Abschnitts-Logik - employee_sv_pruefung liest sie jetzt
+--       ebenfalls von hier, statt die Logik zweimal zu pflegen.
+-- ---------------------------------------------------------------------------
+create or replace view employee_sv_abschnitte as
 with beschaeftigungstage_roh as (
   select
     we.employee_id,
@@ -2984,17 +2983,33 @@ with beschaeftigungstage_roh as (
     ) as abschnitt_nr
   from work_entries we
   where we.stunden > 0 or we.markierung is not null
-),
-abschnitte as (
-  select
-    employee_id,
-    saison_jahr,
-    abschnitt_nr,
-    min(datum) as von,
-    max(datum) as bis,
-    (max(datum) - min(datum) + 1) as tage
-  from beschaeftigungstage_roh
-  group by employee_id, saison_jahr, abschnitt_nr
+)
+select
+  employee_id,
+  saison_jahr,
+  abschnitt_nr,
+  min(datum) as von,
+  max(datum) as bis,
+  (max(datum) - min(datum) + 1)::int as tage
+from beschaeftigungstage_roh
+group by employee_id, saison_jahr, abschnitt_nr;
+
+alter view employee_sv_abschnitte set (security_invoker = true);
+grant select on employee_sv_abschnitte to authenticated;
+
+-- Erweiterung 2026-08-14 (Nutzer: "Die verschiedenen Abschnitte müssen
+-- transparent benannt und gerechnet werden"): w.beginn_letzter_abschnitt
+-- wurde bisher nur INTERN für austrittsdatum_105_tage/_empfohlen genutzt,
+-- aber nie selbst angezeigt - ohne ihn war für den Nutzer nicht sichtbar,
+-- wann der GERADE LAUFENDE Abschnitt begonnen hat, wenn es (durch
+-- Statuswechsel oder nachgetragene historische Abrechnungen) mehrere
+-- Abschnitte in einer Saison gibt. w.erster_arbeitstag zeigt weiterhin den
+-- allerersten Tag der Saison über ALLE Abschnitte - bewusst unverändert
+-- gelassen, nur um aktueller_abschnitt_seit ergänzt (ans Ende angehängt,
+-- 42P16-sicher).
+create or replace view employee_sv_pruefung as
+with abschnitte as (
+  select * from employee_sv_abschnitte
 ),
 w as (
   select

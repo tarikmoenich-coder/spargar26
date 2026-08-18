@@ -10,6 +10,7 @@ import SvFragebogenFormular, {
 import AbrechnungsHistorie from "@/components/AbrechnungsHistorie";
 import type {
   Employee,
+  SvAbschnitt,
   SvFragebogenAuswertung,
   SvPruefung,
 } from "@/lib/types";
@@ -19,6 +20,7 @@ import {
   resttageFarbeClass,
   resttageText,
   svFreiheitResttage,
+  tageAufschluesselung,
 } from "@/lib/svPruefung";
 
 const CURRENT_YEAR = new Date().getFullYear();
@@ -48,6 +50,10 @@ export default function SozialversicherungPage() {
   // ab Arbeitsbeginn korrekt anzuzeigen statt fälschlich "unbefristet"
   // (Nutzer-Vorgabe 2026-08-10).
   const [pruefung, setPruefung] = useState<Record<string, SvPruefung>>({});
+  // Für die Tage-Aufschlüsselung im Tooltip bei "Angewendete Regel"
+  // (Nutzer-Vorgabe 2026-08-15) - ungruppiert, tageAufschluesselung()
+  // filtert selbst je Person.
+  const [svAbschnitte, setSvAbschnitte] = useState<SvAbschnitt[]>([]);
 
   const [editingId, setEditingId] = useState<string | null>(null);
 
@@ -56,22 +62,29 @@ export default function SozialversicherungPage() {
     const supabase = getSupabaseClient();
     let query = supabase.from("employees").select("*").order("personal_nr");
     if (!showInactive) query = query.eq("aktiv", true);
-    const [{ data: emps }, { data: frag }, { data: fragVorjahr }, { data: pr }] =
-      await Promise.all([
-        query,
-        supabase
-          .from("sv_fragebogen_auswertung")
-          .select("*")
-          .eq("saison_jahr", jahr),
-        supabase
-          .from("sv_fragebogen_auswertung")
-          .select("*")
-          .eq("saison_jahr", jahr - 1),
-        supabase
-          .from("employee_sv_pruefung")
-          .select("*")
-          .eq("saison_jahr", jahr),
-      ]);
+    const [
+      { data: emps },
+      { data: frag },
+      { data: fragVorjahr },
+      { data: pr },
+      { data: abschnitte },
+    ] = await Promise.all([
+      query,
+      supabase
+        .from("sv_fragebogen_auswertung")
+        .select("*")
+        .eq("saison_jahr", jahr),
+      supabase
+        .from("sv_fragebogen_auswertung")
+        .select("*")
+        .eq("saison_jahr", jahr - 1),
+      supabase.from("employee_sv_pruefung").select("*").eq("saison_jahr", jahr),
+      supabase
+        .from("employee_sv_abschnitte")
+        .select("*")
+        .eq("saison_jahr", jahr),
+    ]);
+    setSvAbschnitte((abschnitte as SvAbschnitt[]) ?? []);
     setEmployees((emps as Employee[]) ?? []);
     const map: Record<string, SvFragebogenAuswertung> = {};
     ((frag as SvFragebogenAuswertung[]) ?? []).forEach((f) => {
@@ -276,7 +289,9 @@ export default function SozialversicherungPage() {
                           entfällt
                         </span>
                       ) : svPruefung ? (
-                        angewendeteRegel(svPruefung)
+                        <span title={tageAufschluesselung(svPruefung, svAbschnitte)}>
+                          {angewendeteRegel(svPruefung)}
+                        </span>
                       ) : (
                         <span className="text-neutral-400">
                           15 Wochen (105 Tage)
