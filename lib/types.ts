@@ -628,6 +628,11 @@ export interface AdvanceRecipientDetail {
   name: string;
   vorname: string;
   anteil: number;
+  // Nur bei Zahlungsart "BÜ" (Überweisung) befüllt - Schnappschuss der
+  // Kontodaten zum Zeitpunkt der Erfassung (Nutzer-Vorgabe 2026-08-14).
+  zahlungsempfaenger?: string | null;
+  iban?: string | null;
+  bic?: string | null;
 }
 
 // Bereits ausgegebene Arbeitskleidung je Person/Saison-Jahr - aus der

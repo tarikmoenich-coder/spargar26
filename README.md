@@ -232,14 +232,25 @@ Enthalten:
 - Vorschussverwaltung: einzeln, gruppenweise (nach Arbeitsgruppe) oder nach
   Herkunft auswählen, Betrag pro Person individuell anpassbar, atomare
   Belegnummer, Storno statt Löschen, filterbar nach Jahr und Monat (wie
-  bei Auszahlungen). Druck erzeugt zwei getrennte Blätter: eine
-  Mitarbeiter-Unterschriftenliste (wie bisher, aber ohne Summe - die
-  Empfänger müssen die Gesamtsumme nicht sehen) und einen separaten
-  Übergabe-Beleg für die Person, die das Geld zur Verteilung bekommt
-  (z.B. Gruppenleiter) - mit Summe, optionalem Feld "Übergeben an" (wie
-  Begründung beim Erfassen abfragbar) und einem einzigen
-  Unterschriftenfeld für diese eine Person. Begründung und "Übergeben an"
-  stehen auf beiden Blättern direkt unter der Belegnummer
+  bei Auszahlungen). Zahlungsart BAR druckt zwei getrennte Blätter: eine
+  Mitarbeiter-Unterschriftenliste (ohne Summe - die Empfänger müssen die
+  Gesamtsumme nicht sehen) und - nur falls "Übergeben an" ausgefüllt ist
+  (Stand 2026-08-14, vorher wurde diese Seite immer gedruckt) - einen
+  separaten Übergabe-Beleg für die Person, die das Geld zur Verteilung
+  bekommt (z.B. Gruppenleiter), mit Summe und einem einzigen
+  Unterschriftenfeld für diese eine Person
+- Zahlungsart Überweisung (Stand 2026-08-14, Code "BÜ" - vorher "AZ", das
+  für "Auszahlung" stand und bei Vorschüssen verwirrend war): eigenes,
+  einseitiges Druckbild statt der beiden BAR-Blätter, da kein Bargeld den
+  Besitzer wechselt. Zahlungsempfänger, IBAN und BIC sind je Empfänger
+  Pflichtangaben - aus den Personalstammdaten vorbefüllt, änderbar, als
+  Schnappschuss auf `advance_recipients` gespeichert (bleiben unverändert,
+  auch wenn sich die IBAN der Person später ändert) - und erscheinen mit
+  auf dem Belegdruck. Statt einer Erhalt-Unterschrift bestätigt dort jede
+  Person selbst mit Unterschrift, dass ihre eigenen Kontodaten korrekt
+  sind, BEVOR die Überweisung tatsächlich ausgeführt wird (Nutzer-Vorgabe:
+  "Die Richtigkeit dieser Banküberweisung will ich mir unterschreiben
+  lassen, bevor ich sie durchführe")
 - Nachträgliche Korrektur eines bereits bestätigten Vorschuss-Betrags
   (admin/kasse, auch nach Storno-Sperre): Grund ist Pflichtfeld, jede
   Korrektur wird mit Anwender, Zeitstempel und Differenz in den

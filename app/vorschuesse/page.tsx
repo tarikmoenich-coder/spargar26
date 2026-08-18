@@ -28,6 +28,12 @@ interface AusgewaehltePerson {
   name: string;
   vorname: string;
   betrag: string;
+  // Nur bei Zahlungsart "BÜ" (Überweisung) relevant - aus den
+  // Personalstammdaten vorbefüllt, aber änderbar (Nutzer-Vorgabe
+  // 2026-08-14: "zwingend immer abgefragt").
+  zahlungsempfaenger: string;
+  iban: string;
+  bic: string;
 }
 
 interface Beleg {
@@ -101,7 +107,9 @@ export default function VorschuessePage() {
           .limit(100),
         supabase
           .from("employees")
-          .select("id, personal_nr, name, vorname, aktiv, gruppe_nr, herkunft")
+          .select(
+            "id, personal_nr, name, vorname, aktiv, gruppe_nr, herkunft, zahlungsempfaenger, iban, bic"
+          )
           .eq("aktiv", true)
           .order("name"),
         supabase.from("arbeitsgruppen").select("*").order("reihenfolge"),
@@ -147,6 +155,9 @@ export default function VorschuessePage() {
         name: emp.name,
         vorname: emp.vorname,
         betrag: basisBetrag || "0",
+        zahlungsempfaenger: emp.zahlungsempfaenger ?? "",
+        iban: emp.iban ?? "",
+        bic: emp.bic ?? "",
       },
     ]);
   }
@@ -177,6 +188,16 @@ export default function VorschuessePage() {
   function betragAendern(id: string, wert: string) {
     setAusgewaehlt((prev) =>
       prev.map((p) => (p.employee_id === id ? { ...p, betrag: wert } : p))
+    );
+  }
+
+  function bankfeldAendern(
+    id: string,
+    feld: "zahlungsempfaenger" | "iban" | "bic",
+    wert: string
+  ) {
+    setAusgewaehlt((prev) =>
+      prev.map((p) => (p.employee_id === id ? { ...p, [feld]: wert } : p))
     );
   }
 
@@ -230,6 +251,20 @@ export default function VorschuessePage() {
       setError("Bitte für jede ausgewählte Person einen Betrag > 0 eintragen.");
       return;
     }
+    // Nutzer-Vorgabe 2026-08-14: bei Überweisung sind Zahlungsempfänger/
+    // IBAN/BIC zwingend erforderlich - kein Beleg ohne vollständige
+    // Kontodaten.
+    if (
+      zahlungsart === "BÜ" &&
+      ausgewaehlt.some(
+        (p) => !p.zahlungsempfaenger.trim() || !p.iban.trim() || !p.bic.trim()
+      )
+    ) {
+      setError(
+        "Bitte für jede ausgewählte Person Zahlungsempfänger, IBAN und BIC eintragen."
+      );
+      return;
+    }
     setSaving(true);
     setError(null);
     const supabase = getSupabaseClient();
@@ -272,6 +307,12 @@ export default function VorschuessePage() {
           advance_id: inserted.id,
           employee_id: p.employee_id,
           anteil: Number(p.betrag),
+          // Nur bei Überweisung befüllt - Schnappschuss der Kontodaten
+          // zum Erfassungszeitpunkt, siehe advance_recipients in schema.sql.
+          zahlungsempfaenger:
+            zahlungsart === "BÜ" ? p.zahlungsempfaenger : null,
+          iban: zahlungsart === "BÜ" ? p.iban : null,
+          bic: zahlungsart === "BÜ" ? p.bic : null,
         }))
       );
 
@@ -294,6 +335,10 @@ export default function VorschuessePage() {
         name: p.name,
         vorname: p.vorname,
         anteil: Number(p.betrag),
+        zahlungsempfaenger:
+          zahlungsart === "BÜ" ? p.zahlungsempfaenger : null,
+        iban: zahlungsart === "BÜ" ? p.iban : null,
+        bic: zahlungsart === "BÜ" ? p.bic : null,
       })),
     });
 
@@ -338,7 +383,9 @@ export default function VorschuessePage() {
     const supabase = getSupabaseClient();
     const { data, error } = await supabase
       .from("advance_recipients")
-      .select("employee_id, anteil, employees(personal_nr, name, vorname)")
+      .select(
+        "employee_id, anteil, zahlungsempfaenger, iban, bic, employees(personal_nr, name, vorname)"
+      )
       .eq("advance_id", adv.id);
     if (error || !data) return;
     const empfaenger: AdvanceRecipientDetail[] = data.map((row: any) => ({
@@ -347,6 +394,9 @@ export default function VorschuessePage() {
       name: row.employees?.name ?? "",
       vorname: row.employees?.vorname ?? "",
       anteil: Number(row.anteil ?? 0),
+      zahlungsempfaenger: row.zahlungsempfaenger,
+      iban: row.iban,
+      bic: row.bic,
     }));
     setDruckBeleg({
       belegnummer: adv.belegnummer,
@@ -448,7 +498,7 @@ export default function VorschuessePage() {
               onChange={(e) => setZahlungsart(e.target.value)}
             >
               <option value="BAR">BAR</option>
-              <option value="AZ">Überweisung (AZ)</option>
+              <option value="BÜ">Überweisung (BÜ)</option>
             </select>
             <div className="col-span-2" />
 
@@ -545,11 +595,25 @@ export default function VorschuessePage() {
                   </button>
                 </div>
               </div>
+              {zahlungsart === "BÜ" && (
+                <p className="mb-2 text-xs text-neutral-500">
+                  Bei Überweisung sind Zahlungsempfänger, IBAN und BIC
+                  Pflichtangaben - aus den Personalstammdaten vorbefüllt,
+                  bei Bedarf änderbar. Erscheinen mit auf dem Belegdruck.
+                </p>
+              )}
               <table>
                 <thead>
                   <tr>
                     <th>Pers.-Nr.</th>
                     <th>Name</th>
+                    {zahlungsart === "BÜ" && (
+                      <>
+                        <th>Zahlungsempfänger</th>
+                        <th>IBAN</th>
+                        <th>BIC</th>
+                      </>
+                    )}
                     <th>Betrag €</th>
                     <th></th>
                   </tr>
@@ -561,6 +625,49 @@ export default function VorschuessePage() {
                       <td>
                         {p.name}, {p.vorname}
                       </td>
+                      {zahlungsart === "BÜ" && (
+                        <>
+                          <td>
+                            <input
+                              className="w-40"
+                              value={p.zahlungsempfaenger}
+                              onChange={(e) =>
+                                bankfeldAendern(
+                                  p.employee_id,
+                                  "zahlungsempfaenger",
+                                  e.target.value
+                                )
+                              }
+                            />
+                          </td>
+                          <td>
+                            <input
+                              className="w-44"
+                              value={p.iban}
+                              onChange={(e) =>
+                                bankfeldAendern(
+                                  p.employee_id,
+                                  "iban",
+                                  e.target.value
+                                )
+                              }
+                            />
+                          </td>
+                          <td>
+                            <input
+                              className="w-28"
+                              value={p.bic}
+                              onChange={(e) =>
+                                bankfeldAendern(
+                                  p.employee_id,
+                                  "bic",
+                                  e.target.value
+                                )
+                              }
+                            />
+                          </td>
+                        </>
+                      )}
                       <td>
                         <input
                           type="number"
@@ -594,18 +701,23 @@ export default function VorschuessePage() {
             onChange={(e) => setBegruendung(e.target.value)}
           />
 
-          <div className="flex flex-col gap-1">
-            <input
-              placeholder="Übergeben an (optional, z.B. Gruppenleiter)"
-              value={uebergebenAn}
-              onChange={(e) => setUebergebenAn(e.target.value)}
-            />
-            <p className="text-xs text-neutral-500">
-              Falls jemand das Geld zur Verteilung an die einzelnen
-              Empfänger bekommt: erscheint auf dem separaten
-              Übergabe-Beleg beim Drucken (siehe unten).
-            </p>
-          </div>
+          {/* Nur bei BAR sinnvoll - bei Überweisung wird kein Bargeld an
+              eine dritte Person zur Verteilung übergeben (Nutzer-Vorgabe
+              2026-08-14). */}
+          {zahlungsart === "BAR" && (
+            <div className="flex flex-col gap-1">
+              <input
+                placeholder="Übergeben an (optional, z.B. Gruppenleiter)"
+                value={uebergebenAn}
+                onChange={(e) => setUebergebenAn(e.target.value)}
+              />
+              <p className="text-xs text-neutral-500">
+                Falls jemand das Geld zur Verteilung an die einzelnen
+                Empfänger bekommt: erscheint auf dem separaten
+                Übergabe-Beleg beim Drucken (siehe unten).
+              </p>
+            </div>
+          )}
 
           <div className="flex items-center gap-2">
             <button type="submit" className="btn" disabled={saving}>
@@ -803,22 +915,84 @@ export default function VorschuessePage() {
         </table>
       )}
 
-      {/* Zwei getrennte Druckblätter - nur im Druck sichtbar.
-          1) Mitarbeiter-Unterschriftenliste: wie bisher, aber ohne Summe -
-             die Empfänger müssen die Gesamtsumme nicht sehen.
-          2) Übergabe-Beleg: für die Person, die das Geld zur Verteilung
-             bekommt (z.B. Gruppenleiter) - mit Summe und einem einzigen
-             Unterschriftenfeld für diese Person, aber ohne
-             Unterschriftenfelder je Empfänger. */}
-      {anzeigeBeleg && (
+      {/* Druckblätter - nur im Druck sichtbar. Bei Überweisung (BÜ) ein
+          eigenständiges, einseitiges Layout mit Kontodaten je Person
+          (Nutzer-Vorgabe 2026-08-14) - kein Bargeld wechselt den Besitzer,
+          daher weder Erhalt- noch Übergabe-Unterschriften, sondern eine
+          Bestätigung JEDER Person, dass ihre eigenen Kontodaten korrekt
+          sind, VOR Ausführung der Überweisung. Bei BAR wie bisher zwei
+          Blätter: 1) Mitarbeiter-Unterschriftenliste (Erhalt, ohne Summe),
+          2) Übergabe-Beleg (nur falls "Übergeben an" ausgefüllt ist). */}
+      {anzeigeBeleg && anzeigeBeleg.zahlungsart === "BÜ" && (
+        <div className="hidden print:block">
+          <h2 className="text-xl font-semibold">
+            Vorschuss-Überweisung{anzeigeBeleg.storniert ? " (STORNIERT)" : ""}
+          </h2>
+          <p className="mt-1 text-base">
+            Belegnummer: {anzeigeBeleg.belegnummer} · Datum:{" "}
+            {new Date(anzeigeBeleg.datum).toLocaleDateString("de-DE")} ·
+            Überweisung
+          </p>
+          <p className="text-base">
+            Begründung: {anzeigeBeleg.begruendung || "-"}
+          </p>
+          <p className="mt-1 text-sm">
+            Mit der Unterschrift bestätigt die jeweilige Person, dass die
+            eigenen Kontodaten korrekt sind - die Überweisung wird erst
+            danach ausgeführt.
+          </p>
+          <table className="mt-4 print-form-table">
+            <thead>
+              <tr>
+                <th>Pers.-Nr.</th>
+                <th>Name</th>
+                <th>Zahlungsempfänger</th>
+                <th>IBAN</th>
+                <th>BIC</th>
+                <th>Betrag €</th>
+                <th>Kontodaten korrekt, Unterschrift</th>
+              </tr>
+            </thead>
+            <tbody>
+              {anzeigeBeleg.empfaenger.map((p) => (
+                <tr key={p.employee_id}>
+                  <td>{p.personal_nr}</td>
+                  <td>
+                    {p.name}, {p.vorname}
+                  </td>
+                  <td>{p.zahlungsempfaenger || "-"}</td>
+                  <td>{p.iban || "-"}</td>
+                  <td>{p.bic || "-"}</td>
+                  <td>{p.anteil.toFixed(2)}</td>
+                  <td></td>
+                </tr>
+              ))}
+            </tbody>
+            <tfoot>
+              <tr>
+                <td colSpan={5} className="text-right font-semibold">
+                  Summe
+                </td>
+                <td className="font-semibold">
+                  {anzeigeBeleg.empfaenger
+                    .reduce((s, p) => s + p.anteil, 0)
+                    .toFixed(2)}
+                </td>
+                <td></td>
+              </tr>
+            </tfoot>
+          </table>
+        </div>
+      )}
+
+      {anzeigeBeleg && anzeigeBeleg.zahlungsart !== "BÜ" && (
         <div className="hidden print:block">
           <h2 className="text-xl font-semibold">
             Vorschuss-Auszahlung{anzeigeBeleg.storniert ? " (STORNIERT)" : ""}
           </h2>
           <p className="mt-1 text-base">
             Belegnummer: {anzeigeBeleg.belegnummer} · Datum:{" "}
-            {new Date(anzeigeBeleg.datum).toLocaleDateString("de-DE")} ·{" "}
-            {anzeigeBeleg.zahlungsart === "BAR" ? "Bar" : "Überweisung"}
+            {new Date(anzeigeBeleg.datum).toLocaleDateString("de-DE")} · Bar
           </p>
           <p className="text-base">
             Begründung: {anzeigeBeleg.begruendung || "-"} · Übergeben an:{" "}
@@ -847,64 +1021,64 @@ export default function VorschuessePage() {
             </tbody>
           </table>
 
-          <div className="print-page-break">
-            <h2 className="text-xl font-semibold">Vorschuss-Übergabe</h2>
-            <p className="mt-1 text-base">
-              Belegnummer: {anzeigeBeleg.belegnummer} · Datum:{" "}
-              {new Date(anzeigeBeleg.datum).toLocaleDateString("de-DE")} ·{" "}
-              {anzeigeBeleg.zahlungsart === "BAR" ? "Bar" : "Überweisung"}
-            </p>
-            <p className="text-base">
-              Begründung: {anzeigeBeleg.begruendung || "-"} · Übergeben an:{" "}
-              {anzeigeBeleg.uebergeben_an || "-"}
-            </p>
-            <table className="mt-4 print-form-table">
-              <thead>
-                <tr>
-                  <th>Pers.-Nr.</th>
-                  <th>Name</th>
-                  <th>Betrag €</th>
-                </tr>
-              </thead>
-              <tbody>
-                {anzeigeBeleg.empfaenger.map((p) => (
-                  <tr key={p.employee_id}>
-                    <td>{p.personal_nr}</td>
-                    <td>
-                      {p.name}, {p.vorname}
-                    </td>
-                    <td>{p.anteil.toFixed(2)}</td>
+          {/* Nur wenn "Übergeben an" tatsächlich ausgefüllt ist - sonst gibt
+              es niemanden, der diesen Beleg entgegennimmt/unterschreibt
+              (Nutzer-Vorgabe 2026-08-14: die zweite Seite wurde bisher immer
+              gedruckt, auch ohne "Übergeben an"). */}
+          {anzeigeBeleg.uebergeben_an && (
+            <div className="print-page-break">
+              <h2 className="text-xl font-semibold">Vorschuss-Übergabe</h2>
+              <p className="mt-1 text-base">
+                Belegnummer: {anzeigeBeleg.belegnummer} · Datum:{" "}
+                {new Date(anzeigeBeleg.datum).toLocaleDateString("de-DE")} · Bar
+              </p>
+              <p className="text-base">
+                Begründung: {anzeigeBeleg.begruendung || "-"} · Übergeben an:{" "}
+                {anzeigeBeleg.uebergeben_an}
+              </p>
+              <table className="mt-4 print-form-table">
+                <thead>
+                  <tr>
+                    <th>Pers.-Nr.</th>
+                    <th>Name</th>
+                    <th>Betrag €</th>
                   </tr>
-                ))}
-              </tbody>
-              <tfoot>
-                <tr>
-                  <td colSpan={2} className="text-right font-semibold">
-                    Summe
-                  </td>
-                  <td className="font-semibold">
-                    {anzeigeBeleg.empfaenger
-                      .reduce((s, p) => s + p.anteil, 0)
-                      .toFixed(2)}
-                  </td>
-                </tr>
-              </tfoot>
-            </table>
-            <p className="mt-6 text-base">
-              Übergeben an:{" "}
-              {anzeigeBeleg.uebergeben_an || (
-                <span className="inline-block w-64 border-b-2 border-black">
+                </thead>
+                <tbody>
+                  {anzeigeBeleg.empfaenger.map((p) => (
+                    <tr key={p.employee_id}>
+                      <td>{p.personal_nr}</td>
+                      <td>
+                        {p.name}, {p.vorname}
+                      </td>
+                      <td>{p.anteil.toFixed(2)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+                <tfoot>
+                  <tr>
+                    <td colSpan={2} className="text-right font-semibold">
+                      Summe
+                    </td>
+                    <td className="font-semibold">
+                      {anzeigeBeleg.empfaenger
+                        .reduce((s, p) => s + p.anteil, 0)
+                        .toFixed(2)}
+                    </td>
+                  </tr>
+                </tfoot>
+              </table>
+              <p className="mt-6 text-base">
+                Übergeben an: {anzeigeBeleg.uebergeben_an}
+              </p>
+              <p className="mt-8 text-base">
+                Unterschrift:{" "}
+                <span className="ml-2 inline-block w-64 border-b-2 border-black">
                   &nbsp;
                 </span>
-              )}
-            </p>
-            <p className="mt-8 text-base">
-              Unterschrift:{" "}
-              <span className="ml-2 inline-block w-64 border-b-2 border-black">
-                &nbsp;
-              </span>
-            </p>
-          </div>
+              </p>
+            </div>
+          )}
         </div>
       )}
     </div>

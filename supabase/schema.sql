@@ -2224,7 +2224,7 @@ create table advances (
   -- Übergabe-Beleg (siehe Druck auf der Vorschüsse-Seite). Optional wie
   -- Begründung.
   uebergeben_an text,
-  zahlungsart text not null, -- z.B. 'BAR', 'AZ' (Überweisung)
+  zahlungsart text not null, -- z.B. 'BAR', 'BÜ' (Überweisung, Stand 2026-08-14 - vorher 'AZ', das für "Auszahlung" stand und hier verwirrend war)
   storniert boolean not null default false,
   storniert_am timestamptz,
   storniert_von uuid references profiles (id),
@@ -2237,6 +2237,16 @@ create table advance_recipients (
   advance_id bigint not null references advances (id) on delete restrict,
   employee_id uuid not null references employees (id) on delete restrict,
   anteil numeric(10, 2), -- optional: individueller Anteil, sonst gleichmäßig
+  -- Bei Zahlungsart "BÜ" (Überweisung) - Nutzer-Vorgabe 2026-08-14: Pflicht,
+  -- beim Erfassen aus den Personalstammdaten vorbefüllt, aber änderbar.
+  -- Bewusst hier (nicht auf advances) UND als eigener Schnappschuss
+  -- gespeichert (nicht live aus employees gelesen) - eine Überweisung kann
+  -- an mehrere Personen mit je eigenem Konto gehen, und der Beleg muss
+  -- dauerhaft die Kontodaten zeigen, mit denen tatsächlich überwiesen
+  -- wurde, auch wenn sich employees.iban später ändert.
+  zahlungsempfaenger text,
+  iban text,
+  bic text,
   primary key (advance_id, employee_id)
 );
 
