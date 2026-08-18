@@ -251,6 +251,20 @@ Enthalten:
   sind, BEVOR die Überweisung tatsächlich ausgeführt wird (Nutzer-Vorgabe:
   "Die Richtigkeit dieser Banküberweisung will ich mir unterschreiben
   lassen, bevor ich sie durchführe")
+- Neue Vorschussart "Strafe/Rechnung" (Stand 2026-08-18): eigener Beleg mit
+  Belegupload (Strafzettel/Rechnung als Nachweis, PDF/JPG/PNG), bewusst auf
+  genau eine Person beschränkt (der Beleg gehört zu dieser einen Person,
+  keine Mehrfachauswahl wie bei normalen Vorschüssen). Zahlungsart/
+  "Übergeben an" entfallen (kein Geld fließt) - intern `zahlungsart = 'N/A'`,
+  wodurch diese Belege automatisch aus dem physischen Kassenbestand
+  herausfallen (Kasse/Dashboard filtern explizit auf `zahlungsart = 'BAR'`),
+  aber wie ein normaler Vorschuss den Auszahlungsbetrag mindern. Der Beleg
+  liegt in einem eigenen, privaten Storage-Bucket (`vorschuss-belege`,
+  getrennt von `mitarbeiter-dokumente`, da kasse hier zusätzlich lesen/
+  schreiben darf) und ist per Direktlink (zeitlich begrenzte signierte URL)
+  sowohl im Vorschusslog als auch auf der "Suche"-Seite abrufbar - dort
+  nur für Rollen mit den bisherigen Vorschuss-Rechten (admin/hr/kasse/
+  lohnabrechnung/pruefer), nicht z.B. zeiterfassung
 - Nachträgliche Korrektur eines bereits bestätigten Vorschuss-Betrags
   (admin/kasse, auch nach Storno-Sperre): Grund ist Pflichtfeld, jede
   Korrektur wird mit Anwender, Zeitstempel und Differenz in den
@@ -270,7 +284,9 @@ Enthalten:
   Verbrauchsgegenstände (kostenloser Tausch gegen das Altgerät) und werden
   bewusst nicht erfasst. Erfasst über eine kontrollierte
   security-definer-Ausnahme (season_bonuses selbst bleibt für
-  zeiterfassung nicht lesbar/schreibbar)
+  zeiterfassung nicht lesbar/schreibbar). Die Spaltenüberschriften zeigen
+  seit 2026-08-18 zusätzlich den in den Einstellungen hinterlegten Preis
+  je Stück (z.B. "Hose (Anzahl) (12,50 €/Stück)")
 - Kautionsübergabe an den Hausmeister (Stand 2026-08-09): die bei der
   Auszahlung einbehaltene Zimmerkaution mindert zunächst nur den
   Auszahlungsbetrag der Person, nicht den Kassenbestand - erst wenn sie
@@ -304,7 +320,14 @@ Enthalten:
   Arbeitsstunden (inkl. Notiz je Tag) sowie Vorschuss-Historie (inkl.
   Begründung) einer Person einsehen und als Übersicht für den Mitarbeiter
   ausdrucken - damit nicht nur die Verwaltung, sondern auch untere Ebenen
-  selbst Auskunft geben können
+  selbst Auskunft geben können. Seit 2026-08-18 zusätzlich als
+  "Auslage"-Positionen unter Vorschüsse aufgeführt: Buskosten,
+  Fahrerkaution, Zimmerkaution und die berechnete Arbeitskleidung (je
+  Hose/Jacke/Stiefel eine eigene Zeile, nur wenn > 0), aus `season_bonuses`
+  abgeleitet. Datum zeigt "Saison {Jahr}" statt eines echten Datums, da
+  `season_bonuses` nur einen gemeinsamen `updated_at`-Zeitstempel je
+  Mitarbeiter+Jahr für alle Felder hat (kein präzises Einzeldatum je
+  Position verfügbar)
 - Freitext-Notiz je Tag auf der Stundenerfassung (z.B. "krank", "zu
   spät") - erscheint auch auf der "Suche"-Seite
 - 15-Wochen-Kontrolle (SV-Freiheit landwirtschaftliche Saisonarbeit,

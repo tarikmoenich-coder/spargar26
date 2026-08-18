@@ -12,6 +12,7 @@ import { useEffect, useState } from "react";
 import { getSupabaseClient } from "@/lib/supabase/client";
 import { useProfile } from "@/lib/useProfile";
 import { uebersetzung } from "@/lib/i18n";
+import { formatEuro } from "@/lib/format";
 import ErfassungTabs from "@/components/ErfassungTabs";
 import type {
   Arbeitsgruppe,
@@ -197,9 +198,24 @@ export default function ArbeitskleidungPage() {
               <th>{t("erfassung.persnr")}</th>
               <th>{t("erfassung.name")}</th>
               <th>{t("erfassung.gruppe")}</th>
-              <th>{t("arbeitskleidung.hose")}</th>
-              <th>{t("arbeitskleidung.jacke")}</th>
-              <th>{t("arbeitskleidung.stiefel")}</th>
+              <th>
+                {t("arbeitskleidung.hose")}
+                {satz?.kleidung_hose
+                  ? ` (${formatEuro(satz.kleidung_hose)} €/Stück)`
+                  : ""}
+              </th>
+              <th>
+                {t("arbeitskleidung.jacke")}
+                {satz?.kleidung_jacke
+                  ? ` (${formatEuro(satz.kleidung_jacke)} €/Stück)`
+                  : ""}
+              </th>
+              <th>
+                {t("arbeitskleidung.stiefel")}
+                {satz?.kleidung_stiefel
+                  ? ` (${formatEuro(satz.kleidung_stiefel)} €/Stück)`
+                  : ""}
+              </th>
               <th></th>
             </tr>
           </thead>

@@ -6,12 +6,33 @@ import { useProfile } from "@/lib/useProfile";
 import { uebersetzung } from "@/lib/i18n";
 import type {
   Employee,
+  EmployeeAuslagenHistorie,
   ErdbeerenPraemieTag,
   VorschussHistorieEintrag,
   WorkEntry,
   ZuckermaisPraemieTag,
 } from "@/lib/types";
 import { formatDatumDE } from "@/lib/format";
+
+const VORSCHUSS_BUCKET = "vorschuss-belege";
+
+// Eine anzeigefertige Zeile für die Vorschüsse-Tabelle - vereint echte
+// Vorschüsse (inkl. Strafe/Rechnung) UND die aus season_bonuses
+// abgeleiteten Auslagen (Bus/Kaution/Arbeitskleidung, Nutzer-Vorgabe
+// 2026-08-18). Letztere haben kein echtes Datum (season_bonuses.updated_at
+// ist nur ein gemeinsamer Zeitstempel je Mitarbeiter+Jahr, siehe
+// schema.sql) - daher "Saison {Jahr}" statt eines Datums.
+interface VorschussAnzeigeZeile {
+  key: string;
+  sortDatum: string;
+  datumAnzeige: string;
+  betrag: number;
+  artLabel: string;
+  begruendung: string;
+  storniert: boolean;
+  belegStoragePath: string | null;
+  belegDateiname: string | null;
+}
 
 // Für die Suche reicht die eingeschränkte Sicht (keine sensiblen Felder) -
 // alle Rollen dürfen hier lesen, siehe employees_public/employees-Grant.
@@ -33,6 +54,7 @@ export default function SuchePage() {
   const [saisonJahr, setSaisonJahr] = useState(jetzigeSaison());
   const [stunden, setStunden] = useState<WorkEntry[]>([]);
   const [vorschuesse, setVorschuesse] = useState<VorschussHistorieEintrag[]>([]);
+  const [auslagen, setAuslagen] = useState<EmployeeAuslagenHistorie[]>([]);
   const [zuckermais, setZuckermais] = useState<ZuckermaisPraemieTag[]>([]);
   const [erdbeeren, setErdbeeren] = useState<ErdbeerenPraemieTag[]>([]);
   const [ladenListe, setLadenListe] = useState(true);
@@ -70,39 +92,59 @@ export default function SuchePage() {
     setAusgewaehlt(m);
     setLadenDetail(true);
     const supabase = getSupabaseClient();
-    const [{ data: we }, { data: vh }, { data: zm }, { data: eb }] = await Promise.all([
-      supabase
-        .from("work_entries")
-        .select("*")
-        .eq("employee_id", m.id)
-        .gte("datum", `${saisonJahr}-01-01`)
-        .lte("datum", `${saisonJahr}-12-31`)
-        .order("datum"),
-      supabase
-        .from("employee_vorschuss_historie")
-        .select("*")
-        .eq("employee_id", m.id)
-        .order("datum"),
-      supabase
-        .from("zuckermais_praemie_tag")
-        .select("*")
-        .eq("employee_id", m.id)
-        .gte("datum", `${saisonJahr}-01-01`)
-        .lte("datum", `${saisonJahr}-12-31`)
-        .order("datum"),
-      supabase
-        .from("erdbeeren_praemie_tag")
-        .select("*")
-        .eq("employee_id", m.id)
-        .gte("datum", `${saisonJahr}-01-01`)
-        .lte("datum", `${saisonJahr}-12-31`)
-        .order("datum"),
-    ]);
+    const [{ data: we }, { data: vh }, { data: al }, { data: zm }, { data: eb }] =
+      await Promise.all([
+        supabase
+          .from("work_entries")
+          .select("*")
+          .eq("employee_id", m.id)
+          .gte("datum", `${saisonJahr}-01-01`)
+          .lte("datum", `${saisonJahr}-12-31`)
+          .order("datum"),
+        supabase
+          .from("employee_vorschuss_historie")
+          .select("*")
+          .eq("employee_id", m.id)
+          .order("datum"),
+        // Bewusst ohne Saisonjahr-Filter (wie Vorschüsse) - zeigt alle
+        // Jahre, jede Zeile trägt ihr eigenes saison_jahr.
+        supabase
+          .from("employee_auslagen_historie")
+          .select("*")
+          .eq("employee_id", m.id),
+        supabase
+          .from("zuckermais_praemie_tag")
+          .select("*")
+          .eq("employee_id", m.id)
+          .gte("datum", `${saisonJahr}-01-01`)
+          .lte("datum", `${saisonJahr}-12-31`)
+          .order("datum"),
+        supabase
+          .from("erdbeeren_praemie_tag")
+          .select("*")
+          .eq("employee_id", m.id)
+          .gte("datum", `${saisonJahr}-01-01`)
+          .lte("datum", `${saisonJahr}-12-31`)
+          .order("datum"),
+      ]);
     setStunden((we as WorkEntry[]) ?? []);
     setVorschuesse((vh as VorschussHistorieEintrag[]) ?? []);
+    setAuslagen((al as EmployeeAuslagenHistorie[]) ?? []);
     setZuckermais((zm as ZuckermaisPraemieTag[]) ?? []);
     setErdbeeren((eb as ErdbeerenPraemieTag[]) ?? []);
     setLadenDetail(false);
+  }
+
+  async function belegAnsehen(pfad: string) {
+    const supabase = getSupabaseClient();
+    const { data, error } = await supabase.storage
+      .from(VORSCHUSS_BUCKET)
+      .createSignedUrl(pfad, 60);
+    if (error || !data) {
+      window.alert("Beleg konnte nicht geöffnet werden.");
+      return;
+    }
+    window.open(data.signedUrl, "_blank");
   }
 
   // Bei Saisonjahr-Wechsel Arbeitsstunden neu laden, falls jemand
@@ -119,6 +161,61 @@ export default function SuchePage() {
   const vorschussGesamt = vorschuesse
     .filter((v) => !v.storniert)
     .reduce((s, v) => s + Number(v.betrag), 0);
+
+  // Vereint echte Vorschüsse (inkl. Strafe/Rechnung) und die aus
+  // season_bonuses abgeleiteten Auslagen (Bus/Kaution/Arbeitskleidung) zu
+  // einer gemeinsamen, anzeigefertigen Liste (Nutzer-Vorgabe 2026-08-18).
+  // Bewusst NICHT in vorschussGesamt eingerechnet - das bleibt die Summe
+  // der echten Vorschüsse, genau wie season_summary.vorschuss_summe.
+  const vorschussZeilen = useMemo<VorschussAnzeigeZeile[]>(() => {
+    const echte: VorschussAnzeigeZeile[] = vorschuesse.map((v, i) => ({
+      key: `v-${v.datum}-${i}`,
+      sortDatum: v.datum,
+      datumAnzeige: formatDatumDE(v.datum),
+      betrag: Number(v.betrag),
+      artLabel:
+        v.art === "Strafe/Rechnung"
+          ? v.art
+          : v.zahlungsart === "BAR"
+          ? t("gemeinsam.bar")
+          : t("gemeinsam.ueberweisung"),
+      begruendung: v.begruendung ?? "—",
+      storniert: v.storniert,
+      belegStoragePath: v.beleg_storage_path,
+      belegDateiname: v.beleg_dateiname,
+    }));
+
+    const auslagenZeilen: VorschussAnzeigeZeile[] = [];
+    auslagen.forEach((a) => {
+      const posten: [number, string][] = [
+        [Number(a.bus_kosten), "Buskosten"],
+        [Number(a.fahrer_kaution), "Fahrerkaution"],
+        [Number(a.zimmer_kaution), "Zimmerkaution"],
+        [Number(a.kleidung_hose_betrag), "Arbeitskleidung (Hose)"],
+        [Number(a.kleidung_jacke_betrag), "Arbeitskleidung (Jacke)"],
+        [Number(a.kleidung_stiefel_betrag), "Arbeitskleidung (Stiefel)"],
+      ];
+      posten.forEach(([betrag, begruendung]) => {
+        if (betrag > 0) {
+          auslagenZeilen.push({
+            key: `a-${a.saison_jahr}-${begruendung}`,
+            sortDatum: `${a.saison_jahr}-12-31T23:59:59`,
+            datumAnzeige: `Saison ${a.saison_jahr}`,
+            betrag,
+            artLabel: "Auslage",
+            begruendung,
+            storniert: false,
+            belegStoragePath: null,
+            belegDateiname: null,
+          });
+        }
+      });
+    });
+
+    return [...echte, ...auslagenZeilen].sort((x, y) =>
+      x.sortDatum.localeCompare(y.sortDatum)
+    );
+  }, [vorschuesse, auslagen, t]);
   const zuckermaisGesamt = zuckermais.reduce(
     (s, z) => s + Number(z.praemie ?? 0),
     0
@@ -296,7 +393,7 @@ export default function SuchePage() {
                     })}
                   </span>
                 </div>
-                {vorschuesse.length === 0 ? (
+                {vorschussZeilen.length === 0 ? (
                   <p className="text-sm text-neutral-500">
                     {t("suche.keinevorschuesse")}
                   </p>
@@ -313,21 +410,27 @@ export default function SuchePage() {
                         </tr>
                       </thead>
                       <tbody>
-                        {vorschuesse.map((v, i) => (
-                          <tr
-                            key={`${v.datum}-${i}`}
-                            className={v.storniert ? "opacity-50" : ""}
-                          >
-                            <td>{formatDatumDE(v.datum)}</td>
-                            <td>{Number(v.betrag).toFixed(2)}</td>
+                        {vorschussZeilen.map((z) => (
+                          <tr key={z.key} className={z.storniert ? "opacity-50" : ""}>
+                            <td>{z.datumAnzeige}</td>
+                            <td>{z.betrag.toFixed(2)}</td>
+                            <td>{z.artLabel}</td>
                             <td>
-                              {v.zahlungsart === "BAR"
-                                ? t("gemeinsam.bar")
-                                : t("gemeinsam.ueberweisung")}
+                              {z.begruendung}
+                              {z.belegStoragePath && (
+                                <button
+                                  type="button"
+                                  className="ml-2 text-xs text-emerald-700 underline"
+                                  onClick={() =>
+                                    belegAnsehen(z.belegStoragePath!)
+                                  }
+                                >
+                                  Beleg
+                                </button>
+                              )}
                             </td>
-                            <td>{v.begruendung ?? "—"}</td>
                             <td>
-                              {v.storniert
+                              {z.storniert
                                 ? t("gemeinsam.storniert")
                                 : t("gemeinsam.aktiv")}
                             </td>
@@ -479,7 +582,7 @@ export default function SuchePage() {
           <h3 className="mt-6 text-base font-semibold">
             Vorschüsse ({vorschussGesamt.toFixed(2)} € aktiv)
           </h3>
-          {vorschuesse.length === 0 ? (
+          {vorschussZeilen.length === 0 ? (
             <p className="mt-1 text-sm">Keine Vorschüsse erfasst.</p>
           ) : (
             <table className="mt-2 print-form-table">
@@ -493,13 +596,16 @@ export default function SuchePage() {
                 </tr>
               </thead>
               <tbody>
-                {vorschuesse.map((v, i) => (
-                  <tr key={`${v.datum}-${i}`}>
-                    <td>{formatDatumDE(v.datum)}</td>
-                    <td>{Number(v.betrag).toFixed(2)}</td>
-                    <td>{v.zahlungsart === "BAR" ? "Bar" : "Überweisung"}</td>
-                    <td>{v.begruendung ?? "—"}</td>
-                    <td>{v.storniert ? "storniert" : "aktiv"}</td>
+                {vorschussZeilen.map((z) => (
+                  <tr key={z.key}>
+                    <td>{z.datumAnzeige}</td>
+                    <td>{z.betrag.toFixed(2)}</td>
+                    <td>{z.artLabel}</td>
+                    <td>
+                      {z.begruendung}
+                      {z.belegDateiname && ` (Beleg: ${z.belegDateiname})`}
+                    </td>
+                    <td>{z.storniert ? "storniert" : "aktiv"}</td>
                   </tr>
                 ))}
               </tbody>

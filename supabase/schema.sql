@@ -2224,13 +2224,38 @@ create table advances (
   -- Übergabe-Beleg (siehe Druck auf der Vorschüsse-Seite). Optional wie
   -- Begründung.
   uebergeben_an text,
-  zahlungsart text not null, -- z.B. 'BAR', 'BÜ' (Überweisung, Stand 2026-08-14 - vorher 'AZ', das für "Auszahlung" stand und hier verwirrend war)
+  zahlungsart text not null, -- z.B. 'BAR', 'BÜ' (Überweisung, Stand 2026-08-14 - vorher 'AZ', das für "Auszahlung" stand und hier verwirrend war), 'N/A' bei art = 'Strafe/Rechnung' (kein Geld fließt, siehe unten)
   storniert boolean not null default false,
   storniert_am timestamptz,
   storniert_von uuid references profiles (id),
   storno_grund text,
-  created_at timestamptz not null default now()
+  created_at timestamptz not null default now(),
+  -- Vorschussart (Nutzer-Vorgabe 2026-08-18): 'Strafe/Rechnung' ist ein
+  -- Lohnabzug mit Belegpflicht (Strafzettel/Rechnung als Nachweis, siehe
+  -- beleg_storage_path unten) statt einer Geldübergabe - daher zahlungsart
+  -- 'N/A' bei diesem Wert, wodurch diese Belege automatisch aus dem
+  -- physischen Kassenbestand herausfallen (kasse/dashboard filtern explizit
+  -- auf zahlungsart = 'BAR'). Fließt trotzdem wie ein normaler Vorschuss in
+  -- season_summary.vorschuss_summe ein (keine art-Einschränkung dort).
+  art text not null default 'Vorschuss'
+    check (art in ('Vorschuss', 'Strafe/Rechnung')),
+  -- Nur bei art = 'Strafe/Rechnung' befüllt - Nachweis-Dokument im privaten
+  -- Storage-Bucket "vorschuss-belege" (kein öffentlicher Zugriff, Downloads
+  -- laufen über zeitlich begrenzte signierte URLs, wie bei
+  -- mitarbeiter-dokumente). Bewusst auf advances selbst (nicht
+  -- advance_recipients) - Nutzer-Vorgabe: genau ein Empfänger je
+  -- Strafe/Rechnung-Beleg, daher 1:1 zum Beleg statt n:m.
+  beleg_dateiname text,
+  beleg_storage_path text
 );
+
+-- Privater Storage-Bucket für Strafe/Rechnung-Belege - getrennt von
+-- "mitarbeiter-dokumente" (dort nur admin/hr), da kasse hier ebenfalls
+-- hochladen/lesen darf, aber keinen Zugriff auf die eigentlichen
+-- Personaldokumente bekommen soll.
+insert into storage.buckets (id, name, public)
+values ('vorschuss-belege', 'vorschuss-belege', false)
+on conflict (id) do nothing;
 
 -- n:m Verknüpfung, da ein Vorschuss an mehrere Personen gehen kann
 create table advance_recipients (
@@ -3349,7 +3374,13 @@ grant select on anreiseliste_offen_arbeitend to authenticated;
 -- ---------------------------------------------------------------------------
 -- Achtung: CREATE OR REPLACE VIEW darf bestehende Spalten weder umbenennen
 -- noch ihre Reihenfolge ändern - neue Spalten müssen ans Ende. Deshalb
--- steht "begruendung" hier hinter "storniert" statt davor.
+-- steht "begruendung" hier hinter "storniert" statt davor, und art/
+-- beleg_* (2026-08-18, Vorschussart "Strafe/Rechnung") hinter begruendung.
+-- beleg_storage_path/beleg_dateiname sind bewusst per current_role_name()
+-- maskiert (nicht einfach mitgegeben) - "art" allein ist unkritisch (wie
+-- begruendung breit sichtbar), aber der Beleg-Verweis soll nur den Rollen
+-- mit den bisherigen Vorschuss-Rechten zugänglich sein (Nutzer-Vorgabe),
+-- nicht z.B. zeiterfassung, die diese Sicht ebenfalls lesen darf.
 create or replace view employee_vorschuss_historie as
 select
   ar.employee_id,
@@ -3357,11 +3388,46 @@ select
   ar.anteil as betrag,
   a.zahlungsart,
   a.storniert,
-  a.begruendung
+  a.begruendung,
+  a.art,
+  case when current_role_name() in ('admin', 'hr', 'kasse', 'lohnabrechnung', 'pruefer')
+    then a.beleg_storage_path else null end as beleg_storage_path,
+  case when current_role_name() in ('admin', 'hr', 'kasse', 'lohnabrechnung', 'pruefer')
+    then a.beleg_dateiname else null end as beleg_dateiname
 from advance_recipients ar
 join advances a on a.id = ar.advance_id;
 
 grant select on employee_vorschuss_historie to authenticated;
+
+-- ---------------------------------------------------------------------------
+-- 12f-2. View: Bus/Kaution(en)/Arbeitskleidung je Mitarbeiter+Saison für die
+--        "Suche"-Seite, dort als zusätzliche "Auslage"-Positionen unter
+--        Vorschüsse aufgeführt (Nutzer-Vorgabe 2026-08-18). Bewusst NICHT
+--        security_invoker - season_bonuses UND verpflegungssaetze sind per
+--        RLS eingeschränkt (siehe employee_kleidung_ausgabe), aber genau
+--        wie bei den echten Vorschüssen sollen alle Rollen hier Auskunft
+--        geben können. Kein Datum je Position - season_bonuses hat nur
+--        einen gemeinsamen updated_at je Mitarbeiter+Jahr für alle Felder
+--        (nicht separat je Bus/Kaution/Kleidung gepflegt), daher zeigt die
+--        Suche-Seite hierfür "Saison {Jahr}" statt eines echten Datums.
+-- ---------------------------------------------------------------------------
+create or replace view employee_auslagen_historie as
+select
+  b.employee_id,
+  b.saison_jahr,
+  coalesce(b.bus_hin, 0) + coalesce(b.bus_rueck, 0) as bus_kosten,
+  coalesce(b.fahrer_kaution, 0) as fahrer_kaution,
+  coalesce(b.zimmer_kaution, 0) as zimmer_kaution,
+  coalesce(b.kleidung_hose_anzahl, 0) * coalesce(v.kleidung_hose, 0)
+    as kleidung_hose_betrag,
+  coalesce(b.kleidung_jacke_anzahl, 0) * coalesce(v.kleidung_jacke, 0)
+    as kleidung_jacke_betrag,
+  coalesce(b.kleidung_stiefel_anzahl, 0) * coalesce(v.kleidung_stiefel, 0)
+    as kleidung_stiefel_betrag
+from season_bonuses b
+left join verpflegungssaetze v on v.saison_jahr = b.saison_jahr;
+
+grant select on employee_auslagen_historie to authenticated;
 
 -- ---------------------------------------------------------------------------
 -- 12g. View: aktuelle Führerschein-Klassen je Mitarbeiter, aus der neuesten
@@ -3680,6 +3746,21 @@ create policy "advances_update" on advances for update
 create policy "advance_recipients_rw" on advance_recipients for all
   using (current_role_name() in ('admin', 'hr', 'kasse', 'lohnabrechnung', 'pruefer'))
   with check (current_role_name() in ('admin', 'kasse'));
+-- Strafe/Rechnung-Belege: gleiche Rollenaufteilung wie advance_recipients_rw
+-- (lesen: wie bisherige Vorschuss-Rechte, schreiben: wie advances_write).
+create policy "vorschuss_belege_storage_select" on storage.objects for select
+  using (
+    bucket_id = 'vorschuss-belege'
+    and current_role_name() in ('admin', 'hr', 'kasse', 'lohnabrechnung', 'pruefer')
+  );
+create policy "vorschuss_belege_storage_insert" on storage.objects for insert
+  with check (
+    bucket_id = 'vorschuss-belege' and current_role_name() in ('admin', 'kasse')
+  );
+create policy "vorschuss_belege_storage_delete" on storage.objects for delete
+  using (
+    bucket_id = 'vorschuss-belege' and current_role_name() in ('admin', 'kasse')
+  );
 -- kassenbewegungen: nur lesend per Policy - Schreiben ausschließlich über
 -- die security-definer Funktion vorschuss_korrigieren.
 create policy "kassenbewegungen_select" on kassenbewegungen for select

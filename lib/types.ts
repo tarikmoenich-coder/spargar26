@@ -592,6 +592,27 @@ export interface VorschussHistorieEintrag {
   zahlungsart: string;
   begruendung: string | null;
   storniert: boolean;
+  // Vorschussart (2026-08-18) - 'Vorschuss' oder 'Strafe/Rechnung'.
+  art: string;
+  // Nur für Rollen mit Vorschuss-Rechten befüllt, siehe
+  // employee_vorschuss_historie in schema.sql.
+  beleg_storage_path: string | null;
+  beleg_dateiname: string | null;
+}
+
+// Bus/Kaution(en)/Arbeitskleidung je Mitarbeiter+Saison-Jahr - für die
+// "Suche"-Seite, dort als "Auslage"-Positionen unter Vorschüsse aufgeführt
+// (2026-08-18). Aus der schmalen Sicht employee_auslagen_historie
+// (season_bonuses/verpflegungssaetze selbst sind per RLS eingeschränkt).
+export interface EmployeeAuslagenHistorie {
+  employee_id: string;
+  saison_jahr: number;
+  bus_kosten: number;
+  fahrer_kaution: number;
+  zimmer_kaution: number;
+  kleidung_hose_betrag: number;
+  kleidung_jacke_betrag: number;
+  kleidung_stiefel_betrag: number;
 }
 
 export interface VerpflegungsSatz {
@@ -641,6 +662,12 @@ export interface Advance {
   zahlungsart: string;
   storniert: boolean;
   storno_grund: string | null;
+  // Vorschussart (2026-08-18) - 'Vorschuss' oder 'Strafe/Rechnung'. Bei
+  // Strafe/Rechnung ist zahlungsart immer 'N/A' (kein Geld fließt, siehe
+  // schema.sql) und beleg_* enthält das hochgeladene Nachweis-Dokument.
+  art: string;
+  beleg_dateiname: string | null;
+  beleg_storage_path: string | null;
 }
 
 // Ein Empfänger innerhalb eines Vorschusses, mit seinem individuellen Anteil

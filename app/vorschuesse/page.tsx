@@ -40,11 +40,15 @@ interface Beleg {
   belegnummer: string;
   datum: string;
   zahlungsart: string;
+  art: string;
   storniert: boolean;
   begruendung: string | null;
   uebergeben_an: string | null;
+  beleg_dateiname: string | null;
   empfaenger: AdvanceRecipientDetail[];
 }
+
+const VORSCHUSS_BUCKET = "vorschuss-belege";
 
 export default function VorschuessePage() {
   const { profile } = useProfile();
@@ -56,6 +60,11 @@ export default function VorschuessePage() {
 
   const [basisBetrag, setBasisBetrag] = useState("");
   const [zahlungsart, setZahlungsart] = useState("BAR");
+  // Vorschussart (Nutzer-Vorgabe 2026-08-18): "Strafe/Rechnung" ist auf
+  // genau eine Person beschränkt und braucht einen Beleg-Upload, siehe
+  // handleSubmit.
+  const [art, setArt] = useState<"Vorschuss" | "Strafe/Rechnung">("Vorschuss");
+  const [belegDatei, setBelegDatei] = useState<File | null>(null);
   const [begruendung, setBegruendung] = useState("");
   // Person (z.B. Gruppenleiter), die das Geld zur Verteilung an die
   // einzelnen Empfänger bekommt - erscheint auf dem separaten
@@ -145,21 +154,28 @@ export default function VorschuessePage() {
     return ausgewaehlt.some((p) => p.employee_id === id);
   }
 
+  function personZuEintrag(emp: Employee): AusgewaehltePerson {
+    return {
+      employee_id: emp.id,
+      personal_nr: emp.personal_nr,
+      name: emp.name,
+      vorname: emp.vorname,
+      betrag: basisBetrag || "0",
+      zahlungsempfaenger: emp.zahlungsempfaenger ?? "",
+      iban: emp.iban ?? "",
+      bic: emp.bic ?? "",
+    };
+  }
+
   function personHinzufuegen(emp: Employee) {
     if (istAusgewaehlt(emp.id)) return;
-    setAusgewaehlt((prev) => [
-      ...prev,
-      {
-        employee_id: emp.id,
-        personal_nr: emp.personal_nr,
-        name: emp.name,
-        vorname: emp.vorname,
-        betrag: basisBetrag || "0",
-        zahlungsempfaenger: emp.zahlungsempfaenger ?? "",
-        iban: emp.iban ?? "",
-        bic: emp.bic ?? "",
-      },
-    ]);
+    // Strafe/Rechnung: genau eine Person (Nutzer-Vorgabe 2026-08-18) - eine
+    // neue Auswahl ersetzt die bisherige, statt sie zu ergänzen.
+    if (art === "Strafe/Rechnung") {
+      setAusgewaehlt([personZuEintrag(emp)]);
+      return;
+    }
+    setAusgewaehlt((prev) => [...prev, personZuEintrag(emp)]);
   }
 
   function personEntfernen(id: string) {
@@ -251,11 +267,31 @@ export default function VorschuessePage() {
       setError("Bitte für jede ausgewählte Person einen Betrag > 0 eintragen.");
       return;
     }
+    // Nutzer-Vorgabe 2026-08-18: Strafe/Rechnung nur für genau eine Person,
+    // mit Pflicht-Beleg (Strafzettel/Rechnung).
+    if (art === "Strafe/Rechnung") {
+      if (ausgewaehlt.length !== 1) {
+        setError(
+          "Strafe/Rechnung kann nur für genau eine Person erfasst werden."
+        );
+        return;
+      }
+      if (!belegDatei) {
+        setError(
+          "Bitte den zugehörigen Beleg (Strafzettel/Rechnung) hochladen."
+        );
+        return;
+      }
+    }
+    // Kein Geld fließt bei Strafe/Rechnung (siehe schema.sql) - zahlungsart
+    // 'N/A' statt der ausgewählten BAR/BÜ, damit diese Belege korrekt aus
+    // dem physischen Kassenbestand herausfallen.
+    const effektiveZahlungsart = art === "Strafe/Rechnung" ? "N/A" : zahlungsart;
     // Nutzer-Vorgabe 2026-08-14: bei Überweisung sind Zahlungsempfänger/
     // IBAN/BIC zwingend erforderlich - kein Beleg ohne vollständige
     // Kontodaten.
     if (
-      zahlungsart === "BÜ" &&
+      effektiveZahlungsart === "BÜ" &&
       ausgewaehlt.some(
         (p) => !p.zahlungsempfaenger.trim() || !p.iban.trim() || !p.bic.trim()
       )
@@ -288,8 +324,9 @@ export default function VorschuessePage() {
         betrag: summeAusgewaehlt,
         empfaenger_text: empfaengerTextAus(ausgewaehlt),
         begruendung,
-        uebergeben_an: uebergebenAn || null,
-        zahlungsart,
+        uebergeben_an: art === "Strafe/Rechnung" ? null : uebergebenAn || null,
+        zahlungsart: effektiveZahlungsart,
+        art,
       })
       .select()
       .single();
@@ -310,9 +347,9 @@ export default function VorschuessePage() {
           // Nur bei Überweisung befüllt - Schnappschuss der Kontodaten
           // zum Erfassungszeitpunkt, siehe advance_recipients in schema.sql.
           zahlungsempfaenger:
-            zahlungsart === "BÜ" ? p.zahlungsempfaenger : null,
-          iban: zahlungsart === "BÜ" ? p.iban : null,
-          bic: zahlungsart === "BÜ" ? p.bic : null,
+            effektiveZahlungsart === "BÜ" ? p.zahlungsempfaenger : null,
+          iban: effektiveZahlungsart === "BÜ" ? p.iban : null,
+          bic: effektiveZahlungsart === "BÜ" ? p.bic : null,
         }))
       );
 
@@ -322,13 +359,45 @@ export default function VorschuessePage() {
       return;
     }
 
+    // Beleg-Upload erst NACH dem Anlegen der advances-Zeile, da der Pfad die
+    // erzeugte id enthält (wie personal-dokumente, nur umgekehrt bezogen -
+    // hier gehört der Beleg zum Beleg selbst, nicht zu einem Mitarbeiter).
+    let belegDateinameGespeichert: string | null = null;
+    if (art === "Strafe/Rechnung" && belegDatei) {
+      const pfad = `${inserted.id}/${Date.now()}_${belegDatei.name}`;
+      const { error: uploadError } = await supabase.storage
+        .from(VORSCHUSS_BUCKET)
+        .upload(pfad, belegDatei);
+      if (uploadError) {
+        setError(
+          `Vorschuss erfasst, aber Beleg-Upload fehlgeschlagen: ${uploadError.message}`
+        );
+        setSaving(false);
+        load();
+        return;
+      }
+      const { error: belegUpdateError } = await supabase
+        .from("advances")
+        .update({ beleg_storage_path: pfad, beleg_dateiname: belegDatei.name })
+        .eq("id", inserted.id);
+      if (belegUpdateError) {
+        setError(
+          `Vorschuss erfasst, aber Beleg konnte nicht verknüpft werden: ${belegUpdateError.message}`
+        );
+      } else {
+        belegDateinameGespeichert = belegDatei.name;
+      }
+    }
+
     setLetzterBeleg({
       belegnummer,
       datum: inserted.datum,
-      zahlungsart,
+      zahlungsart: effektiveZahlungsart,
+      art,
       storniert: false,
       begruendung: begruendung || null,
-      uebergeben_an: uebergebenAn || null,
+      uebergeben_an: art === "Strafe/Rechnung" ? null : uebergebenAn || null,
+      beleg_dateiname: belegDateinameGespeichert,
       empfaenger: ausgewaehlt.map((p) => ({
         employee_id: p.employee_id,
         personal_nr: p.personal_nr,
@@ -336,9 +405,9 @@ export default function VorschuessePage() {
         vorname: p.vorname,
         anteil: Number(p.betrag),
         zahlungsempfaenger:
-          zahlungsart === "BÜ" ? p.zahlungsempfaenger : null,
-        iban: zahlungsart === "BÜ" ? p.iban : null,
-        bic: zahlungsart === "BÜ" ? p.bic : null,
+          effektiveZahlungsart === "BÜ" ? p.zahlungsempfaenger : null,
+        iban: effektiveZahlungsart === "BÜ" ? p.iban : null,
+        bic: effektiveZahlungsart === "BÜ" ? p.bic : null,
       })),
     });
 
@@ -346,8 +415,21 @@ export default function VorschuessePage() {
     setBegruendung("");
     setUebergebenAn("");
     setAusgewaehlt([]);
+    setBelegDatei(null);
     setSaving(false);
     load();
+  }
+
+  async function belegAnsehen(pfad: string) {
+    const supabase = getSupabaseClient();
+    const { data, error } = await supabase.storage
+      .from(VORSCHUSS_BUCKET)
+      .createSignedUrl(pfad, 60);
+    if (error || !data) {
+      window.alert("Beleg konnte nicht geöffnet werden.");
+      return;
+    }
+    window.open(data.signedUrl, "_blank");
   }
 
   async function storno(adv: Advance) {
@@ -402,9 +484,11 @@ export default function VorschuessePage() {
       belegnummer: adv.belegnummer,
       datum: adv.datum,
       zahlungsart: adv.zahlungsart,
+      art: adv.art,
       storniert: adv.storniert,
       begruendung: adv.begruendung,
       uebergeben_an: adv.uebergeben_an,
+      beleg_dateiname: adv.beleg_dateiname,
       empfaenger,
     });
   }
@@ -494,55 +578,102 @@ export default function VorschuessePage() {
               onChange={(e) => setBasisBetrag(e.target.value)}
             />
             <select
-              value={zahlungsart}
-              onChange={(e) => setZahlungsart(e.target.value)}
+              value={art}
+              onChange={(e) => {
+                setArt(e.target.value as "Vorschuss" | "Strafe/Rechnung");
+                // Auswahl zurücksetzen - vermeidet eine Mehrfachauswahl, die
+                // beim Wechsel zu Strafe/Rechnung (genau eine Person) nicht
+                // mehr gültig wäre.
+                setAusgewaehlt([]);
+                setBelegDatei(null);
+              }}
             >
-              <option value="BAR">BAR</option>
-              <option value="BÜ">Überweisung (BÜ)</option>
+              <option value="Vorschuss">Vorschuss</option>
+              <option value="Strafe/Rechnung">Strafe/Rechnung</option>
             </select>
-            <div className="col-span-2" />
+            {art !== "Strafe/Rechnung" && (
+              <select
+                value={zahlungsart}
+                onChange={(e) => setZahlungsart(e.target.value)}
+              >
+                <option value="BAR">BAR</option>
+                <option value="BÜ">Überweisung (BÜ)</option>
+              </select>
+            )}
+            {art !== "Strafe/Rechnung" && <div className="col-span-1" />}
 
-            <div className="col-span-2 flex gap-2">
-              <select
-                value={gruppenFilter}
-                onChange={(e) => setGruppenFilter(e.target.value)}
-              >
-                <option value="">Gruppe wählen…</option>
-                {gruppen.map((g) => (
-                  <option key={g.gruppe_nr} value={g.gruppe_nr}>
-                    {g.gruppe_nr} – {g.bezeichnung}
-                  </option>
-                ))}
-              </select>
-              <button
-                type="button"
-                className="btn-secondary whitespace-nowrap text-xs"
-                onClick={gruppeHinzufuegen}
-              >
-                Gruppe hinzufügen
-              </button>
-            </div>
-            <div className="col-span-2 flex gap-2">
-              <select
-                value={herkunftFilter}
-                onChange={(e) => setHerkunftFilter(e.target.value)}
-              >
-                <option value="">Herkunft wählen…</option>
-                {herkuenfte.map((h) => (
-                  <option key={h.wert} value={h.wert}>
-                    {h.wert}
-                  </option>
-                ))}
-              </select>
-              <button
-                type="button"
-                className="btn-secondary whitespace-nowrap text-xs"
-                onClick={herkunftHinzufuegen}
-              >
-                Herkunft hinzufügen
-              </button>
-            </div>
+            {art === "Strafe/Rechnung" && (
+              <div className="col-span-2 flex flex-col gap-1">
+                <label className="text-sm font-medium">
+                  Beleg (Strafzettel/Rechnung) - Pflicht
+                </label>
+                <input
+                  type="file"
+                  accept=".pdf,.jpg,.jpeg,.png"
+                  onChange={(e) =>
+                    setBelegDatei(e.target.files?.[0] ?? null)
+                  }
+                />
+                {belegDatei && (
+                  <p className="text-xs text-neutral-500">
+                    Ausgewählt: {belegDatei.name}
+                  </p>
+                )}
+              </div>
+            )}
+
+            {art !== "Strafe/Rechnung" && (
+              <>
+                <div className="col-span-2 flex gap-2">
+                  <select
+                    value={gruppenFilter}
+                    onChange={(e) => setGruppenFilter(e.target.value)}
+                  >
+                    <option value="">Gruppe wählen…</option>
+                    {gruppen.map((g) => (
+                      <option key={g.gruppe_nr} value={g.gruppe_nr}>
+                        {g.gruppe_nr} – {g.bezeichnung}
+                      </option>
+                    ))}
+                  </select>
+                  <button
+                    type="button"
+                    className="btn-secondary whitespace-nowrap text-xs"
+                    onClick={gruppeHinzufuegen}
+                  >
+                    Gruppe hinzufügen
+                  </button>
+                </div>
+                <div className="col-span-2 flex gap-2">
+                  <select
+                    value={herkunftFilter}
+                    onChange={(e) => setHerkunftFilter(e.target.value)}
+                  >
+                    <option value="">Herkunft wählen…</option>
+                    {herkuenfte.map((h) => (
+                      <option key={h.wert} value={h.wert}>
+                        {h.wert}
+                      </option>
+                    ))}
+                  </select>
+                  <button
+                    type="button"
+                    className="btn-secondary whitespace-nowrap text-xs"
+                    onClick={herkunftHinzufuegen}
+                  >
+                    Herkunft hinzufügen
+                  </button>
+                </div>
+              </>
+            )}
           </div>
+          {art === "Strafe/Rechnung" && (
+            <p className="text-xs text-neutral-500">
+              Strafe/Rechnung ist auf genau eine Person beschränkt, da der
+              Beleg zu einer bestimmten Person gehört - unten einzeln
+              auswählen.
+            </p>
+          )}
 
           <div>
             <p className="mb-1 text-sm font-medium">
@@ -595,7 +726,7 @@ export default function VorschuessePage() {
                   </button>
                 </div>
               </div>
-              {zahlungsart === "BÜ" && (
+              {art !== "Strafe/Rechnung" && zahlungsart === "BÜ" && (
                 <p className="mb-2 text-xs text-neutral-500">
                   Bei Überweisung sind Zahlungsempfänger, IBAN und BIC
                   Pflichtangaben - aus den Personalstammdaten vorbefüllt,
@@ -607,7 +738,7 @@ export default function VorschuessePage() {
                   <tr>
                     <th>Pers.-Nr.</th>
                     <th>Name</th>
-                    {zahlungsart === "BÜ" && (
+                    {art !== "Strafe/Rechnung" && zahlungsart === "BÜ" && (
                       <>
                         <th>Zahlungsempfänger</th>
                         <th>IBAN</th>
@@ -625,7 +756,7 @@ export default function VorschuessePage() {
                       <td>
                         {p.name}, {p.vorname}
                       </td>
-                      {zahlungsart === "BÜ" && (
+                      {art !== "Strafe/Rechnung" && zahlungsart === "BÜ" && (
                         <>
                           <td>
                             <input
@@ -703,8 +834,9 @@ export default function VorschuessePage() {
 
           {/* Nur bei BAR sinnvoll - bei Überweisung wird kein Bargeld an
               eine dritte Person zur Verteilung übergeben (Nutzer-Vorgabe
-              2026-08-14). */}
-          {zahlungsart === "BAR" && (
+              2026-08-14). Bei Strafe/Rechnung ebenfalls nicht sinnvoll -
+              kein Bargeld fließt (Nutzer-Vorgabe 2026-08-18). */}
+          {art !== "Strafe/Rechnung" && zahlungsart === "BAR" && (
             <div className="flex flex-col gap-1">
               <input
                 placeholder="Übergeben an (optional, z.B. Gruppenleiter)"
@@ -824,9 +956,17 @@ export default function VorschuessePage() {
                   <td>{Number(a.betrag).toFixed(2)}</td>
                   <td>{a.empfaenger_text}</td>
                   <td>{a.begruendung}</td>
-                  <td>{a.zahlungsart}</td>
+                  <td>{a.art === "Strafe/Rechnung" ? a.art : a.zahlungsart}</td>
                   <td>{a.storniert ? `storniert: ${a.storno_grund}` : "aktiv"}</td>
                   <td className="flex gap-2">
+                    {canSeeDetails && a.beleg_storage_path && (
+                      <button
+                        className="btn-secondary text-xs"
+                        onClick={() => belegAnsehen(a.beleg_storage_path!)}
+                      >
+                        Beleg ansehen
+                      </button>
+                    )}
                     {canSeeDetails && (
                       <button
                         className="btn-secondary text-xs"
@@ -990,16 +1130,27 @@ export default function VorschuessePage() {
       {anzeigeBeleg && anzeigeBeleg.zahlungsart !== "BÜ" && (
         <div className="hidden print:block">
           <h2 className="text-xl font-semibold">
-            Vorschuss-Auszahlung{anzeigeBeleg.storniert ? " (STORNIERT)" : ""}
+            {anzeigeBeleg.art === "Strafe/Rechnung"
+              ? "Strafe/Rechnung"
+              : "Vorschuss-Auszahlung"}
+            {anzeigeBeleg.storniert ? " (STORNIERT)" : ""}
           </h2>
           <p className="mt-1 text-base">
             Belegnummer: {anzeigeBeleg.belegnummer} · Datum:{" "}
-            {new Date(anzeigeBeleg.datum).toLocaleDateString("de-DE")} · Bar
+            {new Date(anzeigeBeleg.datum).toLocaleDateString("de-DE")}
+            {anzeigeBeleg.art !== "Strafe/Rechnung" && " · Bar"}
           </p>
           <p className="text-base">
-            Begründung: {anzeigeBeleg.begruendung || "-"} · Übergeben an:{" "}
-            {anzeigeBeleg.uebergeben_an || "-"}
+            Begründung: {anzeigeBeleg.begruendung || "-"}
+            {anzeigeBeleg.art !== "Strafe/Rechnung" && (
+              <> · Übergeben an: {anzeigeBeleg.uebergeben_an || "-"}</>
+            )}
           </p>
+          {anzeigeBeleg.art === "Strafe/Rechnung" && (
+            <p className="text-base">
+              Beleg: {anzeigeBeleg.beleg_dateiname || "-"}
+            </p>
+          )}
           <table className="mt-4 print-form-table">
             <thead>
               <tr>
