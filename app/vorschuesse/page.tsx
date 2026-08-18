@@ -947,8 +947,7 @@ export default function VorschuessePage() {
                 <th>Pers.-Nr.</th>
                 <th>Name</th>
                 <th>Zahlungsempfänger</th>
-                <th>IBAN</th>
-                <th>BIC</th>
+                <th>IBAN / BIC</th>
                 <th>Betrag €</th>
                 <th>Kontodaten korrekt, Unterschrift</th>
               </tr>
@@ -961,8 +960,11 @@ export default function VorschuessePage() {
                     {p.name}, {p.vorname}
                   </td>
                   <td>{p.zahlungsempfaenger || "-"}</td>
-                  <td>{p.iban || "-"}</td>
-                  <td>{p.bic || "-"}</td>
+                  <td>
+                    {p.iban || "-"}
+                    <br />
+                    <span className="text-xs">{p.bic || "-"}</span>
+                  </td>
                   <td>{p.anteil.toFixed(2)}</td>
                   <td></td>
                 </tr>
@@ -970,7 +972,7 @@ export default function VorschuessePage() {
             </tbody>
             <tfoot>
               <tr>
-                <td colSpan={5} className="text-right font-semibold">
+                <td colSpan={4} className="text-right font-semibold">
                   Summe
                 </td>
                 <td className="font-semibold">
