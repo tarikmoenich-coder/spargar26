@@ -2217,7 +2217,12 @@ create table advances (
   datum_kassenbuch date not null default current_date,
   betrag numeric(10, 2) not null check (betrag > 0),
   empfaenger_text text,
-  bearbeiter_id uuid references profiles (id),
+  -- Bugfix 2026-08-19: fehlte bisher ohne "default auth.uid()" (anders als
+  -- z.B. auszahlungsbelege.erstellt_von) und wurde auch nirgends im
+  -- Frontend explizit gesetzt - deshalb zeigte "Anwender" im Kassenbuch bei
+  -- JEDEM Vorschuss "—", während Auszahlungen/Kautionsübergaben korrekt
+  -- einen Bearbeiter zeigten (siehe app/kasse/page.tsx).
+  bearbeiter_id uuid references profiles (id) default auth.uid(),
   begruendung text,
   -- Name der Person (z.B. Gruppenleiter), der das Geld zur Verteilung an
   -- die einzelnen Empfänger übergeben wird - erscheint auf dem separaten
@@ -2365,7 +2370,12 @@ create table cash_deposits (
   datum_kassenbuch date not null default current_date,
   betrag numeric(10, 2) not null check (betrag > 0),
   verwendungszweck text,
-  bearbeiter_id uuid references profiles (id),
+  -- Gleicher Bugfix wie bei advances.bearbeiter_id (2026-08-19) - fehlte
+  -- ohne "default auth.uid()" und wurde nirgends explizit gesetzt.
+  -- Aktuell im Kassenbuch nicht angezeigt (Einzahlungen-Tabelle hat noch
+  -- keine Anwender-Spalte), aber die Daten sollen ab jetzt korrekt
+  -- erfasst werden.
+  bearbeiter_id uuid references profiles (id) default auth.uid(),
   storniert boolean not null default false,
   storniert_am timestamptz,
   storniert_von uuid references profiles (id),

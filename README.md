@@ -310,7 +310,13 @@ Enthalten:
   Unter "Prüfung durchführen" steht zusätzlich eine Liste aller Bewegungen
   (Vorschuss, Vorschuss-Korrektur, Auszahlung, Kautionsübergabe) seit der
   letzten Prüfung, mit Datum, Belegnummer und
-  Anwender, zur Durchsicht vor dem Zählen der Kasse. Nach Freigabe einer
+  Anwender, zur Durchsicht vor dem Zählen der Kasse. Bugfix 2026-08-19:
+  `advances.bearbeiter_id`/`cash_deposits.bearbeiter_id` hatten - anders
+  als die vergleichbaren `erstellt_von`-Spalten - keinen
+  `default auth.uid()` und wurden auch im Frontend nirgends explizit
+  gesetzt, weshalb "Anwender" bei jedem Vorschuss leer blieb. Gilt nur für
+  neue Zeilen ab dem Migrationszeitpunkt - bestehende Vorschüsse/
+  Einzahlungen bleiben ohne Anwender. Nach Freigabe einer
   Prüfung (nur admin/pruefer, zweistufig - kasse führt die Prüfung durch,
   pruefer gibt frei) werden alle Belege im geprüften Zeitraum gesperrt
   (Storno/Korrektur nicht mehr möglich) - analog zur Monatsabschluss-Sperre
