@@ -214,7 +214,19 @@ Enthalten:
   Änderungen verändern eine bereits ausgezahlte Abrechnung nicht mehr
   rückwirkend; Lohnübersicht warnt mit „⚠", falls die Live-Berechnung
   seither abweicht) und erzeugt eine druckbare Auszahlungsliste (mehrere
-  Personen, eine Zeile pro Person, mit Unterschriftenspalte)
+  Personen, eine Zeile pro Person, mit Unterschriftenspalte). Nachträgliche
+  Korrektur eines falsch eingegebenen Netto-Betrags (Stand 2026-08-19,
+  admin/lohnabrechnung): "korrigieren"-Link direkt im gesperrten
+  Netto-Feld, Grund ist Pflichtfeld und wird protokolliert (wie
+  Vorschuss-Korrektur, landet ebenfalls in "Kassenbewegungen" auf der
+  Kasse-Seite), aktualisiert dabei auch den eingefrorenen Schnappschuss
+  (sonst bliebe die Korrektur unsichtbar - siehe oben) und damit
+  automatisch die Auszahlungsbeleg-Summe und den Kassenbestand. Gesperrt
+  bei bereits freigegebener Kassenprüfung (dann zuerst im Kassenbuch
+  wiedereröffnen) und bei Abrechnungsart "pauschal" (Netto dort automatisch
+  berechnet). Bewusst nur Netto korrigierbar, kein automatischer
+  Differenzbeleg - die tatsächliche Nach-/Rückzahlung läuft wie bei der
+  Kautions-Rückzahlung außerhalb der App
 - "Auszahlungen"-Seite: ein Beleg je "Jetzt Abrechnen"-Aktion (analog zu
   Vorschüssen/Kassenbuch), aufklappbar mit Personalnummer, Name, Stunden,
   Anwesenheitstage, Brutto, Steuer, Netto, Verpflegung/Unterkunft,

@@ -107,6 +107,13 @@ export default function UebersichtPage() {
   const [periode, setPeriode] = useState<Period | null>(null);
   const [periodeLaeuft, setPeriodeLaeuft] = useState(false);
   const [namenVon, setNamenVon] = useState<Record<string, string>>({});
+  // Korrektur eines bereits abgerechneten Netto-Betrags (Nutzer-Vorgabe
+  // 2026-08-19) - key ist `${employee_id}-${saison_jahr}`.
+  const [korrigierenKey, setKorrigierenKey] = useState<string | null>(null);
+  const [korrekturNetto, setKorrekturNetto] = useState<Record<string, string>>(
+    {}
+  );
+  const [korrekturLaeuft, setKorrekturLaeuft] = useState<string | null>(null);
 
   const canEdit =
     profile?.role === "admin" || profile?.role === "lohnabrechnung";
@@ -406,6 +413,47 @@ export default function UebersichtPage() {
     load();
   }
 
+  // Nachträgliche Korrektur eines bereits abgerechneten (und damit
+  // gesperrten) Netto-Betrags - Nutzer-Vorgabe 2026-08-19: "der
+  // Auszahlungsbetrag stimmt jetzt nicht mehr, weil ich den Netto-Betrag
+  // falsch eingegeben habe". Bewusst nur Netto (kleinster, gezielter
+  // Eingriff), Pflichtgrund + Protokoll in "Kassenbewegungen" (wie
+  // Vorschuss-Korrektur), keine automatische Nach-/Rückzahlung - die
+  // tatsächliche Geldbewegung läuft außerhalb der App, wie bei der
+  // Kautions-Rückzahlung.
+  async function nettoKorrigieren(row: SeasonSummaryRow) {
+    const key = `${row.employee_id}-${row.saison_jahr}`;
+    const neuerWert = korrekturNetto[key];
+    if (!neuerWert || neuerWert.trim() === "") return;
+    const neuerNetto = Number(neuerWert);
+    if (Number.isNaN(neuerNetto)) return;
+    const alterNetto = Number(anzeige(row, "netto"));
+    if (neuerNetto === alterNetto) return; // keine Änderung
+    const grund = window.prompt(
+      `Grund für die Korrektur von ${alterNetto.toFixed(
+        2
+      )} € auf ${neuerNetto.toFixed(2)} € (Netto) bei ${row.name}, ${
+        row.vorname
+      } (Pflichtfeld, wird protokolliert):`
+    );
+    if (!grund) return;
+    setKorrekturLaeuft(key);
+    const supabase = getSupabaseClient();
+    const { error } = await supabase.rpc("abrechnung_korrigieren", {
+      p_employee_id: row.employee_id,
+      p_saison_jahr: row.saison_jahr,
+      p_neuer_netto_extern: neuerNetto,
+      p_grund: grund,
+    });
+    setKorrekturLaeuft(null);
+    if (error) {
+      window.alert(`Korrektur fehlgeschlagen: ${error.message}`);
+      return;
+    }
+    setKorrigierenKey(null);
+    load();
+  }
+
   // Vorfinanzierte Heimreise (Hin+Rück) - als eine gemeinsame Summe erfasst,
   // da die App die beiden Richtungen aktuell nicht getrennt auswertet.
   async function busKostenSpeichern(row: SeasonSummaryRow, wert: string) {
@@ -693,8 +741,64 @@ export default function UebersichtPage() {
                   <td>{fmt(anzeige(r, "praemien_summe"))}</td>
                   <td>{fmt(anzeige(r, "lohnsteuer_pauschal"))}</td>
                   <td className={FARBE_NETTO_TD}>
-                    {r.abrechnungsart === "pauschal" || !canEdit || r.abgerechnet_am ? (
+                    {r.abrechnungsart === "pauschal" || !canEdit ? (
                       fmt(anzeige(r, "netto"))
+                    ) : r.abgerechnet_am ? (
+                      (() => {
+                        const key = `${r.employee_id}-${r.saison_jahr}`;
+                        return korrigierenKey === key ? (
+                          <div className="flex flex-col gap-1">
+                            <input
+                              type="number"
+                              step="0.01"
+                              className="w-24"
+                              placeholder="neuer Netto-Betrag"
+                              value={korrekturNetto[key] ?? ""}
+                              onChange={(e) =>
+                                setKorrekturNetto((prev) => ({
+                                  ...prev,
+                                  [key]: e.target.value,
+                                }))
+                              }
+                            />
+                            <div className="flex gap-1">
+                              <button
+                                type="button"
+                                className="btn-secondary text-xs"
+                                disabled={korrekturLaeuft === key}
+                                onClick={() => nettoKorrigieren(r)}
+                              >
+                                Speichern
+                              </button>
+                              <button
+                                type="button"
+                                className="btn-secondary text-xs"
+                                onClick={() => setKorrigierenKey(null)}
+                              >
+                                Abbrechen
+                              </button>
+                            </div>
+                          </div>
+                        ) : (
+                          <>
+                            {fmt(anzeige(r, "netto"))}{" "}
+                            <button
+                              type="button"
+                              className="text-xs text-emerald-700 underline"
+                              title="Nachträgliche Korrektur - wird mit Grund protokolliert"
+                              onClick={() => {
+                                setKorrekturNetto((prev) => ({
+                                  ...prev,
+                                  [key]: String(anzeige(r, "netto") ?? ""),
+                                }));
+                                setKorrigierenKey(key);
+                              }}
+                            >
+                              korrigieren
+                            </button>
+                          </>
+                        );
+                      })()
                     ) : (
                       <input
                         type="number"

@@ -203,7 +203,10 @@ export default function KassePage() {
       .map((b) => ({
         key: `korrektur-${b.id}`,
         datum: b.zeitstempel,
-        art: "Vorschuss-Korrektur",
+        // Bugfix 2026-08-19: war hier fest auf "Vorschuss-Korrektur"
+        // verdrahtet, obwohl kassenbewegungen.art bereits die echte Art
+        // trägt (z.B. jetzt auch "Abrechnungs-Korrektur").
+        art: b.art,
         belegnummer: b.belegnummer,
         betrag: -Number(b.delta),
         bearbeiter_id: b.bearbeiter_id,
@@ -413,7 +416,8 @@ export default function KassePage() {
               </h2>
               <p className="mb-2 text-sm text-neutral-500">
                 Nachträgliche Änderungen an bereits bestätigten
-                Vorschuss-Beträgen (auch nach Abschluss möglich) - fließen
+                Vorschuss-Beträgen oder bereits abgerechneten
+                Netto-Beträgen (auch nach Abschluss möglich) - fließen
                 direkt in den Kassenbestand oben ein.
               </p>
               <table>
