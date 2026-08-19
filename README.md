@@ -227,6 +227,14 @@ Enthalten:
   berechnet). Bewusst nur Netto korrigierbar, kein automatischer
   Differenzbeleg - die tatsächliche Nach-/Rückzahlung läuft wie bei der
   Kautions-Rückzahlung außerhalb der App
+- "Verpflegungsfreie Tage" (Stand 2026-08-19, Nutzer-Vorgabe: zu viel
+  Verpflegung abgezogen, weil die Kantine an einigen Tagen noch nicht
+  geöffnet hatte): eigenes Zahlenfeld je Mitarbeiter/Saison auf der
+  Lohnübersicht, reduziert NUR den Verpflegungsabzug (Tagessatz ×
+  (Anwesenheitstage − verpflegungsfreie Tage)), nicht die Anwesenheitstage
+  selbst und nicht die Unterkunft. Vor dem Abrechnen normal editierbar wie
+  Buskosten/Kautionen, danach über dieselbe "korrigieren"-Mechanik wie
+  beim Netto-Betrag (Pflichtgrund, Protokoll, Schnappschuss-Aktualisierung)
 - "Auszahlungen"-Seite: ein Beleg je "Jetzt Abrechnen"-Aktion (analog zu
   Vorschüssen/Kassenbuch), aufklappbar mit Personalnummer, Name, Stunden,
   Anwesenheitstage, Brutto, Steuer, Netto, Verpflegung/Unterkunft,

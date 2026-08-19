@@ -508,6 +508,10 @@ export interface SeasonSummaryRow {
   // verpflegungssaetze) - wie Buskosten/Kautionen abgezogen, aber separat
   // ausgewiesen.
   kleidung_betrag: number;
+  // Anzahl Tage ohne Verpflegungsabzug innerhalb der Saison (2026-08-19,
+  // z.B. Kantine noch nicht geöffnet) - reduziert nur abzug_verpflegung,
+  // nicht anwesenheitstage/abzug_wohnen.
+  verpflegungsfreie_tage: number;
 }
 
 // Monats-Ansicht für den Monatsfilter auf der Lohnübersicht (Monats-

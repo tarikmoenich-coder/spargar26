@@ -114,6 +114,18 @@ export default function UebersichtPage() {
     {}
   );
   const [korrekturLaeuft, setKorrekturLaeuft] = useState<string | null>(null);
+  // Gleiches Muster, eigener State - Korrektur der "Verpflegungsfreie
+  // Tage" nach dem Abrechnen (Nutzer-Vorgabe 2026-08-19, z.B. Kantine noch
+  // nicht geöffnet).
+  const [korrigierenVerpflegungKey, setKorrigierenVerpflegungKey] = useState<
+    string | null
+  >(null);
+  const [korrekturVerpflegungstage, setKorrekturVerpflegungstage] = useState<
+    Record<string, string>
+  >({});
+  const [korrekturVerpflegungLaeuft, setKorrekturVerpflegungLaeuft] = useState<
+    string | null
+  >(null);
 
   const canEdit =
     profile?.role === "admin" || profile?.role === "lohnabrechnung";
@@ -454,6 +466,57 @@ export default function UebersichtPage() {
     load();
   }
 
+  // Verpflegungsfreie Tage (Nutzer-Vorgabe 2026-08-19, z.B. Kantine noch
+  // nicht geöffnet) - VOR dem Abrechnen ein normales Eingabefeld wie
+  // Buskosten/Kautionen, direktes Upsert.
+  async function verpflegungsfreieTageSpeichern(
+    row: SeasonSummaryRow,
+    wert: string
+  ) {
+    const supabase = getSupabaseClient();
+    const verpflegungsfreie_tage = wert.trim() === "" ? 0 : Number(wert);
+    await supabase.from("season_bonuses").upsert(
+      {
+        employee_id: row.employee_id,
+        saison_jahr: row.saison_jahr,
+        verpflegungsfreie_tage,
+      },
+      { onConflict: "employee_id,saison_jahr" }
+    );
+    load();
+  }
+
+  // Gleiches Muster wie nettoKorrigieren, für "Verpflegungsfreie Tage"
+  // NACH dem Abrechnen.
+  async function verpflegungKorrigieren(row: SeasonSummaryRow) {
+    const key = `${row.employee_id}-${row.saison_jahr}`;
+    const neuerWert = korrekturVerpflegungstage[key];
+    if (!neuerWert || neuerWert.trim() === "") return;
+    const neueTage = Number(neuerWert);
+    if (Number.isNaN(neueTage)) return;
+    const alteTage = Number(anzeige(row, "verpflegungsfreie_tage") ?? 0);
+    if (neueTage === alteTage) return; // keine Änderung
+    const grund = window.prompt(
+      `Grund für die Korrektur von ${alteTage} auf ${neueTage} verpflegungsfreie Tage bei ${row.name}, ${row.vorname} (Pflichtfeld, wird protokolliert):`
+    );
+    if (!grund) return;
+    setKorrekturVerpflegungLaeuft(key);
+    const supabase = getSupabaseClient();
+    const { error } = await supabase.rpc("abrechnung_verpflegung_korrigieren", {
+      p_employee_id: row.employee_id,
+      p_saison_jahr: row.saison_jahr,
+      p_neue_verpflegungsfreie_tage: neueTage,
+      p_grund: grund,
+    });
+    setKorrekturVerpflegungLaeuft(null);
+    if (error) {
+      window.alert(`Korrektur fehlgeschlagen: ${error.message}`);
+      return;
+    }
+    setKorrigierenVerpflegungKey(null);
+    load();
+  }
+
   // Vorfinanzierte Heimreise (Hin+Rück) - als eine gemeinsame Summe erfasst,
   // da die App die beiden Richtungen aktuell nicht getrennt auswertet.
   async function busKostenSpeichern(row: SeasonSummaryRow, wert: string) {
@@ -686,6 +749,12 @@ export default function UebersichtPage() {
                 <th>Lohnsteuer (pauschal) €</th>
                 <th className={FARBE_NETTO_TH}>Netto €</th>
                 <th className={FARBE_ABZUG_TH}>Verpfl./Unterkunft €</th>
+                <th
+                  className={FARBE_ABZUG_TH}
+                  title="Reduziert nur den Verpflegungsabzug (z.B. Tage, an denen die Kantine noch nicht geöffnet hatte) - Unterkunft bleibt unberührt"
+                >
+                  Verpfl.-freie Tage
+                </th>
                 <th className={FARBE_ABZUG_TH}>Vorschüsse €</th>
                 <th className={FARBE_ABZUG_TH}>Buskosten €</th>
                 <th className={FARBE_KAUTION_TH}>Fahrerkaution €</th>
@@ -818,6 +887,83 @@ export default function UebersichtPage() {
                       Number(anzeige(r, "abzug_verpflegung")) +
                       Number(anzeige(r, "abzug_wohnen"))
                     ).toFixed(2)}
+                  </td>
+                  <td>
+                    {!canEdit ? (
+                      anzeige(r, "verpflegungsfreie_tage") ?? 0
+                    ) : r.abgerechnet_am ? (
+                      (() => {
+                        const key = `${r.employee_id}-${r.saison_jahr}`;
+                        return korrigierenVerpflegungKey === key ? (
+                          <div className="flex flex-col gap-1">
+                            <input
+                              type="number"
+                              step="1"
+                              min={0}
+                              className="w-16"
+                              placeholder="Tage"
+                              value={korrekturVerpflegungstage[key] ?? ""}
+                              onChange={(e) =>
+                                setKorrekturVerpflegungstage((prev) => ({
+                                  ...prev,
+                                  [key]: e.target.value,
+                                }))
+                              }
+                            />
+                            <div className="flex gap-1">
+                              <button
+                                type="button"
+                                className="btn-secondary text-xs"
+                                disabled={korrekturVerpflegungLaeuft === key}
+                                onClick={() => verpflegungKorrigieren(r)}
+                              >
+                                Speichern
+                              </button>
+                              <button
+                                type="button"
+                                className="btn-secondary text-xs"
+                                onClick={() => setKorrigierenVerpflegungKey(null)}
+                              >
+                                Abbrechen
+                              </button>
+                            </div>
+                          </div>
+                        ) : (
+                          <>
+                            {anzeige(r, "verpflegungsfreie_tage") ?? 0}{" "}
+                            <button
+                              type="button"
+                              className="text-xs text-emerald-700 underline"
+                              title="Nachträgliche Korrektur - wird mit Grund protokolliert"
+                              onClick={() => {
+                                setKorrekturVerpflegungstage((prev) => ({
+                                  ...prev,
+                                  [key]: String(
+                                    anzeige(r, "verpflegungsfreie_tage") ?? 0
+                                  ),
+                                }));
+                                setKorrigierenVerpflegungKey(key);
+                              }}
+                            >
+                              korrigieren
+                            </button>
+                          </>
+                        );
+                      })()
+                    ) : (
+                      <input
+                        type="number"
+                        step="1"
+                        min={0}
+                        className="w-16"
+                        defaultValue={r.verpflegungsfreie_tage || ""}
+                        placeholder="0"
+                        key={`${r.employee_id}-vft-${r.verpflegungsfreie_tage}`}
+                        onBlur={(e) =>
+                          verpflegungsfreieTageSpeichern(r, e.target.value)
+                        }
+                      />
+                    )}
                   </td>
                   <td>{fmt(anzeige(r, "vorschuss_summe"))}</td>
                   <td>
