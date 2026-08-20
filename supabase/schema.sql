@@ -1140,8 +1140,16 @@ begin
     raise exception 'Bitte eine Stundenzahl ungleich 0 angeben';
   end if;
 
-  if p_art = 'Gutschrift' and p_stunden <= 0 then
-    raise exception 'Eine Gutschrift muss positiv sein';
+  -- Bugfix 2026-08-20: die vorherige if/elsif-Kette prüfte "ist es KEINE
+  -- Freizeitausgleich UND KEINE Korrektur" als letzte Bedingung - eine
+  -- gültige Gutschrift (positive Stunden) fiel dadurch fälschlich in die
+  -- "Ungültige Art"-Fehlermeldung, da p_art = 'Gutschrift' in keinem der
+  -- vorherigen Zweige behandelt wurde. Jetzt je Art ein eigener,
+  -- vollständiger Zweig.
+  if p_art = 'Gutschrift' then
+    if p_stunden <= 0 then
+      raise exception 'Eine Gutschrift muss positiv sein';
+    end if;
   elsif p_art = 'Freizeitausgleich' then
     if p_stunden >= 0 then
       raise exception 'Freizeitausgleich muss als negative Stundenzahl gebucht werden';
@@ -1152,7 +1160,9 @@ begin
     if -p_stunden > v_saldo then
       raise exception 'Nicht genug Stunden auf dem Stundenkonto (aktueller Saldo: % Std.)', v_saldo;
     end if;
-  elsif p_art <> 'Korrektur' then
+  elsif p_art = 'Korrektur' then
+    null; -- bewusst ohne Saldo-Prüfung, siehe Kommentar bei der Tabelle
+  else
     raise exception 'Ungültige Art - Auszahlung nur über die dafür vorgesehene Funktion';
   end if;
 
