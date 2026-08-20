@@ -43,6 +43,16 @@ Enthalten:
   Papierformulare sind im Druck bewusst schwarz und kräftiger als am
   Bildschirm, Stand 2026-08-11 - die Zettel werden handschriftlich
   ausgefüllt und anschließend kopiert, ein helles Grau verschwindet dabei).
+  Bugfix 2026-08-20: nach mehrfachem Neuladen zeigte ein Nutzer weiterhin
+  einen veralteten Stundenwert (im Protokoll stand bereits der korrekte
+  Wert) - erst Aus-/Wiedereinloggen half. Plausibelster Mechanismus (kein
+  Service Worker/PWA-Cache in der App): der Browser-"Back-Forward-Cache"
+  stellt beim Zurückkehren zur Seite (Tab-Wechsel, Bildschirm entsperren,
+  Zurück-Navigation) eine eingefrorene Kopie aus dem Speicher wieder her,
+  statt sie neu zu laden. Absicherung unabhängig von der genauen Ursache:
+  lädt bei jeder Rückkehr zur Seite (`pageshow` mit `persisted`,
+  `visibilitychange`) zwingend frisch aus der Datenbank nach - außer
+  gerade ein Stunden-Feld hat den Fokus.
   Zur Kontrolle stehen
   die Stunden der letzten 3 Tage schreibgeschützt links neben dem
   bearbeitbaren Tag, sowie zusätzlich die 2 kommenden Tage schreibgeschützt

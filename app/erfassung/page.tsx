@@ -212,6 +212,48 @@ function ErfassungInner() {
     loadAll(datum);
   }, [datum, loadAll]);
 
+  // Bugreport 2026-08-20: ein Mitarbeiter sah nach mehrfachem "Neuladen"
+  // weiterhin einen veralteten Stundenwert, obwohl im Protokoll längst der
+  // korrekte Wert stand - erst Aus-/Wiedereinloggen zeigte den richtigen
+  // Wert. Das Muster (normales Neuladen hilft nicht, ein erzwungener
+  // Neuaufbau der Seite schon) passt zum Browser-"Back-Forward-Cache":
+  // der Browser stellt beim Zurückkehren (Tab-Wechsel, Bildschirm
+  // entsperren, Zurück-Navigation) eine eingefrorene Kopie der Seite aus
+  // dem Speicher wieder her, statt sie neu vom Server zu laden - ein Login
+  // erzwingt dagegen praktisch immer eine echte Navigation. Ohne Service
+  // Worker/PWA-Cache in dieser App (geprüft) ist das der plausibelste
+  // Mechanismus. Absicherung unabhängig von der genauen Ursache: bei jeder
+  // Rückkehr zur Seite zwingend frisch aus der Datenbank nachladen - außer
+  // gerade ein Stunden-Feld hat den Fokus (nicht mitten in der Eingabe
+  // unterbrechen, gleiche Prüfung wie beim Live-Sync unten).
+  useEffect(() => {
+    function aktivesStundenfeld() {
+      const aktiv = document.activeElement;
+      return (
+        aktiv instanceof HTMLElement &&
+        aktiv.getAttribute("data-stunden-feld") === "true"
+      );
+    }
+    function neuLadenFallsSinnvoll() {
+      if (aktivesStundenfeld()) return;
+      loadAll(datumRef.current);
+    }
+    function handlePageShow(e: PageTransitionEvent) {
+      // event.persisted = true heißt: aus dem Back-Forward-Cache
+      // wiederhergestellt, nicht neu vom Server geladen.
+      if (e.persisted) neuLadenFallsSinnvoll();
+    }
+    function handleVisibility() {
+      if (document.visibilityState === "visible") neuLadenFallsSinnvoll();
+    }
+    window.addEventListener("pageshow", handlePageShow);
+    document.addEventListener("visibilitychange", handleVisibility);
+    return () => {
+      window.removeEventListener("pageshow", handlePageShow);
+      document.removeEventListener("visibilitychange", handleVisibility);
+    };
+  }, [loadAll]);
+
   useEffect(() => {
     async function ladePeriode() {
       const [jahrStr, monatStr] = datum.split("-");
