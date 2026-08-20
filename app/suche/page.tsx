@@ -7,7 +7,9 @@ import { uebersetzung } from "@/lib/i18n";
 import type {
   Employee,
   EmployeeAuslagenHistorie,
+  EmployeeStundenkontoSaldo,
   ErdbeerenPraemieTag,
+  StundenkontoBewegung,
   VorschussHistorieEintrag,
   WorkEntry,
   ZuckermaisPraemieTag,
@@ -55,6 +57,12 @@ export default function SuchePage() {
   const [stunden, setStunden] = useState<WorkEntry[]>([]);
   const [vorschuesse, setVorschuesse] = useState<VorschussHistorieEintrag[]>([]);
   const [auslagen, setAuslagen] = useState<EmployeeAuslagenHistorie[]>([]);
+  // Stundenkonto (Nutzer-Vorgabe 2026-08-20: "muss für Mitarbeiter
+  // transparent sein") - pro Saisonjahr wie das Konto selbst.
+  const [stundenkontoSaldo, setStundenkontoSaldo] = useState(0);
+  const [stundenkontoBewegungen, setStundenkontoBewegungen] = useState<
+    StundenkontoBewegung[]
+  >([]);
   const [zuckermais, setZuckermais] = useState<ZuckermaisPraemieTag[]>([]);
   const [erdbeeren, setErdbeeren] = useState<ErdbeerenPraemieTag[]>([]);
   const [ladenListe, setLadenListe] = useState(true);
@@ -92,44 +100,67 @@ export default function SuchePage() {
     setAusgewaehlt(m);
     setLadenDetail(true);
     const supabase = getSupabaseClient();
-    const [{ data: we }, { data: vh }, { data: al }, { data: zm }, { data: eb }] =
-      await Promise.all([
-        supabase
-          .from("work_entries")
-          .select("*")
-          .eq("employee_id", m.id)
-          .gte("datum", `${saisonJahr}-01-01`)
-          .lte("datum", `${saisonJahr}-12-31`)
-          .order("datum"),
-        supabase
-          .from("employee_vorschuss_historie")
-          .select("*")
-          .eq("employee_id", m.id)
-          .order("datum"),
-        // Bewusst ohne Saisonjahr-Filter (wie Vorschüsse) - zeigt alle
-        // Jahre, jede Zeile trägt ihr eigenes saison_jahr.
-        supabase
-          .from("employee_auslagen_historie")
-          .select("*")
-          .eq("employee_id", m.id),
-        supabase
-          .from("zuckermais_praemie_tag")
-          .select("*")
-          .eq("employee_id", m.id)
-          .gte("datum", `${saisonJahr}-01-01`)
-          .lte("datum", `${saisonJahr}-12-31`)
-          .order("datum"),
-        supabase
-          .from("erdbeeren_praemie_tag")
-          .select("*")
-          .eq("employee_id", m.id)
-          .gte("datum", `${saisonJahr}-01-01`)
-          .lte("datum", `${saisonJahr}-12-31`)
-          .order("datum"),
-      ]);
+    const [
+      { data: we },
+      { data: vh },
+      { data: al },
+      { data: sk },
+      { data: skb },
+      { data: zm },
+      { data: eb },
+    ] = await Promise.all([
+      supabase
+        .from("work_entries")
+        .select("*")
+        .eq("employee_id", m.id)
+        .gte("datum", `${saisonJahr}-01-01`)
+        .lte("datum", `${saisonJahr}-12-31`)
+        .order("datum"),
+      supabase
+        .from("employee_vorschuss_historie")
+        .select("*")
+        .eq("employee_id", m.id)
+        .order("datum"),
+      // Bewusst ohne Saisonjahr-Filter (wie Vorschüsse) - zeigt alle
+      // Jahre, jede Zeile trägt ihr eigenes saison_jahr.
+      supabase
+        .from("employee_auslagen_historie")
+        .select("*")
+        .eq("employee_id", m.id),
+      supabase
+        .from("employee_stundenkonto_saldo")
+        .select("*")
+        .eq("employee_id", m.id)
+        .eq("saison_jahr", saisonJahr)
+        .maybeSingle(),
+      supabase
+        .from("stundenkonto_bewegungen")
+        .select("*")
+        .eq("employee_id", m.id)
+        .eq("saison_jahr", saisonJahr)
+        .order("erstellt_am", { ascending: false }),
+      supabase
+        .from("zuckermais_praemie_tag")
+        .select("*")
+        .eq("employee_id", m.id)
+        .gte("datum", `${saisonJahr}-01-01`)
+        .lte("datum", `${saisonJahr}-12-31`)
+        .order("datum"),
+      supabase
+        .from("erdbeeren_praemie_tag")
+        .select("*")
+        .eq("employee_id", m.id)
+        .gte("datum", `${saisonJahr}-01-01`)
+        .lte("datum", `${saisonJahr}-12-31`)
+        .order("datum"),
+    ]);
     setStunden((we as WorkEntry[]) ?? []);
     setVorschuesse((vh as VorschussHistorieEintrag[]) ?? []);
     setAuslagen((al as EmployeeAuslagenHistorie[]) ?? []);
+    setStundenkontoSaldo(
+      sk ? Number((sk as EmployeeStundenkontoSaldo).saldo) : 0
+    );
+    setStundenkontoBewegungen((skb as StundenkontoBewegung[]) ?? []);
     setZuckermais((zm as ZuckermaisPraemieTag[]) ?? []);
     setErdbeeren((eb as ErdbeerenPraemieTag[]) ?? []);
     setLadenDetail(false);
@@ -442,6 +473,56 @@ export default function SuchePage() {
                 )}
               </div>
 
+              <div className="rounded border border-neutral-200 bg-white p-4">
+                <div className="mb-2 flex items-baseline justify-between">
+                  <h2 className="text-base font-semibold text-emerald-800">
+                    Stundenkonto ({saisonJahr})
+                  </h2>
+                  <span
+                    className={
+                      stundenkontoSaldo < 0
+                        ? "text-sm font-medium text-red-600"
+                        : "text-sm font-medium text-neutral-700"
+                    }
+                  >
+                    Saldo: {stundenkontoSaldo.toFixed(2)} Std.
+                  </span>
+                </div>
+                {stundenkontoBewegungen.length === 0 ? (
+                  <p className="text-sm text-neutral-500">
+                    Keine Buchungen für {saisonJahr}.
+                  </p>
+                ) : (
+                  <div className="max-h-96 overflow-y-auto">
+                    <table>
+                      <thead>
+                        <tr>
+                          <th>{t("gemeinsam.datum")}</th>
+                          <th>Stunden</th>
+                          <th>Art</th>
+                          <th>{t("gemeinsam.notiz")}</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {stundenkontoBewegungen.map((b) => (
+                          <tr key={b.id}>
+                            <td>{formatDatumDE(b.datum)}</td>
+                            <td className={b.stunden < 0 ? "text-red-600" : ""}>
+                              {b.stunden > 0 ? "+" : ""}
+                              {Number(b.stunden).toFixed(2)}
+                            </td>
+                            <td>{b.art}</td>
+                            <td className="text-neutral-500">
+                              {b.notiz ?? "—"}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
+
               {zuckermais.length > 0 && (
                 <div className="rounded border border-neutral-200 bg-white p-4">
                   <div className="mb-2 flex items-baseline justify-between">
@@ -606,6 +687,38 @@ export default function SuchePage() {
                       {z.belegDateiname && ` (Beleg: ${z.belegDateiname})`}
                     </td>
                     <td>{z.storniert ? "storniert" : "aktiv"}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+
+          <h3 className="mt-6 text-base font-semibold">
+            Stundenkonto {saisonJahr} (Saldo: {stundenkontoSaldo.toFixed(2)}{" "}
+            Std.)
+          </h3>
+          {stundenkontoBewegungen.length === 0 ? (
+            <p className="mt-1 text-sm">Keine Buchungen für {saisonJahr}.</p>
+          ) : (
+            <table className="mt-2 print-form-table">
+              <thead>
+                <tr>
+                  <th>Datum</th>
+                  <th>Stunden</th>
+                  <th>Art</th>
+                  <th>Notiz</th>
+                </tr>
+              </thead>
+              <tbody>
+                {stundenkontoBewegungen.map((b) => (
+                  <tr key={b.id}>
+                    <td>{formatDatumDE(b.datum)}</td>
+                    <td>
+                      {b.stunden > 0 ? "+" : ""}
+                      {Number(b.stunden).toFixed(2)}
+                    </td>
+                    <td>{b.art}</td>
+                    <td>{b.notiz ?? "—"}</td>
                   </tr>
                 ))}
               </tbody>

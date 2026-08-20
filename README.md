@@ -380,7 +380,11 @@ Enthalten:
   abgeleitet. Datum zeigt "Saison {Jahr}" statt eines echten Datums, da
   `season_bonuses` nur einen gemeinsamen `updated_at`-Zeitstempel je
   Mitarbeiter+Jahr für alle Felder hat (kein präzises Einzeldatum je
-  Position verfügbar)
+  Position verfügbar). Seit 2026-08-20 zusätzlich ein eigener
+  "Stundenkonto"-Block (Saldo + alle Buchungen des gewählten Saisonjahrs,
+  Datum/Stunden/Art/Notiz) - damit auch für die betroffene Person selbst
+  transparent nachvollziehbar ist, wie viele Stunden auf dem Konto stehen,
+  auch im Ausdruck enthalten
 - Freitext-Notiz je Tag auf der Stundenerfassung (z.B. "krank", "zu
   spät") - erscheint auch auf der "Suche"-Seite
 - 15-Wochen-Kontrolle (SV-Freiheit landwirtschaftliche Saisonarbeit,
