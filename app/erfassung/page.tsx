@@ -5,17 +5,21 @@ import { useSearchParams } from "next/navigation";
 import { getSupabaseClient } from "@/lib/supabase/client";
 import { useProfile } from "@/lib/useProfile";
 import { uebersetzung } from "@/lib/i18n";
-import { formatDatumDE } from "@/lib/format";
+import { kannStundenkontoAuszahlen, kannStundenkontoBuchen } from "@/lib/stundenkontoRechte";
+import {
+  speichereWorkEntryFeld,
+  type WorkEntryPatch,
+} from "@/lib/workEntrySpeichern";
 import type {
   Arbeitsgruppe,
   Employee,
   EmployeeStundenkontoSaldo,
   FuehrerscheinEintrag,
   Period,
-  StundenkontoBewegung,
   WorkEntry,
 } from "@/lib/types";
 import ErfassungTabs from "@/components/ErfassungTabs";
+import StundenkontoBereich from "@/components/StundenkontoBereich";
 
 const OHNE_GRUPPE_KEY = "__ohne__";
 
@@ -102,14 +106,11 @@ function ErfassungInner() {
     profile?.role === "admin" ||
     profile?.role === "hr" ||
     profile?.role === "zeiterfassung";
-  // Stundenkonto (Nutzer-Vorgabe 2026-08-20): Buchen (Gutschrift/Korrektur/
-  // Freizeitausgleich) wie Stundenerfassung selbst - "In Auszahlung
-  // umwandeln" erzeugt einen echten Lohnbestandteil, deshalb wie "Jetzt
-  // Abrechnen" nur admin/lohnabrechnung (muss zu stundenkonto_buchen/
-  // stundenkonto_in_auszahlung_umwandeln in schema.sql passen).
-  const canStundenkontoBuchen = canEditStunden;
-  const canStundenkontoAuszahlen =
-    profile?.role === "admin" || profile?.role === "lohnabrechnung";
+  // Stundenkonto: Rollenregeln zentral in lib/stundenkontoRechte.ts - hier
+  // nur zur Anzeige des "Verwalten"-Umschalters (die eigentliche Prüfung
+  // je Aktion steckt in StundenkontoBereich/schema.sql).
+  const canStundenkontoBuchen = kannStundenkontoBuchen(profile?.role);
+  const canStundenkontoAuszahlen = kannStundenkontoAuszahlen(profile?.role);
   // useSearchParams() statt window.location.search: reagiert zuverlässig
   // auch auf clientseitige <Link>-Navigation, bei der Next.js diese Route
   // wiederverwendet statt sie neu zu mounten (sonst würde ein Sprung-Link
@@ -164,36 +165,17 @@ function ErfassungInner() {
   // Stundenkonto (Nutzer-Vorgabe 2026-08-20): immer sichtbar, unabhängig
   // vom gewählten Tag - nur das Jahr des gewählten Datums bestimmt die
   // Saison, auf die sich das Konto bezieht (wie season_bonuses überall
-  // sonst in der App).
+  // sonst in der App). Die eigentliche Werkzeugleiste steckt in der
+  // wiederverwendeten Komponente StundenkontoBereich (siehe unten) - hier
+  // nur der Saldo für die kompakte Spalte in dieser Tabelle sowie, welche
+  // Person gerade aufgeklappt ist.
   const stundenkontoJahr = Number(datum.slice(0, 4));
   const [stundenkontoSaldo, setStundenkontoSaldo] = useState<
     Record<string, number>
   >({});
-  // Nur für die gerade aufgeklappte Person geladen (Historie, nicht der
-  // Saldo - der ist für alle sichtbaren Personen auf einmal geladen).
   const [stundenkontoOffenId, setStundenkontoOffenId] = useState<
     string | null
   >(null);
-  const [stundenkontoHistorie, setStundenkontoHistorie] = useState<
-    StundenkontoBewegung[]
-  >([]);
-  const [stundenkontoLadeHistorie, setStundenkontoLadeHistorie] =
-    useState(false);
-  const [stundenkontoDatum, setStundenkontoDatum] = useState(todayIso());
-  const [stundenkontoStunden, setStundenkontoStunden] = useState("");
-  const [stundenkontoArt, setStundenkontoArt] = useState<
-    "Gutschrift" | "Korrektur" | "Freizeitausgleich"
-  >("Gutschrift");
-  const [stundenkontoNotiz, setStundenkontoNotiz] = useState("");
-  const [auszahlungStunden, setAuszahlungStunden] = useState("");
-  const [auszahlungNotiz, setAuszahlungNotiz] = useState("");
-  const [stundenkontoLaeuft, setStundenkontoLaeuft] = useState(false);
-  const [stundenkontoFehler, setStundenkontoFehler] = useState<string | null>(
-    null
-  );
-  const [stundenkontoErfolg, setStundenkontoErfolg] = useState<string | null>(
-    null
-  );
 
   // Für den Live-Sync-Handler: der jeweils AKTUELLE Tag, nicht der zum
   // Zeitpunkt des Abonnierens eingefangene - beim schnellen Tageswechsel
@@ -501,59 +483,36 @@ function ErfassungInner() {
     return e ? `${e.name}, ${e.vorname}` : "diese Person";
   }
 
-  // Gemeinsame Speicherlogik für Stunden/Markierung/Notiz - alle drei
-  // teilen sich dasselbe Muster: bei bestehendem Eintrag per optimistischer
-  // Sperre (version) aktualisieren, sonst neu anlegen. WICHTIG: Anders als
-  // zuvor wird das Ergebnis jetzt geprüft - weder ein RLS-Fehler (z.B.
-  // fehlende Berechtigung, gesperrter Monat) noch ein Versionskonflikt
-  // (0 betroffene Zeilen, wenn zwischenzeitlich jemand anders gespeichert
-  // hat) dürfen mehr lautlos verschluckt werden, siehe Bugreport
+  // Gemeinsame Speicherlogik für Stunden/Markierung/Notiz - ausgelagert in
+  // lib/workEntrySpeichern.ts (Nutzer-Vorgabe 2026-08-21: dieselbe,
+  // geprüfte Logik soll auch das Controlling-Stundenmonitoring nutzen,
+  // nicht ein zweites Mal geschrieben werden). WICHTIG: weder ein
+  // RLS-Fehler (z.B. fehlende Berechtigung, gesperrter Monat) noch ein
+  // Versionskonflikt dürfen lautlos verschluckt werden, siehe Bugreport
   // 2026-08-08 ("eingetippte Stunden nach Neuladen wieder weg").
   async function speichereFeld(
     employeeId: string,
-    patch: Partial<Pick<WorkEntry, "stunden" | "markierung" | "notiz">>,
+    patch: WorkEntryPatch,
     feldLabel: string
   ): Promise<boolean> {
-    const supabase = getSupabaseClient();
-    const existing = entries[employeeId];
-    let konflikt = false;
-    let fehlerText: string | null = null;
-
-    if (existing) {
-      const { data, error } = await supabase
-        .from("work_entries")
-        .update(patch)
-        .eq("id", existing.id)
-        .eq("version", existing.version) // optimistische Sperre (ADR-010)
-        .select("id");
-      if (error) fehlerText = error.message;
-      else if (!data || data.length === 0) konflikt = true;
-    } else {
-      const { error } = await supabase
-        .from("work_entries")
-        .insert({ employee_id: employeeId, datum, ...patch });
-      if (error) {
-        // Eindeutigkeitsverletzung (employee_id, datum) = jemand anders
-        // war zwischenzeitlich schneller - auch das ist ein Konflikt, kein
-        // "echter" Fehler.
-        if (error.code === "23505") konflikt = true;
-        else fehlerText = error.message;
+    const ergebnis = await speichereWorkEntryFeld(
+      employeeId,
+      datum,
+      entries[employeeId],
+      patch
+    );
+    if (!ergebnis.ok) {
+      if (ergebnis.konflikt) {
+        setSpeicherFehler(
+          `${feldLabel} für ${empfaengerName(employeeId)} konnte nicht gespeichert werden - ` +
+            `eine andere Person hat diesen Eintrag zwischenzeitlich geändert. ` +
+            `Der aktuelle Stand wurde neu geladen, bitte bei Bedarf erneut eingeben.`
+        );
+      } else {
+        setSpeicherFehler(
+          `${feldLabel} für ${empfaengerName(employeeId)} konnte nicht gespeichert werden: ${ergebnis.fehler}`
+        );
       }
-    }
-
-    if (konflikt) {
-      setSpeicherFehler(
-        `${feldLabel} für ${empfaengerName(employeeId)} konnte nicht gespeichert werden - ` +
-          `eine andere Person hat diesen Eintrag zwischenzeitlich geändert. ` +
-          `Der aktuelle Stand wurde neu geladen, bitte bei Bedarf erneut eingeben.`
-      );
-      await ladeEintragNeu(employeeId);
-      return false;
-    }
-    if (fehlerText) {
-      setSpeicherFehler(
-        `${feldLabel} für ${empfaengerName(employeeId)} konnte nicht gespeichert werden: ${fehlerText}`
-      );
       await ladeEintragNeu(employeeId);
       return false;
     }
@@ -578,124 +537,8 @@ function ErfassungInner() {
     await speichereFeld(employeeId, { notiz: value }, "Notiz");
   }
 
-  // Stundenkonto (Nutzer-Vorgabe 2026-08-20) --------------------------------
-
-  async function stundenkontoNeuLaden(employeeId: string) {
-    const supabase = getSupabaseClient();
-    const [{ data: saldoRow }, { data: hist }] = await Promise.all([
-      supabase
-        .from("employee_stundenkonto_saldo")
-        .select("*")
-        .eq("employee_id", employeeId)
-        .eq("saison_jahr", stundenkontoJahr)
-        .maybeSingle(),
-      supabase
-        .from("stundenkonto_bewegungen")
-        .select("*")
-        .eq("employee_id", employeeId)
-        .eq("saison_jahr", stundenkontoJahr)
-        .order("erstellt_am", { ascending: false })
-        .limit(20),
-    ]);
-    setStundenkontoSaldo((prev) => ({
-      ...prev,
-      [employeeId]: saldoRow
-        ? Number((saldoRow as EmployeeStundenkontoSaldo).saldo)
-        : 0,
-    }));
-    setStundenkontoHistorie((hist as StundenkontoBewegung[]) ?? []);
-  }
-
-  async function stundenkontoAufklappen(employeeId: string) {
-    if (stundenkontoOffenId === employeeId) {
-      setStundenkontoOffenId(null);
-      return;
-    }
-    setStundenkontoOffenId(employeeId);
-    setStundenkontoFehler(null);
-    setStundenkontoErfolg(null);
-    setStundenkontoDatum(todayIso());
-    setStundenkontoStunden("");
-    setStundenkontoArt("Gutschrift");
-    setStundenkontoNotiz("");
-    setAuszahlungStunden("");
-    setAuszahlungNotiz("");
-    setStundenkontoLadeHistorie(true);
-    const supabase = getSupabaseClient();
-    const { data } = await supabase
-      .from("stundenkonto_bewegungen")
-      .select("*")
-      .eq("employee_id", employeeId)
-      .eq("saison_jahr", stundenkontoJahr)
-      .order("erstellt_am", { ascending: false })
-      .limit(20);
-    setStundenkontoHistorie((data as StundenkontoBewegung[]) ?? []);
-    setStundenkontoLadeHistorie(false);
-  }
-
-  async function stundenkontoBuchen(employeeId: string) {
-    const stunden = Number(stundenkontoStunden);
-    if (!stundenkontoStunden || Number.isNaN(stunden) || stunden === 0) {
-      setStundenkontoFehler("Bitte eine Stundenzahl ungleich 0 angeben.");
-      return;
-    }
-    setStundenkontoLaeuft(true);
-    setStundenkontoFehler(null);
-    setStundenkontoErfolg(null);
-    const supabase = getSupabaseClient();
-    const { error } = await supabase.rpc("stundenkonto_buchen", {
-      p_employee_id: employeeId,
-      p_saison_jahr: stundenkontoJahr,
-      p_datum: stundenkontoDatum,
-      p_stunden: stunden,
-      p_art: stundenkontoArt,
-      p_notiz: stundenkontoNotiz || null,
-    });
-    setStundenkontoLaeuft(false);
-    if (error) {
-      setStundenkontoFehler(error.message);
-      return;
-    }
-    setStundenkontoErfolg(
-      `${stunden > 0 ? "+" : ""}${stunden} Std. (${stundenkontoArt}) gebucht.`
-    );
-    setStundenkontoStunden("");
-    setStundenkontoNotiz("");
-    await stundenkontoNeuLaden(employeeId);
-  }
-
-  async function stundenkontoAuszahlen(employeeId: string) {
-    const stunden = Number(auszahlungStunden);
-    if (!auszahlungStunden || Number.isNaN(stunden) || stunden <= 0) {
-      setStundenkontoFehler("Bitte eine Stundenzahl größer als 0 angeben.");
-      return;
-    }
-    setStundenkontoLaeuft(true);
-    setStundenkontoFehler(null);
-    setStundenkontoErfolg(null);
-    const supabase = getSupabaseClient();
-    const { data, error } = await supabase.rpc(
-      "stundenkonto_in_auszahlung_umwandeln",
-      {
-        p_employee_id: employeeId,
-        p_saison_jahr: stundenkontoJahr,
-        p_stunden: stunden,
-        p_notiz: auszahlungNotiz || null,
-      }
-    );
-    setStundenkontoLaeuft(false);
-    if (error) {
-      setStundenkontoFehler(error.message);
-      return;
-    }
-    setStundenkontoErfolg(
-      `${stunden} Std. in ${Number(data ?? 0).toFixed(
-        2
-      )} € umgewandelt - erscheint auf der Lohnübersicht.`
-    );
-    setAuszahlungStunden("");
-    setAuszahlungNotiz("");
-    await stundenkontoNeuLaden(employeeId);
+  function stundenkontoAufklappen(employeeId: string) {
+    setStundenkontoOffenId((prev) => (prev === employeeId ? null : employeeId));
   }
 
   // Pfeiltasten hoch/runter im Stunden-Feld springen direkt zum selben
@@ -1062,184 +905,17 @@ function ErfassungInner() {
                           }
                           className="bg-neutral-50"
                         >
-                          <div className="flex flex-col gap-3 p-2">
-                            <p className="text-sm font-semibold">
-                              Stundenkonto {emp.name}, {emp.vorname} - Saison{" "}
-                              {stundenkontoJahr}: aktueller Saldo{" "}
-                              {saldo.toFixed(2)} Std.
-                            </p>
-                            <p className="text-xs text-neutral-500">
-                              Immer unabhängig vom oben gewählten Tag - hier
-                              werden nur Buchungen für das Jahr {stundenkontoJahr}{" "}
-                              angezeigt. Wirkt sich erst auf den Lohn aus,
-                              wenn Stunden "in Auszahlung" umgewandelt werden
-                              (dann wie eine Prämie, live bis zum Abrechnen).
-                            </p>
-
-                            {stundenkontoFehler && (
-                              <p className="text-sm font-medium text-red-600">
-                                ⚠ {stundenkontoFehler}
-                              </p>
-                            )}
-                            {stundenkontoErfolg && (
-                              <p className="text-sm font-medium text-emerald-700">
-                                ✓ {stundenkontoErfolg}
-                              </p>
-                            )}
-
-                            {canStundenkontoBuchen && (
-                              <div className="flex flex-wrap items-end gap-2 rounded border border-neutral-200 bg-white p-2">
-                                <label className="flex flex-col text-xs">
-                                  Datum
-                                  <input
-                                    type="date"
-                                    className="w-36"
-                                    value={stundenkontoDatum}
-                                    onChange={(e) =>
-                                      setStundenkontoDatum(e.target.value)
-                                    }
-                                  />
-                                </label>
-                                <label className="flex flex-col text-xs">
-                                  Art
-                                  <select
-                                    value={stundenkontoArt}
-                                    onChange={(e) =>
-                                      setStundenkontoArt(
-                                        e.target.value as typeof stundenkontoArt
-                                      )
-                                    }
-                                  >
-                                    <option value="Gutschrift">
-                                      Gutschrift (+)
-                                    </option>
-                                    <option value="Freizeitausgleich">
-                                      Freizeitausgleich (−)
-                                    </option>
-                                    <option value="Korrektur">
-                                      Korrektur (± ohne Saldo-Prüfung)
-                                    </option>
-                                  </select>
-                                </label>
-                                <label className="flex flex-col text-xs">
-                                  Stunden
-                                  <input
-                                    type="number"
-                                    step="0.25"
-                                    className="w-24"
-                                    placeholder="z.B. 3 oder -8"
-                                    value={stundenkontoStunden}
-                                    onChange={(e) =>
-                                      setStundenkontoStunden(e.target.value)
-                                    }
-                                  />
-                                </label>
-                                <label className="flex flex-col text-xs">
-                                  Notiz
-                                  <input
-                                    type="text"
-                                    className="w-48"
-                                    placeholder="optional"
-                                    value={stundenkontoNotiz}
-                                    onChange={(e) =>
-                                      setStundenkontoNotiz(e.target.value)
-                                    }
-                                  />
-                                </label>
-                                <button
-                                  type="button"
-                                  className="btn-secondary text-xs"
-                                  disabled={stundenkontoLaeuft}
-                                  onClick={() => stundenkontoBuchen(emp.id)}
-                                >
-                                  Buchen
-                                </button>
-                              </div>
-                            )}
-
-                            {canStundenkontoAuszahlen && (
-                              <div className="flex flex-wrap items-end gap-2 rounded border border-emerald-200 bg-white p-2">
-                                <label className="flex flex-col text-xs">
-                                  Stunden in Auszahlung umwandeln
-                                  <input
-                                    type="number"
-                                    step="0.25"
-                                    min={0}
-                                    className="w-24"
-                                    value={auszahlungStunden}
-                                    onChange={(e) =>
-                                      setAuszahlungStunden(e.target.value)
-                                    }
-                                  />
-                                </label>
-                                <label className="flex flex-col text-xs">
-                                  Notiz
-                                  <input
-                                    type="text"
-                                    className="w-48"
-                                    placeholder="optional"
-                                    value={auszahlungNotiz}
-                                    onChange={(e) =>
-                                      setAuszahlungNotiz(e.target.value)
-                                    }
-                                  />
-                                </label>
-                                <button
-                                  type="button"
-                                  className="btn text-xs"
-                                  disabled={stundenkontoLaeuft}
-                                  onClick={() => stundenkontoAuszahlen(emp.id)}
-                                >
-                                  In Auszahlung umwandeln
-                                </button>
-                              </div>
-                            )}
-
-                            <div>
-                              <p className="mb-1 text-xs font-medium text-neutral-600">
-                                Letzte Buchungen
-                              </p>
-                              {stundenkontoLadeHistorie ? (
-                                <p className="text-xs text-neutral-500">
-                                  Lädt…
-                                </p>
-                              ) : stundenkontoHistorie.length === 0 ? (
-                                <p className="text-xs text-neutral-500">
-                                  Noch keine Buchungen für {stundenkontoJahr}.
-                                </p>
-                              ) : (
-                                <table className="text-xs">
-                                  <thead>
-                                    <tr>
-                                      <th>Datum</th>
-                                      <th>Stunden</th>
-                                      <th>Art</th>
-                                      <th>Notiz</th>
-                                    </tr>
-                                  </thead>
-                                  <tbody>
-                                    {stundenkontoHistorie.map((b) => (
-                                      <tr key={b.id}>
-                                        <td>{formatDatumDE(b.datum)}</td>
-                                        <td
-                                          className={
-                                            b.stunden < 0
-                                              ? "text-red-600"
-                                              : ""
-                                          }
-                                        >
-                                          {b.stunden > 0 ? "+" : ""}
-                                          {Number(b.stunden).toFixed(2)}
-                                        </td>
-                                        <td>{b.art}</td>
-                                        <td>{b.notiz ?? "—"}</td>
-                                      </tr>
-                                    ))}
-                                  </tbody>
-                                </table>
-                              )}
-                            </div>
-                          </div>
+                          <StundenkontoBereich
+                            employeeId={emp.id}
+                            saisonJahr={stundenkontoJahr}
+                            personLabel={`${emp.name}, ${emp.vorname}`}
+                            onSaldoChange={(neu) =>
+                              setStundenkontoSaldo((prev) => ({
+                                ...prev,
+                                [emp.id]: neu,
+                              }))
+                            }
+                          />
                         </td>
                       </tr>
                     )}

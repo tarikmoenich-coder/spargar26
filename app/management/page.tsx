@@ -3,10 +3,12 @@
 import { Fragment, useEffect, useState } from "react";
 import Link from "next/link";
 import { getSupabaseClient } from "@/lib/supabase/client";
+import { useProfile } from "@/lib/useProfile";
 import {
   ABRECHNUNGSART_LABELS,
   type AnreiselisteOffenArbeitend,
   type EmployeeUrlaubstage,
+  type Period,
   type SeasonSummaryRow,
   type SvAbschnitt,
   type SvPruefung,
@@ -20,6 +22,12 @@ import {
   svFreiZeitraumUeberschritten,
   tageAufschluesselung,
 } from "@/lib/svPruefung";
+import {
+  kannStundenkontoAuszahlen,
+  kannStundenkontoBuchen,
+} from "@/lib/stundenkontoRechte";
+import { speichereWorkEntryFeld } from "@/lib/workEntrySpeichern";
+import StundenkontoBereich from "@/components/StundenkontoBereich";
 
 const CURRENT_YEAR = new Date().getFullYear();
 
@@ -63,9 +71,16 @@ interface Abweichung {
 // Stundenmonitoring auftaucht.
 const MAX_STUNDEN_PRO_TAG = 12;
 
+// Nutzer-Vorgabe 2026-08-21: direkt hier bearbeitbar statt nur ein Link
+// zur Stundenerfassung - braucht deshalb dieselben Felder wie WorkEntry
+// für die optimistische Sperre (id/version), nicht nur datum/stunden.
 interface UeberstundenTag {
+  id: number;
   datum: string;
   stunden: number;
+  version: number;
+  markierung: string | null;
+  notiz: string | null;
 }
 
 interface UeberstundenEintrag {
@@ -127,6 +142,19 @@ function offeneGruende(z: AnreiselisteOffenArbeitend): string[] {
 }
 
 export default function ManagementPage() {
+  const { profile } = useProfile();
+  // Muss exakt zu work_entries_write/-update in schema.sql passen (RLS) -
+  // gleiche Definition wie auf der Stundenerfassung. In der Praxis nur für
+  // admin/hr relevant, da zeiterfassung /management gar nicht aufrufen
+  // kann (siehe components/Nav.tsx) - management sieht das Feld dadurch
+  // automatisch nur lesend (wie jede andere Rolle ohne Schreibrecht auch).
+  const canEditStunden =
+    profile?.role === "admin" ||
+    profile?.role === "hr" ||
+    profile?.role === "zeiterfassung";
+  const canStundenkontoBuchen = kannStundenkontoBuchen(profile?.role);
+  const canStundenkontoAuszahlen = kannStundenkontoAuszahlen(profile?.role);
+
   const [faelle, setFaelle] = useState<SvPruefung[]>([]);
   // Für die Tage-Aufschlüsselung im Tooltip bei "Rest bis 105 Tage"
   // (Nutzer-Vorgabe 2026-08-15) - ungruppiert, tageAufschluesselung()
@@ -146,6 +174,21 @@ export default function ManagementPage() {
   >([]);
   const [loading, setLoading] = useState(true);
   const [jahr, setJahr] = useState(CURRENT_YEAR);
+
+  // Monatsabschluss-Sperre je Monat des gewählten Jahres (Nutzer-Vorgabe
+  // 2026-08-21: das Stunden-Feld muss auch hier gesperrt sein, sonst würde
+  // ein Speicherversuch in einem gesperrten Monat entweder lautlos
+  // scheitern oder fälschlich erlaubt wirken - gleiche Prüfung wie auf der
+  // Stundenerfassung, nur für mehrere Monate gleichzeitig statt nur den
+  // einen gewählten Tag).
+  const [gesperrteMonate, setGesperrteMonate] = useState<Set<number>>(
+    new Set()
+  );
+  // Fehlermeldung für die Inline-Bearbeitung im Stundenmonitoring -
+  // eigenständig von speicherFehler auf der Stundenerfassung.
+  const [ueberstundenFehler, setUeberstundenFehler] = useState<string | null>(
+    null
+  );
 
   const [abweichungen, setAbweichungen] = useState<
     { row: SeasonSummaryRow; belegnummer: string; diffs: Abweichung[] }[]
@@ -278,42 +321,73 @@ export default function ManagementPage() {
     loadAbweichungen();
   }, [jahr]);
 
-  useEffect(() => {
-    async function loadUeberstunden() {
-      setLoadingUeberstunden(true);
-      const supabase = getSupabaseClient();
-      const { data, error } = await supabase
-        .from("work_entries")
-        .select("employee_id, datum, stunden, employees(personal_nr, name, vorname)")
-        .gt("stunden", MAX_STUNDEN_PRO_TAG)
-        .gte("datum", `${jahr}-01-01`)
-        .lte("datum", `${jahr}-12-31`)
-        .order("datum");
-      if (!error && data) {
-        const proMitarbeiter = new Map<string, UeberstundenEintrag>();
-        (data as any[]).forEach((row) => {
-          if (!proMitarbeiter.has(row.employee_id)) {
-            proMitarbeiter.set(row.employee_id, {
-              employee_id: row.employee_id,
-              personal_nr: row.employees?.personal_nr ?? "",
-              name: row.employees?.name ?? "",
-              vorname: row.employees?.vorname ?? "",
-              tage: [],
-            });
-          }
-          proMitarbeiter.get(row.employee_id)!.tage.push({
-            datum: row.datum,
-            stunden: Number(row.stunden),
+  // Nutzer-Vorgabe 2026-08-21: direkt bearbeitbar statt nur ein Link zur
+  // Stundenerfassung - braucht deshalb id/version/markierung/notiz, nicht
+  // nur datum/stunden. Als eigenständige Funktion (statt inline im
+  // useEffect), damit nach einer erfolgreichen Speicherung neu geladen
+  // werden kann (eine korrigierte Person kann dadurch aus der Liste
+  // verschwinden, wenn kein Tag mehr über der Grenze liegt).
+  async function loadUeberstunden() {
+    setLoadingUeberstunden(true);
+    const supabase = getSupabaseClient();
+    const { data, error } = await supabase
+      .from("work_entries")
+      .select(
+        "id, employee_id, datum, stunden, version, markierung, notiz, employees(personal_nr, name, vorname)"
+      )
+      .gt("stunden", MAX_STUNDEN_PRO_TAG)
+      .gte("datum", `${jahr}-01-01`)
+      .lte("datum", `${jahr}-12-31`)
+      .order("datum");
+    if (!error && data) {
+      const proMitarbeiter = new Map<string, UeberstundenEintrag>();
+      (data as any[]).forEach((row) => {
+        if (!proMitarbeiter.has(row.employee_id)) {
+          proMitarbeiter.set(row.employee_id, {
+            employee_id: row.employee_id,
+            personal_nr: row.employees?.personal_nr ?? "",
+            name: row.employees?.name ?? "",
+            vorname: row.employees?.vorname ?? "",
+            tage: [],
           });
+        }
+        proMitarbeiter.get(row.employee_id)!.tage.push({
+          id: row.id,
+          datum: row.datum,
+          stunden: Number(row.stunden),
+          version: row.version,
+          markierung: row.markierung,
+          notiz: row.notiz,
         });
-        const ergebnis = Array.from(proMitarbeiter.values()).sort(
-          (a, b) => b.tage.length - a.tage.length
-        );
-        setUeberstunden(ergebnis);
-      }
-      setLoadingUeberstunden(false);
+      });
+      const ergebnis = Array.from(proMitarbeiter.values()).sort(
+        (a, b) => b.tage.length - a.tage.length
+      );
+      setUeberstunden(ergebnis);
     }
+    setLoadingUeberstunden(false);
+  }
+
+  useEffect(() => {
     loadUeberstunden();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [jahr]);
+
+  // Monatsabschluss-Sperre für alle Monate des gewählten Jahres auf einmal
+  // laden (siehe gesperrteMonate oben).
+  useEffect(() => {
+    async function ladeGesperrteMonate() {
+      const supabase = getSupabaseClient();
+      const { data } = await supabase
+        .from("periods")
+        .select("*")
+        .eq("saison_jahr", jahr)
+        .eq("gesperrt", true);
+      setGesperrteMonate(
+        new Set(((data as Period[]) ?? []).map((p) => p.monat))
+      );
+    }
+    ladeGesperrteMonate();
   }, [jahr]);
 
   useEffect(() => {
@@ -347,6 +421,45 @@ export default function ManagementPage() {
     }
     loadResturlaub();
   }, [jahr]);
+
+  // Nutzer-Vorgabe 2026-08-21: Stunden-Feld direkt hier bearbeiten statt
+  // nur ein Link zur Stundenerfassung - nutzt dieselbe, geprüfte
+  // Speicherlogik wie dort (lib/workEntrySpeichern.ts). Lädt danach die
+  // ganze Überstunden-Liste neu, damit eine korrigierte Person korrekt
+  // verschwindet, falls kein Tag mehr über der Grenze liegt.
+  async function ueberstundenSpeichern(
+    employeeId: string,
+    tag: UeberstundenTag,
+    wert: string
+  ) {
+    const stunden = wert === "" ? null : Number(wert);
+    const ergebnis = await speichereWorkEntryFeld(
+      employeeId,
+      tag.datum,
+      {
+        id: tag.id,
+        employee_id: employeeId,
+        datum: tag.datum,
+        stunden: tag.stunden,
+        version: tag.version,
+        markierung: tag.markierung,
+        notiz: tag.notiz,
+      },
+      { stunden }
+    );
+    if (!ergebnis.ok) {
+      setUeberstundenFehler(
+        ergebnis.konflikt
+          ? "Konnte nicht gespeichert werden - eine andere Person hat diesen Eintrag zwischenzeitlich geändert. Die Liste wurde neu geladen, bitte bei Bedarf erneut eingeben."
+          : `Konnte nicht gespeichert werden: ${ergebnis.fehler}`
+      );
+    } else {
+      setUeberstundenFehler(null);
+    }
+    // In jedem Fall neu laden - auch bei Erfolg, damit ein jetzt unter die
+    // Grenze korrigierter Tag korrekt aus der Liste verschwindet.
+    await loadUeberstunden();
+  }
 
   return (
     <div className="flex flex-col gap-4">
@@ -794,35 +907,79 @@ export default function ManagementPage() {
                       {offen && (
                         <tr>
                           <td colSpan={5} className="bg-neutral-50">
-                            <table>
-                              <thead>
-                                <tr>
-                                  <th>Datum</th>
-                                  <th>Stunden</th>
-                                  <th></th>
-                                </tr>
-                              </thead>
-                              <tbody>
-                                {[...u.tage]
-                                  .sort((a, b) => a.datum.localeCompare(b.datum))
-                                  .map((t) => (
-                                    <tr key={t.datum}>
-                                      <td>{formatDatumDE(t.datum)}</td>
-                                      <td className="font-medium text-amber-600">
-                                        {t.stunden.toFixed(2)}
-                                      </td>
-                                      <td>
-                                        <Link
-                                          href={`/erfassung?datum=${t.datum}&employee=${u.employee_id}`}
-                                          className="btn-secondary text-xs"
-                                        >
-                                          In Stundenerfassung öffnen
-                                        </Link>
-                                      </td>
-                                    </tr>
-                                  ))}
-                              </tbody>
-                            </table>
+                            <div className="flex flex-col gap-3 p-2">
+                              {!canEditStunden && (
+                                <p className="text-xs text-amber-700">
+                                  Deine Rolle darf Stunden nicht bearbeiten -
+                                  nur zur Ansicht.
+                                </p>
+                              )}
+                              {ueberstundenFehler && (
+                                <p className="text-sm font-medium text-red-600">
+                                  ⚠ {ueberstundenFehler}
+                                </p>
+                              )}
+                              <table>
+                                <thead>
+                                  <tr>
+                                    <th>Datum</th>
+                                    <th>Stunden</th>
+                                  </tr>
+                                </thead>
+                                <tbody>
+                                  {[...u.tage]
+                                    .sort((a, b) => a.datum.localeCompare(b.datum))
+                                    .map((t) => {
+                                      const monat = Number(t.datum.slice(5, 7));
+                                      const tagGesperrt = gesperrteMonate.has(monat);
+                                      return (
+                                        <tr key={t.id}>
+                                          <td>
+                                            {formatDatumDE(t.datum)}
+                                            {tagGesperrt && (
+                                              <span
+                                                className="ml-1 text-xs text-amber-600"
+                                                title="Monat per Monatsabschluss gesperrt"
+                                              >
+                                                🔒
+                                              </span>
+                                            )}
+                                          </td>
+                                          <td>
+                                            <input
+                                              type="number"
+                                              min={0}
+                                              max={24}
+                                              step={0.25}
+                                              className="w-20 font-medium text-amber-600"
+                                              defaultValue={t.stunden}
+                                              key={`${t.id}-${t.version}`}
+                                              disabled={tagGesperrt || !canEditStunden}
+                                              onBlur={(e) =>
+                                                ueberstundenSpeichern(
+                                                  u.employee_id,
+                                                  t,
+                                                  e.target.value
+                                                )
+                                              }
+                                            />
+                                          </td>
+                                        </tr>
+                                      );
+                                    })}
+                                </tbody>
+                              </table>
+
+                              {(canStundenkontoBuchen || canStundenkontoAuszahlen) && (
+                                <div className="rounded border border-neutral-200 bg-white">
+                                  <StundenkontoBereich
+                                    employeeId={u.employee_id}
+                                    saisonJahr={jahr}
+                                    personLabel={`${u.name}, ${u.vorname}`}
+                                  />
+                                </div>
+                              )}
+                            </div>
                           </td>
                         </tr>
                       )}

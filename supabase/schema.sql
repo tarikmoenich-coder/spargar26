@@ -1205,7 +1205,12 @@ declare
   v_delta numeric;
   s season_summary%rowtype;
 begin
-  if current_role_name() not in ('admin', 'lohnabrechnung') then
+  -- Nutzer-Vorgabe 2026-08-21: hr und management dürfen "In Auszahlung
+  -- umwandeln" ebenfalls sehen/nutzen (nicht nur admin/lohnabrechnung wie
+  -- beim ursprünglichen Bau am 2026-08-20) - ausdrücklich NICHT
+  -- zeiterfassung. Muss exakt zu kannStundenkontoAuszahlen in
+  -- lib/stundenkontoRechte.ts passen.
+  if current_role_name() not in ('admin', 'hr', 'lohnabrechnung', 'management') then
     raise exception 'Keine Berechtigung, Stundenkonto in Auszahlung umzuwandeln';
   end if;
 

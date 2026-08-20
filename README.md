@@ -85,8 +85,10 @@ Enthalten:
   Bereich je Person zeigt den aktuellen Kontostand, ein Buchungsformular
   (Gutschrift/Korrektur/Freizeitausgleich - wie Stundenerfassung selbst
   admin/hr/zeiterfassung, ohne Lohnwirkung) und die letzten Buchungen.
-  "In Auszahlung umwandeln" (nur admin/lohnabrechnung, wie "Jetzt
-  Abrechnen") rechnet automatisch Stunden × Stundenlohn, bucht eine
+  "In Auszahlung umwandeln" (admin/hr/lohnabrechnung/management - Stand
+  2026-08-21 um hr/management erweitert, ausdrücklich NICHT
+  zeiterfassung; vorher nur admin/lohnabrechnung) rechnet automatisch
+  Stunden × Stundenlohn, bucht eine
   negative Bewegung und verhält sich dann wie eine Prämie: fließt live in
   Bruttolohn ein (normal lohnsteuerpflichtig), erscheint auf der
   Lohnübersicht aber als eigene Spalte "Zulage €" (Stand 2026-08-20
@@ -733,11 +735,22 @@ Enthalten:
   sensiblen Personaldaten
 - "Controlling"-Seite, Abschnitt "Stundenmonitoring": listet alle Personen
   mit mindestens einem Tag über 12,00 Stunden in der Stundenerfassung
-  (Saison-Jahr-Filter), aufklappbar je Person mit allen betroffenen Tagen
-  und einem Sprung-Link direkt zu Datum + Person in der Stundenerfassung.
+  (Saison-Jahr-Filter), aufklappbar je Person mit allen betroffenen Tagen.
   Der ganze Abschnitt ist zusätzlich als Ganzes ein-/ausklappbar (Stand
   2026-08-10, standardmäßig eingeklappt) - im eingeklappten Zustand nur
-  die Gesamtzahl "Anzahl Tage > 12 Std." über alle Personen
+  die Gesamtzahl "Anzahl Tage > 12 Std." über alle Personen. Stand
+  2026-08-21 (Nutzer-Vorgabe: "beschleunigt unsere Arbeit im Controlling
+  enorm"): das Stunden-Feld je Tag ist direkt hier bearbeitbar (ersetzt den
+  vorherigen Sprung-Link zur Stundenerfassung) - inkl. Monatsabschluss-
+  Sperre-Anzeige (🔒) und derselben optimistischen Sperre wie auf der
+  Stundenerfassung. Daneben, sofern berechtigt, dieselbe Stundenkonto-
+  Werkzeugleiste wie dort (Buchen/Umwandeln/Historie). Beide Seiten nutzen
+  jetzt dieselbe, geprüfte Speicherlogik (`lib/workEntrySpeichern.ts`) und
+  dieselbe Stundenkonto-Komponente (`components/StundenkontoBereich.tsx`)
+  statt zweimal gepflegten Code - Rollen zentral in
+  `lib/stundenkontoRechte.ts`. "In Auszahlung umwandeln" jetzt zusätzlich
+  für hr/management sichtbar (vorher nur admin/lohnabrechnung),
+  weiterhin NICHT für zeiterfassung
 - "Controlling"-Seite, Abschnitt "Abweichungen bei Auszahlungen": listet
   alle bereits abgerechneten Personen, deren Live-Berechnung inzwischen
   vom eingefrorenen Schnappschuss abweicht (das „⚠" von der
