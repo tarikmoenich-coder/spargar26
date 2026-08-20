@@ -47,6 +47,59 @@ function jetzigeSaison() {
   return new Date().getFullYear();
 }
 
+const WOCHENTAGE = [
+  "Montag",
+  "Dienstag",
+  "Mittwoch",
+  "Donnerstag",
+  "Freitag",
+  "Samstag",
+  "Sonntag",
+];
+
+// Reine Kalendertag-Arithmetik auf Basis von "YYYY-MM-DD" - bewusst über
+// UTC-Millisekunden statt lokaler Zeitzone (gleicher Fallstrick wie beim
+// xlsx-Datumsimport, siehe Erinnerung "xlsx-datum-timezone-bug" - eine
+// lokale Berechnung könnte je nach Zeitzone/Sommerzeit auf den falschen
+// Tag springen).
+function addTageIso(iso: string, delta: number): string {
+  const [j, m, t] = iso.split("-").map(Number);
+  const ms = Date.UTC(j, m - 1, t) + delta * 86400000;
+  return new Date(ms).toISOString().slice(0, 10);
+}
+
+// 0 = Montag ... 6 = Sonntag (deutsche Wochenordnung - JS selbst zählt
+// Sonntag als 0).
+function wochentagIndex(iso: string): number {
+  const [j, m, t] = iso.split("-").map(Number);
+  const jsTag = new Date(Date.UTC(j, m - 1, t)).getUTCDay();
+  return (jsTag + 6) % 7;
+}
+
+function montagDerWoche(iso: string): string {
+  return addTageIso(iso, -wochentagIndex(iso));
+}
+
+// "18.08." statt vollem Datum - die Spaltenüberschrift nennt bereits den
+// Wochentag, siehe WOCHENTAGE.
+function tagMonat(iso: string): string {
+  const [, m, t] = iso.split("-");
+  return `${t}.${m}.`;
+}
+
+// Nur für den Ausdruck (Nutzer-Vorgabe 2026-08-21): eine Zeile je
+// Kalenderwoche, eine Spalte je Wochentag, statt einer Zeile pro Arbeitstag
+// - bei einer vollen Saison sonst 100+ Zeilen.
+interface Wochentagzelle {
+  datum: string;
+  entry: WorkEntry | undefined;
+}
+interface Wochenzeile {
+  montag: string;
+  tage: Wochentagzelle[];
+  summe: number;
+}
+
 export default function SuchePage() {
   const { profile } = useProfile();
   const t = uebersetzung(profile?.sprache);
@@ -266,6 +319,32 @@ export default function SuchePage() {
   );
   const zuckermaisDruck = zuckermais.filter((z) => Number(z.praemie ?? 0) > 0);
   const erdbeerenDruck = erdbeeren.filter((e) => Number(e.praemie ?? 0) > 0);
+
+  // Wochenraster für den Ausdruck (Nutzer-Vorgabe 2026-08-21): eine Zeile
+  // je Kalenderwoche (Montag-Sonntag) von der ersten bis zur letzten
+  // tatsächlichen Buchung - nicht das ganze Kalenderjahr, sonst stünden
+  // Wochen vor Saisonbeginn/nach Saisonende leer mit da.
+  const stundenWochen = useMemo<Wochenzeile[]>(() => {
+    if (stundenDruck.length === 0) return [];
+    const byDatum = new Map(stundenDruck.map((e) => [e.datum, e]));
+    const daten = stundenDruck.map((e) => e.datum).sort();
+    const letzterTag = daten[daten.length - 1];
+    const wochen: Wochenzeile[] = [];
+    let montag = montagDerWoche(daten[0]);
+    while (montag <= letzterTag) {
+      const tage: Wochentagzelle[] = Array.from({ length: 7 }, (_, i) => {
+        const datum = addTageIso(montag, i);
+        return { datum, entry: byDatum.get(datum) };
+      });
+      const summe = tage.reduce(
+        (s, tag) => s + Number(tag.entry?.stunden ?? 0),
+        0
+      );
+      wochen.push({ montag, tage, summe });
+      montag = addTageIso(montag, 7);
+    }
+    return wochen;
+  }, [stundenDruck]);
 
   const jahreOptionen = Array.from(
     { length: 5 },
@@ -646,25 +725,39 @@ export default function SuchePage() {
           <h3 className="mt-4 text-base font-semibold">
             Arbeitsstunden ({stundenGesamt.toFixed(2)} Std. · {tageGesamt} Tage)
           </h3>
-          {stundenDruck.length === 0 ? (
+          {stundenWochen.length === 0 ? (
             <p className="mt-1 text-sm">Keine Einträge in diesem Jahr.</p>
           ) : (
-            <table className="mt-2 print-form-table print-dense-table">
+            <table className="mt-2 print-form-table print-dense-table print-wochenraster">
               <thead>
                 <tr>
-                  <th>Datum</th>
-                  <th>Std.</th>
-                  <th>Markierung</th>
-                  <th>Notiz</th>
+                  {WOCHENTAGE.map((w) => (
+                    <th key={w}>{w}</th>
+                  ))}
+                  <th>Summe</th>
                 </tr>
               </thead>
               <tbody>
-                {stundenDruck.map((e) => (
-                  <tr key={e.id}>
-                    <td>{formatDatumDE(e.datum)}</td>
-                    <td>{e.stunden ?? "—"}</td>
-                    <td>{e.markierung ?? "—"}</td>
-                    <td>{e.notiz ?? "—"}</td>
+                {stundenWochen.map((woche) => (
+                  <tr key={woche.montag}>
+                    {woche.tage.map((tag) => (
+                      <td key={tag.datum}>
+                        <div className="text-neutral-500">
+                          {tagMonat(tag.datum)}
+                        </div>
+                        <div>
+                          {tag.entry?.stunden != null
+                            ? Number(tag.entry.stunden).toFixed(2)
+                            : tag.entry?.markierung ?? "–"}
+                        </div>
+                        {tag.entry?.notiz && (
+                          <div className="italic text-neutral-500">
+                            {tag.entry.notiz}
+                          </div>
+                        )}
+                      </td>
+                    ))}
+                    <td className="font-semibold">{woche.summe.toFixed(2)}</td>
                   </tr>
                 ))}
               </tbody>

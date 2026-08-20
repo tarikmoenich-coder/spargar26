@@ -398,7 +398,13 @@ Enthalten:
   Auszahlungsliste (`.print-dense-table`), und Zeilen ohne jede Information
   fallen weg - Tage komplett ohne Eintrag bei den Arbeitsstunden,
   Prämientage mit 0 € bei Zuckermais/Erdbeeren (nur im Ausdruck, die
-  interaktive Ansicht bleibt vollständig)
+  interaktive Ansicht bleibt vollständig). Die Arbeitsstunden-Tabelle im
+  Ausdruck ist zusätzlich als echtes Wochenraster aufgebaut (Nutzer-Vorgabe
+  "jede Zeile eine Woche"): eine Zeile je Kalenderwoche (Montag-Sonntag)
+  von der ersten bis zur letzten Buchung, eine Spalte je Wochentag mit
+  Datum + Stunden (oder Markierung/Notiz, falls vorhanden) in der Zelle,
+  plus eine Wochensumme-Spalte am Ende jeder Zeile - bei einer vollen
+  Saison damit ca. 20 statt 150+ Zeilen
 - Freitext-Notiz je Tag auf der Stundenerfassung (z.B. "krank", "zu
   spät") - erscheint auch auf der "Suche"-Seite
 - 15-Wochen-Kontrolle (SV-Freiheit landwirtschaftliche Saisonarbeit,

@@ -122,3 +122,25 @@ input[type="number"]::-webkit-inner-spin-button {
     min-width: 2rem;
   }
 }
+
+/* Wochenraster für die gedruckte Arbeitsstunden-Übersicht (Nutzer-Vorgabe
+   2026-08-21: eine Zeile je Kalenderwoche, eine Spalte je Wochentag, statt
+   einer Zeile pro Arbeitstag - bei einer vollen Saison sonst 100+ Zeilen).
+   Alle Spalten sind gleichartige Tages-Zellen (kein Name/Text-Feld) -
+   überschreibt deshalb die Erste-zwei-Spalten-links-Regel von
+   .print-form-table, die hier nur stören würde. Drei Klassen gemeinsam
+   (.print-form-table.print-dense-table.print-wochenraster), damit die
+   Regel unabhängig von der Reihenfolge im Stylesheet sicher gewinnt. */
+@media print {
+  .print-form-table.print-dense-table.print-wochenraster th,
+  .print-form-table.print-dense-table.print-wochenraster td {
+    text-align: center;
+    vertical-align: top;
+  }
+  .print-form-table.print-dense-table.print-wochenraster
+    th:not(:first-child):not(:last-child),
+  .print-form-table.print-dense-table.print-wochenraster
+    td:not(:first-child):not(:last-child) {
+    min-width: 3.4rem;
+  }
+}
