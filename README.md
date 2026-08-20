@@ -89,7 +89,8 @@ Enthalten:
   Abrechnen") rechnet automatisch Stunden × Stundenlohn, bucht eine
   negative Bewegung und verhält sich dann wie eine Prämie: fließt live in
   Bruttolohn ein (normal lohnsteuerpflichtig), erscheint auf der
-  Lohnübersicht aber als eigene Spalte "Stundenkonto €" statt in der
+  Lohnübersicht aber als eigene Spalte "Zulage €" (Stand 2026-08-20
+  umbenannt, vorher "Stundenkonto €") statt in der
   Prämien-Summe. Ist die Person bereits abgerechnet, wird der eingefrorene
   Schnappschuss automatisch mit-aktualisiert und die Änderung wie eine
   Abrechnungs-Korrektur in "Kassenbewegungen" protokolliert (gesperrt bei
@@ -241,7 +242,12 @@ Enthalten:
   Änderungen verändern eine bereits ausgezahlte Abrechnung nicht mehr
   rückwirkend; Lohnübersicht warnt mit „⚠", falls die Live-Berechnung
   seither abweicht) und erzeugt eine druckbare Auszahlungsliste (mehrere
-  Personen, eine Zeile pro Person, mit Unterschriftenspalte). Nachträgliche
+  Personen, eine Zeile pro Person, mit Unterschriftenspalte - eigene, dichte
+  Druckformatierung seit 2026-08-20 (`.print-dense-table` in
+  `app/globals.css`), da die große Handschrift-Formatierung von
+  `.print-form-table` eigentlich für den Gruppenstundenzettel gedacht war
+  und die inzwischen 17-spaltige Liste selbst im Querformat nicht mehr auf
+  eine Seite passen ließ). Nachträgliche
   Korrektur eines falsch eingegebenen Netto-Betrags (Stand 2026-08-19,
   admin/lohnabrechnung): "korrigieren"-Link direkt im gesperrten
   Netto-Feld, Grund ist Pflichtfeld und wird protokolliert (wie

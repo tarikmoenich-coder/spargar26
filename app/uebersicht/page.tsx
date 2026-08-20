@@ -750,7 +750,7 @@ export default function UebersichtPage() {
                   className={FARBE_ZULAGE_TH}
                   title="Aus dem Stundenkonto in Auszahlung umgewandelte Stunden (Stundenerfassung → Stundenkonto) - bereits im Brutto enthalten, hier separat ausgewiesen"
                 >
-                  Stundenkonto €
+                  Zulage €
                 </th>
                 <th>Lohnsteuer (pauschal) €</th>
                 <th className={FARBE_NETTO_TH}>Netto €</th>
@@ -1241,7 +1241,7 @@ export default function UebersichtPage() {
             Datum: {formatDatumDE(new Date().toISOString())} · Anzahl
             Personen: {auszahlungslisteZeilen.length}
           </p>
-          <table className="mt-4 print-form-table">
+          <table className="mt-4 print-form-table print-dense-table">
             <thead>
               <tr>
                 <th>Pers.-Nr.</th>
@@ -1250,7 +1250,7 @@ export default function UebersichtPage() {
                 <th>Tage</th>
                 <th>Brutto €</th>
                 <th>Prämien €</th>
-                <th>Stundenkonto €</th>
+                <th>Zulage €</th>
                 <th>Steuer €</th>
                 <th>Netto €</th>
                 <th>Verpfl./Unterk. €</th>

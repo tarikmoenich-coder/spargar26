@@ -93,3 +93,32 @@ input[type="number"]::-webkit-inner-spin-button {
     min-width: 3.5rem;
   }
 }
+
+/* Dichte Variante für datenreiche Listen mit vielen Spalten (z.B. die
+   Auszahlungsliste, Stand 2026-08-20) - die große Handschrift-
+   Formatierung von .print-form-table (für den Gruppenstundenzettel
+   gedacht) ließ solche Tabellen selbst im Querformat nicht mehr auf eine
+   Seite passen, das Unterschriftenfeld rutschte auf Seite 2.
+   .print-form-table.print-dense-table (beide Klassen gemeinsam) statt nur
+   .print-dense-table, damit die Regel unabhängig von der Reihenfolge im
+   Stylesheet sicher gewinnt. */
+@media print {
+  .print-form-table.print-dense-table {
+    font-size: 8pt;
+  }
+  .print-form-table.print-dense-table th,
+  .print-form-table.print-dense-table td {
+    padding: 0.12rem 0.25rem;
+  }
+  .print-form-table.print-dense-table td {
+    height: auto;
+  }
+  .print-form-table.print-dense-table th:first-child,
+  .print-form-table.print-dense-table td:first-child {
+    min-width: 5rem;
+  }
+  .print-form-table.print-dense-table th:not(:first-child):not(:last-child),
+  .print-form-table.print-dense-table td:not(:first-child):not(:last-child) {
+    min-width: 2rem;
+  }
+}
