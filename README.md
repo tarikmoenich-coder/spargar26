@@ -392,7 +392,13 @@ Enthalten:
   "Stundenkonto"-Block (Saldo + alle Buchungen des gewählten Saisonjahrs,
   Datum/Stunden/Art/Notiz) - damit auch für die betroffene Person selbst
   transparent nachvollziehbar ist, wie viele Stunden auf dem Konto stehen,
-  auch im Ausdruck enthalten
+  auch im Ausdruck enthalten. Ausdruck ("Übersicht zum Aushändigen")
+  verschlankt (Stand 2026-08-21, Nutzer-Meldung "stark aufgebläht"): alle
+  fünf Tabellen nutzen jetzt dieselbe dichte Druckformatierung wie die
+  Auszahlungsliste (`.print-dense-table`), und Zeilen ohne jede Information
+  fallen weg - Tage komplett ohne Eintrag bei den Arbeitsstunden,
+  Prämientage mit 0 € bei Zuckermais/Erdbeeren (nur im Ausdruck, die
+  interaktive Ansicht bleibt vollständig)
 - Freitext-Notiz je Tag auf der Stundenerfassung (z.B. "krank", "zu
   spät") - erscheint auch auf der "Suche"-Seite
 - 15-Wochen-Kontrolle (SV-Freiheit landwirtschaftliche Saisonarbeit,

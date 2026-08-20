@@ -256,6 +256,17 @@ export default function SuchePage() {
     0
   );
 
+  // Nur für den Ausdruck (Nutzer-Vorgabe 2026-08-21: "stark aufgebläht") -
+  // die interaktive Ansicht bleibt unverändert vollständig. Tage ganz ohne
+  // Eintrag (gleiche Bedingung wie tageGesamt oben) bzw. Prämientage mit
+  // 0 € tragen für ein Aushändigungs-Blatt keine Information bei und
+  // blähen bei einer vollen Saison nur unnötig die Seitenzahl auf.
+  const stundenDruck = stunden.filter(
+    (e) => e.stunden !== null || e.markierung !== null
+  );
+  const zuckermaisDruck = zuckermais.filter((z) => Number(z.praemie ?? 0) > 0);
+  const erdbeerenDruck = erdbeeren.filter((e) => Number(e.praemie ?? 0) > 0);
+
   const jahreOptionen = Array.from(
     { length: 5 },
     (_, i) => jetzigeSaison() - i
@@ -635,10 +646,10 @@ export default function SuchePage() {
           <h3 className="mt-4 text-base font-semibold">
             Arbeitsstunden ({stundenGesamt.toFixed(2)} Std. · {tageGesamt} Tage)
           </h3>
-          {stunden.length === 0 ? (
+          {stundenDruck.length === 0 ? (
             <p className="mt-1 text-sm">Keine Einträge in diesem Jahr.</p>
           ) : (
-            <table className="mt-2 print-form-table">
+            <table className="mt-2 print-form-table print-dense-table">
               <thead>
                 <tr>
                   <th>Datum</th>
@@ -648,7 +659,7 @@ export default function SuchePage() {
                 </tr>
               </thead>
               <tbody>
-                {stunden.map((e) => (
+                {stundenDruck.map((e) => (
                   <tr key={e.id}>
                     <td>{formatDatumDE(e.datum)}</td>
                     <td>{e.stunden ?? "—"}</td>
@@ -666,7 +677,7 @@ export default function SuchePage() {
           {vorschussZeilen.length === 0 ? (
             <p className="mt-1 text-sm">Keine Vorschüsse erfasst.</p>
           ) : (
-            <table className="mt-2 print-form-table">
+            <table className="mt-2 print-form-table print-dense-table">
               <thead>
                 <tr>
                   <th>Datum</th>
@@ -700,7 +711,7 @@ export default function SuchePage() {
           {stundenkontoBewegungen.length === 0 ? (
             <p className="mt-1 text-sm">Keine Buchungen für {saisonJahr}.</p>
           ) : (
-            <table className="mt-2 print-form-table">
+            <table className="mt-2 print-form-table print-dense-table">
               <thead>
                 <tr>
                   <th>Datum</th>
@@ -725,12 +736,12 @@ export default function SuchePage() {
             </table>
           )}
 
-          {zuckermais.length > 0 && (
+          {zuckermaisDruck.length > 0 && (
             <>
               <h3 className="mt-6 text-base font-semibold">
                 Zuckermais-Prämien ({zuckermaisGesamt.toFixed(2)} € gesamt)
               </h3>
-              <table className="mt-2 print-form-table">
+              <table className="mt-2 print-form-table print-dense-table">
                 <thead>
                   <tr>
                     <th>Datum</th>
@@ -741,7 +752,7 @@ export default function SuchePage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {zuckermais.map((z) => (
+                  {zuckermaisDruck.map((z) => (
                     <tr key={z.id}>
                       <td>{formatDatumDE(z.datum)}</td>
                       <td>{z.kisten}</td>
@@ -760,12 +771,12 @@ export default function SuchePage() {
             </>
           )}
 
-          {erdbeeren.length > 0 && (
+          {erdbeerenDruck.length > 0 && (
             <>
               <h3 className="mt-6 text-base font-semibold">
                 Erdbeeren-Prämien ({erdbeerenGesamt.toFixed(2)} € gesamt)
               </h3>
-              <table className="mt-2 print-form-table">
+              <table className="mt-2 print-form-table print-dense-table">
                 <thead>
                   <tr>
                     <th>Datum</th>
@@ -777,7 +788,7 @@ export default function SuchePage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {erdbeeren.map((e) => (
+                  {erdbeerenDruck.map((e) => (
                     <tr key={e.id}>
                       <td>{formatDatumDE(e.datum)}</td>
                       <td>{e.parzelle_name}</td>
