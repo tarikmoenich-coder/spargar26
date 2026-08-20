@@ -35,6 +35,11 @@ const ABWEICHUNGS_FELDER: {
   { key: "gesamt_stunden", label: "Stunden", eur: false },
   { key: "anwesenheitstage", label: "Anwesenheitstage", eur: false },
   { key: "praemien_summe", label: "Prämien", eur: true },
+  {
+    key: "stundenkonto_auszahlung_betrag",
+    label: "Stundenkonto-Auszahlung",
+    eur: true,
+  },
   { key: "bruttolohn", label: "Bruttolohn", eur: true },
   { key: "abzug_verpflegung", label: "Verpflegung", eur: true },
   { key: "abzug_wohnen", label: "Unterkunft", eur: true },
@@ -160,6 +165,10 @@ export default function ManagementPage() {
     EmployeeUrlaubstage[]
   >([]);
   const [loadingUrlaub, setLoadingUrlaub] = useState(true);
+  // Umgekehrte Richtung (Nutzer-Vorgabe 2026-08-20): der eigentliche Use
+  // Case ist zu WENIG genommener Urlaub, nicht zu viel.
+  const [resturlaub, setResturlaub] = useState<EmployeeUrlaubstage[]>([]);
+  const [loadingResturlaub, setLoadingResturlaub] = useState(true);
 
   // Personen, die schon arbeiten, obwohl auf der Anreiseliste noch etwas
   // offen ist (Nutzer-Vorgabe 2026-08-11).
@@ -321,6 +330,22 @@ export default function ManagementPage() {
       setLoadingUrlaub(false);
     }
     loadUrlaub();
+  }, [jahr]);
+
+  useEffect(() => {
+    async function loadResturlaub() {
+      setLoadingResturlaub(true);
+      const supabase = getSupabaseClient();
+      const { data, error } = await supabase
+        .from("employee_urlaubstage")
+        .select("*")
+        .eq("saison_jahr", jahr)
+        .eq("zu_wenig_genommen", true)
+        .order("resturlaub_tage", { ascending: false });
+      if (!error) setResturlaub((data as EmployeeUrlaubstage[]) ?? []);
+      setLoadingResturlaub(false);
+    }
+    loadResturlaub();
   }, [jahr]);
 
   return (
@@ -925,6 +950,107 @@ export default function ManagementPage() {
                 ))}
               </tbody>
             </table>
+          </div>
+        )}
+      </div>
+
+      <div>
+        <h2 className="mb-2 text-base font-semibold text-emerald-800">
+          Resturlaub (zu wenig genommen)
+        </h2>
+        <p className="mb-2 text-sm text-neutral-500">
+          Gleicher Anspruch wie oben (2 Tage je vollem Kalendermonat) - hier
+          Personen, bei denen weniger "U"-Tage erfasst wurden als der
+          Anspruch hergibt. Bei bereits inaktiven Personen bedeutet das in
+          der Regel eine Abgeltungspflicht (Auszahlung des Resturlaubs),
+          nicht nur eine Erinnerung.
+        </p>
+        {loadingResturlaub ? (
+          <p className="text-neutral-500">Lädt…</p>
+        ) : resturlaub.length === 0 ? (
+          <p className="text-neutral-500">
+            Kein offener Resturlaub für {jahr}.
+          </p>
+        ) : (
+          <div className="flex flex-col gap-4">
+            {resturlaub.some((u) => !u.aktiv) && (
+              <div className="overflow-x-auto">
+                <h3 className="mb-1 text-sm font-semibold text-red-700">
+                  ⚠ Inaktiv - Abgeltung fällig
+                </h3>
+                <table>
+                  <thead>
+                    <tr>
+                      <th>Pers.-Nr.</th>
+                      <th>Name</th>
+                      <th>1. Eintrag</th>
+                      <th>Letzter Eintrag</th>
+                      <th>Volle Kalendermonate</th>
+                      <th>Anspruch (Tage)</th>
+                      <th>Genommen ("U", Tage)</th>
+                      <th>Resturlaub</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {resturlaub
+                      .filter((u) => !u.aktiv)
+                      .map((u) => (
+                        <tr key={u.employee_id} className="bg-red-50">
+                          <td>{u.personal_nr}</td>
+                          <td>{u.name}, {u.vorname}</td>
+                          <td>{formatDatumDE(u.erster_eintrag)}</td>
+                          <td>{formatDatumDE(u.letzter_eintrag)}</td>
+                          <td>{u.volle_kalendermonate}</td>
+                          <td>{u.urlaubsanspruch_tage}</td>
+                          <td>{u.u_tage}</td>
+                          <td className="font-medium text-red-600">
+                            ⚠ {u.resturlaub_tage} Tag(e) - Abgeltung fällig
+                          </td>
+                        </tr>
+                      ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+            {resturlaub.some((u) => u.aktiv) && (
+              <div className="overflow-x-auto">
+                <h3 className="mb-1 text-sm font-semibold text-neutral-700">
+                  Aktiv - kann noch genommen werden
+                </h3>
+                <table>
+                  <thead>
+                    <tr>
+                      <th>Pers.-Nr.</th>
+                      <th>Name</th>
+                      <th>1. Eintrag</th>
+                      <th>Letzter Eintrag</th>
+                      <th>Volle Kalendermonate</th>
+                      <th>Anspruch (Tage)</th>
+                      <th>Genommen ("U", Tage)</th>
+                      <th>Resturlaub</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {resturlaub
+                      .filter((u) => u.aktiv)
+                      .map((u) => (
+                        <tr key={u.employee_id}>
+                          <td>{u.personal_nr}</td>
+                          <td>{u.name}, {u.vorname}</td>
+                          <td>{formatDatumDE(u.erster_eintrag)}</td>
+                          <td>{formatDatumDE(u.letzter_eintrag)}</td>
+                          <td>{u.volle_kalendermonate}</td>
+                          <td>{u.urlaubsanspruch_tage}</td>
+                          <td>{u.u_tage}</td>
+                          <td className="font-medium text-amber-600">
+                            {u.resturlaub_tage} Tag(e) offen
+                          </td>
+                        </tr>
+                      ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
           </div>
         )}
       </div>

@@ -286,6 +286,10 @@ export interface EmployeeUrlaubstage {
   volle_kalendermonate: number;
   urlaubsanspruch_tage: number;
   ueberzogen: boolean;
+  // Umgekehrte Richtung (2026-08-20) - offener Resturlaub, bei einer
+  // bereits inaktiven Person praktisch eine Abgeltungspflicht.
+  resturlaub_tage: number;
+  zu_wenig_genommen: boolean;
 }
 
 // Ein Frageblock 8 - Zeile ("Bisherige Beschäftigungen im laufenden
@@ -512,6 +516,33 @@ export interface SeasonSummaryRow {
   // z.B. Kantine noch nicht geöffnet) - reduziert nur abzug_verpflegung,
   // nicht anwesenheitstage/abzug_wohnen.
   verpflegungsfreie_tage: number;
+  // Kumulierte Summe aller "in Auszahlung umgewandelten" Stundenkonto-
+  // Buchungen (2026-08-20) - bereits in bruttolohn enthalten, hier nur zur
+  // separaten Anzeige.
+  stundenkonto_auszahlung_betrag: number;
+}
+
+// Stundenkonto (2026-08-20): laufendes Konto je Mitarbeiter/Saison-Jahr für
+// Überstunden & Co., unabhängig vom gewählten Datum auf der
+// Stundenerfassung pflegbar. Bewegungs-Log statt Einzelfeld, siehe
+// schema.sql.
+export interface StundenkontoBewegung {
+  id: number;
+  employee_id: string;
+  saison_jahr: number;
+  datum: string;
+  stunden: number;
+  art: "Gutschrift" | "Korrektur" | "Freizeitausgleich" | "Auszahlung";
+  notiz: string | null;
+  erstellt_von: string | null;
+  erstellt_am: string;
+}
+
+// Aus der Sicht employee_stundenkonto_saldo - aktueller Kontostand.
+export interface EmployeeStundenkontoSaldo {
+  employee_id: string;
+  saison_jahr: number;
+  saldo: number;
 }
 
 // Monats-Ansicht für den Monatsfilter auf der Lohnübersicht (Monats-

@@ -1042,6 +1042,13 @@ create table season_bonuses (
   -- (die bleiben für Stunden/Unterkunft unverändert). Unterkunft bewusst
   -- nicht betroffen - hier ging es ausdrücklich nur um die Kantine.
   verpflegungsfreie_tage int not null default 0,
+  -- Kumulierte Summe aller "in Auszahlung umgewandelten" Stundenkonto-
+  -- Buchungen dieser Saison (Nutzer-Vorgabe 2026-08-20, siehe
+  -- stundenkonto_bewegungen/stundenkonto_in_auszahlung_umwandeln weiter
+  -- unten) - fließt wie eine Prämie live in bruttolohn ein (also normal
+  -- lohnsteuerpflichtig), erscheint auf der Lohnübersicht aber als eigene
+  -- Spalte statt in der Prämien-Summe.
+  stundenkonto_auszahlung_betrag numeric(10, 2) not null default 0,
   -- "Jetzt Abrechnen" auf der Lohnübersicht (pro Saison-Jahr, nicht
   -- permanent - damit eine Wiederkehr in der nächsten Saison nicht mit
   -- dieser Markierung kollidiert).
@@ -1059,6 +1066,204 @@ create table season_bonuses (
   updated_at timestamptz not null default now(),
   unique (employee_id, saison_jahr)
 );
+
+-- ---------------------------------------------------------------------------
+-- 5a. Stundenkonto (Nutzer-Vorgabe 2026-08-20): laufendes Konto je
+--     Mitarbeiter/Saison-Jahr für Überstunden & Co., unabhängig vom gerade
+--     gewählten Datum auf der Stundenerfassung pflegbar. Bewegungs-Log
+--     statt Einzelfeld (wie kassenbewegungen) - der Kontostand ist die
+--     Summe aller Bewegungen, siehe employee_stundenkonto_saldo unten.
+--     Vier Arten:
+--       'Gutschrift'        - Stunden werden dem Konto gutgeschrieben
+--       'Korrektur'         - Tippfehler o.ä. richtigstellen, kein
+--                              Saldo-Check (bewusste Ausnahme)
+--       'Freizeitausgleich' - Stunden werden in freie Tage umgewandelt,
+--                              keine Lohnwirkung
+--       'Auszahlung'        - Stunden werden ausgezahlt, siehe
+--                              stundenkonto_in_auszahlung_umwandeln unten
+--     'Freizeitausgleich' und 'Auszahlung' dürfen den Saldo nicht negativ
+--     werden lassen. Schreibrechte für 'Gutschrift'/'Korrektur'/
+--     'Freizeitausgleich' wie work_entries (admin/hr/zeiterfassung) -
+--     'Auszahlung' ausschließlich über die eigene, admin/lohnabrechnung-
+--     beschränkte Funktion (erzeugt zusätzlich einen echten
+--     Lohnbestandteil, siehe season_bonuses.stundenkonto_auszahlung_betrag
+--     oben). Wie bei auszahlungsbelege/saison_abrechnungen deshalb bewusst
+--     KEINE Schreib-Policy auf der Tabelle selbst - nur die beiden
+--     security-definer Funktionen unten dürfen schreiben.
+-- ---------------------------------------------------------------------------
+create table stundenkonto_bewegungen (
+  id bigint generated always as identity primary key,
+  employee_id uuid not null references employees (id) on delete restrict,
+  saison_jahr int not null,
+  datum date not null default current_date,
+  stunden numeric(6, 2) not null check (stunden <> 0),
+  art text not null
+    check (art in ('Gutschrift', 'Korrektur', 'Freizeitausgleich', 'Auszahlung')),
+  notiz text,
+  erstellt_von uuid references profiles (id) default auth.uid(),
+  erstellt_am timestamptz not null default now()
+);
+
+create index idx_stundenkonto_bewegungen_employee
+  on stundenkonto_bewegungen (employee_id, saison_jahr);
+
+-- Aktueller Kontostand je Mitarbeiter/Saison-Jahr - security_invoker
+-- unbedenklich, stundenkonto_bewegungen ist per RLS ohnehin für jede
+-- angemeldete Rolle lesbar (wie work_entries).
+create or replace view employee_stundenkonto_saldo as
+select employee_id, saison_jahr, sum(stunden) as saldo
+from stundenkonto_bewegungen
+group by employee_id, saison_jahr;
+
+alter view employee_stundenkonto_saldo set (security_invoker = true);
+grant select on employee_stundenkonto_saldo to authenticated;
+
+-- Bucht Gutschrift/Korrektur/Freizeitausgleich - alles ohne unmittelbare
+-- Lohnwirkung, deshalb dieselben Rechte wie die Stundenerfassung selbst.
+create or replace function stundenkonto_buchen(
+  p_employee_id uuid,
+  p_saison_jahr int,
+  p_datum date,
+  p_stunden numeric,
+  p_art text,
+  p_notiz text
+)
+returns void language plpgsql security definer as $$
+declare
+  v_saldo numeric;
+begin
+  if current_role_name() not in ('admin', 'hr', 'zeiterfassung') then
+    raise exception 'Keine Berechtigung für das Stundenkonto';
+  end if;
+
+  if p_stunden is null or p_stunden = 0 then
+    raise exception 'Bitte eine Stundenzahl ungleich 0 angeben';
+  end if;
+
+  if p_art = 'Gutschrift' and p_stunden <= 0 then
+    raise exception 'Eine Gutschrift muss positiv sein';
+  elsif p_art = 'Freizeitausgleich' then
+    if p_stunden >= 0 then
+      raise exception 'Freizeitausgleich muss als negative Stundenzahl gebucht werden';
+    end if;
+    select coalesce(sum(stunden), 0) into v_saldo
+    from stundenkonto_bewegungen
+    where employee_id = p_employee_id and saison_jahr = p_saison_jahr;
+    if -p_stunden > v_saldo then
+      raise exception 'Nicht genug Stunden auf dem Stundenkonto (aktueller Saldo: % Std.)', v_saldo;
+    end if;
+  elsif p_art <> 'Korrektur' then
+    raise exception 'Ungültige Art - Auszahlung nur über die dafür vorgesehene Funktion';
+  end if;
+
+  insert into stundenkonto_bewegungen (employee_id, saison_jahr, datum, stunden, art, notiz)
+  values (p_employee_id, p_saison_jahr, coalesce(p_datum, current_date), p_stunden, p_art, p_notiz);
+end;
+$$;
+
+grant execute on function stundenkonto_buchen(uuid, int, date, numeric, text, text) to authenticated;
+
+-- Wandelt einen Teil des Stundenkonto-Saldos in eine Auszahlung um - admin/
+-- lohnabrechnung wie "Jetzt Abrechnen" (echter Lohnbestandteil). Rechnet
+-- automatisch Stunden × Stundenlohn, bucht eine negative Bewegung und
+-- erhöht season_bonuses.stundenkonto_auszahlung_betrag (kumulativ - mehrere
+-- Umwandlungen je Saison möglich). Ist die Person bereits abgerechnet,
+-- wird zusätzlich der eingefrorene Schnappschuss aktualisiert und die
+-- Änderung protokolliert - exakt dasselbe Muster wie
+-- abrechnung_korrigieren (Sperre bei bereits freigegebener
+-- Kassenprüfung, Eintrag in kassenbewegungen).
+create or replace function stundenkonto_in_auszahlung_umwandeln(
+  p_employee_id uuid,
+  p_saison_jahr int,
+  p_stunden numeric,
+  p_notiz text
+)
+-- Gibt den berechneten Auszahlungsbetrag zurück (Stunden × Stundenlohn) -
+-- so muss das Frontend employees.stundenlohn nicht selbst laden/anzeigen
+-- (auf der Stundenerfassung sonst nur schmal für zeiterfassung geladen,
+-- siehe employees-Select-Grant-Vorfall).
+returns numeric language plpgsql security definer as $$
+declare
+  v_saldo numeric;
+  v_stundenlohn numeric;
+  v_betrag numeric;
+  v_abgerechnet_am timestamptz;
+  v_belegnummer text;
+  v_zahlungsart text;
+  v_alter_betrag numeric;
+  v_neuer_betrag numeric;
+  v_delta numeric;
+  s season_summary%rowtype;
+begin
+  if current_role_name() not in ('admin', 'lohnabrechnung') then
+    raise exception 'Keine Berechtigung, Stundenkonto in Auszahlung umzuwandeln';
+  end if;
+
+  if p_stunden is null or p_stunden <= 0 then
+    raise exception 'Bitte eine Stundenzahl größer als 0 angeben';
+  end if;
+
+  select coalesce(sum(stunden), 0) into v_saldo
+  from stundenkonto_bewegungen
+  where employee_id = p_employee_id and saison_jahr = p_saison_jahr;
+
+  if p_stunden > v_saldo then
+    raise exception 'Nicht genug Stunden auf dem Stundenkonto (aktueller Saldo: % Std.)', v_saldo;
+  end if;
+
+  select stundenlohn into v_stundenlohn from employees where id = p_employee_id;
+  v_betrag := round(p_stunden * coalesce(v_stundenlohn, 0), 2);
+
+  select b.abgerechnet_am, ab.belegnummer, ab.zahlungsart
+    into v_abgerechnet_am, v_belegnummer, v_zahlungsart
+  from season_bonuses b
+  left join auszahlungsbelege ab on ab.id = b.auszahlungsbeleg_id
+  where b.employee_id = p_employee_id and b.saison_jahr = p_saison_jahr;
+
+  if v_abgerechnet_am is not null and ist_kassenpruefung_gesperrt(v_abgerechnet_am) then
+    raise exception 'Dieser Auszahlungsbeleg gehört zu einer bereits freigegebenen Kassenprüfung und kann nicht mehr geändert werden. Bitte zunächst die Kassenprüfung im Kassenbuch wiedereröffnen.';
+  end if;
+
+  if v_abgerechnet_am is not null then
+    select (snapshot ->> 'auszahlungsbetrag')::numeric into v_alter_betrag
+    from season_bonuses
+    where employee_id = p_employee_id and saison_jahr = p_saison_jahr;
+  end if;
+
+  insert into stundenkonto_bewegungen (employee_id, saison_jahr, stunden, art, notiz)
+  values (p_employee_id, p_saison_jahr, -p_stunden, 'Auszahlung', p_notiz);
+
+  insert into season_bonuses (employee_id, saison_jahr, stundenkonto_auszahlung_betrag)
+  values (p_employee_id, p_saison_jahr, v_betrag)
+  on conflict (employee_id, saison_jahr)
+  do update set stundenkonto_auszahlung_betrag =
+    season_bonuses.stundenkonto_auszahlung_betrag + v_betrag;
+
+  if v_abgerechnet_am is not null then
+    select * into s from season_summary
+    where employee_id = p_employee_id and saison_jahr = p_saison_jahr;
+
+    v_neuer_betrag := s.auszahlungsbetrag;
+    v_delta := coalesce(v_neuer_betrag, 0) - coalesce(v_alter_betrag, 0);
+
+    update season_bonuses
+    set snapshot = to_jsonb(s) - 'snapshot'
+    where employee_id = p_employee_id and saison_jahr = p_saison_jahr;
+
+    if v_belegnummer is not null then
+      insert into kassenbewegungen (art, belegnummer, delta, zahlungsart, bearbeiter_id, hinweis)
+      values (
+        'Stundenkonto-Auszahlung', v_belegnummer, v_delta, v_zahlungsart, auth.uid(),
+        coalesce(p_notiz || ' - ', '') || p_stunden || ' Std. umgewandelt'
+      );
+    end if;
+  end if;
+
+  return v_betrag;
+end;
+$$;
+
+grant execute on function stundenkonto_in_auszahlung_umwandeln(uuid, int, numeric, text) to authenticated;
 
 -- ---------------------------------------------------------------------------
 -- Historie aller Abrechnungen je Person und Saison (Nutzer-Vorgabe
@@ -2906,7 +3111,12 @@ with base as (
       + coalesce(b.erdbeer_praemie, 0)
       + coalesce(b.spargel_praemie, 0)
       + coalesce(zm.zuckermais_praemie_summe, 0)
-      + coalesce(eb.erdbeeren_praemie_summe, 0) as bruttolohn,
+      + coalesce(eb.erdbeeren_praemie_summe, 0)
+      -- Nutzer-Vorgabe 2026-08-20: verhält sich wie eine Prämie (fließt in
+      -- Bruttolohn ein, normal lohnsteuerpflichtig), erscheint aber als
+      -- eigene Spalte statt in praemien_summe eingerechnet zu werden.
+      + coalesce(b.stundenkonto_auszahlung_betrag, 0) as bruttolohn,
+    coalesce(b.stundenkonto_auszahlung_betrag, 0) as stundenkonto_auszahlung_betrag,
     b.netto_extern,
     b.abgerechnet_am,
     b.snapshot,
@@ -3015,7 +3225,8 @@ select
     - steuer.zimmer_kaution - steuer.kleidung_betrag
     as auszahlungsbetrag,
   steuer.kleidung_betrag,
-  steuer.verpflegungsfreie_tage
+  steuer.verpflegungsfreie_tage,
+  steuer.stundenkonto_auszahlung_betrag
 from steuer
 -- Sicherheitsfix 2026-08-12 (Supabase-Advisor "Security Definer View"):
 -- diese Sicht liest bewusst mit den Rechten des Eigentümers (u.a.
@@ -3414,6 +3625,9 @@ grant select on employee_sv_pruefung to authenticated;
 --       da nur Juni ein voller Monat ist). "U"-markierte Tage sind die
 --       tatsächlich genommenen Urlaubstage - "ueberzogen" markiert, wenn
 --       mehr U-Tage erfasst wurden als der Anspruch hergibt.
+--       resturlaub_tage/zu_wenig_genommen (2026-08-20, Nutzer-Vorgabe:
+--       "der Use Case ist eigentlich, dass zu wenig Urlaub genommen
+--       wird") - die umgekehrte Richtung, offener Resturlaub.
 -- ---------------------------------------------------------------------------
 create or replace view employee_urlaubstage as
 select
@@ -3428,7 +3642,12 @@ select
   w.u_tage,
   greatest(0, monate.anzahl)::int as volle_kalendermonate,
   greatest(0, monate.anzahl)::int * 2 as urlaubsanspruch_tage,
-  (w.u_tage > greatest(0, monate.anzahl) * 2) as ueberzogen
+  (w.u_tage > greatest(0, monate.anzahl) * 2) as ueberzogen,
+  -- Nutzer-Vorgabe 2026-08-20: der Hauptfall ist eigentlich zu WENIG
+  -- genommener Urlaub (bisher wurde nur "zu viel" geprüft) - offener Rest,
+  -- bei einer bereits inaktiven Person praktisch eine Abgeltungspflicht.
+  greatest(0, greatest(0, monate.anzahl)::int * 2 - w.u_tage) as resturlaub_tage,
+  (w.u_tage < greatest(0, monate.anzahl) * 2) as zu_wenig_genommen
 from employees e
 join lateral (
   select
@@ -3660,6 +3879,7 @@ alter table employees enable row level security;
 alter table work_entries enable row level security;
 alter table periods enable row level security;
 alter table season_bonuses enable row level security;
+alter table stundenkonto_bewegungen enable row level security;
 alter table saison_abrechnungen enable row level security;
 alter table auszahlungsbelege enable row level security;
 alter table kautionsuebergaben enable row level security;
@@ -3795,6 +4015,13 @@ create policy "work_entries_update" on work_entries for update
         and p.gesperrt = true
     )
   );
+
+-- stundenkonto_bewegungen: wie work_entries breit lesbar - Schreiben
+-- ausschließlich über stundenkonto_buchen/stundenkonto_in_auszahlung_
+-- umwandeln (keine Schreib-Policy auf der Tabelle selbst, siehe Kommentar
+-- dort).
+create policy "stundenkonto_bewegungen_select" on stundenkonto_bewegungen for select
+  using (auth.uid() is not null);
 
 -- periods (Monatsabschluss): admin/hr sperren/entsperren, alle lesen.
 create policy "periods_select" on periods for select using (auth.uid() is not null);

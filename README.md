@@ -79,6 +79,23 @@ Enthalten:
   fehlgeschlagener Speicherversuch (z.B. weil jemand anders denselben
   Eintrag zwischenzeitlich geändert hat) zeigt jetzt ebenfalls einen
   Hinweis, statt die Eingabe kommentarlos zu verwerfen
+- "Stundenkonto" (Stand 2026-08-20, Nutzer-Vorgabe): eigene, immer
+  sichtbare Spalte in der Stundenerfassung, unabhängig vom gerade
+  gewählten Tag (nur das Jahr bestimmt die Saison). Ein aufklappbarer
+  Bereich je Person zeigt den aktuellen Kontostand, ein Buchungsformular
+  (Gutschrift/Korrektur/Freizeitausgleich - wie Stundenerfassung selbst
+  admin/hr/zeiterfassung, ohne Lohnwirkung) und die letzten Buchungen.
+  "In Auszahlung umwandeln" (nur admin/lohnabrechnung, wie "Jetzt
+  Abrechnen") rechnet automatisch Stunden × Stundenlohn, bucht eine
+  negative Bewegung und verhält sich dann wie eine Prämie: fließt live in
+  Bruttolohn ein (normal lohnsteuerpflichtig), erscheint auf der
+  Lohnübersicht aber als eigene Spalte "Stundenkonto €" statt in der
+  Prämien-Summe. Ist die Person bereits abgerechnet, wird der eingefrorene
+  Schnappschuss automatisch mit-aktualisiert und die Änderung wie eine
+  Abrechnungs-Korrektur in "Kassenbewegungen" protokolliert (gesperrt bei
+  bereits freigegebener Kassenprüfung). Bewegungs-Log statt Einzelfeld -
+  der Kontostand ist die Summe aller Buchungen, kein negativer Saldo
+  möglich (außer bei "Korrektur", bewusste Ausnahme ohne Saldo-Prüfung)
 - "Stundenerfassung → Import" (admin/hr/zeiterfassung): Excel-/CSV-Import
   zum Nacherfassen mehrerer Tage/Personen auf einmal - anderes Format als
   der Personal-Import: Spalte 1 = Personalnummer, ab Spalte 2 je eine
@@ -722,7 +739,14 @@ Enthalten:
   Beschäftigung Monatsanfang UND -ende dieses Monats abdeckt (z.B.
   02.05.-29.07. ergibt nur 2 Tage, da nur Juni ein voller Monat ist).
   Listet Personen, bei denen mehr "U"-markierte Tage erfasst wurden als
-  der berechnete Anspruch hergibt
+  der berechnete Anspruch hergibt. Zweiter Block "Resturlaub" (Stand
+  2026-08-20, Nutzer-Vorgabe: "der eigentliche Use Case ist zu wenig
+  genommener Urlaub") - gleicher Anspruch, umgekehrte Richtung: Personen,
+  bei denen weniger "U"-Tage erfasst wurden als der Anspruch hergibt.
+  Bereits inaktive Personen werden separat und hervorgehoben als
+  "Abgeltung fällig" gelistet (unused Resturlaub muss bei Beendigung in
+  der Regel ausgezahlt werden), aktive Personen normal ("kann noch
+  genommen werden")
 - Farbschema auf Lohnübersicht und Auszahlungen (Stand 2026-08-09, reine
   Optik, keine Funktionsänderung): Brutto-Spalte durchgehend hellbraun,
   Netto-Spalte durchgehend hellgrau (Kopf + Zellen); die Überschriften von

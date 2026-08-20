@@ -746,6 +746,12 @@ export default function UebersichtPage() {
                 >
                   Prämien €
                 </th>
+                <th
+                  className={FARBE_ZULAGE_TH}
+                  title="Aus dem Stundenkonto in Auszahlung umgewandelte Stunden (Stundenerfassung → Stundenkonto) - bereits im Brutto enthalten, hier separat ausgewiesen"
+                >
+                  Stundenkonto €
+                </th>
                 <th>Lohnsteuer (pauschal) €</th>
                 <th className={FARBE_NETTO_TH}>Netto €</th>
                 <th className={FARBE_ABZUG_TH}>Verpfl./Unterkunft €</th>
@@ -808,6 +814,7 @@ export default function UebersichtPage() {
                     {fmt(anzeige(r, "bruttolohn"))}
                   </td>
                   <td>{fmt(anzeige(r, "praemien_summe"))}</td>
+                  <td>{fmt(anzeige(r, "stundenkonto_auszahlung_betrag"))}</td>
                   <td>{fmt(anzeige(r, "lohnsteuer_pauschal"))}</td>
                   <td className={FARBE_NETTO_TD}>
                     {r.abrechnungsart === "pauschal" || !canEdit ? (
@@ -1243,6 +1250,7 @@ export default function UebersichtPage() {
                 <th>Tage</th>
                 <th>Brutto €</th>
                 <th>Prämien €</th>
+                <th>Stundenkonto €</th>
                 <th>Steuer €</th>
                 <th>Netto €</th>
                 <th>Verpfl./Unterk. €</th>
@@ -1266,6 +1274,7 @@ export default function UebersichtPage() {
                   <td>{anzeige(r, "anwesenheitstage") ?? "—"}</td>
                   <td>{fmt(anzeige(r, "bruttolohn"))}</td>
                   <td>{fmt(anzeige(r, "praemien_summe"))}</td>
+                  <td>{fmt(anzeige(r, "stundenkonto_auszahlung_betrag"))}</td>
                   <td>{fmt(anzeige(r, "lohnsteuer_pauschal"))}</td>
                   <td>{fmt(anzeige(r, "netto"))}</td>
                   <td>
