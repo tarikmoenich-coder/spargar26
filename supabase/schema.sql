@@ -1485,9 +1485,29 @@ declare
   v_war_abgerechnet boolean;
   v_voller_stand jsonb;
   v_zeile jsonb;
+  v_fehlende_namen text;
 begin
   if current_role_name() not in ('admin', 'lohnabrechnung') then
     raise exception 'Keine Berechtigung für "Jetzt Abrechnen"';
+  end if;
+
+  -- Nutzer-Vorgabe 2026-08-21: "ich habe vergessen, den Netto-Betrag aus
+  -- dem Lohnprogramm einzugeben" (mehrfach passiert) - blockiert das
+  -- gesamte Abrechnen, wenn mindestens eine ausgewählte Person einen
+  -- Bruttolohn > 0 hat, aber noch keinen Netto-Betrag. Betrifft nur
+  -- Lohnsteuerklasse 1/sozialversicherungspflichtig (dort trägt
+  -- Lohnbuchhaltung netto_extern von Hand ein, siehe season_bonuses) -
+  -- bei 'pauschal' ist netto immer automatisch berechnet, nie null.
+  select string_agg(s2.name || ', ' || s2.vorname, '; ')
+    into v_fehlende_namen
+  from season_summary s2
+  where s2.employee_id = any(p_employee_ids)
+    and s2.saison_jahr = p_saison_jahr
+    and s2.bruttolohn > 0
+    and s2.netto is null;
+
+  if v_fehlende_namen is not null then
+    raise exception 'Bitte zuerst den Netto-Betrag aus dem Lohnprogramm eintragen für: %', v_fehlende_namen;
   end if;
 
   neue_belegnummer := naechste_belegnummer('AZ-' || to_char(now(), 'MM-YYYY'));

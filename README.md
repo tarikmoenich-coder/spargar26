@@ -262,6 +262,14 @@ Enthalten:
   berechnet). Bewusst nur Netto korrigierbar, kein automatischer
   Differenzbeleg - die tatsächliche Nach-/Rückzahlung läuft wie bei der
   Kautions-Rückzahlung außerhalb der App
+- **"Jetzt Abrechnen" verweigert fehlenden Netto-Betrag (Stand 2026-08-21,
+  Nutzer-Meldung: "mir ist es nun schon mehrfach passiert, dass ich ...
+  vergessen habe den Netto-Betrag aus dem Lohnprogramm einzugeben")**: die
+  Aktion bricht jetzt komplett ab (mit Fehlermeldung, welche Person(en)
+  betroffen sind), wenn mindestens eine ausgewählte Person einen
+  Bruttolohn > 0 hat, aber noch keinen Netto-Betrag eingetragen wurde -
+  betrifft nur Lohnsteuerklasse 1/sozialversicherungspflichtig (bei
+  "pauschal" wird Netto immer automatisch berechnet)
 - **Erneutes "Jetzt Abrechnen" nach Reaktivierung (Stand 2026-08-21,
   Nutzer-Frage: "Person abgerechnet, deaktiviert, reaktiviert, Stunden
   nachgetragen, erneut abgerechnet - kommt dann eine weitere Abrechnung?")**:
@@ -324,15 +332,16 @@ Enthalten:
   Weiter fein-getunt (Stand 2026-08-21): Beträge im Ausdruck mit
   deutschen Tausender-Trennpunkten (`fmtDruck()`, eigene Funktion nur für
   den Druck - die interaktive, aufklappbare Ansicht bleibt beim
-  bisherigen Punkt-Dezimalformat); Spalte "Steuer €" zeigt zusätzlich
-  "(PA)" bei App-berechneter pauschaler Lohnsteuer bzw. "(HSC)" bei vom
-  externen Lohnprogramm ermittelter Steuer (Abrechnungsart
-  Lohnsteuerklasse 1/sozialversicherungspflichtig); "Netto nach Verpfl./
-  Unterk. €" zu "Netto nach Abz. €" gekürzt, der gewonnene Platz kommt
-  der Unterschriftenspalte zugute (`.print-unterschrift-breit`); Brutto,
-  Netto und Auszahlung im Ausdruck größer und fett hervorgehoben
+  bisherigen Punkt-Dezimalformat); "Netto nach Verpfl./Unterk. €" zu
+  "Netto nach Abz. €" gekürzt, der gewonnene Platz kommt der
+  Unterschriftenspalte zugute (`.print-unterschrift-breit`); Brutto, Netto
+  und Auszahlung im Ausdruck größer und fett hervorgehoben
   (`.print-hervorgehoben`), damit die drei Endsummen der Rechenkette auf
-  den ersten Blick auffindbar sind
+  den ersten Blick auffindbar sind. Die Spalte "Steuer €" (die kurzzeitig
+  am selben Tag zusätzlich "(PA)"/"(HSC)" auswies) danach wieder komplett
+  entfernt - sowohl im Ausdruck als auch in der aufklappbaren
+  Bildschirm-Ansicht (Nutzer-Vorgabe: "ergibt sich sowieso aus der
+  Differenz von Brutto zu Netto")
 - Buskosten (vorfinanzierte Heimreise) als eigene, sichtbare
   Abzugsposition im Auszahlungsbetrag (getrennt von Kassen-Vorschüssen,
   "damit es zu keinen Missverständnissen kommen kann")

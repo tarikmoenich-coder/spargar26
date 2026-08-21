@@ -51,7 +51,9 @@ function anzeige(r: SeasonSummaryRow, feld: keyof SeasonSummaryRow) {
 
 // Druck-Spalten der Auszahlungsliste (Nutzer-Vorgabe 2026-08-21): in einer
 // festen Reihenfolge, die die Rechenkette sichtbar macht - Basislohn +
-// Prämien + Zulage = Brutto, minus Steuer = Netto, minus Verpflegung/
+// Prämien + Zulage = Brutto, (abzüglich Steuer, ergibt sich aus der
+// Differenz Brutto/Netto und wird deshalb bewusst nicht als eigene Spalte
+// geführt, Nutzer-Vorgabe 2026-08-21) = Netto, minus Verpflegung/
 // Unterkunft = "Netto nach Verpfl./Unterk." (kein feststehender
 // Fachbegriff dafür, deshalb ein selbsterklärendes Etikett statt eines
 // evtl. falschen), minus Vorschüsse/Buskosten/Kleidung/Kautionen =
@@ -104,23 +106,6 @@ const AUSZAHLUNGS_SPALTEN: AuszahlungsSpalte[] = [
     thKlasse: FARBE_BRUTTO_TH,
     tdKlasse: FARBE_BRUTTO_TD,
     hervorgehoben: true,
-  },
-  {
-    key: "lohnsteuer_pauschal",
-    label: "Steuer €",
-    gruppe: "steuer",
-    wert: (r) => Number(anzeige(r, "lohnsteuer_pauschal") ?? 0),
-    // Nutzer-Vorgabe 2026-08-21: zeigt zusätzlich, ob es sich um die von
-    // der App selbst berechnete pauschale Lohnsteuer handelt ("PA", Label
-    // wie in ABRECHNUNGSART_LABELS) oder um eine vom externen
-    // Lohnprogramm ermittelte Steuer ("HSC", siehe OI-009/Sheet "Summen"
-    // Spalte BA "Netto-Summe (HSC)") - bei "HSC" ist lohnsteuer_pauschal
-    // technisch 0 (die App kennt den echten Betrag nicht), deshalb
-    // "immerZeigen": sonst würde die Spalte bei einem rein-HSC-Beleg
-    // fälschlich als "alle Werte 0" verschwinden, obwohl das PA/HSC-Etikett
-    // weiterhin eine wichtige Information ist.
-    immerZeigen: true,
-    thKlasse: FARBE_ABZUG_TH,
   },
   {
     key: "netto",
@@ -625,7 +610,6 @@ export default function AuszahlungenPage() {
                                 >
                                   Prämien €
                                 </th>
-                                <th>Steuer €</th>
                                 <th className={FARBE_NETTO_TH}>Netto €</th>
                                 <th className={FARBE_ABZUG_TH}>Verpfl./Unterk. €</th>
                                 <th className={FARBE_ABZUG_TH}>Vorschüsse €</th>
@@ -657,7 +641,6 @@ export default function AuszahlungenPage() {
                                     {fmt(anzeige(r, "bruttolohn"))}
                                   </td>
                                   <td>{fmt(anzeige(r, "praemien_summe"))}</td>
-                                  <td>{fmt(anzeige(r, "lohnsteuer_pauschal"))}</td>
                                   <td className={FARBE_NETTO_TD}>
                                     {fmt(anzeige(r, "netto"))}
                                   </td>
@@ -844,15 +827,7 @@ export default function AuszahlungenPage() {
                             gruppenstart[i] ? "print-gruppenstart" : ""
                           } ${s.hervorgehoben ? "print-hervorgehoben" : ""}`}
                         >
-                          {s.key === "lohnsteuer_pauschal" ? (
-                            r.abrechnungsart === "pauschal" ? (
-                              <>{fmtDruck(s.wert(r))} (PA)</>
-                            ) : (
-                              <>– (HSC)</>
-                            )
-                          ) : (
-                            fmtDruck(s.wert(r))
-                          )}
+                          {fmtDruck(s.wert(r))}
                         </td>
                       ))}
                       <td className="print-unterschrift-breit"></td>
