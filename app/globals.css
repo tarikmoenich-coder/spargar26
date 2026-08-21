@@ -157,3 +157,18 @@ input[type="number"]::-webkit-inner-spin-button {
     min-width: 2.5rem;
   }
 }
+
+/* Dickere Trennlinie am Anfang eines neuen Rechenschritts auf der
+   Auszahlungsliste (Nutzer-Vorgabe 2026-08-21: "Basislohn+Prämien+Zulagen
+   = Bruttolohn ... muss ins Auge springen") - Basislohn/Steuer/Verpfl.-
+   Unterk./Vorschüsse/Auszahlung markieren jeweils den Start eines neuen
+   Abschnitts (Bruttolohn-Bestandteile → Steuer/Netto → Sachbezüge →
+   weitere Abzüge → Ergebnis). Nur border-left-width überschrieben
+   (!important nötig, da .print-form-table th/td dieselbe Spezifität mit
+   der vollen border-Shorthand setzt) - Farbe/Stil bleiben die des
+   normalen Rasters. */
+@media print {
+  .print-gruppenstart {
+    border-left-width: 2pt !important;
+  }
+}

@@ -44,6 +44,148 @@ function weichtAb(r: SeasonSummaryRow) {
   return Math.abs(eingefroren - live) > 0.005;
 }
 
+// Druck-Spalten der Auszahlungsliste (Nutzer-Vorgabe 2026-08-21): in einer
+// festen Reihenfolge, die die Rechenkette sichtbar macht - Basislohn +
+// Prämien + Zulage = Brutto, minus Steuer = Netto, minus Verpflegung/
+// Unterkunft = "Netto nach Verpfl./Unterk." (kein feststehender
+// Fachbegriff dafür, deshalb ein selbsterklärendes Etikett statt eines
+// evtl. falschen), minus Vorschüsse/Buskosten/Kleidung/Kautionen =
+// Auszahlung. "gruppe" bestimmt die dickere Trennlinie zwischen den
+// Abschnitten (siehe .print-gruppenstart in globals.css) - wird beim
+// Rendern anhand der tatsächlich SICHTBAREN Spalten neu berechnet, damit
+// die Linie korrekt an der ersten sichtbaren Spalte einer Gruppe bleibt,
+// auch wenn eine davor per "alle Werte 0" ausgeblendet wurde.
+interface AuszahlungsSpalte {
+  key: string;
+  label: string;
+  gruppe: "brutto" | "steuer" | "sachbezug" | "abzuege" | "auszahlung";
+  wert: (r: SeasonSummaryRow) => number;
+  immerZeigen?: boolean;
+  thKlasse?: string;
+  tdKlasse?: string;
+}
+
+const AUSZAHLUNGS_SPALTEN: AuszahlungsSpalte[] = [
+  {
+    key: "basis_brutto",
+    label: "Basislohn €",
+    gruppe: "brutto",
+    wert: (r) => Number(anzeige(r, "basis_brutto") ?? 0),
+    thKlasse: FARBE_BRUTTO_TH,
+  },
+  {
+    key: "praemien_summe",
+    label: "Prämien €",
+    gruppe: "brutto",
+    wert: (r) => Number(anzeige(r, "praemien_summe") ?? 0),
+    thKlasse: FARBE_ZULAGE_TH,
+  },
+  {
+    key: "stundenkonto_auszahlung_betrag",
+    label: "Zulage €",
+    gruppe: "brutto",
+    wert: (r) => Number(anzeige(r, "stundenkonto_auszahlung_betrag") ?? 0),
+    thKlasse: FARBE_ZULAGE_TH,
+  },
+  {
+    key: "bruttolohn",
+    label: "Brutto €",
+    gruppe: "brutto",
+    wert: (r) => Number(anzeige(r, "bruttolohn") ?? 0),
+    immerZeigen: true,
+    thKlasse: FARBE_BRUTTO_TH,
+    tdKlasse: FARBE_BRUTTO_TD,
+  },
+  {
+    key: "lohnsteuer_pauschal",
+    label: "Steuer €",
+    gruppe: "steuer",
+    wert: (r) => Number(anzeige(r, "lohnsteuer_pauschal") ?? 0),
+    thKlasse: FARBE_ABZUG_TH,
+  },
+  {
+    key: "netto",
+    label: "Netto €",
+    gruppe: "steuer",
+    wert: (r) => Number(anzeige(r, "netto") ?? 0),
+    immerZeigen: true,
+    thKlasse: FARBE_NETTO_TH,
+    tdKlasse: FARBE_NETTO_TD,
+  },
+  {
+    key: "verpflegung_unterkunft",
+    label: "Verpfl./Unterk. €",
+    gruppe: "sachbezug",
+    wert: (r) =>
+      Number(anzeige(r, "abzug_verpflegung") ?? 0) +
+      Number(anzeige(r, "abzug_wohnen") ?? 0),
+    thKlasse: FARBE_ABZUG_TH,
+  },
+  {
+    key: "netto_nach_verpflegung",
+    label: "Netto nach Verpfl./Unterk. €",
+    gruppe: "sachbezug",
+    wert: (r) =>
+      Number(anzeige(r, "netto") ?? 0) -
+      Number(anzeige(r, "abzug_verpflegung") ?? 0) -
+      Number(anzeige(r, "abzug_wohnen") ?? 0),
+  },
+  {
+    key: "vorschuss_summe",
+    label: "Vorschüsse €",
+    gruppe: "abzuege",
+    wert: (r) => Number(anzeige(r, "vorschuss_summe") ?? 0),
+    thKlasse: FARBE_ABZUG_TH,
+  },
+  {
+    key: "bus_kosten",
+    label: "Buskosten €",
+    gruppe: "abzuege",
+    wert: (r) => Number(anzeige(r, "bus_kosten") ?? 0),
+    thKlasse: FARBE_ABZUG_TH,
+  },
+  {
+    key: "kleidung_betrag",
+    label: "Kleidung €",
+    gruppe: "abzuege",
+    wert: (r) => Number(anzeige(r, "kleidung_betrag") ?? 0),
+    thKlasse: FARBE_ABZUG_TH,
+  },
+  {
+    key: "kautionen",
+    label: "Kaution(en) €",
+    gruppe: "abzuege",
+    wert: (r) =>
+      Number(anzeige(r, "fahrer_kaution") ?? 0) +
+      Number(anzeige(r, "zimmer_kaution") ?? 0),
+    thKlasse: FARBE_KAUTION_TH,
+  },
+  {
+    key: "auszahlungsbetrag",
+    label: "Auszahlung €",
+    gruppe: "auszahlung",
+    wert: (r) => Number(anzeige(r, "auszahlungsbetrag") ?? 0),
+    immerZeigen: true,
+  },
+];
+
+// Blendet Spalten aus, in denen bei ALLEN Zeilen dieses Belegs eine 0
+// steht (Nutzer-Vorgabe 2026-08-21: "kostet viel Platz") - außer den als
+// "immerZeigen" markierten Kern-/Summenspalten. "Netto nach Verpfl./
+// Unterk." hängt an "Verpfl./Unterk." und verschwindet automatisch mit,
+// da sie sonst nur die bereits sichtbare Netto-Spalte wiederholen würde.
+function sichtbareSpalten(zeilen: SeasonSummaryRow[]): AuszahlungsSpalte[] {
+  const spalten = AUSZAHLUNGS_SPALTEN.filter(
+    (s) => s.immerZeigen || zeilen.some((r) => s.wert(r) !== 0)
+  );
+  const verpflSichtbar = spalten.some(
+    (s) => s.key === "verpflegung_unterkunft"
+  );
+  return spalten.filter(
+    (s) => s.key !== "netto_nach_verpflegung" || verpflSichtbar
+  );
+}
+
 const MONATSNAMEN = [
   "Januar", "Februar", "März", "April", "Mai", "Juni",
   "Juli", "August", "September", "Oktober", "November", "Dezember",
@@ -598,80 +740,78 @@ export default function AuszahlungenPage() {
             {druckZeilen.zahlungsart === "BAR" ? "Bar" : "Überweisung"} ·
             Anzahl Personen: {druckZeilen.zeilen.length}
           </p>
-          <table className="mt-4 print-form-table print-dense-table print-persnr-schmal">
-            <thead>
-              <tr>
-                <th>Pers.-Nr.</th>
-                <th>Name</th>
-                <th>Std.</th>
-                <th>Tage</th>
-                <th>Brutto €</th>
-                <th>Prämien €</th>
-                <th>Zulage €</th>
-                <th>Steuer €</th>
-                <th>Netto €</th>
-                <th>Verpfl./Unterk. €</th>
-                <th>Vorschüsse €</th>
-                <th>Buskosten €</th>
-                <th>Kaution(en) €</th>
-                <th>Kleidung €</th>
-                <th>Auszahlung €</th>
-                <th>Unterschrift</th>
-              </tr>
-            </thead>
-            <tbody>
-              {druckZeilen.zeilen.map((r) => (
-                <tr key={r.employee_id}>
-                  <td>{r.personal_nr}</td>
-                  <td>
-                    {r.name}, {r.vorname}
-                  </td>
-                  <td>{fmt(anzeige(r, "gesamt_stunden"))}</td>
-                  <td>{anzeige(r, "anwesenheitstage") ?? "—"}</td>
-                  <td>{fmt(anzeige(r, "bruttolohn"))}</td>
-                  <td>{fmt(anzeige(r, "praemien_summe"))}</td>
-                  <td>{fmt(anzeige(r, "stundenkonto_auszahlung_betrag"))}</td>
-                  <td>{fmt(anzeige(r, "lohnsteuer_pauschal"))}</td>
-                  <td>{fmt(anzeige(r, "netto"))}</td>
-                  <td>
-                    {(
-                      Number(anzeige(r, "abzug_verpflegung")) +
-                      Number(anzeige(r, "abzug_wohnen"))
-                    ).toFixed(2)}
-                  </td>
-                  <td>{fmt(anzeige(r, "vorschuss_summe"))}</td>
-                  <td>{fmt(anzeige(r, "bus_kosten"))}</td>
-                  <td>
-                    {(
-                      Number(anzeige(r, "fahrer_kaution")) +
-                      Number(anzeige(r, "zimmer_kaution"))
-                    ).toFixed(2)}
-                  </td>
-                  <td>{fmt(anzeige(r, "kleidung_betrag"))}</td>
-                  <td className="font-semibold">
-                    {fmt(anzeige(r, "auszahlungsbetrag"))}
-                  </td>
-                  <td></td>
-                </tr>
-              ))}
-            </tbody>
-            <tfoot>
-              <tr>
-                <td colSpan={14} className="text-right font-semibold">
-                  Summe Auszahlung
-                </td>
-                <td className="font-semibold">
-                  {druckZeilen.zeilen
-                    .reduce(
-                      (s, r) => s + Number(anzeige(r, "auszahlungsbetrag") ?? 0),
-                      0
-                    )
-                    .toFixed(2)}
-                </td>
-                <td></td>
-              </tr>
-            </tfoot>
-          </table>
+          {(() => {
+            const spalten = sichtbareSpalten(druckZeilen.zeilen);
+            const gruppenstart = spalten.map(
+              (s, i) => i === 0 || spalten[i - 1].gruppe !== s.gruppe
+            );
+            return (
+              <table className="mt-4 print-form-table print-dense-table print-persnr-schmal">
+                <thead>
+                  <tr>
+                    <th>Pers.-Nr.</th>
+                    <th>Name</th>
+                    <th>Std.</th>
+                    <th>Tage</th>
+                    {spalten.map((s, i) => (
+                      <th
+                        key={s.key}
+                        className={`${s.thKlasse ?? ""} ${
+                          gruppenstart[i] ? "print-gruppenstart" : ""
+                        }`}
+                      >
+                        {s.label}
+                      </th>
+                    ))}
+                    <th className="print-gruppenstart">Unterschrift</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {druckZeilen.zeilen.map((r) => (
+                    <tr key={r.employee_id}>
+                      <td>{r.personal_nr}</td>
+                      <td>
+                        {r.name}, {r.vorname}
+                      </td>
+                      <td>{fmt(anzeige(r, "gesamt_stunden"))}</td>
+                      <td>{anzeige(r, "anwesenheitstage") ?? "—"}</td>
+                      {spalten.map((s, i) => (
+                        <td
+                          key={s.key}
+                          className={`${s.tdKlasse ?? ""} ${
+                            gruppenstart[i] ? "print-gruppenstart" : ""
+                          } ${s.key === "auszahlungsbetrag" ? "font-semibold" : ""}`}
+                        >
+                          {fmt(s.wert(r))}
+                        </td>
+                      ))}
+                      <td></td>
+                    </tr>
+                  ))}
+                </tbody>
+                <tfoot>
+                  <tr>
+                    <td
+                      colSpan={spalten.length + 3}
+                      className="text-right font-semibold"
+                    >
+                      Summe Auszahlung
+                    </td>
+                    <td className="font-semibold">
+                      {druckZeilen.zeilen
+                        .reduce(
+                          (s, r) =>
+                            s + Number(anzeige(r, "auszahlungsbetrag") ?? 0),
+                          0
+                        )
+                        .toFixed(2)}
+                    </td>
+                    <td></td>
+                  </tr>
+                </tfoot>
+              </table>
+            );
+          })()}
 
           {/* Kautionsübergabe an den Hausmeister - erscheint direkt im
               Anschluss an den Auszahlungsbeleg (Nutzer-Vorgabe 2026-08-09).

@@ -285,7 +285,22 @@ Enthalten:
   (`.print-persnr-schmal`), Fahrer- und Zimmerkaution zu einer Spalte
   "Kaution(en) €" zusammengefasst, und die bisher fehlende Spalte
   "Zulage €" (Stundenkonto-Auszahlung) ergänzt (war auf der Lohnübersicht
-  schon da, hier aber vergessen worden)
+  schon da, hier aber vergessen worden).
+  Spaltenreihenfolge/-format grundlegend überarbeitet (Stand 2026-08-21,
+  Nutzer-Vorgabe: die Rechenkette Basislohn+Prämien+Zulagen=Brutto,
+  −Steuer=Netto, −Verpfl./Unterk.=„Netto nach Verpfl./Unterk." (kein
+  feststehender Fachbegriff, deshalb selbsterklärendes Etikett statt
+  eines evtl. falschen), −Vorschüsse/Buskosten/Kleidung/Kautionen=
+  Auszahlung soll "ins Auge springen"): Spalten in genau dieser
+  Reihenfolge, farblich nach dem bestehenden Lohn-Farbschema gruppiert
+  (Brutto-Bestandteile hellbraun/grün, Steuer/Abzüge rot, Kautionen blau,
+  Netto voll grau, siehe `lib/farben.ts`) und mit einer dickeren
+  Trennlinie am Anfang jedes neuen Rechenschritts (`.print-gruppenstart`).
+  Zusätzlich blendet jede Spalte, in der bei ALLEN Personen dieses Belegs
+  eine 0 steht, sich automatisch aus (Nutzer-Vorgabe: "kostet viel Platz")
+  - außer den Kernspalten Brutto/Netto/Auszahlung, die immer stehen
+  bleiben; "Netto nach Verpfl./Unterk." blendet sich zusammen mit
+  "Verpfl./Unterk." aus, da sie sonst nur Netto wiederholen würde
 - Buskosten (vorfinanzierte Heimreise) als eigene, sichtbare
   Abzugsposition im Auszahlungsbetrag (getrennt von Kassen-Vorschüssen,
   "damit es zu keinen Missverständnissen kommen kann")
