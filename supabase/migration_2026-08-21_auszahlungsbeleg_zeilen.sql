@@ -586,3 +586,86 @@ join employees e on e.id = b.employee_id
 where b.auszahlungsbeleg_id is not null
   and b.snapshot is not null
 on conflict (auszahlungsbeleg_id, employee_id) do nothing;
+
+-- ---------------------------------------------------------------------------
+-- 8. Nachtrag zum Backfill (Abschnitt 7): zwei Personen, bei denen Abschnitt
+--    7 den ursprünglichen (ersten) Beleg NICHT wiederherstellen konnte, weil
+--    zwischen dem Live-Gehen dieser Migration (Abschnitt 1-6) und dem
+--    Ausführen von Abschnitt 7 bereits ein echtes erneutes "Jetzt
+--    Abrechnen" für sie stattfand - season_bonuses.auszahlungsbeleg_id
+--    zeigte zu diesem Zeitpunkt schon auf den NEUEN Differenzbeleg, nicht
+--    mehr auf den ursprünglichen (Nutzer-Meldung 2026-08-21: "Konkret habe
+--    ich jetzt nur noch den Differenzbeleg ... Der ursprüngliche Beleg
+--    fehlt mir"). season_bonuses selbst ist nicht Teil des Audit-Logs
+--    (siehe write_audit_log-Trigger-Liste), die Original-Beträge waren also
+--    nirgends direkt gespeichert.
+--
+--    Lösung: der ursprüngliche Beleg lässt sich trotzdem EXAKT
+--    rekonstruieren, weil ein Differenzbeleg per Definition "aktueller
+--    Gesamtstand minus vorheriger Stand" ist - also gilt umgekehrt
+--    "vorheriger Stand (= ursprünglicher Beleg) = aktueller Gesamtstand
+--    minus Differenzbeleg". Nur gültig, wenn seither GENAU EINE weitere
+--    Zeile existiert (sonst per WHERE-Bedingung ausgeschlossen). Vorschau
+--    vor dem Einfügen mit dem Nutzer abgeglichen (Beträge passten zur
+--    Erinnerung).
+-- ---------------------------------------------------------------------------
+with fehlend as (
+  select
+    sa.employee_id,
+    sa.saison_jahr,
+    sa.auszahlungsbeleg_id as fehlender_beleg_id
+  from saison_abrechnungen sa
+  left join auszahlungsbeleg_zeilen az
+    on az.auszahlungsbeleg_id = sa.auszahlungsbeleg_id
+    and az.employee_id = sa.employee_id
+  where sa.auszahlungsbeleg_id is not null
+    and az.id is null
+),
+rekonstruiert as (
+  select
+    f.fehlender_beleg_id as auszahlungsbeleg_id,
+    f.employee_id,
+    f.saison_jahr,
+    coalesce(b.snapshot->>'personal_nr', e.personal_nr) as personal_nr,
+    coalesce(b.snapshot->>'name', e.name) as name,
+    coalesce(b.snapshot->>'vorname', e.vorname) as vorname,
+    coalesce(b.snapshot->>'abrechnungsart', e.abrechnungsart::text) as abrechnungsart,
+    false as ist_differenz,
+    jsonb_build_object(
+      'gesamt_stunden', coalesce((b.snapshot->>'gesamt_stunden')::numeric,0) - coalesce((az.zeile->>'gesamt_stunden')::numeric,0),
+      'anwesenheitstage', coalesce((b.snapshot->>'anwesenheitstage')::numeric,0) - coalesce((az.zeile->>'anwesenheitstage')::numeric,0),
+      'basis_brutto', coalesce((b.snapshot->>'basis_brutto')::numeric,0) - coalesce((az.zeile->>'basis_brutto')::numeric,0),
+      'praemien_summe', coalesce((b.snapshot->>'praemien_summe')::numeric,0) - coalesce((az.zeile->>'praemien_summe')::numeric,0),
+      'stundenkonto_auszahlung_betrag', coalesce((b.snapshot->>'stundenkonto_auszahlung_betrag')::numeric,0) - coalesce((az.zeile->>'stundenkonto_auszahlung_betrag')::numeric,0),
+      'bruttolohn', coalesce((b.snapshot->>'bruttolohn')::numeric,0) - coalesce((az.zeile->>'bruttolohn')::numeric,0),
+      'lohnsteuer_pauschal', coalesce((b.snapshot->>'lohnsteuer_pauschal')::numeric,0) - coalesce((az.zeile->>'lohnsteuer_pauschal')::numeric,0),
+      'netto', coalesce((b.snapshot->>'netto')::numeric,0) - coalesce((az.zeile->>'netto')::numeric,0),
+      'abzug_verpflegung', coalesce((b.snapshot->>'abzug_verpflegung')::numeric,0) - coalesce((az.zeile->>'abzug_verpflegung')::numeric,0),
+      'abzug_wohnen', coalesce((b.snapshot->>'abzug_wohnen')::numeric,0) - coalesce((az.zeile->>'abzug_wohnen')::numeric,0),
+      'vorschuss_summe', coalesce((b.snapshot->>'vorschuss_summe')::numeric,0) - coalesce((az.zeile->>'vorschuss_summe')::numeric,0),
+      'bus_kosten', coalesce((b.snapshot->>'bus_kosten')::numeric,0) - coalesce((az.zeile->>'bus_kosten')::numeric,0),
+      'fahrer_kaution', coalesce((b.snapshot->>'fahrer_kaution')::numeric,0) - coalesce((az.zeile->>'fahrer_kaution')::numeric,0),
+      'zimmer_kaution', coalesce((b.snapshot->>'zimmer_kaution')::numeric,0) - coalesce((az.zeile->>'zimmer_kaution')::numeric,0),
+      'kleidung_betrag', coalesce((b.snapshot->>'kleidung_betrag')::numeric,0) - coalesce((az.zeile->>'kleidung_betrag')::numeric,0),
+      'verpflegungsfreie_tage', coalesce((b.snapshot->>'verpflegungsfreie_tage')::numeric,0) - coalesce((az.zeile->>'verpflegungsfreie_tage')::numeric,0),
+      'auszahlungsbetrag', coalesce((b.snapshot->>'auszahlungsbetrag')::numeric,0) - coalesce((az.zeile->>'auszahlungsbetrag')::numeric,0)
+    ) as zeile
+  from fehlend f
+  join employees e on e.id = f.employee_id
+  join season_bonuses b on b.employee_id = f.employee_id and b.saison_jahr = f.saison_jahr
+  join auszahlungsbeleg_zeilen az
+    on az.auszahlungsbeleg_id = b.auszahlungsbeleg_id and az.employee_id = f.employee_id
+  where (
+    select count(*) from auszahlungsbeleg_zeilen az2
+    where az2.employee_id = f.employee_id and az2.saison_jahr = f.saison_jahr
+  ) = 1
+)
+insert into auszahlungsbeleg_zeilen (
+  auszahlungsbeleg_id, employee_id, saison_jahr, personal_nr, name, vorname,
+  abrechnungsart, ist_differenz, zeile
+)
+select
+  auszahlungsbeleg_id, employee_id, saison_jahr, personal_nr, name, vorname,
+  abrechnungsart, ist_differenz, zeile
+from rekonstruiert
+on conflict (auszahlungsbeleg_id, employee_id) do nothing;
