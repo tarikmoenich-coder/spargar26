@@ -300,7 +300,19 @@ Enthalten:
   eine 0 steht, sich automatisch aus (Nutzer-Vorgabe: "kostet viel Platz")
   - außer den Kernspalten Brutto/Netto/Auszahlung, die immer stehen
   bleiben; "Netto nach Verpfl./Unterk." blendet sich zusammen mit
-  "Verpfl./Unterk." aus, da sie sonst nur Netto wiederholen würde
+  "Verpfl./Unterk." aus, da sie sonst nur Netto wiederholen würde.
+  Weiter fein-getunt (Stand 2026-08-21): Beträge im Ausdruck mit
+  deutschen Tausender-Trennpunkten (`fmtDruck()`, eigene Funktion nur für
+  den Druck - die interaktive, aufklappbare Ansicht bleibt beim
+  bisherigen Punkt-Dezimalformat); Spalte "Steuer €" zeigt zusätzlich
+  "(PA)" bei App-berechneter pauschaler Lohnsteuer bzw. "(HSC)" bei vom
+  externen Lohnprogramm ermittelter Steuer (Abrechnungsart
+  Lohnsteuerklasse 1/sozialversicherungspflichtig); "Netto nach Verpfl./
+  Unterk. €" zu "Netto nach Abz. €" gekürzt, der gewonnene Platz kommt
+  der Unterschriftenspalte zugute (`.print-unterschrift-breit`); Brutto,
+  Netto und Auszahlung im Ausdruck größer und fett hervorgehoben
+  (`.print-hervorgehoben`), damit die drei Endsummen der Rechenkette auf
+  den ersten Blick auffindbar sind
 - Buskosten (vorfinanzierte Heimreise) als eigene, sichtbare
   Abzugsposition im Auszahlungsbetrag (getrennt von Kassen-Vorschüssen,
   "damit es zu keinen Missverständnissen kommen kann")

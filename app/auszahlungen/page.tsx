@@ -29,6 +29,18 @@ function fmt(n: number | string | null | undefined) {
   return n === null || n === undefined || n === "" ? "—" : Number(n).toFixed(2);
 }
 
+// Nur für den Ausdruck (Nutzer-Vorgabe 2026-08-21: "Tausender
+// Trennpunkte") - bewusst eine eigene Funktion statt fmt() selbst zu
+// ändern, damit die interaktive Ansicht (aufklappbare Liste oben) beim
+// bisherigen Format bleibt.
+function fmtDruck(n: number | string | null | undefined) {
+  if (n === null || n === undefined || n === "") return "—";
+  return Number(n).toLocaleString("de-DE", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  });
+}
+
 // Liest ein Feld aus dem eingefrorenen Schnappschuss (immer vorhanden, da
 // diese Seite nur bereits abgerechnete Personen zeigt).
 function anzeige(r: SeasonSummaryRow, feld: keyof SeasonSummaryRow) {
@@ -63,6 +75,9 @@ interface AuszahlungsSpalte {
   immerZeigen?: boolean;
   thKlasse?: string;
   tdKlasse?: string;
+  // Nutzer-Vorgabe 2026-08-21: Brutto/Netto/Auszahlung etwas größer und
+  // fett gegenüber dem Rest - siehe .print-hervorgehoben in globals.css.
+  hervorgehoben?: boolean;
 }
 
 const AUSZAHLUNGS_SPALTEN: AuszahlungsSpalte[] = [
@@ -95,12 +110,23 @@ const AUSZAHLUNGS_SPALTEN: AuszahlungsSpalte[] = [
     immerZeigen: true,
     thKlasse: FARBE_BRUTTO_TH,
     tdKlasse: FARBE_BRUTTO_TD,
+    hervorgehoben: true,
   },
   {
     key: "lohnsteuer_pauschal",
     label: "Steuer €",
     gruppe: "steuer",
     wert: (r) => Number(anzeige(r, "lohnsteuer_pauschal") ?? 0),
+    // Nutzer-Vorgabe 2026-08-21: zeigt zusätzlich, ob es sich um die von
+    // der App selbst berechnete pauschale Lohnsteuer handelt ("PA", Label
+    // wie in ABRECHNUNGSART_LABELS) oder um eine vom externen
+    // Lohnprogramm ermittelte Steuer ("HSC", siehe OI-009/Sheet "Summen"
+    // Spalte BA "Netto-Summe (HSC)") - bei "HSC" ist lohnsteuer_pauschal
+    // technisch 0 (die App kennt den echten Betrag nicht), deshalb
+    // "immerZeigen": sonst würde die Spalte bei einem rein-HSC-Beleg
+    // fälschlich als "alle Werte 0" verschwinden, obwohl das PA/HSC-Etikett
+    // weiterhin eine wichtige Information ist.
+    immerZeigen: true,
     thKlasse: FARBE_ABZUG_TH,
   },
   {
@@ -111,6 +137,7 @@ const AUSZAHLUNGS_SPALTEN: AuszahlungsSpalte[] = [
     immerZeigen: true,
     thKlasse: FARBE_NETTO_TH,
     tdKlasse: FARBE_NETTO_TD,
+    hervorgehoben: true,
   },
   {
     key: "verpflegung_unterkunft",
@@ -123,7 +150,10 @@ const AUSZAHLUNGS_SPALTEN: AuszahlungsSpalte[] = [
   },
   {
     key: "netto_nach_verpflegung",
-    label: "Netto nach Verpfl./Unterk. €",
+    // Kurz gehalten (Nutzer-Vorgabe 2026-08-21: "nimmt zu viel Platz in
+    // Anspruch") - kein feststehender Fachbegriff für diese Zwischensumme,
+    // deshalb weiterhin ein selbsterklärendes, aber kürzeres Etikett.
+    label: "Netto nach Abz. €",
     gruppe: "sachbezug",
     wert: (r) =>
       Number(anzeige(r, "netto") ?? 0) -
@@ -166,6 +196,7 @@ const AUSZAHLUNGS_SPALTEN: AuszahlungsSpalte[] = [
     gruppe: "auszahlung",
     wert: (r) => Number(anzeige(r, "auszahlungsbetrag") ?? 0),
     immerZeigen: true,
+    hervorgehoben: true,
   },
 ];
 
@@ -758,12 +789,14 @@ export default function AuszahlungenPage() {
                         key={s.key}
                         className={`${s.thKlasse ?? ""} ${
                           gruppenstart[i] ? "print-gruppenstart" : ""
-                        }`}
+                        } ${s.hervorgehoben ? "print-hervorgehoben" : ""}`}
                       >
                         {s.label}
                       </th>
                     ))}
-                    <th className="print-gruppenstart">Unterschrift</th>
+                    <th className="print-gruppenstart print-unterschrift-breit">
+                      Unterschrift
+                    </th>
                   </tr>
                 </thead>
                 <tbody>
@@ -773,19 +806,27 @@ export default function AuszahlungenPage() {
                       <td>
                         {r.name}, {r.vorname}
                       </td>
-                      <td>{fmt(anzeige(r, "gesamt_stunden"))}</td>
+                      <td>{fmtDruck(anzeige(r, "gesamt_stunden"))}</td>
                       <td>{anzeige(r, "anwesenheitstage") ?? "—"}</td>
                       {spalten.map((s, i) => (
                         <td
                           key={s.key}
                           className={`${s.tdKlasse ?? ""} ${
                             gruppenstart[i] ? "print-gruppenstart" : ""
-                          } ${s.key === "auszahlungsbetrag" ? "font-semibold" : ""}`}
+                          } ${s.hervorgehoben ? "print-hervorgehoben" : ""}`}
                         >
-                          {fmt(s.wert(r))}
+                          {s.key === "lohnsteuer_pauschal" ? (
+                            r.abrechnungsart === "pauschal" ? (
+                              <>{fmtDruck(s.wert(r))} (PA)</>
+                            ) : (
+                              <>– (HSC)</>
+                            )
+                          ) : (
+                            fmtDruck(s.wert(r))
+                          )}
                         </td>
                       ))}
-                      <td></td>
+                      <td className="print-unterschrift-breit"></td>
                     </tr>
                   ))}
                 </tbody>
@@ -797,14 +838,14 @@ export default function AuszahlungenPage() {
                     >
                       Summe Auszahlung
                     </td>
-                    <td className="font-semibold">
-                      {druckZeilen.zeilen
-                        .reduce(
+                    <td className="font-semibold print-hervorgehoben">
+                      {fmtDruck(
+                        druckZeilen.zeilen.reduce(
                           (s, r) =>
                             s + Number(anzeige(r, "auszahlungsbetrag") ?? 0),
                           0
                         )
-                        .toFixed(2)}
+                      )}
                     </td>
                     <td></td>
                   </tr>
@@ -827,7 +868,7 @@ export default function AuszahlungenPage() {
               <p className="text-base">
                 Übergeben an: {druckZeilen.kaution.uebergeben_an} · Personen:{" "}
                 {druckZeilen.kautionPersonen.length} · Betrag:{" "}
-                {Number(druckZeilen.kaution.betrag_summe).toFixed(2)} €
+                {fmtDruck(druckZeilen.kaution.betrag_summe)} €
               </p>
               <table className="mt-4 print-form-table print-dense-table print-persnr-schmal">
                 <thead>
@@ -842,7 +883,7 @@ export default function AuszahlungenPage() {
                     <tr key={i}>
                       <td>{p.personal_nr}</td>
                       <td>{p.name}</td>
-                      <td>{p.betrag.toFixed(2)}</td>
+                      <td>{fmtDruck(p.betrag)}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -852,7 +893,7 @@ export default function AuszahlungenPage() {
                       Summe
                     </td>
                     <td className="font-semibold">
-                      {Number(druckZeilen.kaution.betrag_summe).toFixed(2)}
+                      {fmtDruck(druckZeilen.kaution.betrag_summe)}
                     </td>
                   </tr>
                 </tfoot>

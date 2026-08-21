@@ -172,3 +172,31 @@ input[type="number"]::-webkit-inner-spin-button {
     border-left-width: 2pt !important;
   }
 }
+
+/* Brutto/Netto/Auszahlung auf der Auszahlungsliste etwas größer und fett
+   hervorheben (Nutzer-Vorgabe 2026-08-21: "etwas größer als den Rest und
+   Fett machen") - die drei Endsummen der Rechenkette sollen auf den ersten
+   Blick auffindbar sein. Nur font-size/font-weight überschrieben
+   (!important nötig aus demselben Grund wie bei .print-gruppenstart:
+   .print-form-table.print-dense-table th/td setzt font-size mit derselben
+   Spezifität). */
+@media print {
+  .print-hervorgehoben {
+    font-size: 9.5pt !important;
+    font-weight: 700 !important;
+  }
+}
+
+/* Breitere letzte Spalte (Unterschrift) auf der Auszahlungsliste - der
+   durch die Kürzung von "Netto nach Verpfl./Unterk. €" auf "Netto nach
+   Abz. €" gewonnene Platz wird ihr gutgeschrieben (Nutzer-Vorgabe
+   2026-08-21). Eigene Klasse statt einer generischen
+   :last-child-Regel auf .print-dense-table, da die Kautionsübergabe-
+   Tabelle auf derselben Seite keine Unterschriftenspalte hat und ihre
+   letzte Spalte (Betrag) schmal bleiben soll. */
+@media print {
+  .print-form-table.print-dense-table th.print-unterschrift-breit,
+  .print-form-table.print-dense-table td.print-unterschrift-breit {
+    min-width: 8rem;
+  }
+}
