@@ -83,9 +83,6 @@ export default function UebersichtPage() {
   const [ausgewaehlt, setAusgewaehlt] = useState<Set<string>>(new Set());
   const [abrechnenLaeuft, setAbrechnenLaeuft] = useState(false);
   const [abrechnenFehler, setAbrechnenFehler] = useState<string | null>(null);
-  const [auszahlungslisteZeilen, setAuszahlungslisteZeilen] = useState<
-    SeasonSummaryRow[] | null
-  >(null);
   const [letzterBeleg, setLetzterBeleg] = useState<string | null>(null);
   const [abrechnenZahlungsart, setAbrechnenZahlungsart] = useState("BAR");
 
@@ -315,21 +312,6 @@ export default function UebersichtPage() {
     )
     .filter(passtZurSuche);
 
-  // Druck: nach dem Öffnen des Druckdialogs (oder Abbruch) zurücksetzen.
-  useEffect(() => {
-    function handleAfterPrint() {
-      setAuszahlungslisteZeilen(null);
-    }
-    window.addEventListener("afterprint", handleAfterPrint);
-    return () => window.removeEventListener("afterprint", handleAfterPrint);
-  }, []);
-
-  useEffect(() => {
-    if (auszahlungslisteZeilen === null) return;
-    const id = setTimeout(() => window.print(), 50);
-    return () => clearTimeout(id);
-  }, [auszahlungslisteZeilen]);
-
   function toggleAuswahl(employeeId: string) {
     setAusgewaehlt((prev) => {
       const next = new Set(prev);
@@ -383,17 +365,13 @@ export default function UebersichtPage() {
       }
     );
     if (fehler) setAbrechnenFehler(fehler.message);
-
-    // Frisch geladene Daten (mit Schnappschuss) direkt für den Ausdruck
-    // holen, statt auf den nächsten Render zu warten.
-    const { data: frisch } = await supabase
-      .from("season_summary")
-      .select("*")
-      .in("employee_id", ids)
-      .eq("saison_jahr", jahr);
-    if (frisch && frisch.length > 0) {
-      setAuszahlungslisteZeilen(frisch as SeasonSummaryRow[]);
-    }
+    // Bugfix/Aufräumen 2026-08-21 (Nutzer-Vorgabe: "dieser Beleg ist
+    // eigentlich auch unnötig"): früher wurde hier zusätzlich sofort eine
+    // eigene Auszahlungsliste OHNE Belegnummer gedruckt (sowohl automatisch
+    // nach "Jetzt Abrechnen" als auch über einen eigenen Button) - der
+    // tatsächlich genutzte Beleg MIT Belegnummer kommt ohnehin von der
+    // "Auszahlungen"-Seite (siehe Hinweis unten), dieser zweite,
+    // unvollständige Ausdruck war nur verwirrende Doppelung.
     if (belegnummer && !fehler) {
       setLetzterBeleg(belegnummer);
     }
@@ -401,14 +379,6 @@ export default function UebersichtPage() {
     setAusgewaehlt(new Set());
     setAbrechnenLaeuft(false);
     load();
-  }
-
-  function auszahlungslisteFuerAuswahlDrucken() {
-    const zeilen = rows.filter(
-      (r) => ausgewaehlt.has(r.employee_id) && r.abgerechnet_am
-    );
-    if (zeilen.length === 0) return;
-    setAuszahlungslisteZeilen(zeilen);
   }
 
   async function nettoExternSpeichern(row: SeasonSummaryRow, wert: string) {
@@ -552,9 +522,6 @@ export default function UebersichtPage() {
     load();
   }
 
-  const auswahlAnzahlAbgerechnet = rows.filter(
-    (r) => ausgewaehlt.has(r.employee_id) && r.abgerechnet_am
-  ).length;
 
   // Wer "erwartungsgemäß" bis wann Einträge im gewählten Monat haben
   // sollte: bis heute (falls der Monat noch läuft) oder bis zum Monatsende
@@ -688,17 +655,6 @@ export default function UebersichtPage() {
             {ausgewaehlt.size > 0
               ? `${ausgewaehlt.size} Person(en) jetzt abrechnen`
               : "Jetzt Abrechnen"}
-          </button>
-        )}
-        {canEdit && monatFilter === 0 && (
-          <button
-            type="button"
-            className="btn-secondary"
-            disabled={auswahlAnzahlAbgerechnet === 0}
-            onClick={auszahlungslisteFuerAuswahlDrucken}
-          >
-            Auszahlungsliste für Auswahl drucken
-            {auswahlAnzahlAbgerechnet > 0 ? ` (${auswahlAnzahlAbgerechnet})` : ""}
           </button>
         )}
         {monatFilter === 0 && abrechnenFehler && (
@@ -1231,89 +1187,6 @@ export default function UebersichtPage() {
         </div>
       )}
 
-      {/* Auszahlungsliste zum Ausdrucken - nur im Druck sichtbar. */}
-      {auszahlungslisteZeilen && (
-        <div className="hidden print:block">
-          <h2 className="text-xl font-semibold">
-            Auszahlungsliste Saison {jahr}
-          </h2>
-          <p className="mt-1 text-base">
-            Datum: {formatDatumDE(new Date().toISOString())} · Anzahl
-            Personen: {auszahlungslisteZeilen.length}
-          </p>
-          <table className="mt-4 print-form-table print-dense-table">
-            <thead>
-              <tr>
-                <th>Pers.-Nr.</th>
-                <th>Name</th>
-                <th>Std.</th>
-                <th>Tage</th>
-                <th>Brutto €</th>
-                <th>Prämien €</th>
-                <th>Zulage €</th>
-                <th>Steuer €</th>
-                <th>Netto €</th>
-                <th>Verpfl./Unterk. €</th>
-                <th>Vorschüsse €</th>
-                <th>Buskosten €</th>
-                <th>Fahrerkaution €</th>
-                <th>Zimmerkaution €</th>
-                <th>Kleidung €</th>
-                <th>Auszahlung €</th>
-                <th>Unterschrift</th>
-              </tr>
-            </thead>
-            <tbody>
-              {auszahlungslisteZeilen.map((r) => (
-                <tr key={r.employee_id}>
-                  <td>{r.personal_nr}</td>
-                  <td>
-                    {r.name}, {r.vorname}
-                  </td>
-                  <td>{fmt(anzeige(r, "gesamt_stunden"))}</td>
-                  <td>{anzeige(r, "anwesenheitstage") ?? "—"}</td>
-                  <td>{fmt(anzeige(r, "bruttolohn"))}</td>
-                  <td>{fmt(anzeige(r, "praemien_summe"))}</td>
-                  <td>{fmt(anzeige(r, "stundenkonto_auszahlung_betrag"))}</td>
-                  <td>{fmt(anzeige(r, "lohnsteuer_pauschal"))}</td>
-                  <td>{fmt(anzeige(r, "netto"))}</td>
-                  <td>
-                    {(
-                      Number(anzeige(r, "abzug_verpflegung")) +
-                      Number(anzeige(r, "abzug_wohnen"))
-                    ).toFixed(2)}
-                  </td>
-                  <td>{fmt(anzeige(r, "vorschuss_summe"))}</td>
-                  <td>{fmt(anzeige(r, "bus_kosten"))}</td>
-                  <td>{fmt(anzeige(r, "fahrer_kaution"))}</td>
-                  <td>{fmt(anzeige(r, "zimmer_kaution"))}</td>
-                  <td>{fmt(anzeige(r, "kleidung_betrag"))}</td>
-                  <td className="font-semibold">
-                    {fmt(anzeige(r, "auszahlungsbetrag"))}
-                  </td>
-                  <td></td>
-                </tr>
-              ))}
-            </tbody>
-            <tfoot>
-              <tr>
-                <td colSpan={14} className="text-right font-semibold">
-                  Summe Auszahlung
-                </td>
-                <td className="font-semibold">
-                  {auszahlungslisteZeilen
-                    .reduce(
-                      (s, r) => s + Number(anzeige(r, "auszahlungsbetrag") ?? 0),
-                      0
-                    )
-                    .toFixed(2)}
-                </td>
-                <td></td>
-              </tr>
-            </tfoot>
-          </table>
-        </div>
-      )}
     </div>
   );
 }

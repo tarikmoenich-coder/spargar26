@@ -144,3 +144,16 @@ input[type="number"]::-webkit-inner-spin-button {
     min-width: 3.4rem;
   }
 }
+
+/* Schmalere erste Spalte für Belege, deren erste Spalte die Personal-
+   nummer ist (kurzer Inhalt, z.B. "a1023") statt eines Datums (das
+   generische .print-dense-table braucht die volle Breite für Datumsangaben
+   wie auf der Suche-Seite und darf deshalb nicht verändert werden).
+   Nutzer-Meldung 2026-08-21: "die Personalnummer nimmt zu viel Platz ein"
+   auf der Auszahlungsliste. */
+@media print {
+  .print-form-table.print-dense-table.print-persnr-schmal th:first-child,
+  .print-form-table.print-dense-table.print-persnr-schmal td:first-child {
+    min-width: 2.5rem;
+  }
+}

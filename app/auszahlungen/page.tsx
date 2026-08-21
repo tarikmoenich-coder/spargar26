@@ -598,7 +598,7 @@ export default function AuszahlungenPage() {
             {druckZeilen.zahlungsart === "BAR" ? "Bar" : "Überweisung"} ·
             Anzahl Personen: {druckZeilen.zeilen.length}
           </p>
-          <table className="mt-4 print-form-table">
+          <table className="mt-4 print-form-table print-dense-table print-persnr-schmal">
             <thead>
               <tr>
                 <th>Pers.-Nr.</th>
@@ -607,13 +607,13 @@ export default function AuszahlungenPage() {
                 <th>Tage</th>
                 <th>Brutto €</th>
                 <th>Prämien €</th>
+                <th>Zulage €</th>
                 <th>Steuer €</th>
                 <th>Netto €</th>
                 <th>Verpfl./Unterk. €</th>
                 <th>Vorschüsse €</th>
                 <th>Buskosten €</th>
-                <th>Fahrerkaution €</th>
-                <th>Zimmerkaution €</th>
+                <th>Kaution(en) €</th>
                 <th>Kleidung €</th>
                 <th>Auszahlung €</th>
                 <th>Unterschrift</th>
@@ -630,6 +630,7 @@ export default function AuszahlungenPage() {
                   <td>{anzeige(r, "anwesenheitstage") ?? "—"}</td>
                   <td>{fmt(anzeige(r, "bruttolohn"))}</td>
                   <td>{fmt(anzeige(r, "praemien_summe"))}</td>
+                  <td>{fmt(anzeige(r, "stundenkonto_auszahlung_betrag"))}</td>
                   <td>{fmt(anzeige(r, "lohnsteuer_pauschal"))}</td>
                   <td>{fmt(anzeige(r, "netto"))}</td>
                   <td>
@@ -640,8 +641,12 @@ export default function AuszahlungenPage() {
                   </td>
                   <td>{fmt(anzeige(r, "vorschuss_summe"))}</td>
                   <td>{fmt(anzeige(r, "bus_kosten"))}</td>
-                  <td>{fmt(anzeige(r, "fahrer_kaution"))}</td>
-                  <td>{fmt(anzeige(r, "zimmer_kaution"))}</td>
+                  <td>
+                    {(
+                      Number(anzeige(r, "fahrer_kaution")) +
+                      Number(anzeige(r, "zimmer_kaution"))
+                    ).toFixed(2)}
+                  </td>
                   <td>{fmt(anzeige(r, "kleidung_betrag"))}</td>
                   <td className="font-semibold">
                     {fmt(anzeige(r, "auszahlungsbetrag"))}
@@ -684,7 +689,7 @@ export default function AuszahlungenPage() {
                 {druckZeilen.kautionPersonen.length} · Betrag:{" "}
                 {Number(druckZeilen.kaution.betrag_summe).toFixed(2)} €
               </p>
-              <table className="mt-4 print-form-table">
+              <table className="mt-4 print-form-table print-dense-table print-persnr-schmal">
                 <thead>
                   <tr>
                     <th>Pers.-Nr.</th>
