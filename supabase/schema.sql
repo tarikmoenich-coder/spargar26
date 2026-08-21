@@ -3532,7 +3532,12 @@ grant select on employee_letzte_abrechnung to authenticated;
 --      gedruckten Beleg, sobald sie erneut abgerechnet wurde (siehe
 --      auszahlungsbeleg_zeilen weiter oben).
 -- ---------------------------------------------------------------------------
-create or replace view auszahlungsbeleg_summary as
+-- drop statt create-or-replace: Postgres verweigert create-or-replace, wenn
+-- sich Spaltennamen ändern ("weicht_ab" -> "enthaelt_differenz", 42P16) -
+-- unbedenklich, keine andere Sicht/Funktion greift auf diese Sicht zu.
+drop view if exists auszahlungsbeleg_summary;
+
+create view auszahlungsbeleg_summary as
 select
   ab.id,
   ab.belegnummer,

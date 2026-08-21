@@ -31,12 +31,14 @@
 -- kumulierten Saison-Betrags.
 --
 -- In der Supabase SQL-Konsole ausfuehren. Kein ALTER TYPE, laeuft in einem
--- Zug.
+-- Zug. Durchgehend mit "if not exists"/"drop ... if exists" geschrieben,
+-- damit ein erneutes Ausführen (z.B. nach einem Abbruch mitten im Skript)
+-- gefahrlos möglich ist.
 
 -- ---------------------------------------------------------------------------
 -- 1. Neue Tabelle
 -- ---------------------------------------------------------------------------
-create table auszahlungsbeleg_zeilen (
+create table if not exists auszahlungsbeleg_zeilen (
   id bigint generated always as identity primary key,
   auszahlungsbeleg_id bigint not null references auszahlungsbelege (id),
   employee_id uuid not null references employees (id) on delete restrict,
@@ -62,7 +64,7 @@ create table auszahlungsbeleg_zeilen (
   erstellt_am timestamptz not null default now()
 );
 
-create unique index idx_auszahlungsbeleg_zeilen_beleg_employee
+create unique index if not exists idx_auszahlungsbeleg_zeilen_beleg_employee
   on auszahlungsbeleg_zeilen (auszahlungsbeleg_id, employee_id);
 
 alter table auszahlungsbeleg_zeilen enable row level security;
@@ -72,6 +74,7 @@ alter table auszahlungsbeleg_zeilen enable row level security;
 -- saison_abrechnungen für alle angemeldeten Rollen). Nur lesend per Policy -
 -- geschrieben ausschließlich über saison_abrechnen_batch bzw. die
 -- Korrektur-Funktionen (alle security definer).
+drop policy if exists "auszahlungsbeleg_zeilen_select" on auszahlungsbeleg_zeilen;
 create policy "auszahlungsbeleg_zeilen_select" on auszahlungsbeleg_zeilen for select
   using (current_role_name() in ('admin', 'hr', 'kasse', 'lohnabrechnung', 'pruefer', 'management'));
 
@@ -519,7 +522,12 @@ grant execute on function stundenkonto_in_auszahlung_umwandeln(uuid, int, numeri
 --    auszahlungsbeleg_zeilen umgestellt, weicht_ab durch enthaelt_differenz
 --    ersetzt.
 -- ---------------------------------------------------------------------------
-create or replace view auszahlungsbeleg_summary as
+-- drop statt create-or-replace: Postgres verweigert create-or-replace, wenn
+-- sich Spaltennamen ändern ("weicht_ab" -> "enthaelt_differenz", 42P16) -
+-- unbedenklich, keine andere Sicht/Funktion greift auf diese Sicht zu.
+drop view if exists auszahlungsbeleg_summary;
+
+create view auszahlungsbeleg_summary as
 select
   ab.id,
   ab.belegnummer,
