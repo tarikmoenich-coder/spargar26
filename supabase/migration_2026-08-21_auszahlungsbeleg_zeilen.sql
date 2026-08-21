@@ -28,12 +28,14 @@
 -- weiterhin der laufende Gesamtstand der Saison. War eine Person für dieses
 -- Saisonjahr schon einmal abgerechnet, erzeugt "Jetzt Abrechnen" nur noch
 -- eine DIFFERENZ-Zeile (ist_differenz = true) statt des vollen,
--- kumulierten Saison-Betrags.
+-- kumulierten Saison-Betrags. Abschnitt 7 füllt zusätzlich bereits
+-- bestehende Auszahlungsbelege einmalig aus season_bonuses nach, sonst
+-- wären sie auf der Auszahlungen-Seite plötzlich nicht mehr sichtbar.
 --
 -- In der Supabase SQL-Konsole ausfuehren. Kein ALTER TYPE, laeuft in einem
--- Zug. Durchgehend mit "if not exists"/"drop ... if exists" geschrieben,
--- damit ein erneutes Ausführen (z.B. nach einem Abbruch mitten im Skript)
--- gefahrlos möglich ist.
+-- Zug. Durchgehend mit "if not exists"/"drop ... if exists"/"on conflict do
+-- nothing" geschrieben, damit ein erneutes Ausführen (z.B. nach einem
+-- Abbruch mitten im Skript) gefahrlos möglich ist.
 
 -- ---------------------------------------------------------------------------
 -- 1. Neue Tabelle
@@ -545,3 +547,42 @@ where current_role_name() in
 group by ab.id, ab.belegnummer, ab.saison_jahr, ab.zahlungsart, ab.erstellt_am, ab.erstellt_von;
 
 grant select on auszahlungsbeleg_summary to authenticated;
+
+-- ---------------------------------------------------------------------------
+-- 7. Backfill: bereits bestehende Auszahlungsbelege bekommen eine Zeile in
+--    der neuen Tabelle, sonst verschwinden sie aus auszahlungsbeleg_summary
+--    (INNER JOIN, siehe oben) - Nutzer-Meldung 2026-08-21: "Jetzt sehe ich
+--    die ursprünglichen bereits durchgeführten Auszahlungsbelege nicht
+--    mehr". Unbedenklich mit ist_differenz = false: VOR dieser Migration
+--    gab es das Differenzbeleg-Konzept noch nicht, season_bonuses.snapshot
+--    war für jede Person/Saison IMMER der volle (nie ein Differenz-)Betrag.
+--    Nur der jeweils AKTUELLSTE Beleg je Person/Saison lässt sich so
+--    wiederherstellen (season_bonuses hält nur eine Zeile) - eine Person,
+--    die schon VOR dieser Migration mehrfach abgerechnet wurde, hat ihre
+--    älteren Belege bereits vorher verloren (der ursprüngliche, hier
+--    behobene Bug) und bekommt hier nur den letzten Stand zugeordnet.
+--    "on conflict do nothing" macht diesen Block gefahrlos wiederholbar.
+--    Bewusst NICHT in schema.sql übernommen (anders als der Rest dieser
+--    Migration) - ein frischer Install hat keine season_bonuses-Altdaten
+--    zum Nachfüllen, dort wäre dieser Block reine Altdaten-Reparatur ohne
+--    Bezug zur eigentlichen Struktur.
+-- ---------------------------------------------------------------------------
+insert into auszahlungsbeleg_zeilen (
+  auszahlungsbeleg_id, employee_id, saison_jahr, personal_nr, name, vorname,
+  abrechnungsart, ist_differenz, zeile
+)
+select
+  b.auszahlungsbeleg_id,
+  b.employee_id,
+  b.saison_jahr,
+  coalesce(b.snapshot ->> 'personal_nr', e.personal_nr),
+  coalesce(b.snapshot ->> 'name', e.name),
+  coalesce(b.snapshot ->> 'vorname', e.vorname),
+  coalesce(b.snapshot ->> 'abrechnungsart', e.abrechnungsart::text),
+  false,
+  b.snapshot
+from season_bonuses b
+join employees e on e.id = b.employee_id
+where b.auszahlungsbeleg_id is not null
+  and b.snapshot is not null
+on conflict (auszahlungsbeleg_id, employee_id) do nothing;
