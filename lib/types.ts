@@ -592,7 +592,23 @@ export interface AuszahlungsbelegSummary {
   erstellt_von: string | null;
   anzahl_personen: number;
   summe_auszahlungsbetrag: number | null;
-  weicht_ab: boolean;
+  // Ersetzt das frühere "weicht_ab" (2026-08-21): ein historischer Beleg
+  // ist jetzt unveränderlich (siehe auszahlungsbeleg_zeilen in
+  // schema.sql), ein "weicht von der Live-Berechnung ab"-Vergleich ergibt
+  // dafür keinen Sinn mehr. Zeigt stattdessen, ob mindestens eine Zeile
+  // dieses Belegs ein Differenzbeleg ist (Person war für diese Saison
+  // schon einmal abgerechnet).
+  enthaelt_differenz: boolean;
+}
+
+// Eine Zeile aus auszahlungsbeleg_zeilen (Auszahlungen-Seite) - inhaltlich
+// wie SeasonSummaryRow (zeile hat dieselben Feldnamen und wird 1:1 als
+// "snapshot" durchgereicht, damit anzeige() unverändert funktioniert),
+// zusätzlich ist_differenz: true, wenn diese Zeile nicht den vollen
+// Saison-Betrag zeigt, sondern nur die Differenz seit einer früheren
+// Abrechnung derselben Person/Saison (siehe schema.sql).
+export interface AuszahlungsbelegZeile extends SeasonSummaryRow {
+  ist_differenz: boolean;
 }
 
 // Log-Eintrag für eine nachträgliche Korrektur eines bestätigten

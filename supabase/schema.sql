@@ -962,6 +962,58 @@ create table auszahlungsbelege (
 );
 
 -- ---------------------------------------------------------------------------
+-- 4a2. Unveränderliche Zeilen je Beleg/Person (Nutzer-Vorgabe 2026-08-21,
+--      Frage: "Person abgerechnet, deaktiviert, reaktiviert, Stunden
+--      nachgetragen, erneut abgerechnet - kommt dann eine weitere
+--      Abrechnung?"). VORHER stammte der Beleg-Inhalt für die Auszahlungen-
+--      Seite/auszahlungsbeleg_summary aus season_bonuses.snapshot bzw.
+--      season_bonuses.auszahlungsbeleg_id - beides wird bei JEDER erneuten
+--      Abrechnung derselben Person/Saison überschrieben (season_bonuses hat
+--      UNIQUE(employee_id, saison_jahr)). Das hatte zwei Folgen: (1) ein
+--      erneutes "Jetzt Abrechnen" zeigte wieder den KOMPLETTEN, kumulierten
+--      Saison-Betrag statt nur der Differenz seit der letzten Abrechnung -
+--      Doppelzahlungsrisiko; (2) der ALTE, bereits gedruckte Beleg verlor
+--      diese Person (und ihren Betrag) rückwirkend aus seiner eigenen
+--      Summe/Personenliste, sobald der Verweis auf den neuen Beleg wanderte.
+--
+--      Diese Tabelle ist append-only (wie saison_abrechnungen) und hält pro
+--      (Beleg, Person) die für GENAU DIESEN Beleg gültigen Beträge fest -
+--      unabhängig davon, was später mit season_bonuses passiert.
+--      season_bonuses bleibt unverändert bestehen und weiterhin der
+--      "laufende Gesamtstand" der Saison (Basis für die Abweichungsanzeige
+--      auf der Lohnübersicht und für den Vergleichswert beim nächsten
+--      Differenzbeleg), siehe saison_abrechnen_batch weiter unten.
+-- ---------------------------------------------------------------------------
+create table auszahlungsbeleg_zeilen (
+  id bigint generated always as identity primary key,
+  auszahlungsbeleg_id bigint not null references auszahlungsbelege (id),
+  employee_id uuid not null references employees (id) on delete restrict,
+  saison_jahr int not null,
+  personal_nr text not null,
+  name text not null,
+  vorname text not null,
+  abrechnungsart text not null,
+  -- true, wenn diese Zeile die DIFFERENZ zu einer früheren Abrechnung
+  -- derselben Person/Saison ist (nicht der volle Saison-Betrag) - Person
+  -- war also schon einmal für dieses Jahr abgerechnet und wurde seither
+  -- reaktiviert.
+  ist_differenz boolean not null default false,
+  -- Gleiche Feldnamen wie season_summary (basis_brutto, praemien_summe,
+  -- stundenkonto_auszahlung_betrag, bruttolohn, lohnsteuer_pauschal, netto,
+  -- abzug_verpflegung, abzug_wohnen, vorschuss_summe, bus_kosten,
+  -- fahrer_kaution, zimmer_kaution, kleidung_betrag, verpflegungsfreie_tage,
+  -- gesamt_stunden, anwesenheitstage, auszahlungsbetrag) - bei
+  -- ist_differenz = true die DIFFERENZ, sonst der volle Wert. Gleiche
+  -- Struktur wie season_bonuses.snapshot, damit anzeige() im Frontend
+  -- (app/auszahlungen/page.tsx) unverändert weiterverwendet werden kann.
+  zeile jsonb not null,
+  erstellt_am timestamptz not null default now()
+);
+
+create unique index idx_auszahlungsbeleg_zeilen_beleg_employee
+  on auszahlungsbeleg_zeilen (auszahlungsbeleg_id, employee_id);
+
+-- ---------------------------------------------------------------------------
 -- 4b. Kautionsübergabe (Nutzer-Vorgabe 2026-08-09): die bei der Auszahlung
 --     einbehaltene Zimmerkaution wird real an den Hausmeister übergeben -
 --     erst dann wird sie auch als tatsächliche Kassenausgabe fällig (die
@@ -1200,10 +1252,12 @@ declare
   v_abgerechnet_am timestamptz;
   v_belegnummer text;
   v_zahlungsart text;
+  v_auszahlungsbeleg_id bigint;
   v_alter_betrag numeric;
   v_neuer_betrag numeric;
   v_delta numeric;
   s season_summary%rowtype;
+  neu season_summary%rowtype;
 begin
   -- Nutzer-Vorgabe 2026-08-21: hr und management dürfen "In Auszahlung
   -- umwandeln" ebenfalls sehen/nutzen (nicht nur admin/lohnabrechnung wie
@@ -1229,8 +1283,8 @@ begin
   select stundenlohn into v_stundenlohn from employees where id = p_employee_id;
   v_betrag := round(p_stunden * coalesce(v_stundenlohn, 0), 2);
 
-  select b.abgerechnet_am, ab.belegnummer, ab.zahlungsart
-    into v_abgerechnet_am, v_belegnummer, v_zahlungsart
+  select b.abgerechnet_am, b.auszahlungsbeleg_id, ab.belegnummer, ab.zahlungsart
+    into v_abgerechnet_am, v_auszahlungsbeleg_id, v_belegnummer, v_zahlungsart
   from season_bonuses b
   left join auszahlungsbelege ab on ab.id = b.auszahlungsbeleg_id
   where b.employee_id = p_employee_id and b.saison_jahr = p_saison_jahr;
@@ -1239,10 +1293,15 @@ begin
     raise exception 'Dieser Auszahlungsbeleg gehört zu einer bereits freigegebenen Kassenprüfung und kann nicht mehr geändert werden. Bitte zunächst die Kassenprüfung im Kassenbuch wiedereröffnen.';
   end if;
 
+  -- Nutzer-Vorgabe 2026-08-21: volle "Vorher"-Zeile (nicht nur den Betrag)
+  -- einlesen, damit die Differenz auch auf dem tatsächlich gedruckten Beleg
+  -- nachgezogen werden kann (auszahlungsbeleg_zeile_delta_anwenden unten) -
+  -- gleiches Muster wie abrechnung_korrigieren/
+  -- abrechnung_verpflegung_korrigieren.
   if v_abgerechnet_am is not null then
-    select (snapshot ->> 'auszahlungsbetrag')::numeric into v_alter_betrag
-    from season_bonuses
+    select * into s from season_summary
     where employee_id = p_employee_id and saison_jahr = p_saison_jahr;
+    v_alter_betrag := s.auszahlungsbetrag;
   end if;
 
   insert into stundenkonto_bewegungen (employee_id, saison_jahr, stunden, art, notiz)
@@ -1255,15 +1314,17 @@ begin
     season_bonuses.stundenkonto_auszahlung_betrag + v_betrag;
 
   if v_abgerechnet_am is not null then
-    select * into s from season_summary
+    select * into neu from season_summary
     where employee_id = p_employee_id and saison_jahr = p_saison_jahr;
 
-    v_neuer_betrag := s.auszahlungsbetrag;
+    v_neuer_betrag := neu.auszahlungsbetrag;
     v_delta := coalesce(v_neuer_betrag, 0) - coalesce(v_alter_betrag, 0);
 
     update season_bonuses
-    set snapshot = to_jsonb(s) - 'snapshot'
+    set snapshot = to_jsonb(neu) - 'snapshot'
     where employee_id = p_employee_id and saison_jahr = p_saison_jahr;
+
+    perform auszahlungsbeleg_zeile_delta_anwenden(p_employee_id, v_auszahlungsbeleg_id, s, neu);
 
     if v_belegnummer is not null then
       insert into kassenbewegungen (art, belegnummer, delta, zahlungsart, bearbeiter_id, hinweis)
@@ -1309,6 +1370,95 @@ create table saison_abrechnungen (
 create index idx_saison_abrechnungen_employee
   on saison_abrechnungen (employee_id, saison_jahr, abgerechnet_am);
 
+-- ---------------------------------------------------------------------------
+-- Differenzbeleg-Hilfsfunktionen (Nutzer-Vorgabe 2026-08-21): siehe
+-- auszahlungsbeleg_zeilen weiter oben. auszahlungsbeleg_zeile_differenz
+-- bildet aus zwei season_summary-artigen JSON-Objekten (aktueller Stand
+-- minus vorheriger eingefrorener Stand) die reine Differenz je Betrags-
+-- /Mengenfeld - nicht-numerische Felder (Name, Personalnummer, ...) bleiben
+-- unverändert der AKTUELLE Stand. auszahlungsbeleg_zeile_delta_anwenden
+-- ADDIERT diese Differenz nachträglich auf eine bereits bestehende Beleg-
+-- Zeile (statt sie zu überschreiben) - so bleibt eine Differenz-Zeile eine
+-- Differenz-Zeile und eine volle Erstzeile eine volle Zeile, auch wenn eine
+-- der drei Korrektur-Funktionen (abrechnung_korrigieren,
+-- abrechnung_verpflegung_korrigieren, stundenkonto_in_auszahlung_umwandeln)
+-- nachträglich etwas an einer bereits abgerechneten Person ändert.
+-- ---------------------------------------------------------------------------
+create or replace function auszahlungsbeleg_zeile_felder()
+returns text[] language sql immutable as $$
+  select array[
+    'gesamt_stunden', 'anwesenheitstage', 'basis_brutto', 'praemien_summe',
+    'stundenkonto_auszahlung_betrag', 'bruttolohn', 'lohnsteuer_pauschal',
+    'netto', 'abzug_verpflegung', 'abzug_wohnen', 'vorschuss_summe',
+    'bus_kosten', 'fahrer_kaution', 'zimmer_kaution', 'kleidung_betrag',
+    'verpflegungsfreie_tage', 'auszahlungsbetrag'
+  ];
+$$;
+
+create or replace function auszahlungsbeleg_zeile_differenz(v_neu jsonb, v_alt jsonb)
+returns jsonb language plpgsql immutable as $$
+declare
+  v_ergebnis jsonb := v_neu;
+  v_feld text;
+begin
+  foreach v_feld in array auszahlungsbeleg_zeile_felder() loop
+    v_ergebnis := jsonb_set(
+      v_ergebnis, array[v_feld],
+      to_jsonb(
+        coalesce((v_neu ->> v_feld)::numeric, 0)
+        - coalesce((v_alt ->> v_feld)::numeric, 0)
+      )
+    );
+  end loop;
+  return v_ergebnis;
+end;
+$$;
+
+create or replace function auszahlungsbeleg_zeile_delta_anwenden(
+  p_employee_id uuid,
+  p_beleg_id bigint,
+  p_alt season_summary,
+  p_neu season_summary
+)
+returns void language plpgsql security definer as $$
+declare
+  v_zeile jsonb;
+  v_feld text;
+  v_alt_jsonb jsonb := to_jsonb(p_alt) - 'snapshot';
+  v_neu_jsonb jsonb := to_jsonb(p_neu) - 'snapshot';
+  v_delta numeric;
+begin
+  if p_beleg_id is null then
+    return;
+  end if;
+
+  select zeile into v_zeile from auszahlungsbeleg_zeilen
+  where auszahlungsbeleg_id = p_beleg_id and employee_id = p_employee_id
+  for update;
+
+  if not found then
+    -- Sollte nicht vorkommen (jede abgerechnete Person hat eine Zeile im
+    -- zuletzt erstellten Beleg) - sicherheitshalber kein Fehler, damit eine
+    -- Korrektur nicht an einer fehlenden historischen Zeile scheitert.
+    return;
+  end if;
+
+  foreach v_feld in array auszahlungsbeleg_zeile_felder() loop
+    v_delta := coalesce((v_neu_jsonb ->> v_feld)::numeric, 0)
+      - coalesce((v_alt_jsonb ->> v_feld)::numeric, 0);
+    if v_delta <> 0 then
+      v_zeile := jsonb_set(
+        v_zeile, array[v_feld],
+        to_jsonb(coalesce((v_zeile ->> v_feld)::numeric, 0) + v_delta)
+      );
+    end if;
+  end loop;
+
+  update auszahlungsbeleg_zeilen set zeile = v_zeile
+  where auszahlungsbeleg_id = p_beleg_id and employee_id = p_employee_id;
+end;
+$$;
+
 -- "Jetzt Abrechnen" auf der Lohnübersicht (Mehrfachauswahl): erstellt EINEN
 -- Auszahlungsbeleg für die ganze Aktion (analog zu Vorschüssen/Kassenbuch),
 -- markiert jede übergebene Person als abgerechnet, friert ihren Stand als
@@ -1332,6 +1482,9 @@ declare
   neuer_beleg_id bigint;
   neue_belegnummer text;
   emp_id uuid;
+  v_war_abgerechnet boolean;
+  v_voller_stand jsonb;
+  v_zeile jsonb;
 begin
   if current_role_name() not in ('admin', 'lohnabrechnung') then
     raise exception 'Keine Berechtigung für "Jetzt Abrechnen"';
@@ -1348,16 +1501,42 @@ begin
     where employee_id = emp_id and saison_jahr = p_saison_jahr;
 
     if found then
+      -- Nutzer-Vorgabe 2026-08-21: war diese Person für dieses Saisonjahr
+      -- schon EINMAL abgerechnet (z.B. reaktiviert und mit nachgetragenen
+      -- Stunden), zeigt dieser Beleg nur die DIFFERENZ seit der letzten
+      -- Abrechnung, nicht nochmal den vollen (kumulierten) Saison-Betrag -
+      -- siehe auszahlungsbeleg_zeilen weiter oben.
+      v_war_abgerechnet := s.abgerechnet_am is not null;
       -- 'snapshot' aus s selbst entfernen, sonst würde sich bei mehrfachem
       -- Abrechnen derselben Person der alte Schnappschuss im neuen
       -- verschachteln.
+      v_voller_stand := to_jsonb(s) - 'snapshot';
+      if v_war_abgerechnet then
+        v_zeile := auszahlungsbeleg_zeile_differenz(v_voller_stand, s.snapshot);
+      else
+        v_zeile := v_voller_stand;
+      end if;
+
+      insert into auszahlungsbeleg_zeilen (
+        auszahlungsbeleg_id, employee_id, saison_jahr, personal_nr, name,
+        vorname, abrechnungsart, ist_differenz, zeile
+      )
+      values (
+        neuer_beleg_id, emp_id, p_saison_jahr, s.personal_nr, s.name,
+        s.vorname, s.abrechnungsart, v_war_abgerechnet, v_zeile
+      );
+
+      -- season_bonuses bleibt weiterhin der laufende GESAMTSTAND der Saison
+      -- (Basis für die Abweichungsanzeige auf der Lohnübersicht und für den
+      -- Vergleichswert beim nächsten Differenzbeleg oben) - hier also
+      -- unverändert der volle kumulierte Stand, nicht die Differenz.
       insert into season_bonuses (
         employee_id, saison_jahr, abgerechnet_am, abgerechnet_von,
         snapshot, auszahlungsbeleg_id
       )
       values (
         emp_id, p_saison_jahr, now(), auth.uid(),
-        to_jsonb(s) - 'snapshot', neuer_beleg_id
+        v_voller_stand, neuer_beleg_id
       )
       on conflict (employee_id, saison_jahr)
       do update set
@@ -1474,6 +1653,12 @@ begin
   set snapshot = to_jsonb(neu) - 'snapshot'
   where employee_id = p_employee_id and saison_jahr = p_saison_jahr;
 
+  -- Nutzer-Vorgabe 2026-08-21: die Korrektur muss auch auf dem tatsächlich
+  -- gedruckten Beleg sichtbar werden, nicht nur im laufenden Gesamtstand
+  -- (season_bonuses) - siehe auszahlungsbeleg_zeilen/-zeile_delta_anwenden
+  -- weiter oben.
+  perform auszahlungsbeleg_zeile_delta_anwenden(p_employee_id, s.auszahlungsbeleg_id, s, neu);
+
   if v_belegnummer is not null then
     insert into kassenbewegungen (art, belegnummer, delta, zahlungsart, bearbeiter_id, hinweis)
     values ('Abrechnungs-Korrektur', v_belegnummer, v_delta, v_zahlungsart, auth.uid(), p_grund);
@@ -1551,6 +1736,10 @@ begin
   update season_bonuses
   set snapshot = to_jsonb(neu) - 'snapshot'
   where employee_id = p_employee_id and saison_jahr = p_saison_jahr;
+
+  -- Nutzer-Vorgabe 2026-08-21: siehe gleiche Begründung in
+  -- abrechnung_korrigieren.
+  perform auszahlungsbeleg_zeile_delta_anwenden(p_employee_id, s.auszahlungsbeleg_id, s, neu);
 
   if v_belegnummer is not null then
     insert into kassenbewegungen (art, belegnummer, delta, zahlungsart, bearbeiter_id, hinweis)
@@ -3334,9 +3523,14 @@ grant select on employee_letzte_abrechnung to authenticated;
 
 -- ---------------------------------------------------------------------------
 -- 12d. View: Auszahlungsbeleg-Übersicht für die "Auszahlungen"-Seite -
---      Belegnummer, Anzahl Personen, Summe, und ob sich der eingefrorene
---      Stand einer enthaltenen Person seither von der Live-Berechnung
---      unterscheidet (z.B. weil danach ein Satz/Vorschuss geändert wurde).
+--      Belegnummer, Anzahl Personen, Summe, und ob dieser Beleg eine oder
+--      mehrere Differenzbeleg-Zeilen enthält (Nutzer-Vorgabe 2026-08-21).
+--      Quelle 2026-08-21 umgestellt von season_bonuses (EINE, bei jeder
+--      erneuten Abrechnung derselben Person überschriebene Zeile je
+--      Person/Saison) auf die unveränderliche auszahlungsbeleg_zeilen -
+--      vorher verschwand eine Person rückwirkend aus einem alten, bereits
+--      gedruckten Beleg, sobald sie erneut abgerechnet wurde (siehe
+--      auszahlungsbeleg_zeilen weiter oben).
 -- ---------------------------------------------------------------------------
 create or replace view auszahlungsbeleg_summary as
 select
@@ -3346,20 +3540,16 @@ select
   ab.zahlungsart,
   ab.erstellt_am,
   ab.erstellt_von,
-  count(sb.employee_id) as anzahl_personen,
-  sum((sb.snapshot ->> 'auszahlungsbetrag')::numeric) as summe_auszahlungsbetrag,
-  bool_or(
-    (sb.snapshot ->> 'auszahlungsbetrag')::numeric is distinct from ss.auszahlungsbetrag
-  ) as weicht_ab
+  count(az.employee_id) as anzahl_personen,
+  sum((az.zeile ->> 'auszahlungsbetrag')::numeric) as summe_auszahlungsbetrag,
+  bool_or(az.ist_differenz) as enthaelt_differenz
 from auszahlungsbelege ab
-join season_bonuses sb on sb.auszahlungsbeleg_id = ab.id
-left join season_summary ss
-  on ss.employee_id = sb.employee_id and ss.saison_jahr = sb.saison_jahr
+join auszahlungsbeleg_zeilen az on az.auszahlungsbeleg_id = ab.id
 -- Sicherheitsfix 2026-08-12 (Supabase-Advisor "Security Definer View"):
--- gleicher Grund wie bei season_summary - season_bonuses ist per RLS
--- admin/lohnabrechnung-only, diese Sicht braucht die Eigentümer-Rechte
--- dafür, darf aber nicht an zeiterfassung/erntewirtschaft durchgereicht
--- werden.
+-- gleicher Grund wie bei season_summary - auszahlungsbeleg_zeilen ist per
+-- RLS auf die Lohn-Rollen beschränkt, diese Sicht braucht die Eigentümer-
+-- Rechte dafür, darf aber nicht an zeiterfassung/erntewirtschaft
+-- durchgereicht werden.
 where current_role_name() in
   ('admin', 'hr', 'kasse', 'lohnabrechnung', 'pruefer', 'management')
 group by ab.id, ab.belegnummer, ab.saison_jahr, ab.zahlungsart, ab.erstellt_am, ab.erstellt_von;
@@ -3897,6 +4087,7 @@ alter table season_bonuses enable row level security;
 alter table stundenkonto_bewegungen enable row level security;
 alter table saison_abrechnungen enable row level security;
 alter table auszahlungsbelege enable row level security;
+alter table auszahlungsbeleg_zeilen enable row level security;
 alter table kautionsuebergaben enable row level security;
 alter table kautionsuebergabe_personen enable row level security;
 alter table verpflegungssaetze enable row level security;
@@ -4060,6 +4251,14 @@ create policy "auszahlungsbelege_select" on auszahlungsbelege for select
 -- employee_letzte_abrechnung).
 create policy "saison_abrechnungen_select" on saison_abrechnungen for select
   using (auth.uid() is not null);
+
+-- auszahlungsbeleg_zeilen: enthält Beträge, deshalb wie season_bonuses/
+-- auszahlungsbeleg_summary auf die Lohn-Rollen beschränkt (nicht wie
+-- saison_abrechnungen für alle angemeldeten Rollen). Nur lesend per Policy -
+-- geschrieben ausschließlich über saison_abrechnen_batch bzw. die
+-- Korrektur-Funktionen (alle security definer).
+create policy "auszahlungsbeleg_zeilen_select" on auszahlungsbeleg_zeilen for select
+  using (current_role_name() in ('admin', 'hr', 'kasse', 'lohnabrechnung', 'pruefer', 'management'));
 
 -- Kautionsübergabe: admin/lohnabrechnung (Auszahlungen-Seite) und kasse
 -- (Kassenbuch-Auswirkung) dürfen anlegen/stornieren, alle mit

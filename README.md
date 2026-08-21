@@ -262,6 +262,26 @@ Enthalten:
   berechnet). Bewusst nur Netto korrigierbar, kein automatischer
   Differenzbeleg - die tatsächliche Nach-/Rückzahlung läuft wie bei der
   Kautions-Rückzahlung außerhalb der App
+- **Erneutes "Jetzt Abrechnen" nach Reaktivierung (Stand 2026-08-21,
+  Nutzer-Frage: "Person abgerechnet, deaktiviert, reaktiviert, Stunden
+  nachgetragen, erneut abgerechnet - kommt dann eine weitere Abrechnung?")**:
+  season_summary rechnet immer kumulativ für die gesamte Saison, nie "seit
+  der letzten Abrechnung" - ein zweites "Jetzt Abrechnen" für dieselbe
+  Person hätte sonst wieder den KOMPLETTEN Saison-Betrag gezeigt statt nur
+  der Differenz (Doppelzahlungsrisiko), und der alte, bereits gedruckte
+  Beleg hätte diese Person rückwirkend aus seiner eigenen Summe/
+  Personenliste verloren. Behoben mit einer neuen, unveränderlichen
+  Tabelle `auszahlungsbeleg_zeilen`, die pro Beleg/Person die für GENAU
+  DIESEN Beleg gültigen Beträge festhält, unabhängig davon, was später mit
+  derselben Person passiert. War eine Person für die Saison schon einmal
+  abgerechnet, erzeugt "Jetzt Abrechnen" jetzt automatisch nur noch einen
+  **Differenzbeleg** (nur die Differenz seit der letzten Abrechnung,
+  gekennzeichnet mit „(Differenz)" auf Beleg/Bildschirm und einem „⚠
+  Differenz"-Hinweis in der Belegliste) - mit Warnhinweis im Bestätigungs-
+  Dialog vor dem Klick. Bereits erstellte Belege bleiben dadurch für immer
+  unveränderlich, auch die drei nachträglichen Korrektur-Funktionen (Netto,
+  Verpflegungstage, Stundenkonto-Auszahlung) ziehen ihre Änderung jetzt
+  zusätzlich auf die tatsächlich gedruckte Beleg-Zeile nach
 - "Verpflegungsfreie Tage" (Stand 2026-08-19, Nutzer-Vorgabe: zu viel
   Verpflegung abgezogen, weil die Kantine an einigen Tagen noch nicht
   geöffnet hatte): eigenes Zahlenfeld je Mitarbeiter/Saison auf der

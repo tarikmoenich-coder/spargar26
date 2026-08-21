@@ -340,14 +340,32 @@ export default function UebersichtPage() {
 
   async function jetztAbrechnen() {
     if (ausgewaehlt.size === 0) return;
-    const namen = rows
-      .filter((r) => ausgewaehlt.has(r.employee_id))
-      .map((r) => `${r.name}, ${r.vorname}`);
+    const ausgewaehlteRows = rows.filter((r) => ausgewaehlt.has(r.employee_id));
+    const namen = ausgewaehlteRows.map((r) => `${r.name}, ${r.vorname}`);
+    // Nutzer-Vorgabe 2026-08-21 (Frage: "Person abgerechnet, deaktiviert,
+    // reaktiviert, Stunden nachgetragen, erneut abgerechnet - kommt dann
+    // eine weitere Abrechnung?"): wer bereits ein abgerechnet_am hat, war
+    // für diese Saison schon einmal abgerechnet (z.B. reaktiviert) - für
+    // diese Personen erzeugt saison_abrechnen_batch jetzt automatisch nur
+    // einen Differenzbeleg (siehe schema.sql/auszahlungsbeleg_zeilen), statt
+    // nochmal den vollen Saison-Betrag auszuzahlen. Reiner Transparenz-
+    // Hinweis vor dem Klick, kein RPC-Signaturwechsel nötig.
+    const bereitsAbgerechnet = ausgewaehlteRows.filter((r) => r.abgerechnet_am);
+    const differenzHinweis =
+      bereitsAbgerechnet.length > 0
+        ? `\n\nAchtung: ${bereitsAbgerechnet.length} Person(en) wurden für diese ` +
+          `Saison bereits abgerechnet:\n${bereitsAbgerechnet
+            .map((r) => `${r.name}, ${r.vorname}`)
+            .join("\n")}\n\n` +
+          `Für sie wird nur die Differenz seit der letzten Abrechnung ausgezahlt ` +
+          `(Differenzbeleg), nicht nochmal der volle Saison-Betrag.`
+        : "";
     const bestaetigt = window.confirm(
       `${ausgewaehlt.size} Person(en) für Saison ${jahr} jetzt abrechnen?\n\n` +
         `${namen.join("\n")}\n\n` +
         `Diese Personen werden danach auf "inaktiv" gesetzt (können bei Bedarf ` +
-        `später wieder reaktiviert werden).`
+        `später wieder reaktiviert werden).` +
+        differenzHinweis
     );
     if (!bestaetigt) return;
 

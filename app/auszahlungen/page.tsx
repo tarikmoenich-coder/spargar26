@@ -5,6 +5,7 @@ import { getSupabaseClient } from "@/lib/supabase/client";
 import { useProfile } from "@/lib/useProfile";
 import type {
   AuszahlungsbelegSummary,
+  AuszahlungsbelegZeile,
   Kautionsuebergabe,
   SeasonSummaryRow,
 } from "@/lib/types";
@@ -46,14 +47,6 @@ function fmtDruck(n: number | string | null | undefined) {
 function anzeige(r: SeasonSummaryRow, feld: keyof SeasonSummaryRow) {
   if (r.snapshot && feld in r.snapshot) return r.snapshot[feld];
   return r[feld] as number | string | null;
-}
-
-function weichtAb(r: SeasonSummaryRow) {
-  if (!r.snapshot) return false;
-  const eingefroren = Number(r.snapshot.auszahlungsbetrag);
-  const live = r.auszahlungsbetrag === null ? NaN : Number(r.auszahlungsbetrag);
-  if (Number.isNaN(eingefroren) || Number.isNaN(live)) return false;
-  return Math.abs(eingefroren - live) > 0.005;
 }
 
 // Druck-Spalten der Auszahlungsliste (Nutzer-Vorgabe 2026-08-21): in einer
@@ -234,11 +227,11 @@ export default function AuszahlungenPage() {
   const [monatFilter, setMonatFilter] = useState<number | "alle">("alle");
   const [loading, setLoading] = useState(true);
   const [offen, setOffen] = useState<Set<number>>(new Set());
-  const [details, setDetails] = useState<Record<number, SeasonSummaryRow[]>>({});
+  const [details, setDetails] = useState<Record<number, AuszahlungsbelegZeile[]>>({});
   const [druckZeilen, setDruckZeilen] = useState<{
     belegnummer: string;
     zahlungsart: string;
-    zeilen: SeasonSummaryRow[];
+    zeilen: AuszahlungsbelegZeile[];
     kaution: Kautionsuebergabe | null;
     kautionPersonen: { name: string; personal_nr: string; betrag: number }[];
   } | null>(null);
@@ -304,15 +297,49 @@ export default function AuszahlungenPage() {
     });
     if (!details[beleg.id]) {
       const supabase = getSupabaseClient();
+      // Nutzer-Vorgabe 2026-08-21: Quelle von season_summary (per
+      // auszahlungsbeleg_id gefiltert - wanderte bei einer erneuten
+      // Abrechnung derselben Person auf den NEUEN Beleg, wodurch die Person
+      // rückwirkend aus diesem, bereits gedruckten Beleg verschwand) auf
+      // die unveränderliche auszahlungsbeleg_zeilen umgestellt.
       const { data, error } = await supabase
-        .from("season_summary")
+        .from("auszahlungsbeleg_zeilen")
         .select("*")
         .eq("auszahlungsbeleg_id", beleg.id)
         .order("name");
       if (!error) {
+        const zeilen: AuszahlungsbelegZeile[] = (
+          (data as {
+            employee_id: string;
+            saison_jahr: number;
+            personal_nr: string;
+            name: string;
+            vorname: string;
+            abrechnungsart: SeasonSummaryRow["abrechnungsart"];
+            ist_differenz: boolean;
+            zeile: Record<string, number | string | null>;
+          }[]) ?? []
+        ).map((row) => ({
+          ...(row.zeile as unknown as SeasonSummaryRow),
+          employee_id: row.employee_id,
+          saison_jahr: row.saison_jahr,
+          personal_nr: row.personal_nr,
+          name: row.name,
+          vorname: row.vorname,
+          abrechnungsart: row.abrechnungsart,
+          gruppe_nr: null,
+          aktiv: true,
+          abgerechnet_am: null,
+          auszahlungsbeleg_id: beleg.id,
+          // anzeige() liest bevorzugt aus snapshot - die eingefrorene
+          // Beleg-Zeile IST hier schon der anzuzeigende Wert (voll oder
+          // Differenz), kein separater "Live"-Stand mehr nötig.
+          snapshot: row.zeile,
+          ist_differenz: row.ist_differenz,
+        }));
         setDetails((prev) => ({
           ...prev,
-          [beleg.id]: (data as SeasonSummaryRow[]) ?? [],
+          [beleg.id]: zeilen,
         }));
       }
     }
@@ -544,9 +571,12 @@ export default function AuszahlungenPage() {
                 >
                   <span className="font-medium">
                     {beleg.belegnummer}
-                    {beleg.weicht_ab && (
-                      <span className="ml-2 text-amber-600" title="Weicht von der Live-Berechnung ab">
-                        ⚠
+                    {beleg.enthaelt_differenz && (
+                      <span
+                        className="ml-2 text-amber-600"
+                        title="Enthält mindestens einen Differenzbeleg - eine Person war für diese Saison bereits einmal abgerechnet"
+                      >
+                        ⚠ Differenz
                       </span>
                     )}
                   </span>
@@ -612,6 +642,14 @@ export default function AuszahlungenPage() {
                                   <td>{r.personal_nr}</td>
                                   <td>
                                     {r.name}, {r.vorname}
+                                    {r.ist_differenz && (
+                                      <span
+                                        className="ml-1 text-amber-600 text-xs"
+                                        title="Nur die Differenz seit einer früheren Abrechnung dieser Person/Saison, nicht der volle Saison-Betrag"
+                                      >
+                                        (Differenz)
+                                      </span>
+                                    )}
                                   </td>
                                   <td>{fmt(anzeige(r, "gesamt_stunden"))}</td>
                                   <td>{anzeige(r, "anwesenheitstage") ?? "—"}</td>
@@ -636,16 +674,6 @@ export default function AuszahlungenPage() {
                                   <td>{fmt(anzeige(r, "kleidung_betrag"))}</td>
                                   <td className="font-medium">
                                     {fmt(anzeige(r, "auszahlungsbetrag"))}
-                                    {weichtAb(r) && (
-                                      <span
-                                        className="ml-1 text-amber-600"
-                                        title={`Live-Berechnung aktuell: ${fmt(
-                                          r.auszahlungsbetrag
-                                        )} €`}
-                                      >
-                                        ⚠
-                                      </span>
-                                    )}
                                   </td>
                                 </tr>
                               ))}
@@ -805,6 +833,7 @@ export default function AuszahlungenPage() {
                       <td>{r.personal_nr}</td>
                       <td>
                         {r.name}, {r.vorname}
+                        {r.ist_differenz && " (Differenz)"}
                       </td>
                       <td>{fmtDruck(anzeige(r, "gesamt_stunden"))}</td>
                       <td>{anzeige(r, "anwesenheitstage") ?? "—"}</td>
