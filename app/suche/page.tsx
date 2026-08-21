@@ -57,6 +57,10 @@ const WOCHENTAGE = [
   "Sonntag",
 ];
 
+// Kürzel für die interaktive Arbeitsstunden-Liste (Nutzer-Vorgabe
+// 2026-08-21) - dieselbe Reihenfolge wie WOCHENTAGE (0 = Montag).
+const WOCHENTAGE_KUERZEL = ["Mo", "Di", "Mi", "Do", "Fr", "Sa", "So"];
+
 // Reine Kalendertag-Arithmetik auf Basis von "YYYY-MM-DD" - bewusst über
 // UTC-Millisekunden statt lokaler Zeitzone (gleicher Fallstrick wie beim
 // xlsx-Datumsimport, siehe Erinnerung "xlsx-datum-timezone-bug" - eine
@@ -78,6 +82,11 @@ function wochentagIndex(iso: string): number {
 
 function montagDerWoche(iso: string): string {
   return addTageIso(iso, -wochentagIndex(iso));
+}
+
+// Wochentag-Kürzel für ein Datum, z.B. "Do" für einen Donnerstag.
+function wochentagKuerzel(iso: string): string {
+  return WOCHENTAGE_KUERZEL[wochentagIndex(iso)];
 }
 
 // "18.08." statt vollem Datum - die Spaltenüberschrift nennt bereits den
@@ -491,7 +500,9 @@ export default function SuchePage() {
                       <tbody>
                         {stunden.map((e) => (
                           <tr key={e.id}>
-                            <td>{formatDatumDE(e.datum)}</td>
+                            <td>
+                              {wochentagKuerzel(e.datum)}, {formatDatumDE(e.datum)}
+                            </td>
                             <td>{e.stunden ?? "—"}</td>
                             <td>{e.markierung ?? "—"}</td>
                             <td className="text-neutral-500">{e.notiz}</td>

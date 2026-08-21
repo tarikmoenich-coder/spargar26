@@ -461,7 +461,9 @@ Enthalten:
   von der ersten bis zur letzten Buchung, eine Spalte je Wochentag mit
   Datum + Stunden (oder Markierung/Notiz, falls vorhanden) in der Zelle,
   plus eine Wochensumme-Spalte am Ende jeder Zeile - bei einer vollen
-  Saison damit ca. 20 statt 150+ Zeilen
+  Saison damit ca. 20 statt 150+ Zeilen. Die interaktive (nicht gedruckte)
+  Arbeitsstunden-Liste zeigt seit 2026-08-21 zusätzlich das Wochentag-Kürzel
+  (Mo/Di/Mi/Do/Fr/Sa/So) vor jedem Datum
 - Freitext-Notiz je Tag auf der Stundenerfassung (z.B. "krank", "zu
   spät") - erscheint auch auf der "Suche"-Seite
 - 15-Wochen-Kontrolle (SV-Freiheit landwirtschaftliche Saisonarbeit,
