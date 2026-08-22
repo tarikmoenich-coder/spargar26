@@ -349,7 +349,11 @@ Enthalten:
   Eingabefeld für den vom externen Lohnprogramm gelieferten Netto-Betrag
   (App berechnet hier bewusst keine eigene Lohnsteuer)
 - Herkünfte-Verwaltung unter Einstellungen (nur admin), als Dropdown im
-  Personalstamm (statt Freitext, damit Filter/Auswahl zuverlässig funktioniert)
+  Personalstamm (statt Freitext, damit Filter/Auswahl zuverlässig funktioniert).
+  Filter nach Herkunft (Stand 2026-08-21) auf der Personalstamm- und der
+  Sozialversicherung-Seite, um die sichtbare Liste einzugrenzen - getrennt
+  von der bereits bestehenden Mehrfachauswahl-Herkunft im Personalstamm
+  (die baut eine Gruppen-Auswahl auf, filtert nicht die Liste)
 - Vorschussverwaltung: einzeln, gruppenweise (nach Arbeitsgruppe) oder nach
   Herkunft auswählen, Betrag pro Person individuell anpassbar, atomare
   Belegnummer, Storno statt Löschen, filterbar nach Jahr und Monat (wie

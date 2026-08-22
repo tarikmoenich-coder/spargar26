@@ -73,6 +73,10 @@ export default function MitarbeiterPage() {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [showInactive, setShowInactive] = useState(false);
+  // Nutzer-Vorgabe 2026-08-21: Filter nach Herkunft für die Personalstamm-
+  // Liste - eigener State, bewusst getrennt von bulkHerkunftFilter (das
+  // steuert die Mehrfachauswahl weiter unten, nicht die sichtbare Liste).
+  const [herkunftListenFilter, setHerkunftListenFilter] = useState("");
   const [form, setForm] = useState(emptyForm);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
@@ -682,12 +686,14 @@ export default function MitarbeiterPage() {
 
   const filtered = employees.filter((e) => {
     const q = search.toLowerCase();
-    return (
+    const passtSuche =
       !q ||
       e.name.toLowerCase().includes(q) ||
       e.vorname.toLowerCase().includes(q) ||
-      e.personal_nr.toLowerCase().includes(q)
-    );
+      e.personal_nr.toLowerCase().includes(q);
+    const passtHerkunft =
+      !herkunftListenFilter || e.herkunft === herkunftListenFilter;
+    return passtSuche && passtHerkunft;
   });
 
   // Ausgelagert, damit dasselbe Formular sowohl oben (Neuanlegen) als auch
@@ -1048,6 +1054,20 @@ export default function MitarbeiterPage() {
           onChange={(e) => setSearch(e.target.value)}
           className="w-72"
         />
+        <label className="text-sm">
+          Herkunft{" "}
+          <select
+            value={herkunftListenFilter}
+            onChange={(e) => setHerkunftListenFilter(e.target.value)}
+          >
+            <option value="">Alle</option>
+            {herkuenfte.map((h) => (
+              <option key={h.wert} value={h.wert}>
+                {h.wert}
+              </option>
+            ))}
+          </select>
+        </label>
         <label className="flex items-center gap-1 text-sm">
           <input
             type="checkbox"

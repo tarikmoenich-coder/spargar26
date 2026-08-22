@@ -10,6 +10,7 @@ import SvFragebogenFormular, {
 import AbrechnungsHistorie from "@/components/AbrechnungsHistorie";
 import type {
   Employee,
+  Herkunft,
   SvAbschnitt,
   SvFragebogenAuswertung,
   SvPruefung,
@@ -35,9 +36,13 @@ export default function SozialversicherungPage() {
   const [jahr, setJahr] = useState(CURRENT_YEAR);
   const [showInactive, setShowInactive] = useState(false);
   const [search, setSearch] = useState("");
+  // Nutzer-Vorgabe 2026-08-21: Filter nach Herkunft, wie auf der
+  // Personalstamm-Seite (app/mitarbeiter/page.tsx).
+  const [herkunftFilter, setHerkunftFilter] = useState("");
   const [loading, setLoading] = useState(true);
 
   const [employees, setEmployees] = useState<Employee[]>([]);
+  const [herkuenfte, setHerkuenfte] = useState<Herkunft[]>([]);
   const [fragebogen, setFragebogen] = useState<
     Record<string, SvFragebogenAuswertung>
   >({});
@@ -68,6 +73,7 @@ export default function SozialversicherungPage() {
       { data: fragVorjahr },
       { data: pr },
       { data: abschnitte },
+      { data: herkunftData },
     ] = await Promise.all([
       query,
       supabase
@@ -83,9 +89,11 @@ export default function SozialversicherungPage() {
         .from("employee_sv_abschnitte")
         .select("*")
         .eq("saison_jahr", jahr),
+      supabase.from("herkuenfte").select("*").order("reihenfolge"),
     ]);
     setSvAbschnitte((abschnitte as SvAbschnitt[]) ?? []);
     setEmployees((emps as Employee[]) ?? []);
+    setHerkuenfte((herkunftData as Herkunft[]) ?? []);
     const map: Record<string, SvFragebogenAuswertung> = {};
     ((frag as SvFragebogenAuswertung[]) ?? []).forEach((f) => {
       map[f.employee_id] = f;
@@ -111,12 +119,13 @@ export default function SozialversicherungPage() {
 
   const gefiltert = employees.filter((e) => {
     const q = search.toLowerCase();
-    return (
+    const passtSuche =
       !q ||
       e.name.toLowerCase().includes(q) ||
       e.vorname.toLowerCase().includes(q) ||
-      e.personal_nr.toLowerCase().includes(q)
-    );
+      e.personal_nr.toLowerCase().includes(q);
+    const passtHerkunft = !herkunftFilter || e.herkunft === herkunftFilter;
+    return passtSuche && passtHerkunft;
   });
 
   return (
@@ -152,6 +161,20 @@ export default function SozialversicherungPage() {
             onChange={(e) => setJahr(Number(e.target.value))}
             className="w-24"
           />
+        </label>
+        <label>
+          Herkunft{" "}
+          <select
+            value={herkunftFilter}
+            onChange={(e) => setHerkunftFilter(e.target.value)}
+          >
+            <option value="">Alle</option>
+            {herkuenfte.map((h) => (
+              <option key={h.wert} value={h.wert}>
+                {h.wert}
+              </option>
+            ))}
+          </select>
         </label>
         <label className="flex items-center gap-1">
           <input
