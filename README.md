@@ -938,6 +938,33 @@ Enthalten:
   Erdbeeren), und die Formel enthält jetzt zusätzlich die Tagesprämien
   ("die fehlen bei der Betrachtung der reinen Gruppenkosten") - Migration
   `migration_2026-08-12_kulturkosten_praemien.sql`
+- **Personenauswertung Zuckermais (Stand 2026-08-23, Nutzer-Vorgabe: "wen
+  schicke ich zuerst nach Hause" - wer kostet am meisten bei geringster
+  Leistung)**: neue Sektion unter der bestehenden Tagesstatistik auf
+  `Statistik → Zuckermais`, nur für admin/hr/management sichtbar (enger
+  als der Rest der Seite) - rechnet bewusst mit dem individuellen
+  `employees.stundenlohn`, nicht dem Mindestlohn wie die übrige Seite,
+  echte Lohnkosten je Person sind hier der Punkt. Freier Von-Bis-
+  Zeitraumfilter statt nur Saison-Jahr ("vor allem wenn ich es mir über
+  einen längeren Zeitraum anschauen kann", Nutzer-Zitat). Kennzahlen je
+  Person: **Auslastung %** = Ausbeute/Std. ÷ die im Zeitraum jeweils
+  gültige Norm × 100 - zeilenweise mit dem am jeweiligen Tag gültigen
+  Satz berechnet und dann summiert, nicht aus Tages-Durchschnitten
+  gemittelt, damit eine Normänderung mitten im Zeitraum korrekt gewichtet
+  einfließt (gleiches Prinzip wie bei `zuckermais_praemie_tag` selbst).
+  **Negativprämie €** = Spiegelbild der bestehenden Prämien-Formel mit
+  demselben Satz (`GREATEST((Norm × Std. − Kolben) × Satz, 0)`) - macht
+  eine Unterschreitung in denselben Euro sichtbar wie die Prämie selbst
+  (Nutzer-Bestätigung: die Prämie ist dabei keine Verzerrung zulasten
+  guter Leute, da Kosten/Kolben schnelle und langsame Leute schon ohne
+  sie trennt). Personen mit weniger als 5 Std. im Zeitraum werden
+  ausgeblendet (zu verrauschte Auslastung). Tabelle klickbar sortierbar,
+  Standard-Sortierung Auslastung aufsteigend. Reine Frontend-Auswertung
+  auf bereits bestehenden Daten (`zuckermais_praemie_tag`,
+  `employees.stundenlohn`), keine Migration nötig. Erdbeeren (Daten
+  ebenso bereits person-scharf vorhanden, Norm dort aber je Parzelle) und
+  Spargel (bislang keine personenscharfen Erntedaten überhaupt) bewusst
+  zurückgestellt - siehe Konzept-Dokument in der Sitzung
 - Neue Rolle `erntewirtschaft` (Stand 2026-08-09): eigener,
   eingeschränkter Arbeitsbereich mit ausschließlich Zugriff auf Prämien
   (erfassen, wie zeiterfassung), Statistik und ein eigenes Dashboard - kein
