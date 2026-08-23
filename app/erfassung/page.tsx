@@ -909,6 +909,7 @@ function ErfassungInner() {
                             employeeId={emp.id}
                             saisonJahr={stundenkontoJahr}
                             personLabel={`${emp.name}, ${emp.vorname}`}
+                            bearbeitetesDatum={datum}
                             onSaldoChange={(neu) =>
                               setStundenkontoSaldo((prev) => ({
                                 ...prev,

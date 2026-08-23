@@ -30,6 +30,12 @@ interface StundenkontoBereichProps {
   // "Name, Vorname" - für die Überschrift/Meldungen.
   personLabel: string;
   onSaldoChange?: (saldo: number) => void;
+  // Nutzer-Vorgabe 2026-08-23: Standard-Datum im "Buchen"-Feld soll den
+  // Tag übernehmen, der im aufrufenden Kontext (Stundenerfassung) gerade
+  // bearbeitet wird, statt immer auf heute zu stehen - optional, damit
+  // andere Aufrufer (z.B. das Controlling-Stundenmonitoring, das keinen
+  // einzelnen bearbeiteten Tag kennt) unverändert bei "heute" bleiben.
+  bearbeitetesDatum?: string;
 }
 
 export default function StundenkontoBereich({
@@ -37,6 +43,7 @@ export default function StundenkontoBereich({
   saisonJahr,
   personLabel,
   onSaldoChange,
+  bearbeitetesDatum,
 }: StundenkontoBereichProps) {
   const { profile } = useProfile();
   const canBuchen = kannStundenkontoBuchen(profile?.role);
@@ -45,7 +52,7 @@ export default function StundenkontoBereich({
   const [saldo, setSaldo] = useState(0);
   const [historie, setHistorie] = useState<StundenkontoBewegung[]>([]);
   const [ladeHistorie, setLadeHistorie] = useState(true);
-  const [datum, setDatum] = useState(todayIso());
+  const [datum, setDatum] = useState(bearbeitetesDatum ?? todayIso());
   const [stunden, setStunden] = useState("");
   const [art, setArt] = useState<
     "Gutschrift" | "Korrektur" | "Freizeitausgleich"
@@ -87,7 +94,7 @@ export default function StundenkontoBereich({
   useEffect(() => {
     setFehler(null);
     setErfolg(null);
-    setDatum(todayIso());
+    setDatum(bearbeitetesDatum ?? todayIso());
     setStunden("");
     setArt("Gutschrift");
     setNotiz("");
@@ -95,7 +102,7 @@ export default function StundenkontoBereich({
     setAuszahlungNotiz("");
     neuLaden();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [employeeId, saisonJahr]);
+  }, [employeeId, saisonJahr, bearbeitetesDatum]);
 
   async function buchen() {
     const wert = Number(stunden);

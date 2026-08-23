@@ -834,7 +834,12 @@ Enthalten:
   statt zweimal gepflegten Code - Rollen zentral in
   `lib/stundenkontoRechte.ts`. "In Auszahlung umwandeln" jetzt zusätzlich
   für hr/management sichtbar (vorher nur admin/lohnabrechnung),
-  weiterhin NICHT für zeiterfassung
+  weiterhin NICHT für zeiterfassung. Stand 2026-08-23 (Nutzer-Vorgabe): das
+  "Buchen"-Datumsfeld übernimmt auf der Stundenerfassung als Standard den
+  gerade bearbeiteten Tag statt immer "heute" - neuer optionaler Prop
+  `bearbeitetesDatum` an `StundenkontoBereich`, auf dem Controlling-
+  Stundenmonitoring (kein einzelner bearbeiteter Tag vorhanden) bewusst
+  nicht gesetzt, bleibt dort bei "heute"
 - "Controlling"-Seite, Abschnitt "Abweichungen bei Auszahlungen": listet
   alle bereits abgerechneten Personen, deren Live-Berechnung inzwischen
   vom eingefrorenen Schnappschuss abweicht (das „⚠" von der
