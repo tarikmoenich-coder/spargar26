@@ -959,7 +959,8 @@ Enthalten:
   guter Leute, da Kosten/Kolben schnelle und langsame Leute schon ohne
   sie trennt). Personen mit weniger als 5 Std. im Zeitraum werden
   ausgeblendet (zu verrauschte Auslastung). Tabelle klickbar sortierbar,
-  Standard-Sortierung Auslastung aufsteigend. Reine Frontend-Auswertung
+  Standard-Sortierung Auslastung aufsteigend, Herkunft-Spalte rechts neben
+  dem Namen. Reine Frontend-Auswertung
   auf bereits bestehenden Daten (`zuckermais_praemie_tag`,
   `employees.stundenlohn`), keine Migration nötig. Erdbeeren (Daten
   ebenso bereits person-scharf vorhanden, Norm dort aber je Parzelle) und

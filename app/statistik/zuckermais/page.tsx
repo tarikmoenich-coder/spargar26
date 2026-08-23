@@ -44,6 +44,7 @@ interface PersonenZeile {
   personal_nr: string;
   name: string;
   vorname: string;
+  herkunft: string;
   stunden: number;
   kolben: number;
   proStunde: number;
@@ -60,6 +61,7 @@ interface PersonenZeile {
 type PersonenSortKey = keyof Pick<
   PersonenZeile,
   | "name"
+  | "herkunft"
   | "stunden"
   | "kolben"
   | "proStunde"
@@ -113,7 +115,10 @@ export default function StatistikZuckermaisPage() {
   );
   const [praemieZeilen, setPraemieZeilen] = useState<ZuckermaisPraemieTag[]>([]);
   const [mitarbeiterMap, setMitarbeiterMap] = useState<
-    Record<string, Pick<Employee, "personal_nr" | "name" | "vorname" | "stundenlohn">>
+    Record<
+      string,
+      Pick<Employee, "personal_nr" | "name" | "vorname" | "stundenlohn" | "herkunft">
+    >
   >({});
   const [personenLoading, setPersonenLoading] = useState(false);
   const [personenSort, setPersonenSort] = useState<{
@@ -136,12 +141,12 @@ export default function StatistikZuckermaisPage() {
       // Zeitraum weiterhin korrekt ausgewertet werden können.
       supabase
         .from("employees")
-        .select("id, personal_nr, name, vorname, stundenlohn"),
+        .select("id, personal_nr, name, vorname, stundenlohn, herkunft"),
     ]);
     if (!error) setPraemieZeilen((praemie as ZuckermaisPraemieTag[]) ?? []);
     const map: Record<
       string,
-      Pick<Employee, "personal_nr" | "name" | "vorname" | "stundenlohn">
+      Pick<Employee, "personal_nr" | "name" | "vorname" | "stundenlohn" | "herkunft">
     > = {};
     ((mitarbeiter as Employee[]) ?? []).forEach((m) => {
       map[m.id] = m;
@@ -204,6 +209,7 @@ export default function StatistikZuckermaisPage() {
           personal_nr: mitarbeiter?.personal_nr ?? "—",
           name: mitarbeiter?.name ?? "—",
           vorname: mitarbeiter?.vorname ?? "",
+          herkunft: mitarbeiter?.herkunft ?? "—",
           stunden: v.stunden,
           kolben: v.kolben,
           proStunde: v.stunden > 0 ? v.kolben / v.stunden : 0,
@@ -420,6 +426,7 @@ export default function StatistikZuckermaisPage() {
                     {(
                       [
                         ["name", "Name"],
+                        ["herkunft", "Herkunft"],
                         ["stunden", "Std."],
                         ["kolben", "Kolben"],
                         ["proStunde", "Kolben/Std."],
@@ -452,6 +459,7 @@ export default function StatistikZuckermaisPage() {
                       <td>
                         {z.name}, {z.vorname}
                       </td>
+                      <td>{z.herkunft}</td>
                       <td>{fmt(z.stunden)}</td>
                       <td>{fmt(z.kolben)}</td>
                       <td>{fmt(z.proStunde)}</td>
@@ -469,7 +477,7 @@ export default function StatistikZuckermaisPage() {
                 </tbody>
                 <tfoot>
                   <tr className="font-semibold">
-                    <td colSpan={7} className="text-right">
+                    <td colSpan={8} className="text-right">
                       Summe Negativprämie im Zeitraum
                     </td>
                     <td className="text-red-600">{fmt(summeNegativpraemie)}</td>
