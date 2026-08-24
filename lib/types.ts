@@ -757,15 +757,36 @@ export interface AdvanceRecipientDetail {
   bic?: string | null;
 }
 
-// Bereits ausgegebene Arbeitskleidung je Person/Saison-Jahr - aus der
-// schmalen Sicht employee_kleidung_ausgabe (season_bonuses selbst bleibt
-// für zeiterfassung nicht lesbar).
-export interface EmployeeKleidungAusgabe {
+// Arbeitskleidung (Nutzer-Vorgabe 2026-08-24: Datumsstempel + Größen +
+// "lebender" Lagerbestand statt einer überschreibbaren Gesamtzahl je
+// Person/Saison). Ersetzt EmployeeKleidungAusgabe/employee_kleidung_ausgabe.
+export type KleidungTyp = "Hose" | "Jacke" | "Stiefel";
+
+// Ein Eintrag aus dem Ausgabe-Log kleidung_ausgaben - eine Zeile je
+// tatsächlicher Ausgabe, storniert statt gelöscht (wie Vorschüsse).
+export interface KleidungAusgabe {
+  id: number;
   employee_id: string;
   saison_jahr: number;
-  kleidung_hose_anzahl: number;
-  kleidung_jacke_anzahl: number;
-  kleidung_stiefel_anzahl: number;
+  typ: KleidungTyp;
+  groesse: string;
+  anzahl: number;
+  datum: string;
+  bearbeiter_id: string | null;
+  storniert: boolean;
+  storno_grund: string | null;
+}
+
+// Anfangsbestand je Saison/Typ/Größe aus kleidung_lagerbestand - der
+// aktuelle Bestand wird im Frontend live berechnet (Anfangsbestand minus
+// Summe aller nicht stornierten kleidung_ausgaben), nie gespeichert.
+export interface KleidungLagerbestand {
+  saison_jahr: number;
+  typ: KleidungTyp;
+  groesse: string;
+  anfangsbestand: number;
+  updated_by: string | null;
+  updated_at: string;
 }
 
 // Prämien (Nutzer-Vorgabe 2026-08-09) - Menüpunkt mit Untermenüs Spargel/

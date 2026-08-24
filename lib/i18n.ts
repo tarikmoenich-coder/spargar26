@@ -42,6 +42,8 @@ const de = {
   "gemeinsam.steigen": "Steigen",
   "gemeinsam.sut": "Sut",
   "gemeinsam.parzelle": "Parzelle",
+  "gemeinsam.aufklappen": "Aufklappen",
+  "gemeinsam.einklappen": "Einklappen",
 
   // Stundenerfassung (app/erfassung/page.tsx)
   "erfassung.title": "Stundenerfassung",
@@ -98,14 +100,33 @@ const de = {
   // Arbeitskleidung (app/arbeitskleidung/page.tsx)
   "arbeitskleidung.title": "Arbeitskleidung {jahr}",
   "arbeitskleidung.untertitel":
-    "Nur Hose, Jacke und Stiefel werden berechnet und als eigene Abzugsposition in die Lohnübersicht übernommen (wie Buskosten/Kautionen). Spargelmesser, Feile, Handschuhe sind Verbrauchsgegenstände - werden beim Tausch gegen das Altgerät kostenlos ersetzt und hier nicht erfasst. Anzahl statt Betrag: der Preis je Stück steht fest in den Einstellungen.",
+    "Jede Ausgabe wird einzeln mit Datum und Größe erfasst (kein Überschreiben mehr) - siehe Ausgabe-Historie je Person. Nur Hose, Jacke und Stiefel fließen als eigene Abzugsposition in die Lohnübersicht ein (wie Buskosten/Kautionen), Spargelmesser/Feile/Handschuhe sind Verbrauchsgegenstände und werden hier bewusst nicht erfasst. Der Lagerbestand unten wird automatisch aus Anfangsbestand minus allen Ausgaben berechnet.",
   "arbeitskleidung.keinepreise":
     "⚠ Für {jahr} sind noch keine Preise für Hose/Jacke/Stiefel in den Einstellungen hinterlegt - eingetragene Stückzahlen werden erst mit 0 € berechnet, bis das nachgeholt wird.",
   "arbeitskleidung.keineberechtigung":
     "Nur admin/hr/zeiterfassung dürfen Arbeitskleidung erfassen.",
-  "arbeitskleidung.hose": "Hose (Anzahl)",
-  "arbeitskleidung.jacke": "Jacke (Anzahl)",
-  "arbeitskleidung.stiefel": "Stiefel (Anzahl)",
+  "arbeitskleidung.typhose": "Hose",
+  "arbeitskleidung.typjacke": "Jacke",
+  "arbeitskleidung.typstiefel": "Stiefel",
+  "arbeitskleidung.lagerbestand": "Lagerbestand",
+  "arbeitskleidung.lagerbestanduntertitel":
+    "Anfangsbestand zu Saisonbeginn eintragen (nur admin/hr) - der aktuelle Bestand wird automatisch berechnet (Anfangsbestand minus alle nicht stornierten Ausgaben) und muss nicht 100% genau gepflegt werden, um trotzdem eine gute Orientierung zu geben.",
+  "arbeitskleidung.typ": "Typ",
+  "arbeitskleidung.groesse": "Größe",
+  "arbeitskleidung.anfangsbestand": "Anfangsbestand",
+  "arbeitskleidung.ausgegeben": "Ausgegeben",
+  "arbeitskleidung.aktuellerbestand": "Aktueller Bestand",
+  "arbeitskleidung.ausgabeerfassen": "Ausgabe erfassen",
+  "arbeitskleidung.anzahl": "Anzahl",
+  "arbeitskleidung.ausgeben": "Ausgeben",
+  "arbeitskleidung.historie": "Ausgabe-Historie",
+  "arbeitskleidung.keinehistorie": "Noch keine Ausgaben erfasst.",
+  "arbeitskleidung.stornieren": "Stornieren",
+  "arbeitskleidung.storniert": "storniert",
+  "arbeitskleidung.stornogrundprompt":
+    "Grund für die Stornierung dieser Ausgabe (Pflichtfeld, wird protokolliert):",
+  "arbeitskleidung.bearbeiter": "Anwender",
+  "arbeitskleidung.bishernichts": "Noch keine Ausgabe in dieser Saison.",
 } as const;
 
 export type TKey = keyof typeof de;
@@ -130,6 +151,8 @@ const hr: Record<TKey, string> = {
   "gemeinsam.steigen": "Gajbe",
   "gemeinsam.sut": "Otpad",
   "gemeinsam.parzelle": "Parcela",
+  "gemeinsam.aufklappen": "Proširi",
+  "gemeinsam.einklappen": "Suzi",
 
   "erfassung.title": "Evidencija radnih sati",
   "erfassung.untertitel":
@@ -183,14 +206,33 @@ const hr: Record<TKey, string> = {
 
   "arbeitskleidung.title": "Radna odjeća {jahr}",
   "arbeitskleidung.untertitel":
-    "Obračunavaju se samo hlače, jakna i čizme te se preuzimaju kao zasebna stavka odbitka u pregledu plaća (kao putni troškovi/depoziti). Nož za šparoge, turpija i rukavice su potrošni materijal - besplatno se zamjenjuju uz predaju starog komada i ovdje se ne evidentiraju. Broj komada umjesto iznosa: cijena po komadu je fiksno postavljena u postavkama.",
+    "Svako izdavanje bilježi se zasebno s datumom i veličinom (više se ne prepisuje) - povijest izdavanja vidljiva je po osobi. Samo hlače, jakna i čizme ulaze kao zasebna stavka odbitka u pregled plaća (kao putni troškovi/depoziti), nož za šparoge, turpija i rukavice su potrošni materijal i ovdje se ne bilježe. Zaliha ispod automatski se izračunava kao početno stanje minus sva izdavanja.",
   "arbeitskleidung.keinepreise":
     "⚠ Za {jahr} još nisu unesene cijene za hlače/jaknu/čizme u postavkama - unesene količine se do tada obračunavaju s 0 €.",
   "arbeitskleidung.keineberechtigung":
     "Samo admin/hr/zeiterfassung smiju evidentirati radnu odjeću.",
-  "arbeitskleidung.hose": "Hlače (kom.)",
-  "arbeitskleidung.jacke": "Jakna (kom.)",
-  "arbeitskleidung.stiefel": "Čizme (kom.)",
+  "arbeitskleidung.typhose": "Hlače",
+  "arbeitskleidung.typjacke": "Jakna",
+  "arbeitskleidung.typstiefel": "Čizme",
+  "arbeitskleidung.lagerbestand": "Zaliha",
+  "arbeitskleidung.lagerbestanduntertitel":
+    "Unesite početno stanje na početku sezone (samo admin/hr) - trenutno stanje računa se automatski (početno stanje minus sva nestornirana izdavanja) i ne mora biti 100% točno da bi ipak dalo dobru orijentaciju.",
+  "arbeitskleidung.typ": "Vrsta",
+  "arbeitskleidung.groesse": "Veličina",
+  "arbeitskleidung.anfangsbestand": "Početno stanje",
+  "arbeitskleidung.ausgegeben": "Izdano",
+  "arbeitskleidung.aktuellerbestand": "Trenutno stanje",
+  "arbeitskleidung.ausgabeerfassen": "Zabilježi izdavanje",
+  "arbeitskleidung.anzahl": "Količina",
+  "arbeitskleidung.ausgeben": "Izdaj",
+  "arbeitskleidung.historie": "Povijest izdavanja",
+  "arbeitskleidung.keinehistorie": "Još nema zabilježenih izdavanja.",
+  "arbeitskleidung.stornieren": "Storniraj",
+  "arbeitskleidung.storniert": "stornirano",
+  "arbeitskleidung.stornogrundprompt":
+    "Razlog za storniranje ovog izdavanja (obavezno, bilježi se):",
+  "arbeitskleidung.bearbeiter": "Korisnik",
+  "arbeitskleidung.bishernichts": "Još nema izdavanja u ovoj sezoni.",
 };
 
 const WOERTERBUECHER: Record<Sprache, Record<TKey, string>> = { de, hr };

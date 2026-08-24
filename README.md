@@ -411,16 +411,44 @@ Enthalten:
   App in bar - die App bildet aktuell nur den Abzug ab, keinen offen/
   zurückgezahlt-Status
 - "Stundenerfassung → Arbeitskleidung" (admin/hr/zeiterfassung, Stand
-  2026-08-09): Ausgabe von Arbeitshose/-jacke/Gummistiefeln je Person
-  (Anzahl statt Betrag - fester Preis je Stück in den Einstellungen) -
+  2026-08-09): Ausgabe von Arbeitshose/-jacke/Gummistiefeln je Person -
   landet wie Buskosten/Kautionen als eigene, sichtbare Abzugsposition im
   Auszahlungsbetrag. Spargelmesser, Feile, Handschuhe sind
   Verbrauchsgegenstände (kostenloser Tausch gegen das Altgerät) und werden
   bewusst nicht erfasst. Erfasst über eine kontrollierte
   security-definer-Ausnahme (season_bonuses selbst bleibt für
-  zeiterfassung nicht lesbar/schreibbar). Die Spaltenüberschriften zeigen
-  seit 2026-08-18 zusätzlich den in den Einstellungen hinterlegten Preis
-  je Stück (z.B. "Hose (Anzahl) (12,50 €/Stück)")
+  zeiterfassung nicht lesbar/schreibbar). **Grundlegend umgebaut (Stand
+  2026-08-24, Nutzer-Vorgabe: "Ich möchte einen Datumsstempel bekommen...
+  die Größen, die ausgegeben wurden... einen Lagerbestand an
+  Arbeitskleidung, der 'lebt'"):** statt einer überschreibbaren Gesamtzahl
+  je Person/Saison jetzt ein Ausgabe-Log (`kleidung_ausgaben`) - jede
+  Ausgabe ein eigener, zeitgestempelter Eintrag mit Pflichtfeld Größe
+  (feste Listen im Code: Hose/Jacke S–3XL, Stiefel 36–48), per Storno statt
+  Überschreiben korrigierbar (Pflichtgrund, wie bei Vorschüssen). Neuer
+  Abschnitt "Lagerbestand" (admin/hr tragen den Anfangsbestand je Typ+Größe
+  zu Saisonbeginn ein, alle mit Zugriff sehen ihn) zeigt den aktuellen
+  Bestand live berechnet (Anfangsbestand − Summe aller nicht stornierten
+  Ausgaben, muss laut Nutzer nicht 100% exakt sein - reine Orientierung),
+  rot/gelb eingefärbt bei 0 bzw. ≤ 3 Stück. Personentabelle jetzt
+  aufklappbar (wie Controlling → Stundenmonitoring): Ausgabe-Formular
+  (Typ/Größe/Anzahl) plus die eigene Ausgabe-Historie der Person inkl.
+  Storno-Möglichkeit. Der bestehende Lohnabzug bleibt inhaltlich
+  unverändert (weiterhin Stück × Preis) - `season_bonuses.kleidung_*_anzahl`
+  ist jetzt nur noch ein aus dem Log neu berechneter Cache
+  (`arbeitskleidung_bestand_synchronisieren`), ersetzt die alte Funktion
+  `arbeitskleidung_setzen`. Migration:
+  `migration_2026-08-24_arbeitskleidung_lagerbestand.sql`. Gleicher
+  Suchfilter wie auf der Stundenerfassung (Name/Personalnummer) ergänzt.
+  **Bugfix im selben Zuge (Nutzer-Meldung: "steht da, dass die Preise für
+  2026 noch nicht in den Einstellungen hinterlegt sind. Das stimmt aber
+  nicht"):** `verpflegungssaetze` hatte nur eine einzige RLS-Policy ("for
+  all using (is_admin())") - dadurch konnte KEINE andere Rolle
+  (hr/zeiterfassung/kasse/lohnabrechnung/pruefer/management/
+  erntewirtschaft) die Preise/Sätze überhaupt lesen, betraf also nicht nur
+  diese Seite, sondern auch die Mindestlohn-Vorbelegung auf Personal/
+  Personalplanung/Anreiseliste. Aufgeteilt wie bei zuckermais_saetze/
+  erdbeeren_parzellen_saetze (lesen breit, schreiben weiterhin nur admin).
+  Migration: `migration_2026-08-24_verpflegungssaetze_select_rls.sql`
 - Kautionsübergabe an den Hausmeister (Stand 2026-08-09): die bei der
   Auszahlung einbehaltene Zimmerkaution mindert zunächst nur den
   Auszahlungsbetrag der Person, nicht den Kassenbestand - erst wenn sie
