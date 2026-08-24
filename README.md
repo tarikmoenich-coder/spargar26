@@ -655,6 +655,35 @@ Enthalten:
   fehlende historische Abrechnung am ehesten zu einer voreiligen Umstellung
   geführt haben dürfte. Jetzt immer sichtbar (reines Fakten-Protokoll,
   keine SV-Freiheits-Prüfung)
+- **Statuswechsel-Kette sichtbar gemacht (Stand 2026-08-24, drei
+  zusammenhängende Nutzer-Meldungen nach einem echten Statuswechsel-Test):**
+  1. "Erfassen" des SV-Fragebogens entfällt jetzt komplett bei
+     `sozialversicherungspflichtig` (Button zeigt "Historie" statt
+     "Erfassen"/"Bearbeiten", Formular wird nicht mehr angeboten) - die
+     Abschnitts-Historie bleibt bewusst weiter erreichbar (siehe Bugfix
+     oben, genau diese Personen brauchen sie am dringendsten).
+  2. Neue Sicht `employee_status_chain` (verknüpft eine Personalnummer über
+     `employees.vorgaenger_employee_id` mit ihrer Vorgänger-/Nachfolge-
+     Nummer, Übergangsdatum aus dem ersten übertragenen Arbeitstag der
+     neuen Nummer hergeleitet - der Stichtag selbst wird nirgends
+     gespeichert) speist zwei neue Spalten auf Personal → Sozialversicherung:
+     "Status war" (Abrechnungsart vor dem Statuswechsel) und "… seit" (Datum
+     des aktuellen Status bzw., auf der jetzt inaktiven alten Nummer, ein
+     Verweis "→ SV-Pfl. seit DATUM (Nr. X)"). Löst konkret: "Überschritten
+     seit X Tagen" auf einer inaktiven, längst per Statuswechsel korrekt
+     umgestellten Nummer wirkte wie ein weiterhin offenes Problem - die
+     105-Tage-Prüfung selbst bleibt unverändert korrekt, es fehlte nur die
+     sichtbare Verknüpfung.
+  3. Lohnübersicht: neuer Schnellfilter "nur offene Statuswechsel" (nutzt
+     dieselbe Sicht) - zeigt gezielt inaktive Personen mit Nachfolge-Nummer,
+     die noch NICHT abgerechnet sind, statt sie in der allgemeinen
+     "inaktive anzeigen"-Liste unter echten Ex-Mitarbeitern zu verlieren.
+     Zusätzlich Badge "⚠ Statuswechsel offen" in der Status-Spalte. Die
+     zugrunde liegenden Daten waren schon vorher korrekt (`season_summary`/
+     `season_summary_monat` filtern nicht nach `aktiv`, "inaktive anzeigen"
+     macht sie technisch schon sichtbar/abrechenbar) - das eigentliche
+     Problem war reine Auffindbarkeit.
+  Migration: `migration_2026-08-24_statuswechsel_status_chain.sql`.
 - Klarheits-Pass 2026-08-14 (Nutzer: "Die verschiedenen Abschnitte müssen
   transparent benannt und gerechnet werden"): "Aktiv seit" im Personalstamm
   folgt jetzt der Vorgänger-Kette (springt nach einem Statuswechsel nicht

@@ -220,6 +220,22 @@ export interface SvAbschnitt {
   tage: number;
 }
 
+// Aus der Sicht employee_status_chain (Nutzer-Vorgabe 2026-08-24) -
+// verknüpft eine Personalnummer mit ihrer Vorgänger-/Nachfolge-Nummer aus
+// einem Statuswechsel (employees.vorgaenger_employee_id), damit z.B. auf
+// der Sozialversicherung-Seite sichtbar wird, dass eine als "Überschritten"
+// markierte, inzwischen inaktive Nummer per Statuswechsel korrekt auf
+// sozialversicherungspflichtig umgestellt wurde, statt wie ein weiterhin
+// offenes Problem zu wirken.
+export interface EmployeeStatusChain {
+  employee_id: string;
+  vorheriger_status: string | null;
+  aktueller_status_seit: string | null;
+  nachfolger_personal_nr: string | null;
+  nachfolger_status: string | null;
+  nachfolger_seit: string | null;
+}
+
 // Aus der Sicht audit_log_ansicht (Änderungsprotokoll) - siehe schema.sql.
 // before_data/after_data enthalten den kompletten Datensatz vorher/nachher;
 // die geänderten Felder werden erst in der Anzeige daraus ermittelt.

@@ -10,6 +10,7 @@ import SvFragebogenFormular, {
 import AbrechnungsHistorie from "@/components/AbrechnungsHistorie";
 import type {
   Employee,
+  EmployeeStatusChain,
   Herkunft,
   SvAbschnitt,
   SvFragebogenAuswertung,
@@ -28,6 +29,14 @@ const CURRENT_YEAR = new Date().getFullYear();
 // Das Formular zur Feststellung der Versicherungspflicht wird seit
 // 2026-08-11 NICHT mehr hochgeladen (Nutzer-Vorgabe) - der über das
 // Fragebogen-Formular erfasste Inhalt ist der Nachweis.
+
+// Ein Tag vor einem gegebenen ISO-Datum - für "Status war ... bis" (der
+// Tag vor Beginn des Nachfolge-Status). Über UTC-Millisekunden statt
+// lokaler Zeitzone (gleicher Fallstrick wie beim xlsx-Datumsimport).
+function vortag(iso: string): string {
+  const [j, m, t] = iso.split("-").map(Number);
+  return new Date(Date.UTC(j, m - 1, t) - 86400000).toISOString().slice(0, 10);
+}
 
 export default function SozialversicherungPage() {
   const { profile } = useProfile();
@@ -59,6 +68,14 @@ export default function SozialversicherungPage() {
   // (Nutzer-Vorgabe 2026-08-15) - ungruppiert, tageAufschluesselung()
   // filtert selbst je Person.
   const [svAbschnitte, setSvAbschnitte] = useState<SvAbschnitt[]>([]);
+  // Nutzer-Vorgabe 2026-08-24: verknüpft eine Personalnummer mit ihrer
+  // Vorgänger-/Nachfolge-Nummer aus einem Statuswechsel, damit "Überschritten
+  // seit X Tagen" auf einer inzwischen inaktiven Nummer nicht wie ein
+  // weiterhin offenes Problem wirkt, wenn sie längst korrekt auf
+  // sozialversicherungspflichtig umgestellt wurde.
+  const [statusChain, setStatusChain] = useState<
+    Record<string, EmployeeStatusChain>
+  >({});
 
   const [editingId, setEditingId] = useState<string | null>(null);
 
@@ -74,6 +91,7 @@ export default function SozialversicherungPage() {
       { data: pr },
       { data: abschnitte },
       { data: herkunftData },
+      { data: chain },
     ] = await Promise.all([
       query,
       supabase
@@ -90,10 +108,16 @@ export default function SozialversicherungPage() {
         .select("*")
         .eq("saison_jahr", jahr),
       supabase.from("herkuenfte").select("*").order("reihenfolge"),
+      supabase.from("employee_status_chain").select("*"),
     ]);
     setSvAbschnitte((abschnitte as SvAbschnitt[]) ?? []);
     setEmployees((emps as Employee[]) ?? []);
     setHerkuenfte((herkunftData as Herkunft[]) ?? []);
+    const mapChain: Record<string, EmployeeStatusChain> = {};
+    ((chain as EmployeeStatusChain[]) ?? []).forEach((c) => {
+      mapChain[c.employee_id] = c;
+    });
+    setStatusChain(mapChain);
     const map: Record<string, SvFragebogenAuswertung> = {};
     ((frag as SvFragebogenAuswertung[]) ?? []).forEach((f) => {
       map[f.employee_id] = f;
@@ -196,6 +220,12 @@ export default function SozialversicherungPage() {
               <th>Name</th>
               <th>Herkunft</th>
               <th>Status {jahr}</th>
+              <th title="Status vor einem Statuswechsel (diese Nummer hat eine Vorgänger-Nummer)">
+                Status war
+              </th>
+              <th title="Datum, seit dem der aktuelle Status gilt (bei einer Nachfolge-Nummer aus einem Statuswechsel) bzw. seit dem eine Nachfolge-Nummer für diese Person läuft">
+                … seit
+              </th>
               <th>Vorbeschäftigung Deutschland (Tage)</th>
               <th title="15 Wochen = 105 Kalendertage je Kalenderjahr, über alle Beschäftigungsabschnitte und alle deutschen Arbeitgeber zusammengerechnet">
                 Angewendete Regel
@@ -238,6 +268,7 @@ export default function SozialversicherungPage() {
               // gäbe es noch etwas zu prüfen.
               const svPflichtig =
                 emp.abrechnungsart === "sozialversicherungspflichtig";
+              const chain = statusChain[emp.id];
               return (
                 <Fragment key={emp.id}>
                   <tr className={emp.aktiv ? "" : "opacity-50"}>
@@ -276,6 +307,52 @@ export default function SozialversicherungPage() {
                         <span className="font-medium text-red-600">
                           ⚠ Nicht bestanden
                         </span>
+                      )}
+                    </td>
+                    <td className="text-xs">
+                      {/* Nutzer-Vorgabe 2026-08-24: "Zeitraum war von:
+                          Kurzfristig/SV-Frei/SV-Pflichtig" - nur befüllt,
+                          wenn diese Nummer selbst aus einem Statuswechsel
+                          entstanden ist (hat einen Vorgänger). */}
+                      {chain?.vorheriger_status ? (
+                        <span
+                          title={
+                            chain.aktueller_status_seit
+                              ? `bis ${formatDatumDE(vortag(chain.aktueller_status_seit))}`
+                              : undefined
+                          }
+                        >
+                          {chain.vorheriger_status}
+                        </span>
+                      ) : (
+                        <span className="text-neutral-400">—</span>
+                      )}
+                    </td>
+                    <td className="text-xs">
+                      {/* Nutzer-Vorgabe 2026-08-24: "Zeitraum SV-Pflichtig/
+                          SV-Frei/etc. seit: (Datum)" - entweder das eigene
+                          Startdatum (diese Nummer ist eine Nachfolge-Nummer)
+                          oder, falls diese Nummer selbst eine Nachfolge-
+                          Nummer hat (jetzt inaktiv, per Statuswechsel
+                          abgelöst), ein Verweis darauf - genau das fehlte
+                          bisher: "Überschritten seit X Tagen" auf einer
+                          inaktiven Nummer wirkte wie ein weiterhin offenes
+                          Problem, obwohl die Person längst korrekt auf die
+                          neue Nummer umgestellt wurde. */}
+                      {chain?.aktueller_status_seit ? (
+                        formatDatumDE(chain.aktueller_status_seit)
+                      ) : chain?.nachfolger_status ? (
+                        <span
+                          className="font-medium text-emerald-700"
+                          title={`Neue Personalnummer ${chain.nachfolger_personal_nr ?? "—"}`}
+                        >
+                          → {chain.nachfolger_status} seit{" "}
+                          {chain.nachfolger_seit
+                            ? formatDatumDE(chain.nachfolger_seit)
+                            : "—"}
+                        </span>
+                      ) : (
+                        <span className="text-neutral-400">—</span>
                       )}
                     </td>
                     <td
@@ -488,25 +565,40 @@ export default function SozialversicherungPage() {
                             setEditingId(editingId === emp.id ? null : emp.id)
                           }
                         >
-                          {f ? "Bearbeiten" : "Erfassen"}
+                          {svPflichtig ? "Historie" : f ? "Bearbeiten" : "Erfassen"}
                         </button>
                       </td>
                     )}
                   </tr>
                   {editingId === emp.id && (
                     <tr>
-                      <td colSpan={11}>
-                        <SvFragebogenFormular
-                          employeeId={emp.id}
-                          saisonJahr={jahr}
-                          canEdit={canEdit}
-                          titel={`SV-Fragebogen ${jahr} - ${emp.name}, ${emp.vorname}`}
-                          onGespeichert={() => {
-                            setEditingId(null);
-                            load();
-                          }}
-                          onAbbrechen={() => setEditingId(null)}
-                        />
+                      <td colSpan={13}>
+                        {/* Nutzer-Vorgabe 2026-08-24: Erfassen/Bearbeiten des
+                            SV-Fragebogens entfällt bei sozialversicherungs-
+                            pflichtig komplett - die Feststellung prüft SV-
+                            Freiheit, die für diese Personen gegenstandslos
+                            ist (wie schon bei den übrigen Spalten). Ein
+                            evtl. vorhandener Fragebogen aus der Zeit davor
+                            bleibt in der Datenbank erhalten, wird hier nur
+                            nicht mehr zum Bearbeiten angeboten. */}
+                        {svPflichtig ? (
+                          <p className="p-2 text-sm text-neutral-500">
+                            SV-Fragebogen entfällt (sozialversicherungspflichtig)
+                            - unten nur die Abrechnungs-Historie.
+                          </p>
+                        ) : (
+                          <SvFragebogenFormular
+                            employeeId={emp.id}
+                            saisonJahr={jahr}
+                            canEdit={canEdit}
+                            titel={`SV-Fragebogen ${jahr} - ${emp.name}, ${emp.vorname}`}
+                            onGespeichert={() => {
+                              setEditingId(null);
+                              load();
+                            }}
+                            onAbbrechen={() => setEditingId(null)}
+                          />
+                        )}
                         {/* Bewusst IMMER anzeigen, unabhängig von
                             svPflichtig - die Abschnitts-Historie ist ein
                             reines Fakten-Protokoll (wann wurde real

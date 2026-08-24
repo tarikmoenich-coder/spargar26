@@ -6,6 +6,7 @@ import { useProfile } from "@/lib/useProfile";
 import {
   ABRECHNUNGSART_LABELS,
   type Arbeitsgruppe,
+  type EmployeeStatusChain,
   type FuehrerscheinEintrag,
   type Period,
   type ProfilName,
@@ -73,6 +74,17 @@ export default function UebersichtPage() {
   // abgerechnete/inaktive Personen sollen die Lohnübersicht nicht
   // zumüllen. Gleiches Muster wie "inaktive anzeigen" im Personalstamm.
   const [showInactive, setShowInactive] = useState(false);
+  // Nutzer-Vorgabe 2026-08-24: "die Personen sind nicht sichtbar, weil sie
+  // 'inaktiv' sind - das passt nicht, weil sie noch nicht abgerechnet
+  // sind" - eine per Statuswechsel abgelöste, jetzt inaktive Nummer mit
+  // noch offener Auszahlung geht in der allgemeinen "inaktive anzeigen"-
+  // Liste unter, weil sie dort ununterscheidbar von wirklich fertigen
+  // Ex-Mitarbeitern steht. Eigener Schnellfilter, der showInactive für
+  // genau diesen Fall ersetzt statt nur zu ergänzen.
+  const [nurOffeneStatuswechsel, setNurOffeneStatuswechsel] = useState(false);
+  const [statusChain, setStatusChain] = useState<
+    Record<string, EmployeeStatusChain>
+  >({});
   // Aus employee_fuehrerschein_kategorien (schmale, breit zugängliche
   // Sicht) - zeigt nur, DASS und WOFÜR jemand einen Führerschein hat.
   const [fuehrerschein, setFuehrerschein] = useState<
@@ -157,7 +169,17 @@ export default function UebersichtPage() {
         .order("reihenfolge");
       setGruppen((data as Arbeitsgruppe[]) ?? []);
     }
+    async function ladeStatusChain() {
+      const supabase = getSupabaseClient();
+      const { data } = await supabase.from("employee_status_chain").select("*");
+      const map: Record<string, EmployeeStatusChain> = {};
+      ((data as EmployeeStatusChain[]) ?? []).forEach((c) => {
+        map[c.employee_id] = c;
+      });
+      setStatusChain(map);
+    }
     ladeGruppen();
+    ladeStatusChain();
   }, []);
 
   useEffect(() => {
@@ -298,11 +320,26 @@ export default function UebersichtPage() {
     );
   };
 
+  // Nutzer-Vorgabe 2026-08-24: eine per Statuswechsel abgelöste, inaktive
+  // Nummer mit noch offener Auszahlung erkennen - hat eine Nachfolge-Nummer
+  // (siehe employee_status_chain) UND ist noch nicht abgerechnet.
+  function hatOffenenStatuswechsel(r: SeasonSummaryRow) {
+    return (
+      !r.aktiv &&
+      !r.abgerechnet_am &&
+      !!statusChain[r.employee_id]?.nachfolger_status
+    );
+  }
+
   // Damit eine Mitarbeiterin z.B. alle zur Abrechnung vorgesehenen Personen
   // vorab in eine Gruppe (z.B. "101 - Abrechnen") packen kann und diese hier
   // gefiltert und komplett auf einmal markiert werden können.
   const gefilterteRows = rows
-    .filter((r) => showInactive || r.aktiv)
+    .filter((r) =>
+      nurOffeneStatuswechsel
+        ? hatOffenenStatuswechsel(r)
+        : showInactive || r.aktiv
+    )
     .filter((r) =>
       !gruppeFilter
         ? true
@@ -636,6 +673,17 @@ export default function UebersichtPage() {
             onChange={(e) => setShowInactive(e.target.checked)}
           />
           inaktive anzeigen
+        </label>
+        <label
+          className="flex items-center gap-1 text-sm text-amber-700"
+          title="Per Statuswechsel abgelöste, inaktive Personalnummern mit noch offener (nicht abgerechneter) Auszahlung - unabhängig von 'inaktive anzeigen'"
+        >
+          <input
+            type="checkbox"
+            checked={nurOffeneStatuswechsel}
+            onChange={(e) => setNurOffeneStatuswechsel(e.target.checked)}
+          />
+          nur offene Statuswechsel
         </label>
         <label className="text-sm">
           Monat{" "}
@@ -1017,6 +1065,19 @@ export default function UebersichtPage() {
                         <br />
                         <span className="text-xs text-neutral-500">
                           abgerechnet {formatDatumDE(r.abgerechnet_am)}
+                        </span>
+                      </>
+                    )}
+                    {hatOffenenStatuswechsel(r) && (
+                      <>
+                        <br />
+                        <span
+                          className="text-xs font-medium text-amber-700"
+                          title={`Neue Personalnummer ${
+                            statusChain[r.employee_id]?.nachfolger_personal_nr ?? "—"
+                          } (${statusChain[r.employee_id]?.nachfolger_status ?? "—"}) - hier noch keine Auszahlung erfolgt`}
+                        >
+                          ⚠ Statuswechsel offen
                         </span>
                       </>
                     )}
