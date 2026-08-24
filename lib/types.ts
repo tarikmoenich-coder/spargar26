@@ -234,6 +234,11 @@ export interface EmployeeStatusChain {
   nachfolger_personal_nr: string | null;
   nachfolger_status: string | null;
   nachfolger_seit: string | null;
+  // Eigener Beschäftigungsbeginn dieser Personalnummer, unabhängig davon,
+  // ob sie selbst eine Nachfolge-Nummer ist - für die "von...bis"-Anzeige
+  // auf einer per Statuswechsel abgelösten Nummer (Nutzer-Vorgabe
+  // 2026-08-24).
+  eigener_erster_arbeitstag: string | null;
 }
 
 // Aus der Sicht audit_log_ansicht (Änderungsprotokoll) - siehe schema.sql.

@@ -29,6 +29,11 @@ returns text language sql immutable as $$
 $$;
 
 create or replace view employee_status_chain as
+with eigene_stunden as (
+  select employee_id, min(datum) as erster_arbeitstag
+  from work_entries
+  group by employee_id
+)
 select
   e.id as employee_id,
   -- Diese Nummer IST eine Nachfolge-Nummer (hat einen Vorgänger) - der
@@ -37,7 +42,7 @@ select
     then abrechnungsart_label(v.abrechnungsart)
   end as vorheriger_status,
   case when e.vorgaenger_employee_id is not null
-    then (select min(we.datum) from work_entries we where we.employee_id = e.id)
+    then es.erster_arbeitstag
   end as aktueller_status_seit,
   -- Diese Nummer HAT eine Nachfolge-Nummer (wurde per Statuswechsel
   -- abgelöst) - deren Status + Startdatum, für die Verknüpfung auf der
@@ -47,11 +52,19 @@ select
     then abrechnungsart_label(n.abrechnungsart)
   end as nachfolger_status,
   case when n.id is not null
-    then (select min(we2.datum) from work_entries we2 where we2.employee_id = n.id)
-  end as nachfolger_seit
+    then esn.erster_arbeitstag
+  end as nachfolger_seit,
+  -- Nutzer-Vorgabe 2026-08-24 (Feinschliff "von ... bis" statt nur "seit"):
+  -- eigener Beschäftigungsbeginn dieser Personalnummer - für die
+  -- "von...bis"-Anzeige auf einer per Statuswechsel abgelösten (jetzt
+  -- inaktiven) Nummer, unabhängig davon, ob sie selbst eine Nachfolge-
+  -- Nummer ist.
+  es.erster_arbeitstag as eigener_erster_arbeitstag
 from employees e
 left join employees v on v.id = e.vorgaenger_employee_id
-left join employees n on n.vorgaenger_employee_id = e.id;
+left join employees n on n.vorgaenger_employee_id = e.id
+left join eigene_stunden es on es.employee_id = e.id
+left join eigene_stunden esn on esn.employee_id = n.id;
 
 -- security_invoker unbedenklich (wie employee_sv_abschnitte): employees
 -- und work_entries sind beide bereits für jede angemeldete Rolle lesbar

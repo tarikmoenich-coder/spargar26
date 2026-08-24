@@ -668,12 +668,16 @@ Enthalten:
      neuen Nummer hergeleitet - der Stichtag selbst wird nirgends
      gespeichert) speist zwei neue Spalten auf Personal → Sozialversicherung:
      "Status war" (Abrechnungsart vor dem Statuswechsel) und "… seit" (Datum
-     des aktuellen Status bzw., auf der jetzt inaktiven alten Nummer, ein
-     Verweis "→ SV-Pfl. seit DATUM (Nr. X)"). Löst konkret: "Überschritten
-     seit X Tagen" auf einer inaktiven, längst per Statuswechsel korrekt
-     umgestellten Nummer wirkte wie ein weiterhin offenes Problem - die
-     105-Tage-Prüfung selbst bleibt unverändert korrekt, es fehlte nur die
-     sichtbare Verknüpfung.
+     des aktuellen Status bzw., auf der jetzt inaktiven alten Nummer - Stand
+     desselben Tages nach Nutzer-Feinschliff "nicht 'seit', sondern 'von...
+     bis' reinschreiben" - der abgeschlossene Zeitraum "von {eigener
+     Beschäftigungsbeginn} bis {Vortag des Wechsels}" plus ein kleiner
+     Verweis auf die neue Nummer, z.B. "von 01.06.2026 bis 23.08.2026
+     (→ SV-Pfl. ab 24.08.2026)"). Löst konkret: "Überschritten seit X Tagen"
+     auf einer inaktiven, längst per Statuswechsel korrekt umgestellten
+     Nummer wirkte wie ein weiterhin offenes Problem - die 105-Tage-Prüfung
+     selbst bleibt unverändert korrekt, es fehlte nur die sichtbare
+     Verknüpfung.
   3. Lohnübersicht: neuer Schnellfilter "nur offene Statuswechsel" (nutzt
      dieselbe Sicht) - zeigt gezielt inaktive Personen mit Nachfolge-Nummer,
      die noch NICHT abgerechnet sind, statt sie in der allgemeinen

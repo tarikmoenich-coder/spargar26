@@ -329,28 +329,43 @@ export default function SozialversicherungPage() {
                       )}
                     </td>
                     <td className="text-xs">
-                      {/* Nutzer-Vorgabe 2026-08-24: "Zeitraum SV-Pflichtig/
-                          SV-Frei/etc. seit: (Datum)" - entweder das eigene
-                          Startdatum (diese Nummer ist eine Nachfolge-Nummer)
-                          oder, falls diese Nummer selbst eine Nachfolge-
-                          Nummer hat (jetzt inaktiv, per Statuswechsel
-                          abgelöst), ein Verweis darauf - genau das fehlte
-                          bisher: "Überschritten seit X Tagen" auf einer
-                          inaktiven Nummer wirkte wie ein weiterhin offenes
-                          Problem, obwohl die Person längst korrekt auf die
-                          neue Nummer umgestellt wurde. */}
+                      {/* Nutzer-Vorgabe 2026-08-24, mit Feinschliff noch am
+                          selben Tag ("von...bis" statt nur "seit"): entweder
+                          das eigene Startdatum (diese Nummer ist eine
+                          Nachfolge-Nummer, Status läuft noch) oder, falls
+                          diese Nummer selbst eine Nachfolge-Nummer hat
+                          (jetzt inaktiv, per Statuswechsel abgelöst), der
+                          abgeschlossene Zeitraum "von eigenem
+                          Beschäftigungsbeginn bis Vortag des Wechsels" plus
+                          ein kleiner Verweis auf die neue Nummer - genau das
+                          fehlte bisher: "Überschritten seit X Tagen" auf
+                          einer inaktiven Nummer wirkte wie ein weiterhin
+                          offenes Problem, obwohl die Person längst korrekt
+                          auf die neue Nummer umgestellt wurde. */}
                       {chain?.aktueller_status_seit ? (
                         formatDatumDE(chain.aktueller_status_seit)
                       ) : chain?.nachfolger_status ? (
-                        <span
-                          className="font-medium text-emerald-700"
-                          title={`Neue Personalnummer ${chain.nachfolger_personal_nr ?? "—"}`}
-                        >
-                          → {chain.nachfolger_status} seit{" "}
-                          {chain.nachfolger_seit
-                            ? formatDatumDE(chain.nachfolger_seit)
-                            : "—"}
-                        </span>
+                        <>
+                          {chain.eigener_erster_arbeitstag &&
+                          chain.nachfolger_seit ? (
+                            <span className="font-medium">
+                              von {formatDatumDE(chain.eigener_erster_arbeitstag)}{" "}
+                              bis {formatDatumDE(vortag(chain.nachfolger_seit))}
+                            </span>
+                          ) : (
+                            <span className="text-neutral-400">—</span>
+                          )}
+                          <span
+                            className="ml-1 text-neutral-500"
+                            title={`Neue Personalnummer ${chain.nachfolger_personal_nr ?? "—"}`}
+                          >
+                            (→ {chain.nachfolger_status} ab{" "}
+                            {chain.nachfolger_seit
+                              ? formatDatumDE(chain.nachfolger_seit)
+                              : "—"}
+                            )
+                          </span>
+                        </>
                       ) : (
                         <span className="text-neutral-400">—</span>
                       )}
