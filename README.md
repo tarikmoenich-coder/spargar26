@@ -481,7 +481,16 @@ Enthalten:
   `kassenbestand_bis(p_bis)` rechnet stattdessen ein echtes SQL `SUM()` ohne
   Zeilenlimit und liefert per Parameter auch den Eröffnungssaldo eines
   beliebigen Zeitpunkts fürs Journal. Migration:
-  `migration_2026-08-24_kassenbestand_bis.sql`.
+  `migration_2026-08-24_kassenbestand_bis.sql`. Auf Nutzer-Nachfrage
+  ergänzt: jede Kassenprüfung erscheint im Journal zusätzlich als eigene,
+  hervorgehobene Trennzeile an ihrem Prüfzeitpunkt (Soll/Ist/Differenz/
+  Status, mit Hinweis "gesperrt" bei bereits freigegebenen Prüfungen) - eine
+  Korrektur kollidiert dabei bewusst NICHT mit einer bereits freigegebenen
+  Kassenprüfung: `vorschuss_korrigieren`/`abrechnung_korrigieren` prüfen
+  schon vorher `ist_kassenpruefung_gesperrt(datum)` und verweigern die
+  Änderung, solange der betroffene Zeitraum freigegeben ist (muss erst
+  wiedereröffnet werden) - bestand bereits vor dem Journal, war aber ohne
+  die neue Trennzeile schwer nachvollziehbar.
 - "Suche"-Seite (alle Rollen): nach Name oder Personalnummer suchen und
   Arbeitsstunden (inkl. Notiz je Tag) sowie Vorschuss-Historie (inkl.
   Begründung) einer Person einsehen und als Übersicht für den Mitarbeiter

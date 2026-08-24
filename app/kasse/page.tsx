@@ -39,6 +39,23 @@ function monatsSchluessel(d: Date) {
   return `EZ-${mm}-${d.getFullYear()}`;
 }
 
+// Nur die im Journal benötigten Felder aus cash_checks - Nutzer-Vorgabe
+// 2026-08-24 ("Kannst du noch kenntlich machen im Journal, wann eine
+// Kassenprüfung stattgefunden hat?"): jede Prüfung erscheint als eigene,
+// hervorgehobene Trennzeile an ihrem check_zeit, damit sofort sichtbar
+// ist, bis wohin die Kasse bereits gezählt/geprüft (und ggf. freigegeben,
+// also gegen Korrekturen gesperrt - siehe ist_kassenpruefung_gesperrt in
+// schema.sql) wurde.
+interface CashCheckZeile {
+  id: number;
+  check_zeit: string;
+  soll: number;
+  ist: number;
+  differenz: number;
+  status: string;
+  freigegeben: boolean;
+}
+
 const CURRENT_YEAR = new Date().getFullYear();
 // Einfache, feste Auswahl statt einer eigenen Abfrage nach den tatsächlich
 // vorhandenen Jahren - die App läuft seit 2026, eine Handvoll Jahre
@@ -61,6 +78,9 @@ interface JournalZeile {
   bearbeiter_id: string | null;
   // Saldo NACH dieser Zeile - null bei einer Korrektur-Zeile (siehe oben).
   laufenderSaldo: number | null;
+  // Nur bei einer Kassenprüfungs-Trennzeile gesetzt (siehe CashCheckZeile
+  // oben) - eigene, breite Darstellung statt der normalen Spalten.
+  pruefung: CashCheckZeile | null;
 }
 
 export default function KassenbuchJournalPage() {
@@ -76,6 +96,7 @@ export default function KassenbuchJournalPage() {
     Kautionsuebergabe[]
   >([]);
   const [korrekturen, setKorrekturen] = useState<Kassenbewegung[]>([]);
+  const [pruefungen, setPruefungen] = useState<CashCheckZeile[]>([]);
   const [namenVon, setNamenVon] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(true);
 
@@ -98,6 +119,7 @@ export default function KassenbuchJournalPage() {
       { data: az },
       { data: kaution },
       { data: bew },
+      { data: chk },
       { data: namen },
     ] = await Promise.all([
       supabase.rpc("kassenbestand_bis", { p_bis: jahresAnfang }),
@@ -135,6 +157,12 @@ export default function KassenbuchJournalPage() {
         .gte("zeitstempel", jahresAnfang)
         .lt("zeitstempel", jahresEnde)
         .order("zeitstempel", { ascending: true }),
+      supabase
+        .from("cash_checks")
+        .select("id, check_zeit, soll, ist, differenz, status, freigegeben")
+        .gte("check_zeit", jahresAnfang)
+        .lt("check_zeit", jahresEnde)
+        .order("check_zeit", { ascending: true }),
       supabase.from("profile_namen").select("*"),
     ]);
     setEroeffnungssaldo(
@@ -145,6 +173,7 @@ export default function KassenbuchJournalPage() {
     setAuszahlungenBar((az as AuszahlungsbelegSummary[]) ?? []);
     setKautionsuebergaben((kaution as Kautionsuebergabe[]) ?? []);
     setKorrekturen((bew as Kassenbewegung[]) ?? []);
+    setPruefungen((chk as CashCheckZeile[]) ?? []);
     const namenMap: Record<string, string> = {};
     ((namen as ProfilName[]) ?? []).forEach((p) => {
       namenMap[p.id] = p.full_name;
@@ -201,6 +230,7 @@ export default function KassenbuchJournalPage() {
       hinweis: d.verwendungszweck,
       bearbeiter_id: d.bearbeiter_id,
       laufenderSaldo: null,
+      pruefung: null,
     })),
     ...barVorschuesse.map((a) => ({
       key: `vorschuss-${a.id}`,
@@ -213,6 +243,7 @@ export default function KassenbuchJournalPage() {
       hinweis: a.begruendung,
       bearbeiter_id: a.bearbeiter_id,
       laufenderSaldo: null,
+      pruefung: null,
     })),
     ...auszahlungenBar.map((ab) => ({
       key: `auszahlung-${ab.id}`,
@@ -225,6 +256,7 @@ export default function KassenbuchJournalPage() {
       hinweis: null,
       bearbeiter_id: ab.erstellt_von,
       laufenderSaldo: null,
+      pruefung: null,
     })),
     ...kautionsuebergaben.map((k) => ({
       key: `kaution-${k.id}`,
@@ -237,6 +269,7 @@ export default function KassenbuchJournalPage() {
       hinweis: `an ${k.uebergeben_an}`,
       bearbeiter_id: k.erstellt_von,
       laufenderSaldo: null,
+      pruefung: null,
     })),
   ].sort((a, b) => (a.datum < b.datum ? -1 : 1));
 
@@ -254,6 +287,7 @@ export default function KassenbuchJournalPage() {
     hinweis: b.hinweis,
     bearbeiter_id: b.bearbeiter_id,
     laufenderSaldo: null,
+    pruefung: null,
   }));
 
   let laufend = eroeffnungssaldo ?? 0;
@@ -273,7 +307,25 @@ export default function KassenbuchJournalPage() {
     return { ...k, laufenderSaldo: vorherige?.laufenderSaldo ?? eroeffnungssaldo };
   });
 
-  const journal = [...zeilenMitSaldo, ...korrekturZeilen]
+  // Kassenprüfungs-Trennzeilen - reine Markierung, bewegen den laufenden
+  // Saldo nicht und brauchen deshalb keine "vorherige"-Zuordnung wie die
+  // Korrektur-Zeilen: sie zeigen ihren eigenen, zum Prüfzeitpunkt
+  // eingefrorenen Soll/Ist-Wert.
+  const pruefungZeilen: JournalZeile[] = pruefungen.map((p) => ({
+    key: `pruefung-${p.id}`,
+    datum: p.check_zeit,
+    art: "Kassenprüfung",
+    belegnummer: "",
+    betrag: null,
+    korrekturDelta: null,
+    storniert: false,
+    hinweis: null,
+    bearbeiter_id: null,
+    laufenderSaldo: null,
+    pruefung: p,
+  }));
+
+  const journal = [...zeilenMitSaldo, ...korrekturZeilen, ...pruefungZeilen]
     .sort((a, b) => (a.datum < b.datum ? -1 : 1))
     .reverse();
 
@@ -292,7 +344,9 @@ export default function KassenbuchJournalPage() {
           Alle Bargeldbewegungen chronologisch mit laufendem Saldo, wie ein
           klassisches Kassenbuch mit Jahres-Eröffnungssaldo. Korrekturen
           (grau, kursiv) bewegen den Saldo nicht zusätzlich - der geänderte
-          Betrag steckt bereits in der ursprünglichen Zeile.
+          Betrag steckt bereits in der ursprünglichen Zeile. Kassenprüfungen
+          erscheinen als eigene, hervorgehobene Trennzeile mit ihrem
+          damaligen Soll/Ist-Stand.
         </p>
       </div>
 
@@ -363,7 +417,23 @@ export default function KassenbuchJournalPage() {
                 <td>{(eroeffnungssaldo ?? 0).toFixed(2)}</td>
                 <td colSpan={2}></td>
               </tr>
-              {journal.map((z) => (
+              {journal.map((z) =>
+                z.pruefung ? (
+                  <tr key={z.key} className="bg-emerald-50">
+                    <td
+                      colSpan={8}
+                      className="py-2 text-center text-sm font-semibold text-emerald-800"
+                    >
+                      🔍 Kassenprüfung {new Date(z.datum).toLocaleString(
+                        "de-DE"
+                      )} — Soll {Number(z.pruefung.soll).toFixed(2)} € / Ist{" "}
+                      {Number(z.pruefung.ist).toFixed(2)} € / Differenz{" "}
+                      {Number(z.pruefung.differenz).toFixed(2)} € —{" "}
+                      {z.pruefung.status}
+                      {z.pruefung.freigegeben && " (freigegeben, gesperrt)"}
+                    </td>
+                  </tr>
+                ) : (
                 <tr
                   key={z.key}
                   className={
@@ -406,7 +476,8 @@ export default function KassenbuchJournalPage() {
                   </td>
                   <td className="text-neutral-500">{z.hinweis ?? ""}</td>
                 </tr>
-              ))}
+                )
+              )}
               {journal.length === 0 && (
                 <tr>
                   <td colSpan={8} className="text-center text-neutral-500">
