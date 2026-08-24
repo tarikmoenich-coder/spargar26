@@ -512,6 +512,16 @@ Enthalten:
   Markierung (z.B. "U" für Urlaub, Nutzer-Vorgabe 2026-08-11: während
   Urlaub besteht das Beschäftigungsverhältnis fort) - vorher zählten nur
   Tage mit Stunden > 0.
+  **Bugfix 2026-08-24 (Nutzer-Fall: historische Abrechnung am 25.06.,
+  0-Std.-Tage davor wurden nicht mitgezählt, Abschnitt endete fälschlich
+  schon am letzten Tag mit Stunden > 0):** "Tag mit Stunden" in
+  `employee_sv_abschnitte` prüfte technisch weiterhin `stunden > 0` statt
+  `stunden is not null` - ein echter "0 Std."-Tag (Person anwesend, aber
+  nicht gearbeitet) fiel damit fälschlich heraus, obwohl dieselbe
+  Begründung wie bei einem Urlaubstag zutrifft und `season_summary.
+  anwesenheitstage` eine "0" schon immer mitzählt. Jetzt konsistent
+  `stunden is not null`. Migration:
+  `migration_2026-08-24_beschaeftigungstag_null_check.sql`.
   Bisherige Beschäftigungstage bei anderen deutschen Arbeitgebern laut
   SV-Fragebogen werden weiterhin dazugerechnet (rechtlich zählt das
   Kalenderjahr über ALLE deutschen Arbeitgeber zusammen).

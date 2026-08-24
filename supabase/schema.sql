@@ -3680,6 +3680,16 @@ grant select on auszahlungsbeleg_summary to authenticated;
 --      Beschäftigungstag = Tag mit Stunden ODER mit Markierung (z.B. "U"
 --      für Urlaub) - Nutzer-Vorgabe 2026-08-11: während Urlaub besteht das
 --      Beschäftigungsverhältnis fort, die Zeit zählt auf die 15 Wochen.
+--      Bugfix 2026-08-24 (Nutzer-Fall: historische Abrechnung am 25.06.,
+--      aber 0-Std.-Tage davor wurden nicht mitgezählt, Abschnitt endete
+--      fälschlich schon beim letzten Tag mit Stunden > 0): "Tag mit
+--      Stunden" bedeutet "stunden is not null" (auch eine echte "0" -
+--      Person anwesend, aber nicht gearbeitet), NICHT "stunden > 0" - exakt
+--      dieselbe Definition wie bei season_summary.anwesenheitstage
+--      ("Kein Eintrag = kein Abzug. Eine eingetragene '0' ... zählt
+--      trotzdem als Anwesenheitstag"). Ein 0-Std.-Tag ist damit ein
+--      Beschäftigungstag wie ein Urlaubstag - dieselbe Begründung
+--      ("Beschäftigungsverhältnis besteht fort") trifft genauso zu.
 --
 --      Reine Tage-Zählung, ersetzt NICHT die rechtliche Prüfung der
 --      Sozialversicherungsbefreiung selbst (eigenes Formular nötig).
@@ -3717,7 +3727,7 @@ with beschaeftigungstage_roh as (
         and sa.abgerechnet_am::date < we.datum
     ) as abschnitt_nr
   from work_entries we
-  where we.stunden > 0 or we.markierung is not null
+  where we.stunden is not null or we.markierung is not null
 )
 select
   employee_id,
