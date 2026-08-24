@@ -946,6 +946,21 @@ Enthalten:
   "Abgeltung fällig" gelistet (unused Resturlaub muss bei Beendigung in
   der Regel ausgezahlt werden), aktive Personen normal ("kann noch
   genommen werden")
+- **"Controlling"-Seite in 5 aufklappbare Themenblöcke gegliedert (Stand
+  2026-08-24, Nutzer-Vorgabe: "Da steht momentan auch einfach alles
+  untereinander"):** die bisher 8 Abschnitte standen stur untereinander -
+  weitet das bereits vorhandene Stundenmonitoring-Muster (eingeklappt nur
+  eine Kennzahl, aufgeklappt die volle Tabelle) über die ganze Seite aus
+  (neue, wiederverwendbare `Gruppe`-Komponente). Zusammengefasst zu:
+  "Anreiseliste – offener Status", "Sozialversicherung (105-Tage)"
+  (enthält die drei bisherigen Einzelabschnitte 15-Wochen-Kontrolle/bald
+  endend/Diskrepanz als Unterabschnitte), "Stundenmonitoring",
+  "Abweichungen bei Auszahlungen" und "Urlaub" (Überzogen + Resturlaub als
+  Unterabschnitte). Nur "Sozialversicherung (105-Tage)" startet
+  aufgeklappt (wichtigster, akutester Block), die anderen vier eingeklappt
+  mit einer Kennzahl (z.B. "3 kritische Fälle · 2 bald endend · 1
+  Diskrepanz(en)"). Reine Darstellungsänderung - alle Abfragen, Filter und
+  die Inline-Bearbeitung im Stundenmonitoring unverändert
 - Farbschema auf Lohnübersicht und Auszahlungen (Stand 2026-08-09, reine
   Optik, keine Funktionsänderung): Brutto-Spalte durchgehend hellbraun,
   Netto-Spalte durchgehend hellgrau (Kopf + Zellen); die Überschriften von

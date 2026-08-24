@@ -141,6 +141,46 @@ function offeneGruende(z: AnreiselisteOffenArbeitend): string[] {
   ].filter((g): g is string => g !== null);
 }
 
+// Ein aufklappbarer Themenblock (Nutzer-Vorgabe 2026-08-24: "Da steht
+// momentan auch einfach alles untereinander" - die Seite hatte 8 Abschnitte
+// stur untereinander). Erweitert das schon vorhandene Stundenmonitoring-
+// Muster (eingeklappt nur eine Kennzahl, aufgeklappt die volle Tabelle) auf
+// die ganze Seite, statt es als Einzelfall zu belassen - ein künftiger
+// weiterer Abschnitt nutzt automatisch dasselbe Verhalten.
+function Gruppe({
+  titel,
+  kennzahl,
+  offen,
+  onToggle,
+  children,
+}: {
+  titel: string;
+  kennzahl: React.ReactNode;
+  offen: boolean;
+  onToggle: () => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <div>
+      <div className="mb-2 flex items-center justify-between">
+        <h2 className="text-base font-semibold text-emerald-800">{titel}</h2>
+        <button
+          type="button"
+          className="btn-secondary text-xs"
+          onClick={onToggle}
+        >
+          {offen ? "Einklappen" : "Aufklappen"}
+        </button>
+      </div>
+      {offen ? (
+        children
+      ) : (
+        <p className="text-sm text-neutral-500">{kennzahl}</p>
+      )}
+    </div>
+  );
+}
+
 export default function ManagementPage() {
   const { profile } = useProfile();
   // Muss exakt zu work_entries_write/-update in schema.sql passen (RLS) -
@@ -154,6 +194,20 @@ export default function ManagementPage() {
     profile?.role === "zeiterfassung";
   const canStundenkontoBuchen = kannStundenkontoBuchen(profile?.role);
   const canStundenkontoAuszahlen = kannStundenkontoAuszahlen(profile?.role);
+
+  // Welche Themenblöcke aufgeklappt sind (Nutzer-Vorgabe 2026-08-24) - nur
+  // die 105-Tage-Kontrolle (wichtigster, akutester Block) startet offen,
+  // der Rest eingeklappt mit Kennzahl.
+  const [gruppenOffen, setGruppenOffen] = useState<Record<string, boolean>>({
+    anreiseliste: false,
+    sv: true,
+    stunden: false,
+    abweichungen: false,
+    urlaub: false,
+  });
+  function toggleGruppe(key: string) {
+    setGruppenOffen((g) => ({ ...g, [key]: !g[key] }));
+  }
 
   const [faelle, setFaelle] = useState<SvPruefung[]>([]);
   // Für die Tage-Aufschlüsselung im Tooltip bei "Rest bis 105 Tage"
@@ -200,9 +254,6 @@ export default function ManagementPage() {
   const [offenUeberstundenId, setOffenUeberstundenId] = useState<
     string | null
   >(null);
-  // Nutzer-Vorgabe 2026-08-10: Stundenmonitoring aufklappbar, standardmäßig
-  // eingeklappt mit nur der Gesamtzahl als Info.
-  const [stundenmonitoringOffen, setStundenmonitoringOffen] = useState(false);
 
   const [urlaubUeberzogen, setUrlaubUeberzogen] = useState<
     EmployeeUrlaubstage[]
@@ -468,15 +519,9 @@ export default function ManagementPage() {
           Controlling
         </h1>
         <p className="text-sm text-neutral-500">
-          15-Wochen-Kontrolle (105 Kalendertage je Kalenderjahr): Personen,
-          bei denen die Grenze für sozialversicherungsfreie kurzfristige
-          Beschäftigung bereits überschritten ist. Mehrere Einsätze im selben
-          Jahr werden zusammengerechnet – Pausen dazwischen zählen nicht mit,
-          ein Abschnitt endet jeweils mit der Abrechnung. Zusätzlich
-          abgeglichen mit dem SV-freien Zeitraum laut den Angaben auf
-          „Personal → Sozialversicherung". Reine Tage-/Datums-Prüfung –
-          ersetzt nicht die rechtliche Prüfung der
-          Sozialversicherungsbefreiung selbst.
+          Überblick über offene Punkte, die Aufmerksamkeit brauchen - je
+          Themenblock aufklappbar, im eingeklappten Zustand nur die
+          Kennzahl.
         </p>
       </div>
 
@@ -490,10 +535,23 @@ export default function ManagementPage() {
         />
       </label>
 
-      <div>
-        <h2 className="mb-2 text-base font-semibold text-emerald-800">
-          Es arbeiten folgende Personen mit offenem Status
-        </h2>
+      <Gruppe
+        titel="Anreiseliste – offener Status"
+        offen={gruppenOffen.anreiseliste}
+        onToggle={() => toggleGruppe("anreiseliste")}
+        kennzahl={
+          loadingOffen ? (
+            "…"
+          ) : (
+            <>
+              Personen, die arbeiten, obwohl noch etwas offen ist:{" "}
+              <span className="font-medium text-amber-600">
+                {offenArbeitend.length}
+              </span>
+            </>
+          )
+        }
+      >
         <p className="mb-2 text-sm text-neutral-500">
           Personen, die noch auf der Anreiseliste stehen (Arbeitsvertrag
           nicht gedruckt, SV-Fragebogen nicht bestanden, fehlende
@@ -565,307 +623,344 @@ export default function ManagementPage() {
             </table>
           </div>
         )}
-      </div>
+      </Gruppe>
 
-      <div>
-        <h2 className="mb-2 text-base font-semibold text-emerald-800">
-          15-Wochen-Kontrolle (105 Tage)
-        </h2>
-        {loading ? (
-          <p className="text-neutral-500">Lädt…</p>
-        ) : faelle.length === 0 ? (
-          <p className="text-neutral-500">
-            Keine kritischen Fälle für {jahr}.
-          </p>
-        ) : (
-          <div className="overflow-x-auto">
-            <table>
-              <thead>
-                <tr>
-                  <th>Pers.-Nr.</th>
-                  <th>Name</th>
-                  <th>Abrechnungsart</th>
-                  <th title="Allererster Arbeitstag in diesem Kalenderjahr, über ALLE Abschnitte hinweg - nicht der Beginn des aktuellen Abschnitts (siehe dort)">
-                    1. Arbeitstag (Saison)
-                  </th>
-                  <th>Letzter Arbeitstag</th>
-                  <th title="Summe der Kalendertage aller Beschäftigungsabschnitte bei uns in diesem Kalenderjahr - Pausen zwischen zwei Einsätzen zählen nicht mit">
-                    Beschäftigungstage (bei uns)
-                  </th>
-                  <th title="Anzahl getrennter Beschäftigungsabschnitte (getrennt jeweils durch eine Abrechnung - echt in der App oder manuell nachgetragen, siehe Personal → Sozialversicherung). 1 = durchgehend.">
-                    Abschnitte
-                  </th>
-                  <th title="Beginn des GERADE LAUFENDEN Abschnitts - maßgeblich für die 105-Tage-Berechnung, nicht der allererste Tag der Saison (siehe Spalte '1. Arbeitstag (Saison)')">
-                    Aktueller Abschnitt seit
-                  </th>
-                  <th title="Bisherige Beschäftigungstage in Deutschland bei anderen Arbeitgebern laut SV-Fragebogen (Personal → Sozialversicherung)">
-                    Vorbeschäftigung Deutschland
-                  </th>
-                  <th>Kombinierte Tage</th>
-                  <th title="105 Kalendertage (15 Wochen) je Kalenderjahr, über alle Abschnitte und alle deutschen Arbeitgeber zusammengerechnet">
-                    Rest bis 105 Tage
-                  </th>
-                  <th title="SV-freier Zeitraum laut Angaben (Personal → Sozialversicherung), abgeleitet aus Bezahlter Urlaub/Freistellung bzw. Schulferien/offenem Zeitraum">
-                    SV-freier Zeitraum (Angaben)
-                  </th>
-                  <th title="Das frühere von 15-Wochen-Ende und dem Ende des SV-freien Zeitraums laut Angaben">
-                    Austrittsdatum (empfohlen)
-                  </th>
-                  <th>Grund</th>
-                  <th>Status</th>
-                </tr>
-              </thead>
-              <tbody>
-                {faelle.map((f) => (
-                  <tr key={f.employee_id}>
-                    <td>{f.personal_nr}</td>
-                    <td>
-                      {f.name}, {f.vorname}
-                      {!f.aktiv && (
-                        <span className="ml-1 text-xs text-neutral-500">
-                          (inaktiv)
-                        </span>
-                      )}
-                    </td>
-                    <td>{ABRECHNUNGSART_LABELS[f.abrechnungsart]}</td>
-                    <td>{formatDatumDE(f.erster_arbeitstag)}</td>
-                    <td>{formatDatumDE(f.letzter_arbeitstag)}</td>
-                    <td>{f.beschaeftigungstage}</td>
-                    <td
-                      className={
-                        f.anzahl_abschnitte > 1 ? "font-medium text-amber-600" : ""
-                      }
-                    >
-                      {f.anzahl_abschnitte}
-                    </td>
-                    <td>{formatDatumDE(f.aktueller_abschnitt_seit)}</td>
-                    <td>{f.vorbeschaeftigung_deutschland_tage}</td>
-                    <td>{f.kombinierte_tage}</td>
-                    <td title={tageAufschluesselung(f, svAbschnitte)}>
-                      {f.rest_bis_105_tage}
-                    </td>
-                    <td className="text-sm">
-                      {f.sv_frei_von || f.sv_frei_bis ? (
-                        <>
-                          {formatDatumDE(f.sv_frei_von)} –{" "}
-                          {f.sv_frei_bis
-                            ? formatDatumDE(f.sv_frei_bis)
-                            : "unbefristet"}
-                          {f.sv_frei_luecke && (
-                            <span
-                              className="ml-1 text-amber-700"
-                              title={`Lücke zwischen Bezahltem Urlaub und Freistellung: ${formatDatumDE(f.sv_frei_luecke_von)} – ${formatDatumDE(f.sv_frei_luecke_bis)}`}
-                            >
-                              ⚠ Lücke
-                            </span>
-                          )}
-                        </>
-                      ) : (
-                        <span className="text-neutral-400">
-                          keine Angaben
-                        </span>
-                      )}
-                    </td>
-                    <td>{formatDatumDE(f.austrittsdatum_empfohlen)}</td>
-                    <td className="text-sm">
-                      {[
-                        f.ueberschritten_105_tage
-                          ? f.vorbeschaeftigung_deutschland_tage > 0
-                            ? "15-Wochen-Grenze (mit Vorbeschäftigung)"
-                            : "15-Wochen-Grenze"
-                          : null,
-                        f.ueberschritten_sv_frei_beginn
-                          ? "SV-freier Zeitraum (Angaben) beginnt zu spät"
-                          : null,
-                        f.ueberschritten_sv_frei_ende
-                          ? "SV-freier Zeitraum (Angaben) überschritten"
-                          : null,
-                        f.ueberschritten_sv_frei_luecke
-                          ? "Lücke im SV-freien Zeitraum"
-                          : null,
-                      ]
-                        .filter(Boolean)
-                        .join(" + ")}
-                    </td>
-                    <td className="font-medium text-red-600">⚠ Überschritten</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </div>
-
-      <div>
-        <h2 className="mb-2 text-base font-semibold text-emerald-800">
-          Nächste 10, deren SV-freier Zeitraum endet
-        </h2>
-        <p className="mb-2 text-sm text-neutral-500">
-          Proaktive Vorausschau (unabhängig davon, ob bereits kritisch) -
-          sortiert nach empfohlenem Austrittsdatum, das nächste zuerst.
+      <Gruppe
+        titel="Sozialversicherung (105-Tage)"
+        offen={gruppenOffen.sv}
+        onToggle={() => toggleGruppe("sv")}
+        kennzahl={
+          loading ? (
+            "…"
+          ) : (
+            <>
+              <span className="font-medium text-red-600">
+                {faelle.length}
+              </span>{" "}
+              kritische Fälle ·{" "}
+              <span className="font-medium text-amber-600">
+                {baldEndend.length}
+              </span>{" "}
+              bald endend ·{" "}
+              <span className="font-medium text-neutral-600">
+                {svFreiheitDiskrepanz.length}
+              </span>{" "}
+              Diskrepanz(en)
+            </>
+          )
+        }
+      >
+        <p className="mb-4 text-sm text-neutral-500">
+          15-Wochen-Kontrolle (105 Kalendertage je Kalenderjahr): Personen,
+          bei denen die Grenze für sozialversicherungsfreie kurzfristige
+          Beschäftigung bereits überschritten ist. Mehrere Einsätze im
+          selben Jahr werden zusammengerechnet – Pausen dazwischen zählen
+          nicht mit, ein Abschnitt endet jeweils mit der Abrechnung.
+          Zusätzlich abgeglichen mit dem SV-freien Zeitraum laut den
+          Angaben auf „Personal → Sozialversicherung". Reine
+          Tage-/Datums-Prüfung – ersetzt nicht die rechtliche Prüfung der
+          Sozialversicherungsbefreiung selbst.
         </p>
-        {loading ? (
-          <p className="text-neutral-500">Lädt…</p>
-        ) : baldEndend.length === 0 ? (
-          <p className="text-neutral-500">
-            Keine Fälle mit bekanntem Austrittsdatum für {jahr}.
-          </p>
-        ) : (
-          <div className="overflow-x-auto">
-            <table>
-              <thead>
-                <tr>
-                  <th>Pers.-Nr.</th>
-                  <th>Name</th>
-                  <th>Abrechnungsart</th>
-                  <th>Angewendete Regel</th>
-                  <th>Austrittsdatum (empfohlen)</th>
-                  <th>Ende der SV-Freiheit (Tage)</th>
-                </tr>
-              </thead>
-              <tbody>
-                {baldEndend.map((f) => {
-                  const tage = svFreiheitResttage(f);
-                  return (
+
+        <div className="mb-6">
+          <h3 className="mb-2 text-sm font-semibold text-emerald-800">
+            15-Wochen-Kontrolle (105 Tage) – kritische Fälle
+          </h3>
+          {loading ? (
+            <p className="text-neutral-500">Lädt…</p>
+          ) : faelle.length === 0 ? (
+            <p className="text-neutral-500">
+              Keine kritischen Fälle für {jahr}.
+            </p>
+          ) : (
+            <div className="overflow-x-auto">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Pers.-Nr.</th>
+                    <th>Name</th>
+                    <th>Abrechnungsart</th>
+                    <th title="Allererster Arbeitstag in diesem Kalenderjahr, über ALLE Abschnitte hinweg - nicht der Beginn des aktuellen Abschnitts (siehe dort)">
+                      1. Arbeitstag (Saison)
+                    </th>
+                    <th>Letzter Arbeitstag</th>
+                    <th title="Summe der Kalendertage aller Beschäftigungsabschnitte bei uns in diesem Kalenderjahr - Pausen zwischen zwei Einsätzen zählen nicht mit">
+                      Beschäftigungstage (bei uns)
+                    </th>
+                    <th title="Anzahl getrennter Beschäftigungsabschnitte (getrennt jeweils durch eine Abrechnung - echt in der App oder manuell nachgetragen, siehe Personal → Sozialversicherung). 1 = durchgehend.">
+                      Abschnitte
+                    </th>
+                    <th title="Beginn des GERADE LAUFENDEN Abschnitts - maßgeblich für die 105-Tage-Berechnung, nicht der allererste Tag der Saison (siehe Spalte '1. Arbeitstag (Saison)')">
+                      Aktueller Abschnitt seit
+                    </th>
+                    <th title="Bisherige Beschäftigungstage in Deutschland bei anderen Arbeitgebern laut SV-Fragebogen (Personal → Sozialversicherung)">
+                      Vorbeschäftigung Deutschland
+                    </th>
+                    <th>Kombinierte Tage</th>
+                    <th title="105 Kalendertage (15 Wochen) je Kalenderjahr, über alle Abschnitte und alle deutschen Arbeitgeber zusammengerechnet">
+                      Rest bis 105 Tage
+                    </th>
+                    <th title="SV-freier Zeitraum laut Angaben (Personal → Sozialversicherung), abgeleitet aus Bezahlter Urlaub/Freistellung bzw. Schulferien/offenem Zeitraum">
+                      SV-freier Zeitraum (Angaben)
+                    </th>
+                    <th title="Das frühere von 15-Wochen-Ende und dem Ende des SV-freien Zeitraums laut Angaben">
+                      Austrittsdatum (empfohlen)
+                    </th>
+                    <th>Grund</th>
+                    <th>Status</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {faelle.map((f) => (
                     <tr key={f.employee_id}>
                       <td>{f.personal_nr}</td>
                       <td>
                         {f.name}, {f.vorname}
+                        {!f.aktiv && (
+                          <span className="ml-1 text-xs text-neutral-500">
+                            (inaktiv)
+                          </span>
+                        )}
                       </td>
                       <td>{ABRECHNUNGSART_LABELS[f.abrechnungsart]}</td>
-                      <td>
-                        {angewendeteRegel(f)}
+                      <td>{formatDatumDE(f.erster_arbeitstag)}</td>
+                      <td>{formatDatumDE(f.letzter_arbeitstag)}</td>
+                      <td>{f.beschaeftigungstage}</td>
+                      <td
+                        className={
+                          f.anzahl_abschnitte > 1
+                            ? "font-medium text-amber-600"
+                            : ""
+                        }
+                      >
+                        {f.anzahl_abschnitte}
+                      </td>
+                      <td>{formatDatumDE(f.aktueller_abschnitt_seit)}</td>
+                      <td>{f.vorbeschaeftigung_deutschland_tage}</td>
+                      <td>{f.kombinierte_tage}</td>
+                      <td title={tageAufschluesselung(f, svAbschnitte)}>
+                        {f.rest_bis_105_tage}
+                      </td>
+                      <td className="text-sm">
+                        {f.sv_frei_von || f.sv_frei_bis ? (
+                          <>
+                            {formatDatumDE(f.sv_frei_von)} –{" "}
+                            {f.sv_frei_bis
+                              ? formatDatumDE(f.sv_frei_bis)
+                              : "unbefristet"}
+                            {f.sv_frei_luecke && (
+                              <span
+                                className="ml-1 text-amber-700"
+                                title={`Lücke zwischen Bezahltem Urlaub und Freistellung: ${formatDatumDE(f.sv_frei_luecke_von)} – ${formatDatumDE(f.sv_frei_luecke_bis)}`}
+                              >
+                                ⚠ Lücke
+                              </span>
+                            )}
+                          </>
+                        ) : (
+                          <span className="text-neutral-400">
+                            keine Angaben
+                          </span>
+                        )}
                       </td>
                       <td>{formatDatumDE(f.austrittsdatum_empfohlen)}</td>
-                      <td className={tage !== null ? resttageFarbeClass(tage) : ""}>
-                        {tage !== null ? resttageText(tage) : "—"}
+                      <td className="text-sm">
+                        {[
+                          f.ueberschritten_105_tage
+                            ? f.vorbeschaeftigung_deutschland_tage > 0
+                              ? "15-Wochen-Grenze (mit Vorbeschäftigung)"
+                              : "15-Wochen-Grenze"
+                            : null,
+                          f.ueberschritten_sv_frei_beginn
+                            ? "SV-freier Zeitraum (Angaben) beginnt zu spät"
+                            : null,
+                          f.ueberschritten_sv_frei_ende
+                            ? "SV-freier Zeitraum (Angaben) überschritten"
+                            : null,
+                          f.ueberschritten_sv_frei_luecke
+                            ? "Lücke im SV-freien Zeitraum"
+                            : null,
+                        ]
+                          .filter(Boolean)
+                          .join(" + ")}
+                      </td>
+                      <td className="font-medium text-red-600">
+                        ⚠ Überschritten
                       </td>
                     </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </div>
-
-      <div>
-        <h2 className="mb-2 text-base font-semibold text-emerald-800">
-          SV-Freiheit Diskrepanz
-        </h2>
-        <p className="mb-2 text-sm text-neutral-500">
-          Rein dokumentierend (keine akute Handlungsaufforderung mehr):
-          bereits inaktive Personen, bei denen die tatsächliche
-          Beschäftigung den SV-freien Zeitraum laut Angaben überschritten
-          hat.
-        </p>
-        {loading ? (
-          <p className="text-neutral-500">Lädt…</p>
-        ) : svFreiheitDiskrepanz.length === 0 ? (
-          <p className="text-neutral-500">
-            Keine Diskrepanzen bei inaktiven Personen für {jahr}.
-          </p>
-        ) : (
-          <div className="overflow-x-auto">
-            <table>
-              <thead>
-                <tr>
-                  <th>Pers.-Nr.</th>
-                  <th>Name</th>
-                  <th title="Allererster Arbeitstag in diesem Kalenderjahr, über ALLE Abschnitte hinweg">
-                    1. Arbeitstag (Saison)
-                  </th>
-                  <th>Letzter Arbeitstag</th>
-                  <th title="Aus den Angaben abgeleiteter Zeitraum, in dem eine Beschäftigung in Deutschland sozialversicherungsfrei möglich ist">
-                    SV-freier Zeitraum (Angaben)
-                  </th>
-                  <th>Grund</th>
-                </tr>
-              </thead>
-              <tbody>
-                {svFreiheitDiskrepanz.map((f) => (
-                  <tr key={f.employee_id}>
-                    <td>{f.personal_nr}</td>
-                    <td>
-                      {f.name}, {f.vorname}
-                      <span className="ml-1 text-xs text-neutral-500">
-                        (inaktiv)
-                      </span>
-                    </td>
-                    <td>{formatDatumDE(f.erster_arbeitstag)}</td>
-                    <td>{formatDatumDE(f.letzter_arbeitstag)}</td>
-                    <td className="text-sm">
-                      {f.sv_frei_von || f.sv_frei_bis ? (
-                        <>
-                          {formatDatumDE(f.sv_frei_von)} –{" "}
-                          {f.sv_frei_bis
-                            ? formatDatumDE(f.sv_frei_bis)
-                            : "offen"}
-                        </>
-                      ) : (
-                        <span className="text-neutral-400">keine Angaben</span>
-                      )}
-                    </td>
-                    <td className="text-sm">
-                      {[
-                        f.ueberschritten_sv_frei_beginn
-                          ? "SV-freier Zeitraum (Angaben) beginnt zu spät"
-                          : null,
-                        f.ueberschritten_sv_frei_ende
-                          ? "SV-freier Zeitraum (Angaben) überschritten"
-                          : null,
-                        f.ueberschritten_sv_frei_luecke
-                          ? "Lücke im SV-freien Zeitraum"
-                          : null,
-                      ]
-                        .filter(Boolean)
-                        .join(" + ")}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </div>
-
-      <div>
-        <div className="mb-2 flex items-center justify-between">
-          <h2 className="text-base font-semibold text-emerald-800">
-            Stundenmonitoring
-          </h2>
-          <button
-            type="button"
-            className="btn-secondary text-xs"
-            onClick={() => setStundenmonitoringOffen((o) => !o)}
-          >
-            {stundenmonitoringOffen ? "Einklappen" : "Aufklappen"}
-          </button>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
         </div>
-        {!stundenmonitoringOffen ? (
-          <p className="text-sm text-neutral-500">
+
+        <div className="mb-6">
+          <h3 className="mb-2 text-sm font-semibold text-emerald-800">
+            Nächste 10, deren SV-freier Zeitraum endet
+          </h3>
+          <p className="mb-2 text-sm text-neutral-500">
+            Proaktive Vorausschau (unabhängig davon, ob bereits kritisch) -
+            sortiert nach empfohlenem Austrittsdatum, das nächste zuerst.
+          </p>
+          {loading ? (
+            <p className="text-neutral-500">Lädt…</p>
+          ) : baldEndend.length === 0 ? (
+            <p className="text-neutral-500">
+              Keine Fälle mit bekanntem Austrittsdatum für {jahr}.
+            </p>
+          ) : (
+            <div className="overflow-x-auto">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Pers.-Nr.</th>
+                    <th>Name</th>
+                    <th>Abrechnungsart</th>
+                    <th>Angewendete Regel</th>
+                    <th>Austrittsdatum (empfohlen)</th>
+                    <th>Ende der SV-Freiheit (Tage)</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {baldEndend.map((f) => {
+                    const tage = svFreiheitResttage(f);
+                    return (
+                      <tr key={f.employee_id}>
+                        <td>{f.personal_nr}</td>
+                        <td>
+                          {f.name}, {f.vorname}
+                        </td>
+                        <td>{ABRECHNUNGSART_LABELS[f.abrechnungsart]}</td>
+                        <td>{angewendeteRegel(f)}</td>
+                        <td>{formatDatumDE(f.austrittsdatum_empfohlen)}</td>
+                        <td
+                          className={
+                            tage !== null ? resttageFarbeClass(tage) : ""
+                          }
+                        >
+                          {tage !== null ? resttageText(tage) : "—"}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+
+        <div>
+          <h3 className="mb-2 text-sm font-semibold text-emerald-800">
+            SV-Freiheit Diskrepanz
+          </h3>
+          <p className="mb-2 text-sm text-neutral-500">
+            Rein dokumentierend (keine akute Handlungsaufforderung mehr):
+            bereits inaktive Personen, bei denen die tatsächliche
+            Beschäftigung den SV-freien Zeitraum laut Angaben überschritten
+            hat.
+          </p>
+          {loading ? (
+            <p className="text-neutral-500">Lädt…</p>
+          ) : svFreiheitDiskrepanz.length === 0 ? (
+            <p className="text-neutral-500">
+              Keine Diskrepanzen bei inaktiven Personen für {jahr}.
+            </p>
+          ) : (
+            <div className="overflow-x-auto">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Pers.-Nr.</th>
+                    <th>Name</th>
+                    <th title="Allererster Arbeitstag in diesem Kalenderjahr, über ALLE Abschnitte hinweg">
+                      1. Arbeitstag (Saison)
+                    </th>
+                    <th>Letzter Arbeitstag</th>
+                    <th title="Aus den Angaben abgeleiteter Zeitraum, in dem eine Beschäftigung in Deutschland sozialversicherungsfrei möglich ist">
+                      SV-freier Zeitraum (Angaben)
+                    </th>
+                    <th>Grund</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {svFreiheitDiskrepanz.map((f) => (
+                    <tr key={f.employee_id}>
+                      <td>{f.personal_nr}</td>
+                      <td>
+                        {f.name}, {f.vorname}
+                        <span className="ml-1 text-xs text-neutral-500">
+                          (inaktiv)
+                        </span>
+                      </td>
+                      <td>{formatDatumDE(f.erster_arbeitstag)}</td>
+                      <td>{formatDatumDE(f.letzter_arbeitstag)}</td>
+                      <td className="text-sm">
+                        {f.sv_frei_von || f.sv_frei_bis ? (
+                          <>
+                            {formatDatumDE(f.sv_frei_von)} –{" "}
+                            {f.sv_frei_bis
+                              ? formatDatumDE(f.sv_frei_bis)
+                              : "offen"}
+                          </>
+                        ) : (
+                          <span className="text-neutral-400">
+                            keine Angaben
+                          </span>
+                        )}
+                      </td>
+                      <td className="text-sm">
+                        {[
+                          f.ueberschritten_sv_frei_beginn
+                            ? "SV-freier Zeitraum (Angaben) beginnt zu spät"
+                            : null,
+                          f.ueberschritten_sv_frei_ende
+                            ? "SV-freier Zeitraum (Angaben) überschritten"
+                            : null,
+                          f.ueberschritten_sv_frei_luecke
+                            ? "Lücke im SV-freien Zeitraum"
+                            : null,
+                        ]
+                          .filter(Boolean)
+                          .join(" + ")}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      </Gruppe>
+
+      <Gruppe
+        titel="Stundenmonitoring"
+        offen={gruppenOffen.stunden}
+        onToggle={() => toggleGruppe("stunden")}
+        kennzahl={
+          <>
             Anzahl Tage &gt; {MAX_STUNDEN_PRO_TAG.toFixed(0)} Std.:{" "}
             <span className="font-medium text-amber-600">
               {loadingUeberstunden
                 ? "…"
                 : ueberstunden.reduce((summe, u) => summe + u.tage.length, 0)}
             </span>
+          </>
+        }
+      >
+        <p className="mb-2 text-sm text-neutral-500">
+          Personen mit mindestens einem Tag über{" "}
+          {MAX_STUNDEN_PRO_TAG.toFixed(2)} Stunden in der Stundenerfassung.
+          Aufklappen zeigt die betroffenen Tage.
+        </p>
+        {loadingUeberstunden ? (
+          <p className="text-neutral-500">Lädt…</p>
+        ) : ueberstunden.length === 0 ? (
+          <p className="text-neutral-500">
+            Keine Tage über {MAX_STUNDEN_PRO_TAG.toFixed(2)} Stunden für{" "}
+            {jahr}.
           </p>
         ) : (
-          <>
-            <p className="mb-2 text-sm text-neutral-500">
-              Personen mit mindestens einem Tag über{" "}
-              {MAX_STUNDEN_PRO_TAG.toFixed(2)} Stunden in der
-              Stundenerfassung. Aufklappen zeigt die betroffenen Tage.
-            </p>
-            {loadingUeberstunden ? (
-              <p className="text-neutral-500">Lädt…</p>
-            ) : ueberstunden.length === 0 ? (
-              <p className="text-neutral-500">
-                Keine Tage über {MAX_STUNDEN_PRO_TAG.toFixed(2)} Stunden für{" "}
-                {jahr}.
-              </p>
-            ) : (
           <div className="overflow-x-auto">
             <table>
               <thead>
@@ -989,15 +1084,26 @@ export default function ManagementPage() {
               </tbody>
             </table>
           </div>
-            )}
-          </>
         )}
-      </div>
+      </Gruppe>
 
-      <div>
-        <h2 className="mb-2 text-base font-semibold text-emerald-800">
-          Abweichungen bei Auszahlungen
-        </h2>
+      <Gruppe
+        titel="Abweichungen bei Auszahlungen"
+        offen={gruppenOffen.abweichungen}
+        onToggle={() => toggleGruppe("abweichungen")}
+        kennzahl={
+          loadingAbw ? (
+            "…"
+          ) : (
+            <>
+              Personen mit Abweichung:{" "}
+              <span className="font-medium text-amber-600">
+                {abweichungen.length}
+              </span>
+            </>
+          )
+        }
+      >
         <p className="mb-2 text-sm text-neutral-500">
           Personen, die bereits abgerechnet wurden ("Jetzt Abrechnen"), bei
           denen sich seither mindestens ein Wert geändert hat (z.B. ein
@@ -1008,9 +1114,7 @@ export default function ManagementPage() {
         {loadingAbw ? (
           <p className="text-neutral-500">Lädt…</p>
         ) : abweichungen.length === 0 ? (
-          <p className="text-neutral-500">
-            Keine Abweichungen für {jahr}.
-          </p>
+          <p className="text-neutral-500">Keine Abweichungen für {jahr}.</p>
         ) : (
           <div className="overflow-x-auto">
             <table>
@@ -1049,168 +1153,194 @@ export default function ManagementPage() {
             </table>
           </div>
         )}
-      </div>
+      </Gruppe>
 
-      <div>
-        <h2 className="mb-2 text-base font-semibold text-emerald-800">
-          Urlaubstage
-        </h2>
-        <p className="mb-2 text-sm text-neutral-500">
-          Anspruch: 2 Urlaubstage je vollem Kalendermonat der Beschäftigung
-          (1. bis letzter Tag mit Stunden oder Markierung) - ein Monat, in
-          dem erst nach dem 1. begonnen oder vor dem Monatsletzten geendet
-          wurde, zählt nicht mit. Personen, bei denen mehr Tage mit
-          Markierung "U" erfasst wurden als der Anspruch hergibt.
-        </p>
-        {loadingUrlaub ? (
-          <p className="text-neutral-500">Lädt…</p>
-        ) : urlaubUeberzogen.length === 0 ? (
-          <p className="text-neutral-500">
-            Keine überzogenen Urlaubstage für {jahr}.
+      <Gruppe
+        titel="Urlaub"
+        offen={gruppenOffen.urlaub}
+        onToggle={() => toggleGruppe("urlaub")}
+        kennzahl={
+          loadingUrlaub || loadingResturlaub ? (
+            "…"
+          ) : (
+            <>
+              <span className="font-medium text-red-600">
+                {urlaubUeberzogen.length}
+              </span>{" "}
+              überzogen ·{" "}
+              <span className="font-medium text-amber-600">
+                {resturlaub.length}
+              </span>{" "}
+              Resturlaub offen
+            </>
+          )
+        }
+      >
+        <div className="mb-6">
+          <h3 className="mb-2 text-sm font-semibold text-emerald-800">
+            Urlaubstage überzogen
+          </h3>
+          <p className="mb-2 text-sm text-neutral-500">
+            Anspruch: 2 Urlaubstage je vollem Kalendermonat der Beschäftigung
+            (1. bis letzter Tag mit Stunden oder Markierung) - ein Monat, in
+            dem erst nach dem 1. begonnen oder vor dem Monatsletzten geendet
+            wurde, zählt nicht mit. Personen, bei denen mehr Tage mit
+            Markierung "U" erfasst wurden als der Anspruch hergibt.
           </p>
-        ) : (
-          <div className="overflow-x-auto">
-            <table>
-              <thead>
-                <tr>
-                  <th>Pers.-Nr.</th>
-                  <th>Name</th>
-                  <th>1. Eintrag</th>
-                  <th>Letzter Eintrag</th>
-                  <th>Volle Kalendermonate</th>
-                  <th>Anspruch (Tage)</th>
-                  <th>Genommen ("U", Tage)</th>
-                  <th>Status</th>
-                </tr>
-              </thead>
-              <tbody>
-                {urlaubUeberzogen.map((u) => (
-                  <tr key={u.employee_id}>
-                    <td>{u.personal_nr}</td>
-                    <td>
-                      {u.name}, {u.vorname}
-                      {!u.aktiv && (
-                        <span className="ml-1 text-xs text-neutral-500">
-                          (inaktiv)
-                        </span>
-                      )}
-                    </td>
-                    <td>{formatDatumDE(u.erster_eintrag)}</td>
-                    <td>{formatDatumDE(u.letzter_eintrag)}</td>
-                    <td>{u.volle_kalendermonate}</td>
-                    <td>{u.urlaubsanspruch_tage}</td>
-                    <td>{u.u_tage}</td>
-                    <td className="font-medium text-red-600">
-                      ⚠ {u.u_tage - u.urlaubsanspruch_tage} Tag(e) zu viel
-                    </td>
+          {loadingUrlaub ? (
+            <p className="text-neutral-500">Lädt…</p>
+          ) : urlaubUeberzogen.length === 0 ? (
+            <p className="text-neutral-500">
+              Keine überzogenen Urlaubstage für {jahr}.
+            </p>
+          ) : (
+            <div className="overflow-x-auto">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Pers.-Nr.</th>
+                    <th>Name</th>
+                    <th>1. Eintrag</th>
+                    <th>Letzter Eintrag</th>
+                    <th>Volle Kalendermonate</th>
+                    <th>Anspruch (Tage)</th>
+                    <th>Genommen ("U", Tage)</th>
+                    <th>Status</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </div>
+                </thead>
+                <tbody>
+                  {urlaubUeberzogen.map((u) => (
+                    <tr key={u.employee_id}>
+                      <td>{u.personal_nr}</td>
+                      <td>
+                        {u.name}, {u.vorname}
+                        {!u.aktiv && (
+                          <span className="ml-1 text-xs text-neutral-500">
+                            (inaktiv)
+                          </span>
+                        )}
+                      </td>
+                      <td>{formatDatumDE(u.erster_eintrag)}</td>
+                      <td>{formatDatumDE(u.letzter_eintrag)}</td>
+                      <td>{u.volle_kalendermonate}</td>
+                      <td>{u.urlaubsanspruch_tage}</td>
+                      <td>{u.u_tage}</td>
+                      <td className="font-medium text-red-600">
+                        ⚠ {u.u_tage - u.urlaubsanspruch_tage} Tag(e) zu viel
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
 
-      <div>
-        <h2 className="mb-2 text-base font-semibold text-emerald-800">
-          Resturlaub (zu wenig genommen)
-        </h2>
-        <p className="mb-2 text-sm text-neutral-500">
-          Gleicher Anspruch wie oben (2 Tage je vollem Kalendermonat) - hier
-          Personen, bei denen weniger "U"-Tage erfasst wurden als der
-          Anspruch hergibt. Bei bereits inaktiven Personen bedeutet das in
-          der Regel eine Abgeltungspflicht (Auszahlung des Resturlaubs),
-          nicht nur eine Erinnerung.
-        </p>
-        {loadingResturlaub ? (
-          <p className="text-neutral-500">Lädt…</p>
-        ) : resturlaub.length === 0 ? (
-          <p className="text-neutral-500">
-            Kein offener Resturlaub für {jahr}.
+        <div>
+          <h3 className="mb-2 text-sm font-semibold text-emerald-800">
+            Resturlaub (zu wenig genommen)
+          </h3>
+          <p className="mb-2 text-sm text-neutral-500">
+            Gleicher Anspruch wie oben (2 Tage je vollem Kalendermonat) - hier
+            Personen, bei denen weniger "U"-Tage erfasst wurden als der
+            Anspruch hergibt. Bei bereits inaktiven Personen bedeutet das in
+            der Regel eine Abgeltungspflicht (Auszahlung des Resturlaubs),
+            nicht nur eine Erinnerung.
           </p>
-        ) : (
-          <div className="flex flex-col gap-4">
-            {resturlaub.some((u) => !u.aktiv) && (
-              <div className="overflow-x-auto">
-                <h3 className="mb-1 text-sm font-semibold text-red-700">
-                  ⚠ Inaktiv - Abgeltung fällig
-                </h3>
-                <table>
-                  <thead>
-                    <tr>
-                      <th>Pers.-Nr.</th>
-                      <th>Name</th>
-                      <th>1. Eintrag</th>
-                      <th>Letzter Eintrag</th>
-                      <th>Volle Kalendermonate</th>
-                      <th>Anspruch (Tage)</th>
-                      <th>Genommen ("U", Tage)</th>
-                      <th>Resturlaub</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {resturlaub
-                      .filter((u) => !u.aktiv)
-                      .map((u) => (
-                        <tr key={u.employee_id} className="bg-red-50">
-                          <td>{u.personal_nr}</td>
-                          <td>{u.name}, {u.vorname}</td>
-                          <td>{formatDatumDE(u.erster_eintrag)}</td>
-                          <td>{formatDatumDE(u.letzter_eintrag)}</td>
-                          <td>{u.volle_kalendermonate}</td>
-                          <td>{u.urlaubsanspruch_tage}</td>
-                          <td>{u.u_tage}</td>
-                          <td className="font-medium text-red-600">
-                            ⚠ {u.resturlaub_tage} Tag(e) - Abgeltung fällig
-                          </td>
-                        </tr>
-                      ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
-            {resturlaub.some((u) => u.aktiv) && (
-              <div className="overflow-x-auto">
-                <h3 className="mb-1 text-sm font-semibold text-neutral-700">
-                  Aktiv - kann noch genommen werden
-                </h3>
-                <table>
-                  <thead>
-                    <tr>
-                      <th>Pers.-Nr.</th>
-                      <th>Name</th>
-                      <th>1. Eintrag</th>
-                      <th>Letzter Eintrag</th>
-                      <th>Volle Kalendermonate</th>
-                      <th>Anspruch (Tage)</th>
-                      <th>Genommen ("U", Tage)</th>
-                      <th>Resturlaub</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {resturlaub
-                      .filter((u) => u.aktiv)
-                      .map((u) => (
-                        <tr key={u.employee_id}>
-                          <td>{u.personal_nr}</td>
-                          <td>{u.name}, {u.vorname}</td>
-                          <td>{formatDatumDE(u.erster_eintrag)}</td>
-                          <td>{formatDatumDE(u.letzter_eintrag)}</td>
-                          <td>{u.volle_kalendermonate}</td>
-                          <td>{u.urlaubsanspruch_tage}</td>
-                          <td>{u.u_tage}</td>
-                          <td className="font-medium text-amber-600">
-                            {u.resturlaub_tage} Tag(e) offen
-                          </td>
-                        </tr>
-                      ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
-          </div>
-        )}
-      </div>
+          {loadingResturlaub ? (
+            <p className="text-neutral-500">Lädt…</p>
+          ) : resturlaub.length === 0 ? (
+            <p className="text-neutral-500">
+              Kein offener Resturlaub für {jahr}.
+            </p>
+          ) : (
+            <div className="flex flex-col gap-4">
+              {resturlaub.some((u) => !u.aktiv) && (
+                <div className="overflow-x-auto">
+                  <h4 className="mb-1 text-sm font-semibold text-red-700">
+                    ⚠ Inaktiv - Abgeltung fällig
+                  </h4>
+                  <table>
+                    <thead>
+                      <tr>
+                        <th>Pers.-Nr.</th>
+                        <th>Name</th>
+                        <th>1. Eintrag</th>
+                        <th>Letzter Eintrag</th>
+                        <th>Volle Kalendermonate</th>
+                        <th>Anspruch (Tage)</th>
+                        <th>Genommen ("U", Tage)</th>
+                        <th>Resturlaub</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {resturlaub
+                        .filter((u) => !u.aktiv)
+                        .map((u) => (
+                          <tr key={u.employee_id} className="bg-red-50">
+                            <td>{u.personal_nr}</td>
+                            <td>
+                              {u.name}, {u.vorname}
+                            </td>
+                            <td>{formatDatumDE(u.erster_eintrag)}</td>
+                            <td>{formatDatumDE(u.letzter_eintrag)}</td>
+                            <td>{u.volle_kalendermonate}</td>
+                            <td>{u.urlaubsanspruch_tage}</td>
+                            <td>{u.u_tage}</td>
+                            <td className="font-medium text-red-600">
+                              ⚠ {u.resturlaub_tage} Tag(e) - Abgeltung fällig
+                            </td>
+                          </tr>
+                        ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+              {resturlaub.some((u) => u.aktiv) && (
+                <div className="overflow-x-auto">
+                  <h4 className="mb-1 text-sm font-semibold text-neutral-700">
+                    Aktiv - kann noch genommen werden
+                  </h4>
+                  <table>
+                    <thead>
+                      <tr>
+                        <th>Pers.-Nr.</th>
+                        <th>Name</th>
+                        <th>1. Eintrag</th>
+                        <th>Letzter Eintrag</th>
+                        <th>Volle Kalendermonate</th>
+                        <th>Anspruch (Tage)</th>
+                        <th>Genommen ("U", Tage)</th>
+                        <th>Resturlaub</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {resturlaub
+                        .filter((u) => u.aktiv)
+                        .map((u) => (
+                          <tr key={u.employee_id}>
+                            <td>{u.personal_nr}</td>
+                            <td>
+                              {u.name}, {u.vorname}
+                            </td>
+                            <td>{formatDatumDE(u.erster_eintrag)}</td>
+                            <td>{formatDatumDE(u.letzter_eintrag)}</td>
+                            <td>{u.volle_kalendermonate}</td>
+                            <td>{u.urlaubsanspruch_tage}</td>
+                            <td>{u.u_tage}</td>
+                            <td className="font-medium text-amber-600">
+                              {u.resturlaub_tage} Tag(e) offen
+                            </td>
+                          </tr>
+                        ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      </Gruppe>
     </div>
   );
 }
