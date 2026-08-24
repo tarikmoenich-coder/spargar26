@@ -100,7 +100,7 @@ const de = {
   // Arbeitskleidung (app/arbeitskleidung/page.tsx)
   "arbeitskleidung.title": "Arbeitskleidung {jahr}",
   "arbeitskleidung.untertitel":
-    "Jede Ausgabe wird einzeln mit Datum und Größe erfasst (kein Überschreiben mehr) - siehe Ausgabe-Historie je Person. Nur Hose, Jacke und Stiefel fließen als eigene Abzugsposition in die Lohnübersicht ein (wie Buskosten/Kautionen), Spargelmesser/Feile/Handschuhe sind Verbrauchsgegenstände und werden hier bewusst nicht erfasst. Der Lagerbestand unten wird automatisch aus Anfangsbestand minus allen Ausgaben berechnet.",
+    "Jede Ausgabe wird einzeln mit Datum und Größe erfasst (kein Überschreiben mehr) - siehe Ausgabe-Historie je Person. Nur Hose, Jacke und Stiefel fließen als eigene Abzugsposition in die Lohnübersicht ein (wie Buskosten/Kautionen), Spargelmesser/Feile/Handschuhe sind Verbrauchsgegenstände und werden hier bewusst nicht erfasst.",
   "arbeitskleidung.keinepreise":
     "⚠ Für {jahr} sind noch keine Preise für Hose/Jacke/Stiefel in den Einstellungen hinterlegt - eingetragene Stückzahlen werden erst mit 0 € berechnet, bis das nachgeholt wird.",
   "arbeitskleidung.keineberechtigung":
@@ -108,19 +108,12 @@ const de = {
   "arbeitskleidung.typhose": "Hose",
   "arbeitskleidung.typjacke": "Jacke",
   "arbeitskleidung.typstiefel": "Stiefel",
-  "arbeitskleidung.lagerbestand": "Lagerbestand",
-  "arbeitskleidung.lagerbestanduntertitel":
-    "Anfangsbestand zu Saisonbeginn eintragen (nur admin/hr) - der aktuelle Bestand wird automatisch berechnet (Anfangsbestand minus alle nicht stornierten Ausgaben) und muss nicht 100% genau gepflegt werden, um trotzdem eine gute Orientierung zu geben.",
   "arbeitskleidung.typ": "Typ",
   "arbeitskleidung.groesse": "Größe",
-  "arbeitskleidung.anfangsbestand": "Anfangsbestand",
-  "arbeitskleidung.ausgegeben": "Ausgegeben",
-  "arbeitskleidung.aktuellerbestand": "Aktueller Bestand",
   "arbeitskleidung.ausgabeerfassen": "Ausgabe erfassen",
   "arbeitskleidung.anzahl": "Anzahl",
   "arbeitskleidung.ausgeben": "Ausgeben",
   "arbeitskleidung.historie": "Ausgabe-Historie",
-  "arbeitskleidung.keinehistorie": "Noch keine Ausgaben erfasst.",
   "arbeitskleidung.stornieren": "Stornieren",
   "arbeitskleidung.storniert": "storniert",
   "arbeitskleidung.stornogrundprompt":
@@ -206,7 +199,7 @@ const hr: Record<TKey, string> = {
 
   "arbeitskleidung.title": "Radna odjeća {jahr}",
   "arbeitskleidung.untertitel":
-    "Svako izdavanje bilježi se zasebno s datumom i veličinom (više se ne prepisuje) - povijest izdavanja vidljiva je po osobi. Samo hlače, jakna i čizme ulaze kao zasebna stavka odbitka u pregled plaća (kao putni troškovi/depoziti), nož za šparoge, turpija i rukavice su potrošni materijal i ovdje se ne bilježe. Zaliha ispod automatski se izračunava kao početno stanje minus sva izdavanja.",
+    "Svako izdavanje bilježi se zasebno s datumom i veličinom (više se ne prepisuje) - povijest izdavanja vidljiva je po osobi. Samo hlače, jakna i čizme ulaze kao zasebna stavka odbitka u pregled plaća (kao putni troškovi/depoziti), nož za šparoge, turpija i rukavice su potrošni materijal i ovdje se ne bilježe.",
   "arbeitskleidung.keinepreise":
     "⚠ Za {jahr} još nisu unesene cijene za hlače/jaknu/čizme u postavkama - unesene količine se do tada obračunavaju s 0 €.",
   "arbeitskleidung.keineberechtigung":
@@ -214,19 +207,12 @@ const hr: Record<TKey, string> = {
   "arbeitskleidung.typhose": "Hlače",
   "arbeitskleidung.typjacke": "Jakna",
   "arbeitskleidung.typstiefel": "Čizme",
-  "arbeitskleidung.lagerbestand": "Zaliha",
-  "arbeitskleidung.lagerbestanduntertitel":
-    "Unesite početno stanje na početku sezone (samo admin/hr) - trenutno stanje računa se automatski (početno stanje minus sva nestornirana izdavanja) i ne mora biti 100% točno da bi ipak dalo dobru orijentaciju.",
   "arbeitskleidung.typ": "Vrsta",
   "arbeitskleidung.groesse": "Veličina",
-  "arbeitskleidung.anfangsbestand": "Početno stanje",
-  "arbeitskleidung.ausgegeben": "Izdano",
-  "arbeitskleidung.aktuellerbestand": "Trenutno stanje",
   "arbeitskleidung.ausgabeerfassen": "Zabilježi izdavanje",
   "arbeitskleidung.anzahl": "Količina",
   "arbeitskleidung.ausgeben": "Izdaj",
   "arbeitskleidung.historie": "Povijest izdavanja",
-  "arbeitskleidung.keinehistorie": "Još nema zabilježenih izdavanja.",
   "arbeitskleidung.stornieren": "Storniraj",
   "arbeitskleidung.storniert": "stornirano",
   "arbeitskleidung.stornogrundprompt":

@@ -1,48 +1,37 @@
 "use client";
 
-// Arbeitskleidung: Lagerbestand + Ausgabe-Log (Nutzer-Vorgabe 2026-08-24:
-// "Ich möchte einen Datumsstempel bekommen... die Größen, die ausgegeben
-// wurden... einen Lagerbestand an Arbeitskleidung, der 'lebt'"). Ersetzt
-// das bisherige Modell (eine überschreibbare Gesamtzahl je Person/Saison)
-// durch ein Ausgabe-Log (jede Ausgabe ein eigener, zeitgestempelter
-// Eintrag mit Größe, per Storno statt Überschreiben korrigierbar) plus
-// einen Anfangsbestand je Typ+Größe (nur admin/hr). Der aktuelle
-// Lagerbestand wird IMMER live berechnet (Anfangsbestand − Summe aller
-// nicht stornierten Ausgaben) - gleiches Prinzip wie kassenbestand_bis()
-// im Kassenbuch, muss laut Nutzer nicht 100% exakt sein, nur eine gute
-// Orientierung geben. Erfasst von admin/hr/zeiterfassung über die
-// security-definer Funktionen arbeitskleidung_ausgabe_buchen/
-// -stornieren - landet weiterhin als eigene, sichtbare Abzugsposition in
-// der Lohnübersicht (wie Buskosten/Kautionen), siehe
-// arbeitskleidung_bestand_synchronisieren in schema.sql.
+// Arbeitskleidung: Ausgabe-Log (Nutzer-Vorgabe 2026-08-24: "Ich möchte
+// einen Datumsstempel bekommen... die Größen, die ausgegeben wurden").
+// Ersetzt das bisherige Modell (eine überschreibbare Gesamtzahl je
+// Person/Saison) durch ein Ausgabe-Log - jede Ausgabe ein eigener,
+// zeitgestempelter Eintrag mit Größe, per Storno statt Überschreiben
+// korrigierbar. Erfasst von admin/hr/zeiterfassung über die security-
+// definer Funktionen arbeitskleidung_ausgabe_buchen/-stornieren - landet
+// weiterhin als eigene, sichtbare Abzugsposition in der Lohnübersicht
+// (wie Buskosten/Kautionen), siehe arbeitskleidung_bestand_synchronisieren
+// in schema.sql. Der Lagerbestand selbst (Anfangsbestand/Inventur) lebt
+// seit 2026-08-25 auf einer eigenen Seite "Lager" (nur admin/hr, Nutzer-
+// Vorgabe: "'Stundenerfassung' macht nur die Ausgabe") - siehe
+// app/lager/page.tsx.
 
 import { Fragment, useEffect, useState } from "react";
+import Link from "next/link";
 import { getSupabaseClient } from "@/lib/supabase/client";
 import { useProfile } from "@/lib/useProfile";
 import { uebersetzung } from "@/lib/i18n";
 import { formatEuro } from "@/lib/format";
 import ErfassungTabs from "@/components/ErfassungTabs";
+import { TYPEN, TYP_BADGE_CLASS, groessenFuer } from "@/lib/arbeitskleidung";
 import type {
   Arbeitsgruppe,
   Employee,
   KleidungAusgabe,
-  KleidungLagerbestand,
   KleidungTyp,
   ProfilName,
   VerpflegungsSatz,
 } from "@/lib/types";
 
 const CURRENT_YEAR = new Date().getFullYear();
-
-// Größen-Listen bewusst fest im Code (Nutzer-Vorgabe 2026-08-24: "fest im
-// Code" statt in den Einstellungen pflegbar) - bei Bedarf hier anpassen.
-const HOSE_JACKE_GROESSEN = ["S", "M", "L", "XL", "XXL", "3XL"];
-const STIEFEL_GROESSEN = Array.from({ length: 13 }, (_, i) => String(36 + i)); // 36–48
-const TYPEN: KleidungTyp[] = ["Hose", "Jacke", "Stiefel"];
-
-function groessenFuer(typ: KleidungTyp): string[] {
-  return typ === "Stiefel" ? STIEFEL_GROESSEN : HOSE_JACKE_GROESSEN;
-}
 
 interface Entwurf {
   typ: KleidungTyp;
@@ -51,7 +40,7 @@ interface Entwurf {
 }
 
 function leererEntwurf(): Entwurf {
-  return { typ: "Hose", groesse: HOSE_JACKE_GROESSEN[0], anzahl: "1" };
+  return { typ: "Hose", groesse: groessenFuer("Hose")[0], anzahl: "1" };
 }
 
 export default function ArbeitskleidungPage() {
@@ -61,14 +50,11 @@ export default function ArbeitskleidungPage() {
     profile?.role === "admin" ||
     profile?.role === "hr" ||
     profile?.role === "zeiterfassung";
-  // Anfangsbestand ist eine Planungsentscheidung (wie Preise/Sätze) -
-  // enger als canEdit, das nur die Ausgabe selbst betrifft.
-  const canEditLager = profile?.role === "admin" || profile?.role === "hr";
+  const canSeeLagerLink = profile?.role === "admin" || profile?.role === "hr";
 
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [gruppen, setGruppen] = useState<Arbeitsgruppe[]>([]);
   const [ausgaben, setAusgaben] = useState<KleidungAusgabe[]>([]);
-  const [lagerbestand, setLagerbestand] = useState<KleidungLagerbestand[]>([]);
   const [namenVon, setNamenVon] = useState<Record<string, string>>({});
   const [satz, setSatz] = useState<VerpflegungsSatz | null>(null);
   const [gruppeFilter, setGruppeFilter] = useState("");
@@ -82,53 +68,37 @@ export default function ArbeitskleidungPage() {
   const [speichernId, setSpeichernId] = useState<string | null>(null);
   const [fehler, setFehler] = useState<string | null>(null);
 
-  const [lagerEntwurf, setLagerEntwurf] = useState<Record<string, string>>({});
-  const [lagerSpeichernKey, setLagerSpeichernKey] = useState<string | null>(
-    null
-  );
-
   async function load() {
     setLoading(true);
     const supabase = getSupabaseClient();
-    const [
-      { data: emp },
-      { data: gr },
-      { data: ausg },
-      { data: lager },
-      { data: saetze },
-      { data: namen },
-    ] = await Promise.all([
-      supabase
-        .from("employees")
-        // Bewusst kein "select *" (2026-08-09-Vorfall, siehe schema.sql) -
-        // diese Seite ist auch für zeiterfassung erreichbar, die keine
-        // sensiblen Felder (SV-Nr./IBAN/...) sehen soll.
-        .select("id, personal_nr, gruppe_nr, name, vorname, aktiv")
-        .eq("aktiv", true)
-        .order("name"),
-      supabase.from("arbeitsgruppen").select("*").order("reihenfolge"),
-      // Kein Zeilenlimit nötig - eine Saison hat realistisch nur wenige
-      // hundert Ausgaben, kein Kassenbuch-Umfang.
-      supabase
-        .from("kleidung_ausgaben")
-        .select("*")
-        .eq("saison_jahr", CURRENT_YEAR)
-        .order("datum", { ascending: false }),
-      supabase
-        .from("kleidung_lagerbestand")
-        .select("*")
-        .eq("saison_jahr", CURRENT_YEAR),
-      supabase
-        .from("verpflegungssaetze")
-        .select("*")
-        .eq("saison_jahr", CURRENT_YEAR)
-        .maybeSingle(),
-      supabase.from("profile_namen").select("*"),
-    ]);
+    const [{ data: emp }, { data: gr }, { data: ausg }, { data: saetze }, { data: namen }] =
+      await Promise.all([
+        supabase
+          .from("employees")
+          // Bewusst kein "select *" (2026-08-09-Vorfall, siehe schema.sql) -
+          // diese Seite ist auch für zeiterfassung erreichbar, die keine
+          // sensiblen Felder (SV-Nr./IBAN/...) sehen soll.
+          .select("id, personal_nr, gruppe_nr, name, vorname, aktiv")
+          .eq("aktiv", true)
+          .order("name"),
+        supabase.from("arbeitsgruppen").select("*").order("reihenfolge"),
+        // Kein Zeilenlimit nötig - eine Saison hat realistisch nur wenige
+        // hundert Ausgaben, kein Kassenbuch-Umfang.
+        supabase
+          .from("kleidung_ausgaben")
+          .select("*")
+          .eq("saison_jahr", CURRENT_YEAR)
+          .order("datum", { ascending: false }),
+        supabase
+          .from("verpflegungssaetze")
+          .select("*")
+          .eq("saison_jahr", CURRENT_YEAR)
+          .maybeSingle(),
+        supabase.from("profile_namen").select("*"),
+      ]);
     setEmployees((emp as Employee[]) ?? []);
     setGruppen((gr as Arbeitsgruppe[]) ?? []);
     setAusgaben((ausg as KleidungAusgabe[]) ?? []);
-    setLagerbestand((lager as KleidungLagerbestand[]) ?? []);
     setSatz((saetze as VerpflegungsSatz) ?? null);
     const namenMap: Record<string, string> = {};
     ((namen as ProfilName[]) ?? []).forEach((p) => {
@@ -197,48 +167,6 @@ export default function ArbeitskleidungPage() {
     load();
   }
 
-  async function lagerSpeichern(typ: KleidungTyp, groesse: string) {
-    const key = `${typ}-${groesse}`;
-    const wert = Number(lagerEntwurf[key]);
-    setLagerSpeichernKey(key);
-    setFehler(null);
-    const supabase = getSupabaseClient();
-    const { error } = await supabase.from("kleidung_lagerbestand").upsert(
-      {
-        saison_jahr: CURRENT_YEAR,
-        typ,
-        groesse,
-        anfangsbestand: Number.isFinite(wert) && wert >= 0 ? wert : 0,
-      },
-      { onConflict: "saison_jahr,typ,groesse" }
-    );
-    setLagerSpeichernKey(null);
-    if (error) {
-      setFehler(error.message);
-      return;
-    }
-    setLagerEntwurf((prev) => {
-      const next = { ...prev };
-      delete next[key];
-      return next;
-    });
-    load();
-  }
-
-  // Lebender Lagerbestand: Aktuell = Anfangsbestand − Ausgegeben, immer
-  // live aus den geladenen Rohdaten berechnet, nie gespeichert (gleiches
-  // Prinzip wie kassenbestand_bis() im Kassenbuch).
-  const ausgegebenJeTypGroesse: Record<string, number> = {};
-  ausgaben.forEach((a) => {
-    if (a.storniert) return;
-    const key = `${a.typ}-${a.groesse}`;
-    ausgegebenJeTypGroesse[key] = (ausgegebenJeTypGroesse[key] ?? 0) + a.anzahl;
-  });
-  const anfangsbestandJeTypGroesse: Record<string, number> = {};
-  lagerbestand.forEach((l) => {
-    anfangsbestandJeTypGroesse[`${l.typ}-${l.groesse}`] = l.anfangsbestand;
-  });
-
   const gefiltert = employees.filter((e) => {
     if (gruppeFilter && e.gruppe_nr !== gruppeFilter) return false;
     if (!search) return true;
@@ -290,6 +218,16 @@ export default function ArbeitskleidungPage() {
         </h1>
         <p className="text-sm text-neutral-500">
           {t("arbeitskleidung.untertitel")}
+          {canSeeLagerLink && (
+            <>
+              {" "}
+              Lagerbestand siehe{" "}
+              <Link href="/lager" className="text-emerald-700 underline">
+                Lager
+              </Link>
+              .
+            </>
+          )}
         </p>
       </div>
 
@@ -304,80 +242,6 @@ export default function ArbeitskleidungPage() {
           ⚠ {fehler}
         </p>
       )}
-
-      <div>
-        <h2 className="mb-2 text-base font-semibold text-emerald-800">
-          {t("arbeitskleidung.lagerbestand")}
-        </h2>
-        <p className="mb-2 text-sm text-neutral-500">
-          {t("arbeitskleidung.lagerbestanduntertitel")}
-        </p>
-        {loading ? (
-          <p className="text-neutral-500">{t("gemeinsam.laedt")}</p>
-        ) : (
-          <div className="overflow-x-auto">
-            <table>
-              <thead>
-                <tr>
-                  <th>{t("arbeitskleidung.typ")}</th>
-                  <th>{t("arbeitskleidung.groesse")}</th>
-                  <th>{t("arbeitskleidung.anfangsbestand")}</th>
-                  <th>{t("arbeitskleidung.ausgegeben")}</th>
-                  <th>{t("arbeitskleidung.aktuellerbestand")}</th>
-                </tr>
-              </thead>
-              <tbody>
-                {TYPEN.flatMap((typ) =>
-                  groessenFuer(typ).map((groesse) => {
-                    const key = `${typ}-${groesse}`;
-                    const anfangsbestand = anfangsbestandJeTypGroesse[key] ?? 0;
-                    const ausgegeben = ausgegebenJeTypGroesse[key] ?? 0;
-                    const aktuell = anfangsbestand - ausgegeben;
-                    return (
-                      <tr key={key}>
-                        <td>{typLabel[typ]}</td>
-                        <td>{groesse}</td>
-                        <td>
-                          {canEditLager ? (
-                            <input
-                              type="number"
-                              min={0}
-                              className="w-20"
-                              value={lagerEntwurf[key] ?? String(anfangsbestand)}
-                              onChange={(e) =>
-                                setLagerEntwurf((prev) => ({
-                                  ...prev,
-                                  [key]: e.target.value,
-                                }))
-                              }
-                              onBlur={() => lagerSpeichern(typ, groesse)}
-                              disabled={lagerSpeichernKey === key}
-                            />
-                          ) : (
-                            anfangsbestand
-                          )}
-                        </td>
-                        <td>{ausgegeben}</td>
-                        <td
-                          className={
-                            aktuell <= 0
-                              ? "font-medium text-red-600"
-                              : aktuell <= 3
-                                ? "font-medium text-amber-600"
-                                : ""
-                          }
-                        >
-                          {aktuell}
-                        </td>
-                      </tr>
-                    );
-                  })
-                )}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </div>
 
       <div>
         <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
@@ -430,7 +294,10 @@ export default function ArbeitskleidungPage() {
                 const werte = entwurfFuer(emp.id);
                 const zusammenfassung = eigeneAusgaben
                   .filter((a) => !a.storniert)
-                  .map((a) => `${a.anzahl}× ${typLabel[a.typ]} (${a.groesse})`)
+                  .map(
+                    (a) =>
+                      `${a.anzahl}× ${typLabel[a.typ]} (${a.groesse})`
+                  )
                   .join(", ");
                 return (
                   <Fragment key={emp.id}>
@@ -550,7 +417,13 @@ export default function ArbeitskleidungPage() {
                                             "de-DE"
                                           )}
                                         </td>
-                                        <td>{typLabel[a.typ]}</td>
+                                        <td>
+                                          <span
+                                            className={`inline-block rounded px-2 py-0.5 text-xs font-medium ${TYP_BADGE_CLASS[a.typ]}`}
+                                          >
+                                            {typLabel[a.typ]}
+                                          </span>
+                                        </td>
                                         <td>{a.groesse}</td>
                                         <td>{a.anzahl}</td>
                                         <td>

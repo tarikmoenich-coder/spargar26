@@ -2043,6 +2043,24 @@ create table kleidung_lagerbestand (
   primary key (saison_jahr, typ, groesse)
 );
 
+-- Setzt updated_at/updated_by zuverlässig bei JEDER Änderung (nicht nur
+-- beim ersten Insert, wo "default now()" schon reicht) - Nutzer-Vorgabe
+-- 2026-08-25: "Den Anfangsbestand mit Datumsstempel versehen". Serverseitig
+-- statt client-seitig gesetzt, damit der Zeitstempel nicht vom Client
+-- manipulierbar ist (wie z.B. bei den Storno-Zeitstempeln andernorts).
+create or replace function kleidung_lagerbestand_touch()
+returns trigger language plpgsql as $$
+begin
+  new.updated_at := now();
+  new.updated_by := auth.uid();
+  return new;
+end;
+$$;
+
+create trigger trg_kleidung_lagerbestand_touch
+  before insert or update on kleidung_lagerbestand
+  for each row execute function kleidung_lagerbestand_touch();
+
 -- Ausgabe-Log - eine Zeile je tatsächlicher Ausgabe (nicht mehr eine
 -- überschreibbare Gesamtzahl je Person). storniert statt Löschen, analog
 -- zu advances/cash_deposits/kautionsuebergaben.
@@ -4526,13 +4544,13 @@ create policy "kautionsuebergabe_personen_select" on kautionsuebergabe_personen 
 create policy "kautionsuebergabe_personen_write" on kautionsuebergabe_personen for insert
   with check (current_role_name() in ('admin', 'kasse', 'lohnabrechnung'));
 
--- Arbeitskleidung (Nutzer-Vorgabe 2026-08-24): Lagerbestand (Anfangsbestand)
--- nur admin/hr, Ausgabe-Log wie gehabt admin/hr/zeiterfassung (die Kleidung
--- ausgibt) - lesend breiter (auch lohnabrechnung/management, analog zu
--- kautionsuebergaben/advances), damit der Lagerbestand auch im
--- Controlling/Lohn-Umfeld sichtbar ist.
+-- Arbeitskleidung (Nutzer-Vorgabe 2026-08-24/25): Lagerbestand (eigene
+-- Seite "Lager") nur admin/hr - sehen UND bearbeiten (Nutzer-Vorgabe:
+-- "Den Lagerbestand soll nur 'admin und hr' sehen und bearbeiten können.
+-- 'Stundenerfassung' macht nur die Ausgabe"). Ausgabe-Log (auf der
+-- Arbeitskleidung-Seite) bleibt admin/hr/zeiterfassung, siehe unten.
 create policy "kleidung_lagerbestand_select" on kleidung_lagerbestand for select
-  using (current_role_name() in ('admin', 'hr', 'zeiterfassung', 'lohnabrechnung', 'management'));
+  using (current_role_name() in ('admin', 'hr'));
 create policy "kleidung_lagerbestand_write" on kleidung_lagerbestand for all
   using (current_role_name() in ('admin', 'hr'))
   with check (current_role_name() in ('admin', 'hr'));

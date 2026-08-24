@@ -3,11 +3,26 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useRef } from "react";
+import { useProfile } from "@/lib/useProfile";
+import type { UserRole } from "@/lib/types";
 
-const tabs = [
+interface Tab {
+  href: string;
+  label: string;
+  // Fehlt roles, sehen alle Rollen mit Zugriff auf diesen Reiter-Bereich
+  // den Tab (bisheriges Verhalten). "Lager" ist bewusst enger (Nutzer-
+  // Vorgabe 2026-08-25: "Den Lagerbestand soll nur 'admin und hr' sehen
+  // und bearbeiten können. 'Stundenerfassung' macht nur die Ausgabe") -
+  // zeiterfassung soll den Tab gar nicht erst sehen, nicht nur eine
+  // "keine Berechtigung"-Seite dahinter finden.
+  roles?: UserRole[];
+}
+
+const tabs: Tab[] = [
   { href: "/erfassung", label: "Erfassung" },
   { href: "/erfassung-import", label: "Import" },
   { href: "/arbeitskleidung", label: "Arbeitskleidung" },
+  { href: "/lager", label: "Lager", roles: ["admin", "hr"] },
 ];
 
 // Analog zu components/PersonalTabs.tsx - siehe dort für die Erklärung der
@@ -16,6 +31,10 @@ const tabs = [
 // sticky-Versatz exakt danach ausrichten können).
 export default function ErfassungTabs() {
   const pathname = usePathname();
+  const { profile } = useProfile();
+  const sichtbareTabs = tabs.filter(
+    (tab) => !tab.roles || (profile && tab.roles.includes(profile.role))
+  );
   const ref = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -38,7 +57,7 @@ export default function ErfassungTabs() {
       ref={ref}
       className="sticky top-14 z-40 -mt-6 flex gap-4 border-b border-neutral-200 bg-neutral-50 print:hidden"
     >
-      {tabs.map((tab) => (
+      {sichtbareTabs.map((tab) => (
         <Link
           key={tab.href}
           href={tab.href}

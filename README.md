@@ -424,21 +424,34 @@ Enthalten:
   je Person/Saison jetzt ein Ausgabe-Log (`kleidung_ausgaben`) - jede
   Ausgabe ein eigener, zeitgestempelter Eintrag mit Pflichtfeld Größe
   (feste Listen im Code: Hose/Jacke S–3XL, Stiefel 36–48), per Storno statt
-  Überschreiben korrigierbar (Pflichtgrund, wie bei Vorschüssen). Neuer
-  Abschnitt "Lagerbestand" (admin/hr tragen den Anfangsbestand je Typ+Größe
-  zu Saisonbeginn ein, alle mit Zugriff sehen ihn) zeigt den aktuellen
-  Bestand live berechnet (Anfangsbestand − Summe aller nicht stornierten
-  Ausgaben, muss laut Nutzer nicht 100% exakt sein - reine Orientierung),
-  rot/gelb eingefärbt bei 0 bzw. ≤ 3 Stück. Personentabelle jetzt
-  aufklappbar (wie Controlling → Stundenmonitoring): Ausgabe-Formular
-  (Typ/Größe/Anzahl) plus die eigene Ausgabe-Historie der Person inkl.
-  Storno-Möglichkeit. Der bestehende Lohnabzug bleibt inhaltlich
-  unverändert (weiterhin Stück × Preis) - `season_bonuses.kleidung_*_anzahl`
-  ist jetzt nur noch ein aus dem Log neu berechneter Cache
-  (`arbeitskleidung_bestand_synchronisieren`), ersetzt die alte Funktion
-  `arbeitskleidung_setzen`. Migration:
-  `migration_2026-08-24_arbeitskleidung_lagerbestand.sql`. Gleicher
-  Suchfilter wie auf der Stundenerfassung (Name/Personalnummer) ergänzt.
+  Überschreiben korrigierbar (Pflichtgrund, wie bei Vorschüssen).
+  Personentabelle jetzt aufklappbar (wie Controlling →
+  Stundenmonitoring): Ausgabe-Formular (Typ/Größe/Anzahl, farbige
+  Typ-Badges) plus die eigene Ausgabe-Historie der Person inkl.
+  Storno-Möglichkeit. Gleicher Suchfilter wie auf der Stundenerfassung
+  (Name/Personalnummer) ergänzt. Der bestehende Lohnabzug bleibt
+  inhaltlich unverändert (weiterhin Stück × Preis) -
+  `season_bonuses.kleidung_*_anzahl` ist jetzt nur noch ein aus dem Log
+  neu berechneter Cache (`arbeitskleidung_bestand_synchronisieren`),
+  ersetzt die alte Funktion `arbeitskleidung_setzen`. **Lagerbestand seit
+  2026-08-25 auf eigener Seite "Stundenerfassung → Lager" (Nutzer-Vorgabe:
+  "Den Lagerbestand soll nur 'admin und hr' sehen und bearbeiten können.
+  'Stundenerfassung' macht nur die Ausgabe"):** nur admin/hr sehen den
+  Reiter überhaupt (`ErfassungTabs` jetzt rollenbewusst je Tab). Tabelle
+  mit farbigen Typ-Badges und dicker Trennlinie zwischen Hose/Jacke/
+  Stiefel, "Aktueller Bestand" weiterhin live berechnet (Anfangsbestand −
+  Summe aller nicht stornierten Ausgaben, muss laut Nutzer nicht 100%
+  exakt sein - reine Orientierung), rot/gelb eingefärbt bei 0 bzw. ≤ 3
+  Stück. Zwei Wege, den Anfangsbestand zu pflegen: direkte Eingabe +
+  "Anfangsbestände speichern" (mit Datumsstempel + Bearbeiter, serverseitig
+  per Trigger `kleidung_lagerbestand_touch` gesetzt, nicht vom Client
+  manipulierbar), oder "Inventur durchführen" - Eingabefeld wird mit dem
+  live berechneten Bestand vorausgefüllt, man trägt den tatsächlich
+  GEZÄHLTEN Bestand ein (nach Zukauf oder bei Schwund), die App rechnet
+  daraus rückwärts den nötigen Anfangsbestand aus. Gemeinsame Konstanten
+  (Größen-Listen, Farb-Badges) in `lib/arbeitskleidung.ts`, damit
+  Arbeitskleidung- und Lager-Seite nie auseinanderlaufen. Migration:
+  `migration_2026-08-24_arbeitskleidung_lagerbestand.sql`.
   **Bugfix im selben Zuge (Nutzer-Meldung: "steht da, dass die Preise für
   2026 noch nicht in den Einstellungen hinterlegt sind. Das stimmt aber
   nicht"):** `verpflegungssaetze` hatte nur eine einzige RLS-Policy ("for
