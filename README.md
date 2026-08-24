@@ -364,6 +364,15 @@ Enthalten:
   separaten Übergabe-Beleg für die Person, die das Geld zur Verteilung
   bekommt (z.B. Gruppenleiter), mit Summe und einem einzigen
   Unterschriftenfeld für diese eine Person
+- **Vorschuss-Historie bei der Auswahl (Stand 2026-08-24, Nutzer-Vorgabe:
+  "um schnell prüfen zu können, ob ich der Person einen Vorschuss geben
+  kann"):** in der Tabelle der gerade ausgewählten Personen zwei neue
+  Spalten - "Letzter Vorschuss" (Datum) und "Bisher insgesamt €" (Summe
+  aller nicht stornierten Vorschüsse dieser Person, über alle Belege
+  hinweg, nicht nur die zuletzt geladenen 100). Eigene, gezielte Abfrage
+  nur für die aktuell ausgewählten Personen (nicht aus der ohnehin auf
+  100 Belege begrenzten Liste abgeleitet), lädt bei jeder Änderung der
+  Auswahl neu
 - Zahlungsart Überweisung (Stand 2026-08-14, Code "BÜ" - vorher "AZ", das
   für "Auszahlung" stand und bei Vorschüssen verwirrend war): eigenes,
   einseitiges Druckbild statt der beiden BAR-Blätter, da kein Bargeld den

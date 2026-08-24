@@ -78,6 +78,14 @@ export default function VorschuessePage() {
   const [monatFilter, setMonatFilter] = useState<number | "alle">("alle");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Nutzer-Vorgabe 2026-08-24: bei den gerade ausgewählten Personen sehen,
+  // wann sie den letzten Vorschuss bekommen haben und wie viel insgesamt -
+  // damit sich vor der Bestätigung schnell einschätzen lässt, ob ein
+  // weiterer Vorschuss angemessen ist. Nur nicht-stornierte Vorschüsse
+  // zählen mit.
+  const [vorschussHistorie, setVorschussHistorie] = useState<
+    Record<string, { letztesDatum: string | null; summe: number }>
+  >({});
 
   const [letzterBeleg, setLetzterBeleg] = useState<Beleg | null>(null);
   const [druckBeleg, setDruckBeleg] = useState<Beleg | null>(null);
@@ -134,6 +142,42 @@ export default function VorschuessePage() {
   useEffect(() => {
     load();
   }, []);
+
+  // Nutzer-Vorgabe 2026-08-24: Vorschuss-Historie (letztes Datum + Summe)
+  // für genau die aktuell ausgewählten Personen nachladen - eigene Abfrage
+  // statt aus der bereits geladenen (auf 100 Belege begrenzten) advances-
+  // Liste abzuleiten, damit auch ältere Vorschüsse mitzählen.
+  const ausgewaehlteIds = ausgewaehlt.map((p) => p.employee_id).join(",");
+  useEffect(() => {
+    if (!ausgewaehlteIds) {
+      setVorschussHistorie({});
+      return;
+    }
+    async function ladeHistorie() {
+      const supabase = getSupabaseClient();
+      const { data } = await supabase
+        .from("advance_recipients")
+        .select("employee_id, anteil, advances!inner(datum, storniert)")
+        .in("employee_id", ausgewaehlteIds.split(","))
+        .eq("advances.storniert", false);
+      const map: Record<string, { letztesDatum: string | null; summe: number }> =
+        {};
+      ((data as any[]) ?? []).forEach((row) => {
+        const eintrag = map[row.employee_id] ?? {
+          letztesDatum: null,
+          summe: 0,
+        };
+        eintrag.summe += Number(row.anteil ?? 0);
+        const datum = row.advances?.datum as string | undefined;
+        if (datum && (!eintrag.letztesDatum || datum > eintrag.letztesDatum)) {
+          eintrag.letztesDatum = datum;
+        }
+        map[row.employee_id] = eintrag;
+      });
+      setVorschussHistorie(map);
+    }
+    ladeHistorie();
+  }, [ausgewaehlteIds]);
 
   // Nach dem Öffnen des Druckdialogs (oder Abbruch) Druckauswahl zurücksetzen.
   useEffect(() => {
@@ -738,6 +782,12 @@ export default function VorschuessePage() {
                   <tr>
                     <th>Pers.-Nr.</th>
                     <th>Name</th>
+                    <th title="Datum des letzten nicht stornierten Vorschusses dieser Person (über alle Belege, nicht nur die letzten 100)">
+                      Letzter Vorschuss
+                    </th>
+                    <th title="Summe aller nicht stornierten Vorschüsse dieser Person insgesamt">
+                      Bisher insgesamt €
+                    </th>
                     {art !== "Strafe/Rechnung" && zahlungsart === "BÜ" && (
                       <>
                         <th>Zahlungsempfänger</th>
@@ -750,11 +800,23 @@ export default function VorschuessePage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {ausgewaehlt.map((p) => (
+                  {ausgewaehlt.map((p) => {
+                    const historie = vorschussHistorie[p.employee_id];
+                    return (
                     <tr key={p.employee_id}>
                       <td>{p.personal_nr}</td>
                       <td>
                         {p.name}, {p.vorname}
+                      </td>
+                      <td className="text-sm">
+                        {historie?.letztesDatum
+                          ? new Date(historie.letztesDatum).toLocaleDateString(
+                              "de-DE"
+                            )
+                          : "—"}
+                      </td>
+                      <td className="text-sm">
+                        {(historie?.summe ?? 0).toFixed(2)}
                       </td>
                       {art !== "Strafe/Rechnung" && zahlungsart === "BÜ" && (
                         <>
@@ -820,7 +882,8 @@ export default function VorschuessePage() {
                         </button>
                       </td>
                     </tr>
-                  ))}
+                    );
+                  })}
                 </tbody>
               </table>
             </div>
