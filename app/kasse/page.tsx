@@ -1,5 +1,25 @@
 "use client";
 
+// Kassenbuch → Journal (Nutzer-Vorgabe 2026-08-24: "Ein Journal mit
+// laufendem Saldo. So könnte ich schneller nachvollziehen bei welcher
+// Kassenbewegung ich in eine Kassendifferenz gerutscht bin"). Ersetzt die
+// früheren, getrennten Tabellen "Einzahlungen" und "Kassenbewegungen
+// (Korrekturen)" - beide gehen hier chronologisch zusammen mit den
+// Bar-Vorschüssen/-Auszahlungen/Kautionsübergaben auf. Wie ein echtes
+// Kassenbuch jahresweise mit Eröffnungssaldo (1. Januar) statt einer
+// beliebigen Von-Bis-Spanne, damit der Eröffnungssaldo eindeutig und ohne
+// weitere Rückfrage berechenbar ist (kassenbestand_bis() in schema.sql).
+//
+// Wichtig für die Korrektheit: eine Korrektur (kassenbewegungen, z.B.
+// nachträglich geänderter Vorschuss-Betrag) bewegt den laufenden Saldo
+// NICHT zusätzlich - der korrigierte Betrag steckt schon im aktuellen
+// Vorschuss-/Auszahlungsbetrag selbst (advances.betrag bzw.
+// auszahlungsbeleg_summary.summe_auszahlungsbetrag werden von den
+// Korrektur-Funktionen direkt aktualisiert). Eine Korrektur erscheint hier
+// nur als informative Zeile (eigene Spalte "Korrektur €"), damit sichtbar
+// bleibt, WANN und WARUM sich ein Betrag nachträglich geändert hat - ohne
+// ihn doppelt zu zählen.
+
 import { useEffect, useState } from "react";
 import { getSupabaseClient } from "@/lib/supabase/client";
 import { useProfile } from "@/lib/useProfile";
@@ -11,143 +31,120 @@ import type {
   Kautionsuebergabe,
   ProfilName,
 } from "@/lib/types";
-
-interface CashCheckRow {
-  id: number;
-  check_zeit: string;
-  period_from: string;
-  period_to: string;
-  opening: number;
-  summe_vorschuesse: number;
-  einzahlungen: number;
-  soll: number;
-  ist: number;
-  differenz: number;
-  innerhalb_toleranz: boolean;
-  status: string;
-  freigegeben: boolean;
-  freigegeben_von: string | null;
-  freigegeben_am: string | null;
-  wiedereroeffnet_von: string | null;
-  wiedereroeffnet_am: string | null;
-  wiedereroeffnung_grund: string | null;
-}
-
-// Eine Zeile in der Liste "Bewegungen seit letzter Prüfung" - vereinheitlicht
-// Vorschüsse, Vorschuss-Korrekturen und Bar-Auszahlungen, damit sie vor
-// einer Kassenprüfung gemeinsam durchgesehen werden können. Betrag ist
-// vorzeichenbehaftet (negativ = Geld hat die Kasse verlassen).
-interface BewegungAnzeige {
-  key: string;
-  datum: string;
-  art: string;
-  belegnummer: string;
-  betrag: number;
-  bearbeiter_id: string | null;
-}
+import KassenbuchTabs from "@/components/KassenbuchTabs";
+import KassenSaldoKarte from "@/components/KassenSaldoKarte";
 
 function monatsSchluessel(d: Date) {
   const mm = String(d.getMonth() + 1).padStart(2, "0");
   return `EZ-${mm}-${d.getFullYear()}`;
 }
 
-export default function KassePage() {
+const CURRENT_YEAR = new Date().getFullYear();
+// Einfache, feste Auswahl statt einer eigenen Abfrage nach den tatsächlich
+// vorhandenen Jahren - die App läuft seit 2026, eine Handvoll Jahre
+// rückwirkend reicht für die Auswahl.
+const JAHRE_OPTIONEN = [CURRENT_YEAR, CURRENT_YEAR - 1, CURRENT_YEAR - 2];
+
+// Eine Zeile im Journal - entweder eine "echte" Bewegung (bewegt den
+// laufenden Saldo) oder eine Korrektur (rein informativ, siehe oben).
+interface JournalZeile {
+  key: string;
+  datum: string;
+  art: string;
+  belegnummer: string;
+  // Vorzeichenbehafteter Betrag der Bewegung selbst - null bei einer
+  // Korrektur-Zeile (die zeigt stattdessen "korrekturDelta").
+  betrag: number | null;
+  korrekturDelta: number | null;
+  storniert: boolean;
+  hinweis: string | null;
+  bearbeiter_id: string | null;
+  // Saldo NACH dieser Zeile - null bei einer Korrektur-Zeile (siehe oben).
+  laufenderSaldo: number | null;
+}
+
+export default function KassenbuchJournalPage() {
   const { profile } = useProfile();
+  const [jahr, setJahr] = useState(CURRENT_YEAR);
+  const [eroeffnungssaldo, setEroeffnungssaldo] = useState<number | null>(null);
   const [deposits, setDeposits] = useState<CashDeposit[]>([]);
   const [barVorschuesse, setBarVorschuesse] = useState<Advance[]>([]);
   const [auszahlungenBar, setAuszahlungenBar] = useState<
     AuszahlungsbelegSummary[]
   >([]);
-  const [bewegungen, setBewegungen] = useState<Kassenbewegung[]>([]);
-  // Kautionsübergaben an den Hausmeister (Nutzer-Vorgabe 2026-08-09) -
-  // immer bar, mindern den Kassenbestand erst mit der Übergabe (nicht
-  // schon bei der Auszahlung selbst).
   const [kautionsuebergaben, setKautionsuebergaben] = useState<
     Kautionsuebergabe[]
   >([]);
+  const [korrekturen, setKorrekturen] = useState<Kassenbewegung[]>([]);
   const [namenVon, setNamenVon] = useState<Record<string, string>>({});
-  const [checks, setChecks] = useState<CashCheckRow[]>([]);
-  const [toleranz, setToleranz] = useState(50);
   const [loading, setLoading] = useState(true);
 
   const [betrag, setBetrag] = useState("");
   const [zweck, setZweck] = useState("");
   const [saving, setSaving] = useState(false);
-  const [istBetrag, setIstBetrag] = useState("");
-  const [checking, setChecking] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const canWrite = profile?.role === "admin" || profile?.role === "kasse";
-  const canFreigeben =
-    profile?.role === "admin" || profile?.role === "pruefer";
 
   async function load() {
     setLoading(true);
     const supabase = getSupabaseClient();
+    const jahresAnfang = `${jahr}-01-01T00:00:00Z`;
+    const jahresEnde = `${jahr + 1}-01-01T00:00:00Z`;
     const [
+      { data: eroeffnung },
       { data: dep },
       { data: adv },
       { data: az },
-      { data: bew },
       { data: kaution },
-      { data: chk },
-      { data: settings },
+      { data: bew },
       { data: namen },
     ] = await Promise.all([
+      supabase.rpc("kassenbestand_bis", { p_bis: jahresAnfang }),
       supabase
         .from("cash_deposits")
         .select("*")
-        .order("datum", { ascending: false })
-        .limit(100),
-      // Nur Bar-Vorschüsse mindern den physischen Kassenbestand -
-      // Überweisungen (AZ) verlassen die Kasse nicht.
+        .gte("datum", jahresAnfang)
+        .lt("datum", jahresEnde)
+        .order("datum", { ascending: true }),
       supabase
         .from("advances")
         .select("*")
         .eq("zahlungsart", "BAR")
-        .order("datum", { ascending: false })
-        .limit(200),
-      // Ebenso: nur Bar-Auszahlungen ("Jetzt Abrechnen") verlassen die Kasse
-      // physisch - Überweisungen nicht. Schmale Sicht, da season_bonuses
-      // selbst für kasse/pruefer nicht lesbar ist.
+        .gte("datum", jahresAnfang)
+        .lt("datum", jahresEnde)
+        .order("datum", { ascending: true }),
       supabase
         .from("auszahlungsbeleg_summary")
         .select("*")
         .eq("zahlungsart", "BAR")
-        .order("erstellt_am", { ascending: false })
-        .limit(200),
-      supabase
-        .from("kassenbewegungen")
-        .select("*")
-        .order("zeitstempel", { ascending: false })
-        .limit(100),
+        .gte("erstellt_am", jahresAnfang)
+        .lt("erstellt_am", jahresEnde)
+        .order("erstellt_am", { ascending: true }),
       supabase
         .from("kautionsuebergaben")
         .select("*")
         .eq("storniert", false)
-        .order("erstellt_am", { ascending: false })
-        .limit(200),
+        .gte("erstellt_am", jahresAnfang)
+        .lt("erstellt_am", jahresEnde)
+        .order("erstellt_am", { ascending: true }),
       supabase
-        .from("cash_checks")
+        .from("kassenbewegungen")
         .select("*")
-        .order("check_zeit", { ascending: false })
-        .limit(20),
-      supabase
-        .from("kassenpruefung_einstellungen")
-        .select("toleranz_euro")
-        .single(),
-      // Schmale, breit zugängliche Sicht - profiles selbst lässt jeden nur
-      // die eigene Zeile lesen, damit der Bearbeiter-Name unten trotzdem
-      // für alle sichtbaren Rollen korrekt angezeigt wird.
+        .eq("zahlungsart", "BAR")
+        .gte("zeitstempel", jahresAnfang)
+        .lt("zeitstempel", jahresEnde)
+        .order("zeitstempel", { ascending: true }),
       supabase.from("profile_namen").select("*"),
     ]);
+    setEroeffnungssaldo(
+      eroeffnung === null || eroeffnung === undefined ? 0 : Number(eroeffnung)
+    );
     setDeposits((dep as CashDeposit[]) ?? []);
     setBarVorschuesse((adv as Advance[]) ?? []);
     setAuszahlungenBar((az as AuszahlungsbelegSummary[]) ?? []);
-    setBewegungen((bew as Kassenbewegung[]) ?? []);
     setKautionsuebergaben((kaution as Kautionsuebergabe[]) ?? []);
-    setChecks((chk as CashCheckRow[]) ?? []);
-    if (settings) setToleranz(Number(settings.toleranz_euro));
+    setKorrekturen((bew as Kassenbewegung[]) ?? []);
     const namenMap: Record<string, string> = {};
     ((namen as ProfilName[]) ?? []).forEach((p) => {
       namenMap[p.id] = p.full_name;
@@ -158,84 +155,8 @@ export default function KassePage() {
 
   useEffect(() => {
     load();
-  }, []);
-
-  const einzahlungenSumme = deposits
-    .filter((d) => !d.storniert)
-    .reduce((sum, d) => sum + Number(d.betrag), 0);
-  const vorschuesseSumme = barVorschuesse
-    .filter((a) => !a.storniert)
-    .reduce((sum, a) => sum + Number(a.betrag), 0);
-  const auszahlungenSumme = auszahlungenBar.reduce(
-    (sum, a) => sum + Number(a.summe_auszahlungsbetrag ?? 0),
-    0
-  );
-  const kautionsuebergabenSumme = kautionsuebergaben.reduce(
-    (sum, k) => sum + Number(k.betrag_summe),
-    0
-  );
-  const saldo =
-    einzahlungenSumme - vorschuesseSumme - auszahlungenSumme - kautionsuebergabenSumme;
-
-  // Bewegungen seit der letzten Kassenprüfung, für die Durchsicht vor einer
-  // neuen Prüfung - vereinheitlicht Vorschüsse, Vorschuss-Korrekturen (nur
-  // Bar) und Bar-Auszahlungen, neueste zuerst.
-  const letzterCheckZeit = checks[0]?.check_zeit ?? null;
-  const bewegungenSeitPruefung: BewegungAnzeige[] = [
-    ...barVorschuesse
-      .filter(
-        (a) => !a.storniert && (!letzterCheckZeit || a.datum > letzterCheckZeit)
-      )
-      .map((a) => ({
-        key: `vorschuss-${a.id}`,
-        datum: a.datum,
-        art: "Vorschuss",
-        belegnummer: a.belegnummer,
-        betrag: -Number(a.betrag),
-        bearbeiter_id: a.bearbeiter_id,
-      })),
-    ...bewegungen
-      .filter(
-        (b) =>
-          b.zahlungsart === "BAR" &&
-          (!letzterCheckZeit || b.zeitstempel > letzterCheckZeit)
-      )
-      .map((b) => ({
-        key: `korrektur-${b.id}`,
-        datum: b.zeitstempel,
-        // Bugfix 2026-08-19: war hier fest auf "Vorschuss-Korrektur"
-        // verdrahtet, obwohl kassenbewegungen.art bereits die echte Art
-        // trägt (z.B. jetzt auch "Abrechnungs-Korrektur").
-        art: b.art,
-        belegnummer: b.belegnummer,
-        betrag: -Number(b.delta),
-        bearbeiter_id: b.bearbeiter_id,
-      })),
-    ...auszahlungenBar
-      .filter(
-        (ab) => !letzterCheckZeit || ab.erstellt_am > letzterCheckZeit
-      )
-      .map((ab) => ({
-        key: `auszahlung-${ab.id}`,
-        datum: ab.erstellt_am,
-        art: "Auszahlung",
-        belegnummer: ab.belegnummer,
-        betrag: -Number(ab.summe_auszahlungsbetrag ?? 0),
-        bearbeiter_id: ab.erstellt_von,
-      })),
-    ...kautionsuebergaben
-      .filter(
-        (k) => !letzterCheckZeit || k.erstellt_am > letzterCheckZeit
-      )
-      .map((k) => ({
-        key: `kaution-${k.id}`,
-        datum: k.erstellt_am,
-        art: "Kautionsübergabe",
-        belegnummer: k.belegnummer,
-        betrag: -Number(k.betrag_summe),
-        bearbeiter_id: k.erstellt_von,
-      })),
-  ].sort((a, b) => (a.datum < b.datum ? 1 : -1));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [jahr]);
 
   async function addDeposit(e: React.FormEvent) {
     e.preventDefault();
@@ -263,99 +184,119 @@ export default function KassePage() {
     load();
   }
 
-  async function runCheck(e: React.FormEvent) {
-    e.preventDefault();
-    setChecking(true);
-    setError(null);
-    const supabase = getSupabaseClient();
-    const letzterCheck = checks[0];
-    const periodFrom = letzterCheck?.check_zeit ?? "1970-01-01T00:00:00Z";
-    const opening = letzterCheck?.ist ?? 0;
-    const ist = Number(istBetrag);
-    const differenz = ist - saldo;
-    const innerhalbToleranz = Math.abs(differenz) <= toleranz;
+  // Baut das Journal: "echte" Bewegungen zuerst aufsteigend nach Datum
+  // sortiert, laufenden Saldo dabei fortschreiben, danach Korrektur-Zeilen
+  // an der richtigen chronologischen Stelle einsortieren (ohne eigenen
+  // Saldo-Sprung), zuletzt für die Anzeige umgedreht (neueste zuerst, wie
+  // überall sonst in der App).
+  const bewegungsZeilen: JournalZeile[] = [
+    ...deposits.map((d) => ({
+      key: `einzahlung-${d.id}`,
+      datum: d.datum,
+      art: "Einzahlung",
+      belegnummer: d.belegnummer,
+      betrag: d.storniert ? 0 : Number(d.betrag),
+      korrekturDelta: null,
+      storniert: d.storniert,
+      hinweis: d.verwendungszweck,
+      bearbeiter_id: d.bearbeiter_id,
+      laufenderSaldo: null,
+    })),
+    ...barVorschuesse.map((a) => ({
+      key: `vorschuss-${a.id}`,
+      datum: a.datum,
+      art: a.art === "Strafe/Rechnung" ? "Strafe/Rechnung" : "Vorschuss",
+      belegnummer: a.belegnummer,
+      betrag: a.storniert ? 0 : -Number(a.betrag),
+      korrekturDelta: null,
+      storniert: a.storniert,
+      hinweis: a.begruendung,
+      bearbeiter_id: a.bearbeiter_id,
+      laufenderSaldo: null,
+    })),
+    ...auszahlungenBar.map((ab) => ({
+      key: `auszahlung-${ab.id}`,
+      datum: ab.erstellt_am,
+      art: "Auszahlung",
+      belegnummer: ab.belegnummer,
+      betrag: -Number(ab.summe_auszahlungsbetrag ?? 0),
+      korrekturDelta: null,
+      storniert: false,
+      hinweis: null,
+      bearbeiter_id: ab.erstellt_von,
+      laufenderSaldo: null,
+    })),
+    ...kautionsuebergaben.map((k) => ({
+      key: `kaution-${k.id}`,
+      datum: k.erstellt_am,
+      art: "Kautionsübergabe",
+      belegnummer: k.belegnummer,
+      betrag: -Number(k.betrag_summe),
+      korrekturDelta: null,
+      storniert: false,
+      hinweis: `an ${k.uebergeben_an}`,
+      bearbeiter_id: k.erstellt_von,
+      laufenderSaldo: null,
+    })),
+  ].sort((a, b) => (a.datum < b.datum ? -1 : 1));
 
-    const { error: insertError } = await supabase.from("cash_checks").insert({
-      period_from: periodFrom,
-      period_to: new Date().toISOString(),
-      opening,
-      summe_vorschuesse: vorschuesseSumme,
-      einzahlungen: einzahlungenSumme,
-      soll: saldo,
-      ist,
-      differenz,
-      innerhalb_toleranz: innerhalbToleranz,
-      status: innerhalbToleranz ? "Bestanden" : "Kassendifferenz",
-    });
-    if (insertError) setError(insertError.message);
-    setIstBetrag("");
-    setChecking(false);
-    load();
-  }
+  // Korrektur-Zeilen separat, chronologisch dazwischengemischt - eigener
+  // Schritt, damit ihr "laufenderSaldo" beim Durchrechnen unten korrekt den
+  // Stand DAVOR übernimmt (nicht Teil der Saldo-fortschreibenden Liste).
+  const korrekturZeilenRoh: JournalZeile[] = korrekturen.map((b) => ({
+    key: `korrektur-${b.id}`,
+    datum: b.zeitstempel,
+    art: b.art,
+    belegnummer: b.belegnummer,
+    betrag: null,
+    korrekturDelta: Number(b.delta),
+    storniert: false,
+    hinweis: b.hinweis,
+    bearbeiter_id: b.bearbeiter_id,
+    laufenderSaldo: null,
+  }));
 
-  // Sperrt alle Belege (Vorschüsse, Einzahlungen, Korrekturen) im geprüften
-  // Zeitraum gegen nachträgliche Änderung (siehe ist_kassenpruefung_gesperrt
-  // in schema.sql) - analog zur Monatsabschluss-Sperre.
-  async function freigeben(c: CashCheckRow) {
-    if (!profile) return;
-    const supabase = getSupabaseClient();
-    const { error: freigabeError } = await supabase
-      .from("cash_checks")
-      .update({
-        freigegeben: true,
-        freigegeben_von: profile.id,
-        freigegeben_am: new Date().toISOString(),
-        status: "Freigegeben",
-      })
-      .eq("id", c.id);
-    if (freigabeError) setError(freigabeError.message);
-    load();
-  }
+  let laufend = eroeffnungssaldo ?? 0;
+  const zeilenMitSaldo: JournalZeile[] = bewegungsZeilen.map((z) => {
+    laufend += z.betrag ?? 0;
+    return { ...z, laufenderSaldo: laufend };
+  });
 
-  async function wiedereroeffnen(c: CashCheckRow) {
-    const grund = window.prompt(
-      "Grund für die Wiedereröffnung dieser Kassenprüfung (Pflichtfeld, wird protokolliert):"
-    );
-    if (!grund) return;
-    if (!profile) return;
-    const supabase = getSupabaseClient();
-    const { error: reopenError } = await supabase
-      .from("cash_checks")
-      .update({
-        freigegeben: false,
-        status: c.innerhalb_toleranz ? "Bestanden" : "Kassendifferenz",
-        wiedereroeffnet_von: profile.id,
-        wiedereroeffnet_am: new Date().toISOString(),
-        wiedereroeffnung_grund: grund,
-      })
-      .eq("id", c.id);
-    if (reopenError) setError(reopenError.message);
-    load();
-  }
+  // Jede Korrektur-Zeile bekommt den Saldo-Stand der zeitlich zuletzt
+  // vorangegangenen echten Bewegung (oder den Eröffnungssaldo, falls noch
+  // keine Bewegung davor liegt) - rein zur Einordnung in der Anzeige, der
+  // Wert selbst bewegt sich dadurch nicht.
+  const korrekturZeilen: JournalZeile[] = korrekturZeilenRoh.map((k) => {
+    const vorherige = [...zeilenMitSaldo]
+      .filter((z) => z.datum <= k.datum)
+      .pop();
+    return { ...k, laufenderSaldo: vorherige?.laufenderSaldo ?? eroeffnungssaldo };
+  });
+
+  const journal = [...zeilenMitSaldo, ...korrekturZeilen]
+    .sort((a, b) => (a.datum < b.datum ? -1 : 1))
+    .reverse();
+
+  const endsaldo = zeilenMitSaldo.length > 0
+    ? zeilenMitSaldo[zeilenMitSaldo.length - 1].laufenderSaldo
+    : eroeffnungssaldo;
 
   return (
     <div className="flex flex-col gap-6">
+      <KassenbuchTabs />
       <div>
-        <h1 className="text-lg font-semibold text-emerald-800">Kassenbuch</h1>
+        <h1 className="text-lg font-semibold text-emerald-800">
+          Kassenbuch – Journal
+        </h1>
         <p className="text-sm text-neutral-500">
-          Einzahlungen und Kassenprüfungen. Toleranz aktuell:{" "}
-          {toleranz.toFixed(2)} € (konfigurierbar, siehe README).
+          Alle Bargeldbewegungen chronologisch mit laufendem Saldo, wie ein
+          klassisches Kassenbuch mit Jahres-Eröffnungssaldo. Korrekturen
+          (grau, kursiv) bewegen den Saldo nicht zusätzlich - der geänderte
+          Betrag steckt bereits in der ursprünglichen Zeile.
         </p>
       </div>
 
-      <div className="rounded border border-neutral-200 bg-white p-4">
-        <p className="text-sm text-neutral-500">Aktueller Kassensaldo</p>
-        <p className="text-2xl font-semibold text-emerald-800">
-          {saldo.toFixed(2)} €
-        </p>
-        <p className="mt-1 text-xs text-neutral-500">
-          Einzahlungen {einzahlungenSumme.toFixed(2)} € − Bar-Vorschüsse{" "}
-          {vorschuesseSumme.toFixed(2)} € − Bar-Auszahlungen{" "}
-          {auszahlungenSumme.toFixed(2)} € − Kautionsübergaben{" "}
-          {kautionsuebergabenSumme.toFixed(2)} € (Überweisungen zählen nicht
-          zum Kassenbestand)
-        </p>
-      </div>
+      <KassenSaldoKarte />
 
       {canWrite && (
         <form
@@ -379,234 +320,113 @@ export default function KassePage() {
           <button type="submit" className="btn" disabled={saving}>
             Einzahlung erfassen
           </button>
+          {error && <span className="text-sm text-red-600">{error}</span>}
         </form>
       )}
+
+      <label className="text-sm">
+        Jahr{" "}
+        <select
+          value={jahr}
+          onChange={(e) => setJahr(Number(e.target.value))}
+        >
+          {JAHRE_OPTIONEN.map((j) => (
+            <option key={j} value={j}>
+              {j}
+            </option>
+          ))}
+        </select>
+      </label>
 
       {loading ? (
         <p className="text-neutral-500">Lädt…</p>
       ) : (
-        <>
+        <div className="overflow-x-auto">
           <table>
             <thead>
               <tr>
-                <th>Beleg-Nr.</th>
                 <th>Datum</th>
+                <th>Art</th>
+                <th>Beleg-Nr.</th>
                 <th>Betrag €</th>
-                <th>Zweck</th>
-                <th>Status</th>
+                <th>Korrektur €</th>
+                <th>Laufender Saldo €</th>
+                <th>Anwender</th>
+                <th>Hinweis</th>
               </tr>
             </thead>
             <tbody>
-              {deposits.map((d) => (
-                <tr key={d.id} className={d.storniert ? "opacity-50" : ""}>
-                  <td>{d.belegnummer}</td>
-                  <td>{new Date(d.datum).toLocaleString("de-DE")}</td>
-                  <td>{Number(d.betrag).toFixed(2)}</td>
-                  <td>{d.verwendungszweck}</td>
-                  <td>{d.storniert ? "storniert" : "aktiv"}</td>
+              <tr className="font-semibold">
+                <td colSpan={5} className="text-right">
+                  Eröffnungssaldo {jahr} (Stand 1.1.)
+                </td>
+                <td>{(eroeffnungssaldo ?? 0).toFixed(2)}</td>
+                <td colSpan={2}></td>
+              </tr>
+              {journal.map((z) => (
+                <tr
+                  key={z.key}
+                  className={
+                    z.korrekturDelta !== null
+                      ? "italic text-neutral-500"
+                      : z.storniert
+                        ? "opacity-50"
+                        : ""
+                  }
+                >
+                  <td>{new Date(z.datum).toLocaleString("de-DE")}</td>
+                  <td>
+                    {z.art}
+                    {z.storniert && " (storniert)"}
+                  </td>
+                  <td>{z.belegnummer}</td>
+                  <td className={(z.betrag ?? 0) < 0 ? "text-red-600" : ""}>
+                    {z.betrag === null
+                      ? "—"
+                      : `${z.betrag > 0 ? "+" : ""}${z.betrag.toFixed(2)}`}
+                  </td>
+                  <td
+                    className={
+                      z.korrekturDelta !== null && z.korrekturDelta < 0
+                        ? "text-red-600"
+                        : ""
+                    }
+                  >
+                    {z.korrekturDelta === null
+                      ? "—"
+                      : `${z.korrekturDelta > 0 ? "+" : ""}${z.korrekturDelta.toFixed(2)}`}
+                  </td>
+                  <td className="font-medium">
+                    {z.korrekturDelta !== null
+                      ? "—"
+                      : z.laufenderSaldo?.toFixed(2)}
+                  </td>
+                  <td>
+                    {z.bearbeiter_id ? namenVon[z.bearbeiter_id] ?? "—" : "—"}
+                  </td>
+                  <td className="text-neutral-500">{z.hinweis ?? ""}</td>
                 </tr>
               ))}
-            </tbody>
-          </table>
-
-          {bewegungen.length > 0 && (
-            <div>
-              <h2 className="mb-2 text-base font-semibold text-emerald-800">
-                Kassenbewegungen (Korrekturen)
-              </h2>
-              <p className="mb-2 text-sm text-neutral-500">
-                Nachträgliche Änderungen an bereits bestätigten
-                Vorschuss-Beträgen oder bereits abgerechneten
-                Netto-Beträgen (auch nach Abschluss möglich) - fließen
-                direkt in den Kassenbestand oben ein.
-              </p>
-              <table>
-                <thead>
-                  <tr>
-                    <th>Zeitpunkt</th>
-                    <th>Art</th>
-                    <th>Beleg-Nr.</th>
-                    <th>Differenz €</th>
-                    <th>Art (Zahlung)</th>
-                    <th>Bearbeiter</th>
-                    <th>Hinweis</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {bewegungen.map((b) => (
-                    <tr key={b.id}>
-                      <td>{new Date(b.zeitstempel).toLocaleString("de-DE")}</td>
-                      <td>{b.art}</td>
-                      <td>{b.belegnummer}</td>
-                      <td className={Number(b.delta) < 0 ? "text-red-600" : ""}>
-                        {Number(b.delta) > 0 ? "+" : ""}
-                        {Number(b.delta).toFixed(2)}
-                      </td>
-                      <td>{b.zahlungsart}</td>
-                      <td>
-                        {b.bearbeiter_id
-                          ? namenVon[b.bearbeiter_id] ?? "—"
-                          : "—"}
-                      </td>
-                      <td>{b.hinweis}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-
-          <div>
-            <h2 className="mb-2 text-base font-semibold text-emerald-800">
-              Kassenprüfung
-            </h2>
-            {canWrite && (
-              <form onSubmit={runCheck} className="mb-3 flex items-center gap-3">
-                <input
-                  type="number"
-                  step="0.01"
-                  placeholder="Gezählter Ist-Betrag €"
-                  required
-                  value={istBetrag}
-                  onChange={(e) => setIstBetrag(e.target.value)}
-                />
-                <button type="submit" className="btn" disabled={checking}>
-                  Prüfung durchführen
-                </button>
-                {error && <span className="text-sm text-red-600">{error}</span>}
-              </form>
-            )}
-
-            <div className="mb-4">
-              <h3 className="mb-1 text-sm font-semibold text-neutral-700">
-                Bewegungen seit letzter Prüfung
-                {checks[0] &&
-                  ` (seit ${new Date(checks[0].check_zeit).toLocaleString(
-                    "de-DE"
-                  )})`}
-              </h3>
-              {bewegungenSeitPruefung.length === 0 ? (
-                <p className="text-sm text-neutral-500">
-                  Keine Bewegungen seit der letzten Prüfung.
-                </p>
-              ) : (
-                <table>
-                  <thead>
-                    <tr>
-                      <th>Datum</th>
-                      <th>Art</th>
-                      <th>Beleg-Nr.</th>
-                      <th>Betrag €</th>
-                      <th>Anwender</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {bewegungenSeitPruefung.map((b) => (
-                      <tr key={b.key}>
-                        <td>{new Date(b.datum).toLocaleString("de-DE")}</td>
-                        <td>{b.art}</td>
-                        <td>{b.belegnummer}</td>
-                        <td className={b.betrag < 0 ? "text-red-600" : ""}>
-                          {b.betrag > 0 ? "+" : ""}
-                          {b.betrag.toFixed(2)}
-                        </td>
-                        <td>
-                          {b.bearbeiter_id
-                            ? namenVon[b.bearbeiter_id] ?? "—"
-                            : "—"}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                  <tfoot>
-                    <tr>
-                      <td colSpan={3} className="text-right font-semibold">
-                        Summe
-                      </td>
-                      <td className="font-semibold">
-                        {bewegungenSeitPruefung
-                          .reduce((s, b) => s + b.betrag, 0)
-                          .toFixed(2)}
-                      </td>
-                      <td></td>
-                    </tr>
-                  </tfoot>
-                </table>
-              )}
-            </div>
-
-            <table>
-              <thead>
+              {journal.length === 0 && (
                 <tr>
-                  <th>Zeitpunkt</th>
-                  <th>Soll €</th>
-                  <th>Ist €</th>
-                  <th>Differenz €</th>
-                  <th>Status</th>
-                  <th>Freigabe</th>
+                  <td colSpan={8} className="text-center text-neutral-500">
+                    Keine Bewegungen in {jahr}.
+                  </td>
                 </tr>
-              </thead>
-              <tbody>
-                {checks.map((c) => (
-                  <tr key={c.id}>
-                    <td>{new Date(c.check_zeit).toLocaleString("de-DE")}</td>
-                    <td>{Number(c.soll).toFixed(2)}</td>
-                    <td>{Number(c.ist).toFixed(2)}</td>
-                    <td>{Number(c.differenz).toFixed(2)}</td>
-                    <td>{c.status}</td>
-                    <td>
-                      {c.freigegeben ? (
-                        <div className="flex items-center gap-2">
-                          <span className="text-emerald-700">
-                            ✓ Freigegeben
-                            {c.freigegeben_am &&
-                              ` am ${new Date(
-                                c.freigegeben_am
-                              ).toLocaleDateString("de-DE")}`}
-                            {c.freigegeben_von && namenVon[c.freigegeben_von]
-                              ? ` von ${namenVon[c.freigegeben_von]}`
-                              : ""}
-                          </span>
-                          {canFreigeben && (
-                            <button
-                              className="btn-secondary text-xs"
-                              onClick={() => wiedereroeffnen(c)}
-                            >
-                              Wiedereröffnen
-                            </button>
-                          )}
-                        </div>
-                      ) : canFreigeben ? (
-                        <button
-                          className="btn-secondary text-xs"
-                          onClick={() => freigeben(c)}
-                        >
-                          Freigeben
-                        </button>
-                      ) : (
-                        <span className="text-neutral-400">offen</span>
-                      )}
-                      {!c.freigegeben && c.wiedereroeffnet_am && (
-                        <p className="mt-1 text-xs text-neutral-500">
-                          Wiedereröffnet am{" "}
-                          {new Date(c.wiedereroeffnet_am).toLocaleDateString(
-                            "de-DE"
-                          )}
-                          {c.wiedereroeffnet_von &&
-                          namenVon[c.wiedereroeffnet_von]
-                            ? ` von ${namenVon[c.wiedereroeffnet_von]}`
-                            : ""}
-                          {c.wiedereroeffnung_grund &&
-                            ` – Grund: ${c.wiedereroeffnung_grund}`}
-                        </p>
-                      )}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </>
+              )}
+            </tbody>
+            <tfoot>
+              <tr className="font-semibold">
+                <td colSpan={5} className="text-right">
+                  Endsaldo {jahr}
+                  {jahr === CURRENT_YEAR && " (= aktueller Kassensaldo)"}
+                </td>
+                <td>{(endsaldo ?? 0).toFixed(2)}</td>
+                <td colSpan={2}></td>
+              </tr>
+            </tfoot>
+          </table>
+        </div>
       )}
     </div>
   );

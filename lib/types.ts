@@ -1138,5 +1138,10 @@ export interface CashDeposit {
   datum_kassenbuch: string;
   betrag: number;
   verwendungszweck: string | null;
+  // War in der Datenbank schon lange vorhanden (gleicher Bugfix wie
+  // advances.bearbeiter_id, 2026-08-19), im Typ aber bisher vergessen, da
+  // die Einzahlungen-Tabelle keine Anwender-Spalte hatte - jetzt für das
+  // Journal (2026-08-24) gebraucht.
+  bearbeiter_id: string | null;
   storniert: boolean;
 }

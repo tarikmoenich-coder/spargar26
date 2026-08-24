@@ -455,7 +455,33 @@ Enthalten:
   pruefer gibt frei) werden alle Belege im geprüften Zeitraum gesperrt
   (Storno/Korrektur nicht mehr möglich) - analog zur Monatsabschluss-Sperre
   bei den Stunden. Wiedereröffnung mit Pflichtgrund hebt die Sperre wieder
-  auf
+  auf. **Kassenbuch in "Journal" und "Kassenprüfung" aufgeteilt (Stand
+  2026-08-24, Nutzer-Vorgabe: "Ein Journal mit laufendem Saldo... Eventuell
+  verdient das Kassenbuch auch Untermenüpunkte"):** eigene Reiter-Leiste
+  (`KassenbuchTabs`, gleiches Muster wie Lohn/Personal/Statistik) mit zwei
+  Routen. "Journal" (`/kasse`, weiterhin die Einzahlung-Erfassung) zeigt
+  jahresweise (Jahr-Filter) einen "Eröffnungssaldo {Jahr}" (Stand 1. Januar)
+  gefolgt von allen Bewegungen des Jahres chronologisch mit laufendem Saldo
+  je Zeile (neueste zuerst, wie überall sonst in der App) - Einzahlungen,
+  Bar-Vorschüsse, Bar-Auszahlungen und Kautionsübergaben bewegen den
+  laufenden Saldo, eine Korrektur ("Kassenbewegungen", z.B. eine
+  nachträglich geänderte Vorschuss-/Auszahlungshöhe) erscheint dagegen nur
+  als eigene, grau-kursive Informationszeile und bewegt den Saldo NICHT
+  zusätzlich - der korrigierte Betrag steckt bereits im aktuellen
+  Vorschuss-/Auszahlungsbetrag selbst, ein zusätzlicher Saldo-Sprung würde
+  doppelt zählen. "Kassenprüfung" (neue Route `/kasse-pruefung`) enthält den
+  Soll/Ist-Abgleich, die Liste "Bewegungen seit letzter Prüfung" sowie
+  Freigabe/Wiedereröffnung - unverändert gegenüber vorher, nur auf eine
+  eigene Seite verschoben. Beide Seiten teilen sich eine neue Saldo-Karte
+  (`KassenSaldoKarte`), die den aktuellen Kassenbestand über die neue
+  SQL-Funktion `kassenbestand_bis()` lädt - ersetzt eine zuvor
+  clientseitige Summierung aus auf 100-200 Zeilen gedeckelten Listen
+  (`.limit(100)`/`.limit(200)`), die bei mehr Belegen über mehrere Saisons
+  hinweg zu einem stillschweigend falschen Kassensaldo geführt hätte;
+  `kassenbestand_bis(p_bis)` rechnet stattdessen ein echtes SQL `SUM()` ohne
+  Zeilenlimit und liefert per Parameter auch den Eröffnungssaldo eines
+  beliebigen Zeitpunkts fürs Journal. Migration:
+  `migration_2026-08-24_kassenbestand_bis.sql`.
 - "Suche"-Seite (alle Rollen): nach Name oder Personalnummer suchen und
   Arbeitsstunden (inkl. Notiz je Tag) sowie Vorschuss-Historie (inkl.
   Begründung) einer Person einsehen und als Übersicht für den Mitarbeiter
