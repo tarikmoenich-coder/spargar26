@@ -301,9 +301,15 @@ export default function ArbeitskleidungPage() {
                   .join(", ");
                 return (
                   <Fragment key={emp.id}>
-                    <tr>
+                    <tr
+                      className={
+                        offen
+                          ? "border-y-2 border-emerald-600 bg-emerald-50"
+                          : ""
+                      }
+                    >
                       <td>{emp.personal_nr}</td>
-                      <td>
+                      <td className={offen ? "font-semibold" : ""}>
                         {emp.name}, {emp.vorname}
                       </td>
                       <td>{emp.gruppe_nr ?? "—"}</td>
@@ -325,9 +331,15 @@ export default function ArbeitskleidungPage() {
                       </td>
                     </tr>
                     {offen && (
-                      <tr>
-                        <td colSpan={5} className="bg-neutral-50">
-                          <div className="flex flex-col gap-3 p-2">
+                      <tr className="border-b-2 border-emerald-600">
+                        <td colSpan={5} className="bg-emerald-50/40 p-0">
+                          <div className="flex flex-col gap-3 border-2 border-t-0 border-emerald-600 bg-white p-3">
+                            <p className="text-sm font-semibold text-emerald-800">
+                              {emp.name}, {emp.vorname}{" "}
+                              <span className="font-normal text-neutral-500">
+                                (Pers.-Nr. {emp.personal_nr})
+                              </span>
+                            </p>
                             <div className="flex flex-wrap items-end gap-3">
                               <label className="text-sm">
                                 {t("arbeitskleidung.typ")}{" "}

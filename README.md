@@ -461,7 +461,13 @@ Enthalten:
   diese Seite, sondern auch die Mindestlohn-Vorbelegung auf Personal/
   Personalplanung/Anreiseliste. Aufgeteilt wie bei zuckermais_saetze/
   erdbeeren_parzellen_saetze (lesen breit, schreiben weiterhin nur admin).
-  Migration: `migration_2026-08-24_verpflegungssaetze_select_rls.sql`
+  Migration: `migration_2026-08-24_verpflegungssaetze_select_rls.sql`.
+  Nutzer-Meldung 2026-08-25 ("Man verliert sich in den Zeilen beim
+  Erfassen, weil die Linien so dünn sind. Ich weiß dann nicht mehr bei
+  welcher Person ich war"): die aufgeklappte Zeile auf der
+  Arbeitskleidung-Seite ist jetzt deutlich als zusammengehöriger Block
+  gerahmt (dicker grüner Rahmen um Kopf- und Ausklapp-Zeile) und
+  wiederholt Name + Personalnummer noch einmal direkt im Formular
 - Kautionsübergabe an den Hausmeister (Stand 2026-08-09): die bei der
   Auszahlung einbehaltene Zimmerkaution mindert zunächst nur den
   Auszahlungsbetrag der Person, nicht den Kassenbestand - erst wenn sie
