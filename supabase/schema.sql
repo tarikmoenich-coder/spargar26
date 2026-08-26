@@ -2347,10 +2347,6 @@ select
   sum(p.kolben) as summe_kolben,
   sum(p.stunden) as summe_stunden,
   sum(p.praemie) as summe_praemie,
-  -- Summe Negativprämie für diesen Tag (Nutzer-Vorgabe 2026-08-25) -
-  -- gleiche Größe wie in der Personenauswertung unten, hier über alle
-  -- Personen des Tages aufsummiert statt über den Zeitraum je Person.
-  sum(p.negativpraemie) as summe_negativpraemie,
   case when sum(p.stunden) > 0 then sum(p.kolben) / sum(p.stunden) else null end
     as kolben_pro_stunde,
   case when sum(p.kolben) > 0 and v.mindestlohn is not null
@@ -2375,7 +2371,16 @@ select
   -- selbst nicht direkt lesen (admin-only per RLS), braucht den Wert aber
   -- für die client-seitige Saison-Summen-Zeile - vorher stand dort ein fest
   -- verdrahteter Wert von 13,90 €, der ebenfalls veraltet war.
-  v.mindestlohn
+  v.mindestlohn,
+  -- Summe Negativprämie für diesen Tag (Nutzer-Vorgabe 2026-08-25) - gleiche
+  -- Größe wie in der Personenauswertung unten, hier über alle Personen des
+  -- Tages aufsummiert statt über den Zeitraum je Person. Bewusst als LETZTE
+  -- Spalte angehängt statt zwischen summe_praemie/kolben_pro_stunde
+  -- eingefügt: "create or replace view" verbietet ein nachträgliches
+  -- Verschieben bestehender Spaltenpositionen (42P16 "cannot change name of
+  -- view column ... to ..." - Postgres-Lehre, siehe schon
+  -- kleidung_betrag/season_summary weiter oben).
+  sum(p.negativpraemie) as summe_negativpraemie
 from zuckermais_praemie_tag p
 left join verpflegungssaetze v
   on v.saison_jahr = extract(year from p.datum)::int

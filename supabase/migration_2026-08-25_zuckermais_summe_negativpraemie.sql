@@ -6,6 +6,13 @@
 -- page.tsx) nachgerechnet, jetzt hier zentral in zuckermais_praemie_tag,
 -- damit Personenauswertung UND die neue "Summe Negativprämie"-Spalte in
 -- zuckermais_statistik_tag garantiert dieselbe Zahl liefern.
+--
+-- Korrektur (erster Versuch scheiterte mit 42P16 "cannot change name of
+-- view column 'kolben_pro_stunde' to 'summe_negativpraemie'"):
+-- summe_negativpraemie muss als LETZTE Spalte angehängt werden, nicht
+-- zwischen summe_praemie und kolben_pro_stunde eingefügt - "create or
+-- replace view" verbietet ein nachträgliches Verschieben bestehender
+-- Spaltenpositionen.
 create or replace view zuckermais_praemie_tag as
 select
   r.id,
@@ -43,10 +50,6 @@ select
   sum(p.kolben) as summe_kolben,
   sum(p.stunden) as summe_stunden,
   sum(p.praemie) as summe_praemie,
-  -- Summe Negativprämie für diesen Tag (Nutzer-Vorgabe 2026-08-25) -
-  -- gleiche Größe wie in der Personenauswertung unten, hier über alle
-  -- Personen des Tages aufsummiert statt über den Zeitraum je Person.
-  sum(p.negativpraemie) as summe_negativpraemie,
   case when sum(p.stunden) > 0 then sum(p.kolben) / sum(p.stunden) else null end
     as kolben_pro_stunde,
   case when sum(p.kolben) > 0 and v.mindestlohn is not null
@@ -58,7 +61,12 @@ select
     then (v.mindestlohn * gs.gruppen_stunden + sum(p.praemie)) / sum(p.kolben)
     else null
   end as kosten_pro_kolben_gruppen,
-  v.mindestlohn
+  v.mindestlohn,
+  -- Summe Negativprämie für diesen Tag (Nutzer-Vorgabe 2026-08-25) - gleiche
+  -- Größe wie in der Personenauswertung unten, hier über alle Personen des
+  -- Tages aufsummiert statt über den Zeitraum je Person. Bewusst als LETZTE
+  -- Spalte angehängt (siehe Korrektur-Hinweis oben).
+  sum(p.negativpraemie) as summe_negativpraemie
 from zuckermais_praemie_tag p
 left join verpflegungssaetze v
   on v.saison_jahr = extract(year from p.datum)::int
