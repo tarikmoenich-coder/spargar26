@@ -1031,7 +1031,17 @@ Enthalten:
   2026-08-25) zwischen Stunden und Kolben ergänzt - die tatsächliche
   Ausbeute (Kolben ÷ Stunden) der eingegebenen Werte, live beim Tippen
   berechnet, zur Unterscheidung von "Kolben Norm" (der bei der aktuellen
-  Norm erwarteten Kolbenzahl). **Erdbeeren** (Prämien → Erdbeeren,
+  Norm erwarteten Kolbenzahl). Sätze-Verwaltung um "Bearbeiten"/"Löschen"
+  je Zeile ergänzt (Stand 2026-08-25, Nutzer-Meldung: ein falsch angelegter
+  Satz ließ sich bisher nicht korrigieren - ein erneuter Speicherversuch
+  mit demselben Datum scheiterte an "duplicate key value violates unique
+  constraint zuckermais_saetze_gueltig_ab_key", da es bisher nur "Satz
+  hinzufügen" gab). Dasselbe Formular dient jetzt für Neuanlage UND
+  Korrektur, mit Warnhinweis: Ändern/Löschen wirkt auf alle Tage, die
+  diesen Satz nutzen - auch rückwirkend auf bereits abgerechnete Personen.
+  Reine Frontend-Ergänzung, keine Migration nötig (RLS erlaubte
+  Update/Delete für admin bereits, nur die UI fehlte). **Erdbeeren**
+  (Prämien → Erdbeeren,
   admin/hr/zeiterfassung/erntewirtschaft, Stand 2026-08-09) nach
   demselben Muster, aber mit Norm (Steigen/Std.) und Bonus (€/Steige über
   Norm) JE PARZELLE UND TAG statt global (auf mehreren Parzellen mit sehr

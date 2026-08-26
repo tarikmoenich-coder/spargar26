@@ -66,13 +66,20 @@ export default function PraemienZuckermaisPage() {
   const [fehler, setFehler] = useState<string | null>(null);
   const [druckModus, setDruckModus] = useState(false);
 
-  // Neuen Satz anlegen (nur admin)
+  // Neuen Satz anlegen ODER einen bestehenden korrigieren (nur admin) -
+  // dasselbe Formular für beides. Nutzer-Meldung 2026-08-25: ein falsch
+  // angelegter Satz ließ sich bisher nicht korrigieren (nur "hinzufügen"
+  // = insert), ein erneuter Versuch mit demselben Datum scheiterte an
+  // "duplicate key value violates unique constraint
+  // zuckermais_saetze_gueltig_ab_key" - jetzt mit "Bearbeiten"/"Löschen"
+  // je Zeile.
   const [neuGueltigAb, setNeuGueltigAb] = useState(heuteIso());
   const [neuNorm, setNeuNorm] = useState("");
   const [neuKolbenProKiste, setNeuKolbenProKiste] = useState("55");
   const [neuSatzProKolben, setNeuSatzProKolben] = useState("");
   const [satzSpeichern, setSatzSpeichern] = useState(false);
   const [satzFehler, setSatzFehler] = useState<string | null>(null);
+  const [bearbeitenId, setBearbeitenId] = useState<number | null>(null);
 
   async function load() {
     setLoading(true);
@@ -233,19 +240,65 @@ export default function PraemienZuckermaisPage() {
     setSatzSpeichern(true);
     setSatzFehler(null);
     const supabase = getSupabaseClient();
-    const { error } = await supabase.from("zuckermais_saetze").insert({
+    const werte = {
       gueltig_ab: neuGueltigAb,
       norm_kolben_pro_stunde: Number(neuNorm),
       kolben_pro_kiste: Number(neuKolbenProKiste) || 55,
       satz_pro_kolben: Number(neuSatzProKolben),
-    });
+    };
+    const { error } =
+      bearbeitenId === null
+        ? await supabase.from("zuckermais_saetze").insert(werte)
+        : await supabase
+            .from("zuckermais_saetze")
+            .update(werte)
+            .eq("id", bearbeitenId);
     setSatzSpeichern(false);
     if (error) {
       setSatzFehler(error.message);
       return;
     }
+    satzFormularZuruecksetzen();
+    ladeSaetze();
+    load();
+  }
+
+  function satzBearbeiten(s: ZuckermaisSatz) {
+    setBearbeitenId(s.id);
+    setNeuGueltigAb(s.gueltig_ab);
+    setNeuNorm(String(s.norm_kolben_pro_stunde));
+    setNeuKolbenProKiste(String(s.kolben_pro_kiste));
+    setNeuSatzProKolben(String(s.satz_pro_kolben));
+    setSatzFehler(null);
+  }
+
+  function satzFormularZuruecksetzen() {
+    setBearbeitenId(null);
+    setNeuGueltigAb(heuteIso());
     setNeuNorm("");
+    setNeuKolbenProKiste("55");
     setNeuSatzProKolben("");
+    setSatzFehler(null);
+  }
+
+  async function satzLoeschen(s: ZuckermaisSatz) {
+    if (
+      !window.confirm(
+        `Satz gültig ab ${formatDatumDE(s.gueltig_ab)} wirklich löschen?`
+      )
+    )
+      return;
+    setSatzFehler(null);
+    const supabase = getSupabaseClient();
+    const { error } = await supabase
+      .from("zuckermais_saetze")
+      .delete()
+      .eq("id", s.id);
+    if (error) {
+      setSatzFehler(error.message);
+      return;
+    }
+    if (bearbeitenId === s.id) satzFormularZuruecksetzen();
     ladeSaetze();
     load();
   }
@@ -359,6 +412,20 @@ export default function PraemienZuckermaisPage() {
           <h2 className="text-sm font-semibold text-emerald-800">
             Sätze verwalten (Norm/Preis, ändert sich im Saisonverlauf)
           </h2>
+          <p className="mt-1 text-xs text-neutral-500">
+            Ändern oder Löschen wirkt sich auf alle Tage aus, die diesen Satz
+            nutzen (von "Gültig ab" bis zum nächsten Satz bzw. bis heute) -
+            auch rückwirkend auf bereits erfasste Tage und ggf. bereits
+            abgerechnete Personen. Bei einem Tippfehler kurz nach dem
+            Anlegen unbedenklich, bei einem länger genutzten Satz vorher
+            genau prüfen.
+          </p>
+          {bearbeitenId !== null && (
+            <p className="mt-1 text-xs text-amber-700">
+              Bearbeite Satz gültig ab {formatDatumDE(neuGueltigAb)} - unten
+              speichern oder abbrechen.
+            </p>
+          )}
           <div className="mt-2 flex flex-wrap items-end gap-2">
             <label className="text-sm">
               Gültig ab{" "}
@@ -404,8 +471,17 @@ export default function PraemienZuckermaisPage() {
               disabled={satzSpeichern}
               onClick={neuenSatzSpeichern}
             >
-              Satz hinzufügen
+              {bearbeitenId === null ? "Satz hinzufügen" : "Änderungen speichern"}
             </button>
+            {bearbeitenId !== null && (
+              <button
+                type="button"
+                className="btn-secondary text-xs"
+                onClick={satzFormularZuruecksetzen}
+              >
+                Abbrechen
+              </button>
+            )}
           </div>
           {satzFehler && (
             <p className="mt-1 text-sm text-red-600">{satzFehler}</p>
@@ -418,15 +494,35 @@ export default function PraemienZuckermaisPage() {
                   <th>Norm (Kolben/Std.)</th>
                   <th>Kolben/Kiste</th>
                   <th>€/Kolben über Norm</th>
+                  <th></th>
                 </tr>
               </thead>
               <tbody>
                 {alleSaetze.map((s) => (
-                  <tr key={s.id}>
+                  <tr
+                    key={s.id}
+                    className={bearbeitenId === s.id ? "bg-amber-50" : ""}
+                  >
                     <td>{formatDatumDE(s.gueltig_ab)}</td>
                     <td>{s.norm_kolben_pro_stunde}</td>
                     <td>{s.kolben_pro_kiste}</td>
                     <td>{s.satz_pro_kolben.toFixed(4)}</td>
+                    <td className="flex gap-2">
+                      <button
+                        type="button"
+                        className="btn-secondary text-xs"
+                        onClick={() => satzBearbeiten(s)}
+                      >
+                        Bearbeiten
+                      </button>
+                      <button
+                        type="button"
+                        className="btn-secondary text-xs"
+                        onClick={() => satzLoeschen(s)}
+                      >
+                        Löschen
+                      </button>
+                    </td>
                   </tr>
                 ))}
               </tbody>
