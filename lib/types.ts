@@ -829,6 +829,9 @@ export interface ZuckermaisPraemieTag {
   satz_pro_kolben: number | null;
   kolben: number;
   praemie: number;
+  // Spiegelbild der Prämie (Nutzer-Vorgabe 2026-08-23/25) - derselbe Satz,
+  // nur wenn UNTER statt ÜBER der Norm gearbeitet wurde.
+  negativpraemie: number;
 }
 
 // Aus der Sicht zuckermais_statistik_tag - Tagesstatistik über alle
@@ -839,6 +842,8 @@ export interface ZuckermaisStatistikTag {
   summe_kolben: number;
   summe_stunden: number;
   summe_praemie: number;
+  // Summe Negativprämie für diesen Tag (Nutzer-Vorgabe 2026-08-25).
+  summe_negativpraemie: number;
   kolben_pro_stunde: number | null;
   kosten_pro_kolben: number | null;
   // Stunden aus der allgemeinen Stundenerfassung der Zuckermais-Gruppen

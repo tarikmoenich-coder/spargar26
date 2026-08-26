@@ -179,7 +179,6 @@ export default function StatistikZuckermaisPage() {
     > = {};
     praemieZeilen.forEach((z) => {
       const norm = Number(z.norm_kolben_pro_stunde ?? 0);
-      const satz = Number(z.satz_pro_kolben ?? 0);
       const stunden = Number(z.stunden);
       const kolben = Number(z.kolben);
       const normKolbenZeile = stunden * norm;
@@ -194,7 +193,10 @@ export default function StatistikZuckermaisPage() {
       eintrag.kolben += kolben;
       eintrag.normKolben += normKolbenZeile;
       eintrag.praemie += Number(z.praemie);
-      eintrag.negativpraemie += Math.max((normKolbenZeile - kolben) * satz, 0);
+      // Aus der Sicht selbst (zuckermais_praemie_tag.negativpraemie,
+      // Nutzer-Vorgabe 2026-08-25) statt hier erneut zu berechnen - eine
+      // Formel, ein Ort, siehe Kommentar dort.
+      eintrag.negativpraemie += Number(z.negativpraemie);
       zwischenstand[z.employee_id] = eintrag;
     });
 
@@ -260,6 +262,10 @@ export default function StatistikZuckermaisPage() {
   const summeKolben = zeilen.reduce((s, z) => s + Number(z.summe_kolben), 0);
   const summeStunden = zeilen.reduce((s, z) => s + Number(z.summe_stunden), 0);
   const summePraemie = zeilen.reduce((s, z) => s + Number(z.summe_praemie), 0);
+  const summeNegativpraemieTag = zeilen.reduce(
+    (s, z) => s + Number(z.summe_negativpraemie ?? 0),
+    0
+  );
   const summeGruppenStunden = zeilen.reduce(
     (s, z) => s + Number(z.gruppen_stunden ?? 0),
     0
@@ -289,7 +295,10 @@ export default function StatistikZuckermaisPage() {
           Tagesstatistik über alle Mitarbeiter. Kosten/Kolben ={" "}
           (Mindestlohn × Summe Stunden + Summe Prämien) / Summe Kolben –
           gerechnet mit dem Mindestlohn, der für dieses Saison-Jahr unter
-          Einstellungen hinterlegt ist. Kulturkosten (Kosten/Kolben, Gruppen)
+          Einstellungen hinterlegt ist. Summe Negativprämie € ist das
+          Spiegelbild der Summe Prämien € für diesen Tag (derselbe Satz, nur
+          unterhalb statt oberhalb der Norm, über alle Personen des Tages
+          aufsummiert). Kulturkosten (Kosten/Kolben, Gruppen)
           = (Mindestlohn × Gruppen-Stunden + Summe Prämien) / Summe Kolben –
           Gruppen-Stunden sind die Stunden aus der allgemeinen
           Stundenerfassung aller Arbeitsgruppen, die unter Einstellungen der
@@ -324,6 +333,7 @@ export default function StatistikZuckermaisPage() {
                 <th rowSpan={2}>Summe Prämien €</th>
                 <th rowSpan={2}>Durchschnitt Kolben/Std.</th>
                 <th rowSpan={2}>Kosten/Kolben €</th>
+                <th rowSpan={2}>Summe Negativprämie €</th>
                 <th colSpan={2} className="border-l-2 border-neutral-300 pl-4">
                   Kulturkosten
                 </th>
@@ -345,6 +355,13 @@ export default function StatistikZuckermaisPage() {
                   <td>{fmt(z.summe_praemie)}</td>
                   <td>{fmt(z.kolben_pro_stunde)}</td>
                   <td className="font-medium">{fmt(z.kosten_pro_kolben, 4)}</td>
+                  <td
+                    className={
+                      Number(z.summe_negativpraemie) > 0 ? "text-red-600" : ""
+                    }
+                  >
+                    {fmt(z.summe_negativpraemie)}
+                  </td>
                   <td className="border-l-2 border-neutral-300 pl-4">
                     {fmt(z.gruppen_stunden)}
                   </td>
@@ -363,6 +380,9 @@ export default function StatistikZuckermaisPage() {
                 <td>{fmt(summePraemie)}</td>
                 <td>{fmt(gesamtKolbenProStunde)}</td>
                 <td>{fmt(gesamtKostenProKolben, 4)}</td>
+                <td className={summeNegativpraemieTag > 0 ? "text-red-600" : ""}>
+                  {fmt(summeNegativpraemieTag)}
+                </td>
                 <td className="border-l-2 border-neutral-300 pl-4">
                   {fmt(summeGruppenStunden)}
                 </td>

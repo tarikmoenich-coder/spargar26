@@ -2294,7 +2294,19 @@ select
     (r.kisten * s.kolben_pro_kiste - r.stunden * coalesce(s.norm_kolben_pro_stunde, 0))
       * coalesce(s.satz_pro_kolben, 0),
     0
-  ) as praemie
+  ) as praemie,
+  -- Spiegelbild der Prämie (Nutzer-Vorgabe 2026-08-23, Konzept "Wer kostet
+  -- am meisten?"): derselbe Satz, aber nur wenn UNTER statt ÜBER der Norm
+  -- gearbeitet wurde. War bisher nur client-seitig in der
+  -- Personenauswertung (app/statistik/zuckermais/page.tsx) nachgerechnet -
+  -- jetzt hier zentral, damit Personenauswertung UND die neue
+  -- "Summe Negativprämie"-Spalte in zuckermais_statistik_tag (Nutzer-
+  -- Vorgabe 2026-08-25) garantiert dieselbe Zahl liefern.
+  greatest(
+    (r.stunden * coalesce(s.norm_kolben_pro_stunde, 0) - r.kisten * s.kolben_pro_kiste)
+      * coalesce(s.satz_pro_kolben, 0),
+    0
+  ) as negativpraemie
 from zuckermais_rohdaten r
 left join lateral (
   select z.norm_kolben_pro_stunde, z.kolben_pro_kiste, z.satz_pro_kolben
@@ -2335,6 +2347,10 @@ select
   sum(p.kolben) as summe_kolben,
   sum(p.stunden) as summe_stunden,
   sum(p.praemie) as summe_praemie,
+  -- Summe Negativprämie für diesen Tag (Nutzer-Vorgabe 2026-08-25) -
+  -- gleiche Größe wie in der Personenauswertung unten, hier über alle
+  -- Personen des Tages aufsummiert statt über den Zeitraum je Person.
+  sum(p.negativpraemie) as summe_negativpraemie,
   case when sum(p.stunden) > 0 then sum(p.kolben) / sum(p.stunden) else null end
     as kolben_pro_stunde,
   case when sum(p.kolben) > 0 and v.mindestlohn is not null

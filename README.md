@@ -1120,6 +1120,18 @@ Enthalten:
   ebenso bereits person-scharf vorhanden, Norm dort aber je Parzelle) und
   Spargel (bislang keine personenscharfen Erntedaten überhaupt) bewusst
   zurückgestellt - siehe Konzept-Dokument in der Sitzung
+- **"Summe Negativprämie €" in der Tagesstatistik (Stand 2026-08-25,
+  Nutzer-Vorgabe: "neben Kosten/Kolben € ... eine Spalte mit der Summe
+  Negativprämie für diesen Tag")**: neue Spalte auf `Statistik →
+  Zuckermais`, direkt neben "Kosten/Kolben €" - Summe der Negativprämie
+  aller Personen dieses Tages. Die Negativprämie-Formel (Spiegelbild der
+  Prämie, siehe Personenauswertung oben) ist dafür aus dem Frontend in die
+  Sicht `zuckermais_praemie_tag` selbst gewandert
+  (`zuckermais_praemie_tag.negativpraemie`) - `zuckermais_statistik_tag`
+  summiert sie je Tag, die Personenauswertung liest jetzt denselben Wert
+  statt ihn ein zweites Mal zu berechnen, damit beide Stellen garantiert
+  übereinstimmen. Migration:
+  `migration_2026-08-25_zuckermais_summe_negativpraemie.sql`
 - Neue Rolle `erntewirtschaft` (Stand 2026-08-09): eigener,
   eingeschränkter Arbeitsbereich mit ausschließlich Zugriff auf Prämien
   (erfassen, wie zeiterfassung), Statistik und ein eigenes Dashboard - kein
