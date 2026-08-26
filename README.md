@@ -342,6 +342,20 @@ Enthalten:
   entfernt - sowohl im Ausdruck als auch in der aufklappbaren
   Bildschirm-Ansicht (Nutzer-Vorgabe: "ergibt sich sowieso aus der
   Differenz von Brutto zu Netto")
+- Eingeklappte Beleg-Zeile auf der "Auszahlungen"-Seite überarbeitet
+  (Stand 2026-08-25, Nutzer-Meldung: "die Belegnummer ist noch bündig,
+  aber dann verschiebt sich ... nach rechts, wenn 'Differenz' dabeisteht"):
+  vorher `flex justify-between` ohne feste Spaltenbreiten - ein längerer
+  Inhalt in einer Spalte (z.B. das "⚠ Differenz"-Badge bei der
+  Belegnummer) schob dadurch alle folgenden Spalten dieser Zeile nach
+  rechts, wodurch verschiedene Belege nicht mehr untereinander
+  ausgerichtet waren. Jetzt feste Breite je Spalte (nur die
+  Belegnummer-Spalte bleibt flexibel), bleibt dadurch zeilenübergreifend
+  exakt ausgerichtet. Zusätzlich neue Spalte "Kaution {Betrag} €" (nur
+  wenn eine Kautionsübergabe für diesen Beleg existiert) direkt im
+  eingeklappten Zustand sichtbar, ohne den Beleg erst aufklappen zu
+  müssen - nutzt dieselbe bereits geladene `kautionen`-Map wie die
+  aufgeklappte Ansicht, keine zusätzliche Abfrage nötig
 - Buskosten (vorfinanzierte Heimreise) als eigene, sichtbare
   Abzugsposition im Auszahlungsbetrag (getrennt von Kassen-Vorschüssen,
   "damit es zu keinen Missverständnissen kommen kann")

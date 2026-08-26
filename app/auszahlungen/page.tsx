@@ -551,10 +551,18 @@ export default function AuszahlungenPage() {
               >
                 <button
                   type="button"
-                  className="flex w-full items-center justify-between gap-3 p-3 text-left"
+                  className="flex w-full items-center gap-3 p-3 text-left"
                   onClick={() => toggleOffen(beleg)}
                 >
-                  <span className="font-medium">
+                  {/* Feste Spaltenbreiten statt "justify-between" (Nutzer-
+                      Meldung 2026-08-25: "verschiebt sich das ... nach
+                      rechts, wenn 'Differenz' dabeisteht") - nur die erste
+                      Spalte (Belegnummer + Differenz-Badge) ist flexibel,
+                      alle folgenden Spalten haben eine feste Breite und
+                      bleiben dadurch über alle Belege hinweg exakt
+                      untereinander ausgerichtet, unabhängig davon, wie
+                      lang der Inhalt einer vorherigen Spalte ist. */}
+                  <span className="min-w-0 flex-1 font-medium">
                     {beleg.belegnummer}
                     {beleg.enthaelt_differenz && (
                       <span
@@ -565,17 +573,29 @@ export default function AuszahlungenPage() {
                       </span>
                     )}
                   </span>
-                  <span className="text-sm text-neutral-500">
+                  <span className="w-56 shrink-0 text-sm text-neutral-500">
                     Saison {beleg.saison_jahr} · {formatDatumDE(beleg.erstellt_am)} ·{" "}
                     {beleg.zahlungsart === "BAR" ? "Bar" : "Überweisung"}
                   </span>
-                  <span className="text-sm text-neutral-500">
+                  <span className="w-24 shrink-0 text-right text-sm text-neutral-500">
                     {beleg.anzahl_personen} Person(en)
                   </span>
-                  <span className="font-medium">
+                  {/* Nutzer-Vorgabe 2026-08-25: "Summe Kaution, falls eine
+                      vorhanden ist, im eingeklappten Zustand sehen" -
+                      dieselbe bereits übergebene Kaution, die weiter unten
+                      im aufgeklappten Zustand steht (kautionen-Map wird
+                      unabhängig vom Auf-/Zuklapp-Status geladen, siehe
+                      load()). Leer statt "0,00 €", wenn (noch) keine
+                      Kautionsübergabe für diesen Beleg existiert. */}
+                  <span className="w-36 shrink-0 whitespace-nowrap text-right text-sm text-neutral-500">
+                    {kautionen[beleg.id]
+                      ? `Kaution ${fmt(kautionen[beleg.id].betrag_summe)} €`
+                      : ""}
+                  </span>
+                  <span className="w-24 shrink-0 text-right font-medium">
                     {fmt(beleg.summe_auszahlungsbetrag)} €
                   </span>
-                  <span className="text-xs text-neutral-400">
+                  <span className="w-4 shrink-0 text-right text-xs text-neutral-400">
                     {istOffen ? "▲" : "▼"}
                   </span>
                 </button>
