@@ -880,6 +880,7 @@ export default function AuszahlungenPage() {
                     <th>Pers.-Nr.</th>
                     <th>Name</th>
                     <th>Betrag €</th>
+                    <th className="print-unterschrift-breit">Unterschrift</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -888,6 +889,7 @@ export default function AuszahlungenPage() {
                       <td>{p.personal_nr}</td>
                       <td>{p.name}</td>
                       <td>{fmtDruck(p.betrag)}</td>
+                      <td className="print-unterschrift-breit"></td>
                     </tr>
                   ))}
                 </tbody>
@@ -899,6 +901,7 @@ export default function AuszahlungenPage() {
                     <td className="font-semibold">
                       {fmtDruck(druckZeilen.kaution.betrag_summe)}
                     </td>
+                    <td></td>
                   </tr>
                 </tfoot>
               </table>

@@ -474,11 +474,13 @@ Enthalten:
   real an den Hausmeister übergeben wird (admin/kasse/lohnabrechnung,
   Beleg direkt auf der Auszahlungen-Seite unter dem jeweiligen
   Auszahlungsbeleg erstellbar), wird sie auch als echte Kassenausgabe im
-  Kassenbuch verbucht. Druck erzeugt wie bei den Vorschüssen zwei Blätter
-  im Anschluss an den Auszahlungsbeleg: eine Zusammenfassung (Personen,
-  Beträge, Summe, "Übergeben an") und eine zweite Liste mit einem
-  einzigen Unterschriftsfeld für den Hausmeister (ein Feld für die ganze
-  Übergabe, nicht je Person). Storno statt Löschen, macht die
+  Kassenbuch verbucht. Druck erzeugt im Anschluss an den Auszahlungsbeleg:
+  eine Personen-Tabelle (Pers.-Nr., Name, Betrag €) mit eigener
+  "Unterschrift"-Spalte je Person (Stand 2026-08-25, Nutzer-Vorgabe:
+  "wie einen Vorschussbeleg unterschriftsfähig machen" - analog zur
+  Bar-Vorschuss-Auszahlung, wo jede Person ihren Betrag einzeln
+  bestätigt), darunter ein einziges zusätzliches Unterschriftsfeld für den
+  Hausmeister für die gesamte Übergabe. Storno statt Löschen, macht die
   Kassenausgabe wieder rückgängig
 - Zahlungsart (Bar/Überweisung) bei "Jetzt Abrechnen" wählbar und je
   Auszahlungsbeleg gespeichert - für Personen, die schon abgereist sind
