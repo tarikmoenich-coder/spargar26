@@ -475,6 +475,9 @@ export default function PraemienZuckermaisPage() {
                 <th>Gruppe</th>
                 <th>Kisten</th>
                 <th>Stunden</th>
+                <th title="Kolben ÷ Stunden - die tatsächliche Ausbeute, nicht die erwartete Norm">
+                  Kolben/Std.
+                </th>
                 <th>Kolben</th>
                 <th title="Erwartete Kolbenzahl bei der aktuellen Norm (Stunden × Norm/Std.) - erst darüber gibt es eine Prämie">
                   Kolben Norm
@@ -489,6 +492,9 @@ export default function PraemienZuckermaisPage() {
                   (aktuellerSatz?.kolben_pro_kiste ?? 0);
                 const kolbenNorm = (Number(werte.stunden) || 0) *
                   (aktuellerSatz?.norm_kolben_pro_stunde ?? 0);
+                const stundenZahl = Number(werte.stunden) || 0;
+                const kolbenProStunde =
+                  stundenZahl > 0 ? kolben / stundenZahl : null;
                 const praemie = praemieVorschau(werte);
                 return (
                   <tr key={emp.id}>
@@ -527,6 +533,9 @@ export default function PraemienZuckermaisPage() {
                           feldAendern(emp.id, "stunden", e.target.value)
                         }
                       />
+                    </td>
+                    <td className="text-neutral-500">
+                      {kolbenProStunde === null ? "—" : fmt(kolbenProStunde)}
                     </td>
                     <td className="text-neutral-500">{kolben ? fmt(kolben) : "—"}</td>
                     <td className="text-neutral-500">

@@ -1027,7 +1027,11 @@ Enthalten:
   fließt live in die Lohnübersicht (Brutto-Spalte) ein, genau wie die
   bisherigen Akkord-/Fahrer-/Erdbeer-/Spargel-Prämien. Tagesaktueller Stand
   zusätzlich in der "Suche" sichtbar (Mitarbeiter-Selbstauskunft) sowie als
-  druckbare Tagesliste zum Aushängen. **Erdbeeren** (Prämien → Erdbeeren,
+  druckbare Tagesliste zum Aushängen. Spalte "Kolben/Std." (Stand
+  2026-08-25) zwischen Stunden und Kolben ergänzt - die tatsächliche
+  Ausbeute (Kolben ÷ Stunden) der eingegebenen Werte, live beim Tippen
+  berechnet, zur Unterscheidung von "Kolben Norm" (der bei der aktuellen
+  Norm erwarteten Kolbenzahl). **Erdbeeren** (Prämien → Erdbeeren,
   admin/hr/zeiterfassung/erntewirtschaft, Stand 2026-08-09) nach
   demselben Muster, aber mit Norm (Steigen/Std.) und Bonus (€/Steige über
   Norm) JE PARZELLE UND TAG statt global (auf mehreren Parzellen mit sehr
