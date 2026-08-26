@@ -190,10 +190,12 @@ input[type="number"]::-webkit-inner-spin-button {
 /* Breitere letzte Spalte (Unterschrift) auf der Auszahlungsliste - der
    durch die Kürzung von "Netto nach Verpfl./Unterk. €" auf "Netto nach
    Abz. €" gewonnene Platz wird ihr gutgeschrieben (Nutzer-Vorgabe
-   2026-08-21). Eigene Klasse statt einer generischen
-   :last-child-Regel auf .print-dense-table, da die Kautionsübergabe-
-   Tabelle auf derselben Seite keine Unterschriftenspalte hat und ihre
-   letzte Spalte (Betrag) schmal bleiben soll. */
+   2026-08-21). Eigene Klasse statt einer generischen :last-child-Regel auf
+   .print-dense-table, da diese Regel nur die dichte Auszahlungsliste
+   betreffen soll - die Kautionsübergabe-Tabelle hat seit 2026-08-25 zwar
+   auch eine Unterschriftenspalte, nutzt dafür aber die normale
+   .print-form-table-Schriftgröße (13pt statt 8pt, Nutzer-Vorgabe: "wie
+   einen Vorschussbeleg") und damit nicht .print-dense-table. */
 @media print {
   .print-form-table.print-dense-table th.print-unterschrift-breit,
   .print-form-table.print-dense-table td.print-unterschrift-breit {

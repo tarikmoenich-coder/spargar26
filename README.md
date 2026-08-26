@@ -480,8 +480,12 @@ Enthalten:
   "wie einen Vorschussbeleg unterschriftsfähig machen" - analog zur
   Bar-Vorschuss-Auszahlung, wo jede Person ihren Betrag einzeln
   bestätigt), darunter ein einziges zusätzliches Unterschriftsfeld für den
-  Hausmeister für die gesamte Übergabe. Storno statt Löschen, macht die
-  Kassenausgabe wieder rückgängig
+  Hausmeister für die gesamte Übergabe. Schriftgröße seit 2026-08-25
+  bewusst wie beim Vorschussbeleg (13pt, `.print-form-table` ohne
+  `.print-dense-table`) statt der kleineren, dichten Formatierung der
+  Auszahlungsliste - Nutzer-Vorgabe: "die Schriftgröße des Belegs wie bei
+  den Vorschüssen machen". Storno statt Löschen, macht die Kassenausgabe
+  wieder rückgängig
 - Zahlungsart (Bar/Überweisung) bei "Jetzt Abrechnen" wählbar und je
   Auszahlungsbeleg gespeichert - für Personen, die schon abgereist sind
   und erst später per Überweisung ausgezahlt werden (siehe Arbeitsgruppe

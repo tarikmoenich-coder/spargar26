@@ -874,13 +874,13 @@ export default function AuszahlungenPage() {
                 {druckZeilen.kautionPersonen.length} · Betrag:{" "}
                 {fmtDruck(druckZeilen.kaution.betrag_summe)} €
               </p>
-              <table className="mt-4 print-form-table print-dense-table print-persnr-schmal">
+              <table className="mt-4 print-form-table">
                 <thead>
                   <tr>
                     <th>Pers.-Nr.</th>
                     <th>Name</th>
                     <th>Betrag €</th>
-                    <th className="print-unterschrift-breit">Unterschrift</th>
+                    <th>Unterschrift</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -889,7 +889,7 @@ export default function AuszahlungenPage() {
                       <td>{p.personal_nr}</td>
                       <td>{p.name}</td>
                       <td>{fmtDruck(p.betrag)}</td>
-                      <td className="print-unterschrift-breit"></td>
+                      <td></td>
                     </tr>
                   ))}
                 </tbody>
