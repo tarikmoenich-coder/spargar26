@@ -195,8 +195,9 @@ export default function StatistikZuckermaisPage() {
       eintrag.praemie += Number(z.praemie);
       // Aus der Sicht selbst (zuckermais_praemie_tag.negativpraemie,
       // Nutzer-Vorgabe 2026-08-25) statt hier erneut zu berechnen - eine
-      // Formel, ein Ort, siehe Kommentar dort.
-      eintrag.negativpraemie += Number(z.negativpraemie);
+      // Formel, ein Ort, siehe Kommentar dort. Fallback auf 0 statt NaN,
+      // falls die Migration für die Spalte noch nicht angewendet wurde.
+      eintrag.negativpraemie += Number(z.negativpraemie ?? 0);
       zwischenstand[z.employee_id] = eintrag;
     });
 
