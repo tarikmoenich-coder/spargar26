@@ -7,6 +7,7 @@ import {
   KULTUREN,
   KULTUR_LABELS,
   type Arbeitsgruppe,
+  type FirmenBankdaten,
   type Herkunft,
   type VerpflegungsSatz,
 } from "@/lib/types";
@@ -53,27 +54,74 @@ export default function EinstellungenPage() {
 
   const isAdmin = profile?.role === "admin";
 
+  // Firmen-Bankdaten (Nutzer-Vorgabe 2026-08-25): Auftraggeber-Konto für
+  // den SEPA-Überweisungs-Export bei Vorschüssen - Singleton-Zeile.
+  const [bankdaten, setBankdaten] = useState<FirmenBankdaten | null>(null);
+  const [bankdatenForm, setBankdatenForm] = useState({
+    name: "",
+    iban: "",
+    bic: "",
+  });
+  const [bankdatenSaving, setBankdatenSaving] = useState(false);
+  const [bankdatenError, setBankdatenError] = useState<string | null>(null);
+  const [bankdatenGespeichert, setBankdatenGespeichert] = useState(false);
+
   async function load() {
     setLoading(true);
     const supabase = getSupabaseClient();
-    const [{ data, error }, { data: gruppenData }, { data: herkunftData }] =
-      await Promise.all([
-        supabase
-          .from("verpflegungssaetze")
-          .select("*")
-          .order("saison_jahr", { ascending: false }),
-        supabase.from("arbeitsgruppen").select("*").order("reihenfolge"),
-        supabase.from("herkuenfte").select("*").order("reihenfolge"),
-      ]);
+    const [
+      { data, error },
+      { data: gruppenData },
+      { data: herkunftData },
+      { data: bankdatenData },
+    ] = await Promise.all([
+      supabase
+        .from("verpflegungssaetze")
+        .select("*")
+        .order("saison_jahr", { ascending: false }),
+      supabase.from("arbeitsgruppen").select("*").order("reihenfolge"),
+      supabase.from("herkuenfte").select("*").order("reihenfolge"),
+      supabase.from("firmen_bankdaten").select("*").eq("id", 1).maybeSingle(),
+    ]);
     if (!error) setSaetze((data as VerpflegungsSatz[]) ?? []);
     setGruppen((gruppenData as Arbeitsgruppe[]) ?? []);
     setHerkuenfte((herkunftData as Herkunft[]) ?? []);
+    const bd = (bankdatenData as FirmenBankdaten) ?? null;
+    setBankdaten(bd);
+    setBankdatenForm({
+      name: bd?.name ?? "",
+      iban: bd?.iban ?? "",
+      bic: bd?.bic ?? "",
+    });
     setLoading(false);
   }
 
   useEffect(() => {
     load();
   }, []);
+
+  async function handleBankdatenSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    setBankdatenSaving(true);
+    setBankdatenError(null);
+    setBankdatenGespeichert(false);
+    const supabase = getSupabaseClient();
+    const { error } = await supabase
+      .from("firmen_bankdaten")
+      .update({
+        name: bankdatenForm.name,
+        iban: bankdatenForm.iban || null,
+        bic: bankdatenForm.bic || null,
+      })
+      .eq("id", 1);
+    setBankdatenSaving(false);
+    if (error) {
+      setBankdatenError(error.message);
+      return;
+    }
+    setBankdatenGespeichert(true);
+    load();
+  }
 
   function editRow(satz: VerpflegungsSatz) {
     setForm({
@@ -189,6 +237,72 @@ export default function EinstellungenPage() {
           Personalplanung) automatisch als Stundenlohn vorbelegt, bleibt dort
           aber frei änderbar.
         </p>
+      </div>
+
+      <div>
+        <h2 className="text-lg font-semibold text-emerald-800">
+          Firmen-Bankdaten
+        </h2>
+        <p className="text-sm text-neutral-500">
+          Auftraggeber-Konto für den SEPA-Überweisungs-Export bei
+          Vorschüssen (Zahlungsart Banküberweisung) - wird einmal
+          hinterlegt und für jede erzeugte SEPA-Datei verwendet. Nur
+          admin/kasse können diese Daten überhaupt lesen.
+        </p>
+      </div>
+
+      {isAdmin ? (
+        <form
+          onSubmit={handleBankdatenSubmit}
+          className="grid grid-cols-1 gap-3 rounded border border-neutral-200 bg-white p-4 sm:grid-cols-3"
+        >
+          <input
+            placeholder="Firmenname (z.B. Mömmel Agrar GmbH & Co. KG)"
+            required
+            value={bankdatenForm.name}
+            onChange={(e) =>
+              setBankdatenForm({ ...bankdatenForm, name: e.target.value })
+            }
+          />
+          <input
+            placeholder="IBAN"
+            value={bankdatenForm.iban}
+            onChange={(e) =>
+              setBankdatenForm({ ...bankdatenForm, iban: e.target.value })
+            }
+          />
+          <input
+            placeholder="BIC"
+            value={bankdatenForm.bic}
+            onChange={(e) =>
+              setBankdatenForm({ ...bankdatenForm, bic: e.target.value })
+            }
+          />
+          <div className="col-span-full flex items-center gap-2">
+            <button type="submit" className="btn" disabled={bankdatenSaving}>
+              Speichern
+            </button>
+            {bankdatenGespeichert && (
+              <span className="text-sm text-emerald-700">Gespeichert.</span>
+            )}
+            {bankdatenError && (
+              <span className="text-sm text-red-600">{bankdatenError}</span>
+            )}
+          </div>
+        </form>
+      ) : (
+        <p className="text-sm text-neutral-500">
+          {bankdaten?.iban
+            ? "Firmen-Bankdaten sind hinterlegt."
+            : "Keine Firmen-Bankdaten hinterlegt."}{" "}
+          Nur admin kann sie ändern.
+        </p>
+      )}
+
+      <div>
+        <h2 className="text-lg font-semibold text-emerald-800">
+          Verpflegung/Unterkunft/Mindestlohn/Arbeitskleidung
+        </h2>
       </div>
 
       {isAdmin ? (

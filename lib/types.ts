@@ -699,6 +699,18 @@ export interface VerpflegungsSatz {
   kleidung_stiefel: number | null;
 }
 
+// Auftraggeber-Konto für den SEPA-Überweisungs-Export bei Vorschüssen
+// (Nutzer-Vorgabe 2026-08-25) - Singleton-Zeile, siehe firmen_bankdaten in
+// schema.sql.
+export interface FirmenBankdaten {
+  id: number;
+  name: string;
+  iban: string | null;
+  bic: string | null;
+  updated_by: string | null;
+  updated_at: string;
+}
+
 export const KULTUREN = ["zuckermais", "erdbeeren", "spargel"] as const;
 export type Kultur = (typeof KULTUREN)[number];
 export const KULTUR_LABELS: Record<Kultur, string> = {

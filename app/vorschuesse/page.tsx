@@ -8,9 +8,15 @@ import type {
   AdvanceRecipientDetail,
   Arbeitsgruppe,
   Employee,
+  FirmenBankdaten,
   Herkunft,
 } from "@/lib/types";
 import LohnTabs from "@/components/LohnTabs";
+import { erzeugeSepaXml, sepaDateiHerunterladen } from "@/lib/sepa";
+
+function heuteIsoDatum() {
+  return new Date().toISOString().slice(0, 10);
+}
 
 function monatsSchluessel(d: Date) {
   const mm = String(d.getMonth() + 1).padStart(2, "0");
@@ -90,6 +96,14 @@ export default function VorschuessePage() {
   const [letzterBeleg, setLetzterBeleg] = useState<Beleg | null>(null);
   const [druckBeleg, setDruckBeleg] = useState<Beleg | null>(null);
 
+  // SEPA-Überweisungsdatei (Nutzer-Vorgabe 2026-08-25): Auftraggeber-Konto
+  // kommt aus den Einstellungen (firmen_bankdaten), Zahlungsdatum ist frei
+  // wählbar (Standard: heute).
+  const [firmenBankdaten, setFirmenBankdaten] =
+    useState<FirmenBankdaten | null>(null);
+  const [sepaDatum, setSepaDatum] = useState(heuteIsoDatum());
+  const [sepaFehler, setSepaFehler] = useState<string | null>(null);
+
   // Nachträgliche Korrektur eines bereits bestätigten Vorschuss-Betrags.
   const [bearbeitenAdvanceId, setBearbeitenAdvanceId] = useState<
     number | null
@@ -115,27 +129,37 @@ export default function VorschuessePage() {
   async function load() {
     setLoading(true);
     const supabase = getSupabaseClient();
-    const [{ data: adv }, { data: emp }, { data: gr }, { data: hk }] =
-      await Promise.all([
-        supabase
-          .from("advances")
-          .select("*")
-          .order("datum", { ascending: false })
-          .limit(100),
-        supabase
-          .from("employees")
-          .select(
-            "id, personal_nr, name, vorname, aktiv, gruppe_nr, herkunft, zahlungsempfaenger, iban, bic"
-          )
-          .eq("aktiv", true)
-          .order("name"),
-        supabase.from("arbeitsgruppen").select("*").order("reihenfolge"),
-        supabase.from("herkuenfte").select("*").order("reihenfolge"),
-      ]);
+    const [
+      { data: adv },
+      { data: emp },
+      { data: gr },
+      { data: hk },
+      { data: bankdaten },
+    ] = await Promise.all([
+      supabase
+        .from("advances")
+        .select("*")
+        .order("datum", { ascending: false })
+        .limit(100),
+      supabase
+        .from("employees")
+        .select(
+          "id, personal_nr, name, vorname, aktiv, gruppe_nr, herkunft, zahlungsempfaenger, iban, bic"
+        )
+        .eq("aktiv", true)
+        .order("name"),
+      supabase.from("arbeitsgruppen").select("*").order("reihenfolge"),
+      supabase.from("herkuenfte").select("*").order("reihenfolge"),
+      // Kein Fehler, falls RLS den Zugriff verweigert (nicht admin/kasse) -
+      // dann bleibt firmenBankdaten einfach null und der SEPA-Button prüft
+      // das selbst ab.
+      supabase.from("firmen_bankdaten").select("*").eq("id", 1).maybeSingle(),
+    ]);
     setAdvances((adv as Advance[]) ?? []);
     setEmployees((emp as Employee[]) ?? []);
     setGruppen((gr as Arbeitsgruppe[]) ?? []);
     setHerkuenfte((hk as Herkunft[]) ?? []);
+    setFirmenBankdaten((bankdaten as FirmenBankdaten) ?? null);
     setLoading(false);
   }
 
@@ -537,6 +561,49 @@ export default function VorschuessePage() {
     });
   }
 
+  // SEPA-Überweisungsdatei erstellen (Nutzer-Vorgabe 2026-08-25): eine
+  // Zahlung je Empfänger dieses Belegs, Verwendungszweck exakt
+  // "[Belegnummer], [Nachname], [Vorname]" wie vom Nutzer vorgegeben. Bricht
+  // mit einer klaren Fehlermeldung ab statt Empfänger ohne IBAN/BIC
+  // stillschweigend zu überspringen - sonst würde eine Person unbemerkt
+  // nicht bezahlt.
+  function sepaErstellen(beleg: Beleg) {
+    setSepaFehler(null);
+    if (!firmenBankdaten?.iban || !firmenBankdaten?.bic) {
+      setSepaFehler(
+        "Bitte zuerst IBAN/BIC von Mömmel Agrar unter Einstellungen hinterlegen."
+      );
+      return;
+    }
+    const ohneIban = beleg.empfaenger.filter((p) => !p.iban || !p.bic);
+    if (ohneIban.length > 0) {
+      setSepaFehler(
+        `Fehlende IBAN/BIC bei: ${ohneIban
+          .map((p) => `${p.name}, ${p.vorname}`)
+          .join("; ")} - bitte zuerst im Personalstamm nachtragen.`
+      );
+      return;
+    }
+    const xml = erzeugeSepaXml(
+      {
+        name: firmenBankdaten.name,
+        iban: firmenBankdaten.iban,
+        bic: firmenBankdaten.bic,
+      },
+      beleg.empfaenger.map((p) => ({
+        employeeId: p.employee_id,
+        name: p.zahlungsempfaenger || `${p.vorname} ${p.name}`,
+        iban: p.iban as string,
+        bic: p.bic as string,
+        betrag: p.anteil,
+        verwendungszweck: `${beleg.belegnummer}, ${p.name}, ${p.vorname}`,
+      })),
+      sepaDatum,
+      beleg.belegnummer
+    );
+    sepaDateiHerunterladen(xml, `SEPA_${beleg.belegnummer}_${sepaDatum}.xml`);
+  }
+
   async function toggleBearbeiten(adv: Advance) {
     if (bearbeitenAdvanceId === adv.id) {
       setBearbeitenAdvanceId(null);
@@ -924,21 +991,47 @@ export default function VorschuessePage() {
       )}
 
       {letzterBeleg && (
-        <div className="flex items-center gap-3 rounded border border-emerald-200 bg-emerald-50 p-3 print:hidden">
-          <span className="text-sm text-emerald-800">
-            Beleg {letzterBeleg.belegnummer} erfasst, Summe{" "}
-            {letzterBeleg.empfaenger
-              .reduce((s, p) => s + p.anteil, 0)
-              .toFixed(2)}{" "}
-            €.
-          </span>
-          <button
-            type="button"
-            className="btn-secondary text-xs"
-            onClick={() => setDruckBeleg(letzterBeleg)}
-          >
-            Auszahlungsliste drucken
-          </button>
+        <div className="flex flex-col gap-2 rounded border border-emerald-200 bg-emerald-50 p-3 print:hidden">
+          <div className="flex flex-wrap items-center gap-3">
+            <span className="text-sm text-emerald-800">
+              Beleg {letzterBeleg.belegnummer} erfasst, Summe{" "}
+              {letzterBeleg.empfaenger
+                .reduce((s, p) => s + p.anteil, 0)
+                .toFixed(2)}{" "}
+              €.
+            </span>
+            <button
+              type="button"
+              className="btn-secondary text-xs"
+              onClick={() => setDruckBeleg(letzterBeleg)}
+            >
+              Auszahlungsliste drucken
+            </button>
+            {/* Nur bei Banküberweisung sinnvoll - bei Bar/Strafe-Rechnung
+                fließt kein Geld per SEPA (Nutzer-Vorgabe 2026-08-25). */}
+            {letzterBeleg.zahlungsart === "BÜ" && (
+              <>
+                <label className="text-xs text-emerald-800">
+                  Zahlungsdatum{" "}
+                  <input
+                    type="date"
+                    value={sepaDatum}
+                    onChange={(e) => setSepaDatum(e.target.value)}
+                  />
+                </label>
+                <button
+                  type="button"
+                  className="btn-secondary text-xs"
+                  onClick={() => sepaErstellen(letzterBeleg)}
+                >
+                  SEPA-Datei erstellen
+                </button>
+              </>
+            )}
+          </div>
+          {sepaFehler && (
+            <span className="text-sm text-red-600">{sepaFehler}</span>
+          )}
         </div>
       )}
 

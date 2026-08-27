@@ -399,6 +399,20 @@ Enthalten:
   sind, BEVOR die Überweisung tatsächlich ausgeführt wird (Nutzer-Vorgabe:
   "Die Richtigkeit dieser Banküberweisung will ich mir unterschreiben
   lassen, bevor ich sie durchführe")
+- SEPA-Überweisungsdatei bei Vorschüssen (Stand 2026-08-25, Nutzer-Vorgabe:
+  "Schaltfläche 'SEPA-Datei erstellen'" bei Zahlungsart Banküberweisung):
+  Button "SEPA-Datei erstellen" direkt in der Erfolgsmeldung nach dem
+  Bestätigen eines Überweisungs-Vorschusses, mit frei wählbarem
+  Zahlungsdatum. Erzeugt eine echte, bankfähige ISO-20022-Datei
+  (`pain.001.001.03`, `lib/sepa.ts`) mit je einer Überweisung pro Empfänger
+  des Belegs - Verwendungszweck exakt "[Belegnummer], [Nachname],
+  [Vorname]" wie vorgegeben. Bricht mit einer klaren Fehlermeldung ab statt
+  eine Person ohne IBAN/BIC stillschweigend zu überspringen. Das
+  Auftraggeber-Konto (Mömmel Agrar GmbH & Co. KG) liegt in der neuen,
+  admin/kasse-only lesbaren Tabelle `firmen_bankdaten` (Singleton-Zeile,
+  admin-editierbar unter Einstellungen → "Firmen-Bankdaten") - einmal
+  hinterlegt statt bei jeder Datei neu eingetippt. Migration:
+  `migration_2026-08-25_firmen_bankdaten_sepa.sql`
 - Neue Vorschussart "Strafe/Rechnung" (Stand 2026-08-18): eigener Beleg mit
   Belegupload (Strafzettel/Rechnung als Nachweis, PDF/JPG/PNG), bewusst auf
   genau eine Person beschränkt (der Beleg gehört zu dieser einen Person,
