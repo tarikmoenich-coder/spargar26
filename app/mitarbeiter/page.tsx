@@ -473,7 +473,11 @@ export default function MitarbeiterPage() {
   }
 
   async function dokument(
-    art: "arbeitsvertrag" | "werkmietvertrag" | "bankverbindung",
+    art:
+      | "arbeitsvertrag"
+      | "arbeitsvertrag_sv_pflichtig"
+      | "werkmietvertrag"
+      | "bankverbindung",
     emp: Employee
   ) {
     setDokumenteFehler(null);
@@ -486,16 +490,27 @@ export default function MitarbeiterPage() {
       Personalnummer: emp.personal_nr,
     };
     try {
-      if (art === "arbeitsvertrag") {
+      if (art === "arbeitsvertrag" || art === "arbeitsvertrag_sv_pflichtig") {
+        // SV-Pflichtig-Vorlage (Nutzer-Vorgabe 2026-08-28: "Beim
+        // Statuswechsel auf SV-Pflichtig brauchen die Leute auch einen
+        // neuen Arbeitsvertrag, der dann auch wieder unterschrieben werden
+        // muss") - dieselben Platzhalter/Werte wie der normale
+        // Arbeitsvertrag, nur eine andere Vorlagendatei mit dem laut
+        // Sozialversicherungspflicht angepassten Vertragstext.
+        const istSvPflichtig = art === "arbeitsvertrag_sv_pflichtig";
         await generiereDokument(
-          "Arbeitsvertrag_Vorlage.docx",
+          istSvPflichtig
+            ? "Arbeitsvertrag_SV_Pflichtig_Vorlage.docx"
+            : "Arbeitsvertrag_Vorlage.docx",
           {
             ...gemeinsam,
             ArbeitsbeginnDatum: formatDatumDE(dokumenteVertragsbeginn),
             ArbeitsendeDatum: formatDatumDE(dokumenteVertragsende),
             Stundenlohn: formatEuro(emp.stundenlohn),
           },
-          `Arbeitsvertrag_${dateiPrefix}.docx`
+          istSvPflichtig
+            ? `Arbeitsvertrag_SV-Pflichtig_${dateiPrefix}.docx`
+            : `Arbeitsvertrag_${dateiPrefix}.docx`
         );
       } else if (art === "werkmietvertrag") {
         await generiereDokument(
@@ -1005,6 +1020,18 @@ export default function MitarbeiterPage() {
           >
             Arbeitsvertrag
           </button>
+          {/* Nur für Personen mit Status SV-Pflichtig (Nutzer-Vorgabe
+              2026-08-28) - beim Statuswechsel auf SV-Pflichtig muss ein
+              neuer, angepasster Arbeitsvertrag unterschrieben werden. */}
+          {emp.abrechnungsart === "sozialversicherungspflichtig" && (
+            <button
+              type="button"
+              className="btn-secondary text-xs"
+              onClick={() => dokument("arbeitsvertrag_sv_pflichtig", emp)}
+            >
+              Arbeitsvertrag (SV-Pflichtig)
+            </button>
+          )}
           <button
             type="button"
             className="btn-secondary text-xs"

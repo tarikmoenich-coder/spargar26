@@ -901,7 +901,14 @@ Enthalten:
   Person jederzeit verfügbar): Arbeitsvertrag/Werkmietvertrag/
   Bankverbindungs-Nachweis aus der Vorlage neu erzeugen und herunterladen,
   z.B. für einen Nachdruck. Bisher war die Dokumenterzeugung nur einmalig
-  über "Anreise vorbereiten" in der Anreiseliste erreichbar
+  über "Anreise vorbereiten" in der Anreiseliste erreichbar. Zusätzlicher
+  Button "Arbeitsvertrag (SV-Pflichtig)" (Stand 2026-08-28, Nutzer-Vorgabe:
+  "Beim Statuswechsel auf SV-Pflichtig brauchen die Leute auch einen neuen
+  Arbeitsvertrag, der dann auch wieder unterschrieben werden muss") - nur
+  sichtbar bei Abrechnungsart "sozialversicherungspflichtig", nutzt eine
+  eigene Vorlage (`Arbeitsvertrag_SV_Pflichtig_Vorlage.docx`, dieselben
+  Platzhalter wie der normale Arbeitsvertrag) mit dem an die
+  Sozialversicherungspflicht angepassten Vertragstext
 - Menüpunkt "Anbau" (nur admin/erntewirtschaft, Stand 2026-08-11):
   Anbauplanung Erdbeeren als Ersatz für die gewachsene Excel
   "Erdbeerpflanzplanung.xlsx" (14 Jahresblätter, jedes per Copy/Paste aus
