@@ -1289,6 +1289,20 @@ Reihenfolge, jede nur einmal) im SQL Editor aus.
 Rechte sind serverseitig in der Datenbank festgelegt (Row Level Security),
 nicht nur im Menü versteckt.
 
+**Automatische Abmeldung nach Inaktivität (Stand 2026-08-28, Nutzer-Vorgabe:
+"alle Nutzer nach 60 Minuten Inaktivität automatisch abgemeldet"):** jede
+Rolle wird nach 60 Minuten ohne Maus-/Tastatur-/Touch-Aktivität automatisch
+abgemeldet (`components/InaktivitaetsAbmeldung.tsx`, global im
+Root-Layout) - Sicherheitsmaßnahme für die sensiblen Personal-/Lohndaten
+dieser App. Rein clientseitig je Browser-Tab (Supabase kennt kein
+serverseitiges Session-Timeout), meldet dabei bewusst nur den eigenen Tab
+ab (`signOut({ scope: "local" })`) statt wie im Standardfall ALLE
+Sitzungen der Person - sonst würde ein zweiter, gerade aktiv genutzter Tab
+derselben Person fälschlich mit ausgeloggt. Login-Seite zeigt danach einen
+erklärenden Hinweis ("wegen 60 Minuten Inaktivität automatisch
+abgemeldet") statt die Person kommentarlos wieder vor dem Formular stehen
+zu lassen. Reine Frontend-Ergänzung, keine Migration nötig.
+
 | Rolle | Sichtbare Menüpunkte | Kernrechte |
 |---|---|---|
 | `admin` | Alle | Voller Zugriff auf alles, inkl. Einstellungen, Kassenprüfungen freigeben, Änderungsprotokoll (Seite "Protokoll") |

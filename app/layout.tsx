@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import "./globals.css";
 import Nav from "@/components/Nav";
+import InaktivitaetsAbmeldung from "@/components/InaktivitaetsAbmeldung";
 
 export const metadata: Metadata = {
   title: "Spargar - Mömmel Agrar",
@@ -15,6 +16,7 @@ export default function RootLayout({
   return (
     <html lang="de">
       <body>
+        <InaktivitaetsAbmeldung />
         <Nav />
         <main className="mx-auto max-w-[1800px] px-4 py-6">{children}</main>
       </body>

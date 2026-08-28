@@ -1,11 +1,16 @@
 "use client";
 
-import { useState } from "react";
-import { useRouter } from "next/navigation";
+import { Suspense, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { getSupabaseClient } from "@/lib/supabase/client";
 
-export default function LoginPage() {
+function LoginFormular() {
   const router = useRouter();
+  // Nutzer-Vorgabe 2026-08-28 (automatische Abmeldung nach 60 Min.
+  // Inaktivität, siehe components/InaktivitaetsAbmeldung.tsx): zeigt einen
+  // erklärenden Hinweis statt die Person einfach kommentarlos wieder vor
+  // dem Anmeldeformular stehen zu lassen.
+  const wegenInaktivitaet = useSearchParams().get("grund") === "inaktivitaet";
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -32,6 +37,12 @@ export default function LoginPage() {
       <h1 className="mb-4 text-lg font-semibold text-emerald-800">
         Spargar Anmeldung
       </h1>
+      {wegenInaktivitaet && (
+        <p className="mb-4 rounded border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-800">
+          Du wurdest wegen 60 Minuten Inaktivität automatisch abgemeldet.
+          Bitte erneut anmelden.
+        </p>
+      )}
       <form onSubmit={handleSubmit} className="flex flex-col gap-3">
         <label className="text-sm">
           E-Mail
@@ -63,5 +74,16 @@ export default function LoginPage() {
         Users) und über die Tabelle „profiles“ einer Rolle zugeordnet.
       </p>
     </div>
+  );
+}
+
+// useSearchParams() (für den Inaktivitäts-Hinweis, siehe LoginFormular)
+// verlangt einen Suspense-Rand, sonst schlägt das statische Prerendering
+// dieser Seite beim Build fehl ("should be wrapped in a suspense boundary").
+export default function LoginPage() {
+  return (
+    <Suspense fallback={null}>
+      <LoginFormular />
+    </Suspense>
   );
 }
