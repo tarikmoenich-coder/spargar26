@@ -1303,6 +1303,12 @@ erklärenden Hinweis ("wegen 60 Minuten Inaktivität automatisch
 abgemeldet") statt die Person kommentarlos wieder vor dem Formular stehen
 zu lassen. Reine Frontend-Ergänzung, keine Migration nötig.
 
+**MÖMMEL-Banner auf der Login-Seite (Stand 2026-08-28):** vom Nutzer
+bereitgestelltes Illustrations-Banner (`public/mommel-banner.png`) oberhalb
+des Anmeldeformulars, über `next/image` eingebunden statt einem einfachen
+`<img>` - Vercel liefert dadurch automatisch eine komprimierte,
+größenoptimierte Fassung der 2,4-MB-Originaldatei aus.
+
 | Rolle | Sichtbare Menüpunkte | Kernrechte |
 |---|---|---|
 | `admin` | Alle | Voller Zugriff auf alles, inkl. Einstellungen, Kassenprüfungen freigeben, Änderungsprotokoll (Seite "Protokoll") |

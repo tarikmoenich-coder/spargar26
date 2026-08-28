@@ -1,6 +1,7 @@
 "use client";
 
 import { Suspense, useState } from "react";
+import Image from "next/image";
 import { useRouter, useSearchParams } from "next/navigation";
 import { getSupabaseClient } from "@/lib/supabase/client";
 
@@ -33,46 +34,61 @@ function LoginFormular() {
   }
 
   return (
-    <div className="mx-auto mt-24 max-w-sm rounded border border-neutral-200 bg-white p-6 shadow-sm">
-      <h1 className="mb-4 text-lg font-semibold text-emerald-800">
-        Spargar Anmeldung
-      </h1>
-      {wegenInaktivitaet && (
-        <p className="mb-4 rounded border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-800">
-          Du wurdest wegen 60 Minuten Inaktivität automatisch abgemeldet.
-          Bitte erneut anmelden.
+    <div className="mx-auto mt-12 flex max-w-2xl flex-col items-center gap-6 px-4">
+      {/* Nutzer-Vorgabe 2026-08-28: Banner oberhalb des Anmeldeformulars.
+          next/image statt eines einfachen <img> - Vercel optimiert/
+          komprimiert die Datei (2,4 MB Original) dadurch automatisch beim
+          Ausliefern. priority, da es das erste sichtbare Element der Seite
+          ist (Largest Contentful Paint). */}
+      <Image
+        src="/mommel-banner.png"
+        alt="Mömmel Lohn & Personal"
+        width={1672}
+        height={941}
+        priority
+        className="h-auto w-full rounded shadow-sm"
+      />
+      <div className="w-full max-w-sm rounded border border-neutral-200 bg-white p-6 shadow-sm">
+        <h1 className="mb-4 text-lg font-semibold text-emerald-800">
+          Spargar Anmeldung
+        </h1>
+        {wegenInaktivitaet && (
+          <p className="mb-4 rounded border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-800">
+            Du wurdest wegen 60 Minuten Inaktivität automatisch abgemeldet.
+            Bitte erneut anmelden.
+          </p>
+        )}
+        <form onSubmit={handleSubmit} className="flex flex-col gap-3">
+          <label className="text-sm">
+            E-Mail
+            <input
+              type="email"
+              required
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              className="mt-1 w-full"
+            />
+          </label>
+          <label className="text-sm">
+            Passwort
+            <input
+              type="password"
+              required
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              className="mt-1 w-full"
+            />
+          </label>
+          {error && <p className="text-sm text-red-600">{error}</p>}
+          <button type="submit" className="btn" disabled={busy}>
+            {busy ? "Anmelden…" : "Anmelden"}
+          </button>
+        </form>
+        <p className="mt-4 text-xs text-neutral-500">
+          Nutzerkonten werden vom Administrator in Supabase angelegt (Auth →
+          Users) und über die Tabelle „profiles“ einer Rolle zugeordnet.
         </p>
-      )}
-      <form onSubmit={handleSubmit} className="flex flex-col gap-3">
-        <label className="text-sm">
-          E-Mail
-          <input
-            type="email"
-            required
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            className="mt-1 w-full"
-          />
-        </label>
-        <label className="text-sm">
-          Passwort
-          <input
-            type="password"
-            required
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            className="mt-1 w-full"
-          />
-        </label>
-        {error && <p className="text-sm text-red-600">{error}</p>}
-        <button type="submit" className="btn" disabled={busy}>
-          {busy ? "Anmelden…" : "Anmelden"}
-        </button>
-      </form>
-      <p className="mt-4 text-xs text-neutral-500">
-        Nutzerkonten werden vom Administrator in Supabase angelegt (Auth →
-        Users) und über die Tabelle „profiles“ einer Rolle zugeordnet.
-      </p>
+      </div>
     </div>
   );
 }
