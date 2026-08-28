@@ -34,12 +34,15 @@ function LoginFormular() {
   }
 
   return (
-    <div className="mx-auto mt-12 flex max-w-2xl flex-col items-center gap-6 px-4">
-      {/* Nutzer-Vorgabe 2026-08-28: Banner oberhalb des Anmeldeformulars.
-          next/image statt eines einfachen <img> - Vercel optimiert/
-          komprimiert die Datei (2,4 MB Original) dadurch automatisch beim
-          Ausliefern. priority, da es das erste sichtbare Element der Seite
-          ist (Largest Contentful Paint). */}
+    <div className="mx-auto mt-12 flex max-w-sm flex-col items-center gap-6 px-4">
+      {/* Nutzer-Vorgabe 2026-08-28: Banner oberhalb des Anmeldeformulars,
+          auf dieselbe (schmale) Breite wie das Anmeldefeld zugeschnitten
+          statt eines breiteren, eigenen Containers ("Du hast es bei dem
+          anderen Projekt schöner gelöst. Da ist das Bild angepasst auf die
+          Breite des Login Feldes"). next/image statt eines einfachen
+          <img> - Vercel optimiert/komprimiert die Datei (2,4 MB Original)
+          dadurch automatisch beim Ausliefern. priority, da es das erste
+          sichtbare Element der Seite ist (Largest Contentful Paint). */}
       <Image
         src="/mommel-banner.png"
         alt="Mömmel Lohn & Personal"
@@ -48,7 +51,7 @@ function LoginFormular() {
         priority
         className="h-auto w-full rounded shadow-sm"
       />
-      <div className="w-full max-w-sm rounded border border-neutral-200 bg-white p-6 shadow-sm">
+      <div className="w-full rounded border border-neutral-200 bg-white p-6 shadow-sm">
         <h1 className="mb-4 text-lg font-semibold text-emerald-800">
           Spargar Anmeldung
         </h1>

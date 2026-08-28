@@ -1307,7 +1307,10 @@ zu lassen. Reine Frontend-Ergänzung, keine Migration nötig.
 bereitgestelltes Illustrations-Banner (`public/mommel-banner.png`) oberhalb
 des Anmeldeformulars, über `next/image` eingebunden statt einem einfachen
 `<img>` - Vercel liefert dadurch automatisch eine komprimierte,
-größenoptimierte Fassung der 2,4-MB-Originaldatei aus.
+größenoptimierte Fassung der 2,4-MB-Originaldatei aus. Auf dieselbe
+(schmale) Breite wie das Anmeldefeld zugeschnitten statt eines breiteren,
+eigenen Containers (Nutzer-Meldung: "Da ist das Bild angepasst auf die
+Breite des Login Feldes. So sieht das nicht gut aus").
 
 | Rolle | Sichtbare Menüpunkte | Kernrechte |
 |---|---|---|
