@@ -753,10 +753,21 @@ export default function SuchePage() {
                   <tr key={woche.montag}>
                     {woche.tage.map((tag) => (
                       <td key={tag.datum}>
-                        <div className="text-neutral-500">
+                        {/* Nutzer-Vorgabe 2026-08-28: "Datum links oben in
+                            die Ecke ... die Stunden in Fett mittig ins Feld"
+                            - vorher stand beides zentriert übereinander, was
+                            "etwas unübersichtlich" war. Die Zelle selbst
+                            bleibt zentriert (siehe .print-wochenraster in
+                            globals.css), nur das Datum bekommt ein eigenes
+                            text-left (überschreibt das geerbte center, da
+                            es eine eigene Regel auf dem Element selbst ist -
+                            kein Spezifitätskonflikt mit der Tabellen-Regel).
+                            Als erstes Element im obenausgerichteten Feld
+                            landet es dadurch oben links. */}
+                        <div className="text-left text-neutral-500">
                           {tagMonat(tag.datum)}
                         </div>
-                        <div>
+                        <div className="font-bold">
                           {tag.entry?.stunden != null
                             ? Number(tag.entry.stunden).toFixed(2)
                             : tag.entry?.markierung ?? "–"}

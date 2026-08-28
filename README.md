@@ -612,7 +612,10 @@ Enthalten:
   plus eine Wochensumme-Spalte am Ende jeder Zeile - bei einer vollen
   Saison damit ca. 20 statt 150+ Zeilen. Die interaktive (nicht gedruckte)
   Arbeitsstunden-Liste zeigt seit 2026-08-21 zusätzlich das Wochentag-Kürzel
-  (Mo/Di/Mi/Do/Fr/Sa/So) vor jedem Datum
+  (Mo/Di/Mi/Do/Fr/Sa/So) vor jedem Datum. Innerhalb einer Tages-Zelle im
+  Wochenraster steht das Datum seit 2026-08-28 links oben in der Ecke statt
+  zentriert über den Stunden (Nutzer-Meldung: "etwas unübersichtlich"), die
+  Stunden selbst fett und weiterhin mittig
 - Freitext-Notiz je Tag auf der Stundenerfassung (z.B. "krank", "zu
   spät") - erscheint auch auf der "Suche"-Seite
 - 15-Wochen-Kontrolle (SV-Freiheit landwirtschaftliche Saisonarbeit,
