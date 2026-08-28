@@ -167,6 +167,33 @@ export default function StundenkontoBereich({
     await neuLaden();
   }
 
+  // Nutzer-Vorgabe 2026-08-28: "Ich habe ein Stundenkonto fälschlicherweise
+  // in Auszahlung umgewandelt... ich bekomme sie nicht mehr raus" - bisher
+  // gab es keinen Weg, das rückgängig zu machen.
+  async function stornieren(b: StundenkontoBewegung) {
+    const grund = window.prompt(
+      "Grund für die Stornierung dieser Umwandlung (Pflichtfeld, wird protokolliert):"
+    );
+    if (!grund) return;
+    setLaeuft(true);
+    setFehler(null);
+    setErfolg(null);
+    const supabase = getSupabaseClient();
+    const { error } = await supabase.rpc("stundenkonto_auszahlung_stornieren", {
+      p_bewegung_id: b.id,
+      p_grund: grund,
+    });
+    setLaeuft(false);
+    if (error) {
+      setFehler(error.message);
+      return;
+    }
+    setErfolg(
+      `Umwandlung storniert - ${Math.abs(b.stunden).toFixed(2)} Std. sind wieder auf dem Stundenkonto.`
+    );
+    await neuLaden();
+  }
+
   return (
     <div className="flex flex-col gap-3 p-2">
       <p className="text-sm font-semibold">
@@ -293,18 +320,35 @@ export default function StundenkontoBereich({
                 <th>Stunden</th>
                 <th>Art</th>
                 <th>Notiz</th>
+                {canAuszahlen && <th></th>}
               </tr>
             </thead>
             <tbody>
               {historie.map((b) => (
-                <tr key={b.id}>
+                <tr key={b.id} className={b.storniert ? "opacity-50" : ""}>
                   <td>{formatDatumDE(b.datum)}</td>
                   <td className={b.stunden < 0 ? "text-red-600" : ""}>
                     {b.stunden > 0 ? "+" : ""}
                     {Number(b.stunden).toFixed(2)}
                   </td>
-                  <td>{b.art}</td>
+                  <td>
+                    {b.art}
+                    {b.storniert && " (storniert)"}
+                  </td>
                   <td>{b.notiz ?? "—"}</td>
+                  {canAuszahlen && (
+                    <td>
+                      {b.art === "Auszahlung" && !b.storniert && (
+                        <button
+                          type="button"
+                          className="btn-secondary text-xs"
+                          onClick={() => stornieren(b)}
+                        >
+                          Stornieren
+                        </button>
+                      )}
+                    </td>
+                  )}
                 </tr>
               ))}
             </tbody>

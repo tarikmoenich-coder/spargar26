@@ -98,7 +98,18 @@ Enthalten:
   Abrechnungs-Korrektur in "Kassenbewegungen" protokolliert (gesperrt bei
   bereits freigegebener Kassenprüfung). Bewegungs-Log statt Einzelfeld -
   der Kontostand ist die Summe aller Buchungen, kein negativer Saldo
-  möglich (außer bei "Korrektur", bewusste Ausnahme ohne Saldo-Prüfung)
+  möglich (außer bei "Korrektur", bewusste Ausnahme ohne Saldo-Prüfung).
+  "Stornieren"-Button je Umwandlung ergänzt (Stand 2026-08-28, Nutzer-
+  Meldung: "Ich habe ein Stundenkonto fälschlicherweise in Auszahlung
+  umgewandelt... ich bekomme sie nicht mehr raus" - dafür gab es bisher gar
+  keinen Weg): bucht eine ausgleichende "Korrektur" zurück aufs Konto
+  (Original-Zeile bleibt sichtbar stehen, nur als "storniert" markiert -
+  vollständiger Audit-Trail statt Löschen), zieht exakt denselben Betrag
+  wieder von "Zulage €" ab (aus einer neuen `betrag`-Spalte auf der
+  Bewegung, nicht mit dem AKTUELLEN Stundenlohn neu berechnet - bleibt so
+  auch bei zwischenzeitlicher Lohnänderung korrekt), inkl. Schnappschuss-/
+  Kassenbewegungs-Korrektur, falls die Person bereits abgerechnet ist.
+  Migration: `migration_2026-08-28_stundenkonto_auszahlung_stornieren.sql`
 - "Stundenerfassung → Import" (admin/hr/zeiterfassung): Excel-/CSV-Import
   zum Nacherfassen mehrerer Tage/Personen auf einmal - anderes Format als
   der Personal-Import: Spalte 1 = Personalnummer, ab Spalte 2 je eine

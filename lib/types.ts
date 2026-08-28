@@ -557,6 +557,11 @@ export interface StundenkontoBewegung {
   notiz: string | null;
   erstellt_von: string | null;
   erstellt_am: string;
+  // Nutzer-Vorgabe 2026-08-28: nur bei art "Auszahlung" befüllt - der bei
+  // der Umwandlung tatsächlich berechnete Betrag, nötig für eine exakte
+  // Stornierung (stundenkonto_auszahlung_stornieren).
+  betrag: number | null;
+  storniert: boolean;
 }
 
 // Aus der Sicht employee_stundenkonto_saldo - aktueller Kontostand.
