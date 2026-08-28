@@ -1092,7 +1092,10 @@ Enthalten:
   Korrektur, mit Warnhinweis: Ändern/Löschen wirkt auf alle Tage, die
   diesen Satz nutzen - auch rückwirkend auf bereits abgerechnete Personen.
   Reine Frontend-Ergänzung, keine Migration nötig (RLS erlaubte
-  Update/Delete für admin bereits, nur die UI fehlte). **Erdbeeren**
+  Update/Delete für admin bereits, nur die UI fehlte). Sätze-Verwaltung
+  zusätzlich einklappbar (Stand 2026-08-28, standardmäßig eingeklappt -
+  wird nur selten gebraucht, soll die tägliche Erfassung nicht überladen).
+  **Erdbeeren**
   (Prämien → Erdbeeren,
   admin/hr/zeiterfassung/erntewirtschaft, Stand 2026-08-09) nach
   demselben Muster, aber mit Norm (Steigen/Std.) und Bonus (€/Steige über

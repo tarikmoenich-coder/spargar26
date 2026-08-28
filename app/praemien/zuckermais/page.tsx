@@ -80,6 +80,11 @@ export default function PraemienZuckermaisPage() {
   const [satzSpeichern, setSatzSpeichern] = useState(false);
   const [satzFehler, setSatzFehler] = useState<string | null>(null);
   const [bearbeitenId, setBearbeitenId] = useState<number | null>(null);
+  // Nutzer-Vorgabe 2026-08-28: "Sätze verwalten" einklappbar machen - wird
+  // nur selten gebraucht (Norm/Preis ändert sich nur ein paar Mal je
+  // Saison), soll die tägliche Erfassung nicht überladen. Standardmäßig
+  // eingeklappt.
+  const [saetzeOffen, setSaetzeOffen] = useState(false);
 
   async function load() {
     setLoading(true);
@@ -409,9 +414,20 @@ export default function PraemienZuckermaisPage() {
           2026-08-09), nicht unten auf der Seite. */}
       {isAdmin && (
         <div className="rounded border border-neutral-200 bg-white p-3 print:hidden">
-          <h2 className="text-sm font-semibold text-emerald-800">
-            Sätze verwalten (Norm/Preis, ändert sich im Saisonverlauf)
-          </h2>
+          <div className="flex items-center justify-between gap-3">
+            <h2 className="text-sm font-semibold text-emerald-800">
+              Sätze verwalten (Norm/Preis, ändert sich im Saisonverlauf)
+            </h2>
+            <button
+              type="button"
+              className="btn-secondary text-xs"
+              onClick={() => setSaetzeOffen((o) => !o)}
+            >
+              {saetzeOffen ? "Einklappen" : "Aufklappen"}
+            </button>
+          </div>
+          {saetzeOffen && (
+            <>
           <p className="mt-1 text-xs text-neutral-500">
             Ändern oder Löschen wirkt sich auf alle Tage aus, die diesen Satz
             nutzen (von "Gültig ab" bis zum nächsten Satz bzw. bis heute) -
@@ -527,6 +543,8 @@ export default function PraemienZuckermaisPage() {
                 ))}
               </tbody>
             </table>
+          )}
+            </>
           )}
         </div>
       )}
