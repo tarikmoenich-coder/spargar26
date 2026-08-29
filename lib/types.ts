@@ -1188,3 +1188,212 @@ export interface CashDeposit {
   bearbeiter_id: string | null;
   storniert: boolean;
 }
+
+// ---------------------------------------------------------------------------
+// Modul "Unterkunft" (Zimmerverwaltung, Migration 2026-08-29). Zimmerplanung
+// Gebäude > Zimmer > Bett > Belegung, dazu Übergabe/Abnahme und
+// Zwischenkontrollen je Zimmer mit Fotodokumentation und Mängelerfassung.
+// Spiegelt supabase/migration_2026-08-29_unterkunft.sql.
+// ---------------------------------------------------------------------------
+export interface UnterkunftGebaeude {
+  id: number;
+  name: string;
+  adresse: string | null;
+  notiz: string | null;
+  aktiv: boolean;
+  erstellt_von: string | null;
+  erstellt_am: string;
+  updated_by: string | null;
+  updated_at: string;
+}
+
+export interface UnterkunftZimmer {
+  id: number;
+  gebaeude_id: number;
+  nummer: string;
+  etage: string | null;
+  // Soll-Bettenzahl (Planungshinweis) - die echte Kapazität ergibt sich aus
+  // den unterkunft_bett-Zeilen.
+  bettenzahl: number | null;
+  notiz: string | null;
+  aktiv: boolean;
+  erstellt_von: string | null;
+  erstellt_am: string;
+  updated_by: string | null;
+  updated_at: string;
+}
+
+export interface UnterkunftBett {
+  id: number;
+  zimmer_id: number;
+  bezeichnung: string;
+  aktiv: boolean;
+  erstellt_von: string | null;
+  erstellt_am: string;
+}
+
+export interface UnterkunftBelegung {
+  id: number;
+  bett_id: number;
+  employee_id: string;
+  von: string;
+  // Offen (noch nicht ausgezogen), solange null.
+  bis: string | null;
+  notiz: string | null;
+  erfasst_von: string | null;
+  erfasst_am: string;
+}
+
+// Aus der Sicht unterkunft_belegung_aktuell - heute laufende Belegungen mit
+// Personendaten.
+export interface UnterkunftBelegungAktuell {
+  id: number;
+  bett_id: number;
+  zimmer_id: number;
+  employee_id: string;
+  personal_nr: string;
+  name: string;
+  vorname: string;
+  von: string;
+  bis: string | null;
+  notiz: string | null;
+}
+
+export interface UnterkunftChecklisteVorlage {
+  id: number;
+  bereich: string;
+  reihenfolge: number;
+  aktiv: boolean;
+  gueltig_ab: string;
+  erstellt_von: string | null;
+  erstellt_am: string;
+}
+
+export type UnterkunftVorgangTyp = "einzug" | "auszug" | "zwischenkontrolle";
+
+export const UNTERKUNFT_VORGANG_TYP_LABELS: Record<UnterkunftVorgangTyp, string> = {
+  einzug: "Einzug / Übergabe",
+  auszug: "Auszug / Abnahme",
+  zwischenkontrolle: "Zwischenkontrolle",
+};
+
+export type UnterkunftGesamtzustand = "gut" | "gebrauchsspuren" | "maengel";
+
+export const UNTERKUNFT_GESAMTZUSTAND_LABELS: Record<
+  UnterkunftGesamtzustand,
+  string
+> = {
+  gut: "Gut",
+  gebrauchsspuren: "Gebrauchsspuren",
+  maengel: "Mängel",
+};
+
+export interface UnterkunftVorgang {
+  id: string;
+  zimmer_id: number;
+  belegung_id: number | null;
+  typ: UnterkunftVorgangTyp;
+  durchgefuehrt_von: string | null;
+  durchgefuehrt_am: string;
+  gesamtzustand: UnterkunftGesamtzustand | null;
+  notiz: string | null;
+  // v1: Name der anwesenden Person + Haken statt Unterschriften-Pad.
+  unterschrift_name: string | null;
+  zustand_bestaetigt: boolean;
+  abgeschlossen: boolean;
+  abgeschlossen_am: string | null;
+  storniert: boolean;
+  storno_grund: string | null;
+  storniert_von: string | null;
+  storniert_am: string | null;
+  updated_by: string | null;
+  updated_at: string;
+}
+
+export type UnterkunftPositionZustand = "io" | "mangel" | "na";
+
+export const UNTERKUNFT_POSITION_ZUSTAND_LABELS: Record<
+  UnterkunftPositionZustand,
+  string
+> = {
+  io: "In Ordnung",
+  mangel: "Mangel",
+  na: "Nicht zutreffend",
+};
+
+export interface UnterkunftVorgangPosition {
+  id: number;
+  vorgang_id: string;
+  bereich: string;
+  zustand: UnterkunftPositionZustand;
+  bemerkung: string | null;
+}
+
+export type UnterkunftMangelSchwere = "gering" | "mittel" | "hoch";
+
+export const UNTERKUNFT_MANGEL_SCHWERE_LABELS: Record<
+  UnterkunftMangelSchwere,
+  string
+> = {
+  gering: "Gering",
+  mittel: "Mittel",
+  hoch: "Hoch",
+};
+
+export type UnterkunftMangelStatus = "offen" | "in_arbeit" | "behoben";
+
+export const UNTERKUNFT_MANGEL_STATUS_LABELS: Record<
+  UnterkunftMangelStatus,
+  string
+> = {
+  offen: "Offen",
+  in_arbeit: "In Arbeit",
+  behoben: "Behoben",
+};
+
+export interface UnterkunftMangel {
+  id: number;
+  zimmer_id: number;
+  quelle_vorgang_id: string | null;
+  beschreibung: string;
+  schwere: UnterkunftMangelSchwere;
+  status: UnterkunftMangelStatus;
+  gemeldet_von: string | null;
+  gemeldet_am: string;
+  behoben_von: string | null;
+  behoben_am: string | null;
+  behebung_notiz: string | null;
+  updated_by: string | null;
+  updated_at: string;
+}
+
+export interface UnterkunftFoto {
+  id: number;
+  vorgang_id: string | null;
+  mangel_id: number | null;
+  bereich: string | null;
+  storage_path: string;
+  dateiname: string;
+  breite: number | null;
+  hoehe: number | null;
+  aufgenommen_am: string | null;
+  hochgeladen_von: string | null;
+  hochgeladen_am: string;
+}
+
+// Aus der Sicht unterkunft_zimmer_uebersicht - Belegungsplan-Kennzahlen je
+// Zimmer.
+export interface UnterkunftZimmerUebersicht {
+  zimmer_id: number;
+  nummer: string;
+  etage: string | null;
+  aktiv: boolean;
+  gebaeude_id: number;
+  gebaeude_name: string;
+  betten: number;
+  belegt: number;
+  frei: number;
+  letzte_kontrolle_am: string | null;
+  letzte_kontrolle_typ: UnterkunftVorgangTyp | null;
+  offene_maengel: number;
+}

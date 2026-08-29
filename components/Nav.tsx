@@ -45,6 +45,11 @@ const items: NavItem[] = [
     ],
   },
   {
+    href: "/unterkunft",
+    label: "Unterkunft",
+    roles: ["admin", "hr"],
+  },
+  {
     href: "/erfassung",
     label: "Stundenerfassung",
     roles: ["admin", "hr", "zeiterfassung"],

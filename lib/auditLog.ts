@@ -19,6 +19,9 @@ export const BEREICH_LABELS: Record<string, string> = {
   employee_documents: "Dokumente",
   periods: "Monatsabschluss",
   personal_kandidaten: "Personalplanung",
+  unterkunft_belegung: "Zimmerbelegung",
+  unterkunft_vorgang: "Zimmer-Vorgang",
+  unterkunft_mangel: "Zimmer-Mangel",
 };
 
 export const AKTION_LABELS: Record<string, string> = {
