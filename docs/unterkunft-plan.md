@@ -27,15 +27,23 @@ Stand: 2026-08-29. Arbeitsdokument, damit der Planungsstand einen Konsolen-Neust
 - [x] Nav-Eintrag „Unterkunft" in `components/Nav.tsx` (roles: admin, hr)
 - [x] `npx tsc --noEmit` sauber · `npx next build` grün (alle 6 /unterkunft-Routen)
 - [x] DDL zusätzlich in `supabase/schema.sql` (Abschnitt 15, Fresh-Install-Parität)
-- [ ] **Migration in der Supabase-SQL-Konsole ausführen (durch den Nutzer)** –
-      `supabase/migration_2026-08-29_unterkunft.sql`. Erst danach ist das Modul nutzbar.
+- [x] **Migration in der Supabase-SQL-Konsole ausgeführt** (2026-08-29, bestätigt) –
+      `supabase/migration_2026-08-29_unterkunft.sql`
+- [x] PWA installierbar gemacht (Manifest + Icons + Apple-Meta, **ohne** Service
+      Worker wegen README-bfcache-Bug) — `public/manifest.webmanifest`,
+      `public/icon-{192,512}.png`, `public/apple-touch-icon.png`,
+      `scripts/gen-pwa-icons.mjs`, `app/layout.tsx` (metadata + viewport)
+- [ ] Smoke-Test vom Handy über die **Vercel-Preview-URL** des Branch
+      `unterkunft-modul` (alles ist auf Vercel deployed): Login als admin/hr →
+      Unterkunft → Stammdaten → Belegung → Übergabe mit Foto; „Zum
+      Startbildschirm hinzufügen" testen
 - [ ] optional Dashboard-Kachel (offene Mängel / fällige Kontrollen)
 - [ ] optional: README.md-Abschnitt im Nutzer-Stil
+- [ ] PR `unterkunft-modul` → `main` mergen (danach Prod-URL installierbar)
 
-### Status: Code fertig, wartet auf DB-Migration
-Alle Dateien geschrieben, Build grün. Nächster Schritt liegt beim Nutzer:
-Migration in Supabase ausführen, dann `npm run dev` und unter „Unterkunft" →
-„Stammdaten" das erste Gebäude/Zimmer/Betten anlegen.
+### Status: DB-Migration durch, Modul einsatzbereit
+Code auf Branch `unterkunft-modul` (Commit b74c19e), Migration in Supabase
+ausgeführt. Nächster Schritt: `npm run dev` und Smoke-Test.
 
 ### Wiedereinstieg nach Konsolen-Neustart
 `claude --continue` in `~/projekte/spargar26`. Diese Datei ist die Quelle der Wahrheit.
