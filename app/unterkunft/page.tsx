@@ -19,13 +19,19 @@ import {
   GRUNDRISS_ZELLE as Z,
   KONTROLL_AMPEL_FARBE,
   KONTROLL_AMPEL_LABELS,
+  herkunftDominant,
+  herkunftFarbe,
   herkunftMix,
+  heuteIso,
   kontrollAmpel,
+  type KontrollAmpel,
 } from "@/lib/unterkunft";
 import {
   UNTERKUNFT_VORGANG_TYP_LABELS,
   type UnterkunftBelegungAktuell,
+  type UnterkunftBett,
   type UnterkunftGebaeude,
+  type UnterkunftPersonOffen,
   type UnterkunftWohneinheitUebersicht,
   type UnterkunftZimmerArt,
   type UnterkunftZimmerUebersicht,
@@ -50,21 +56,100 @@ const RAUM_STYLE: Record<
 const ZIMMER_FREI = { fill: "#dcfce7", stroke: "#22c55e" };
 const ZIMMER_VOLL = { fill: "#f1f5f9", stroke: "#94a3b8" };
 const ZIMMER_INAKTIV = { fill: "#fafafa", stroke: "#e5e5e5" };
+const ZIMMER_GESPERRT = { fill: "#e2e8f0", stroke: "#475569" };
+const ZIMMER_LEER_HERKUNFT = { fill: "#f8fafc", stroke: "#cbd5e1" };
 
-function zimmerFarbe(z: {
+// Ansichts-Umschalter: nur die Kachelfläche wechselt die Bedeutung.
+type Ansicht = "belegung" | "herkunft" | "kontrolle" | "maengel";
+const ANSICHT_LABELS: Record<Ansicht, string> = {
+  belegung: "Belegung",
+  herkunft: "Herkunft",
+  kontrolle: "Kontrolle",
+  maengel: "Mängel",
+};
+const AMPEL_KACHEL: Record<KontrollAmpel, { fill: string; stroke: string }> = {
+  keine: { fill: "#f4f4f5", stroke: "#a3a3a3" },
+  gruen: { fill: "#dcfce7", stroke: "#16a34a" },
+  gelb: { fill: "#fef3c7", stroke: "#f59e0b" },
+  rot: { fill: "#fee2e2", stroke: "#dc2626" },
+};
+const MAENGEL_KACHEL = { fill: "#fee2e2", stroke: "#dc2626" };
+const MAENGEL_KEIN = { fill: "#f4f4f5", stroke: "#d4d4d8" };
+
+function legendeFuer(
+  ansicht: Ansicht
+): Array<{ fill: string; stroke: string; label: string }> {
+  if (ansicht === "kontrolle") {
+    return [
+      { ...AMPEL_KACHEL.gruen, label: "aktuell" },
+      { ...AMPEL_KACHEL.gelb, label: "bald fällig" },
+      { ...AMPEL_KACHEL.rot, label: "überfällig" },
+      { ...AMPEL_KACHEL.keine, label: "noch keine" },
+    ];
+  }
+  if (ansicht === "maengel") {
+    return [
+      { ...MAENGEL_KACHEL, label: "offene Mängel" },
+      { ...MAENGEL_KEIN, label: "ohne Mängel" },
+    ];
+  }
+  if (ansicht === "herkunft") {
+    return [
+      { ...ZIMMER_LEER_HERKUNFT, label: "leer" },
+      { fill: "hsl(30 70% 88%)", stroke: "hsl(30 55% 55%)", label: "je Herkunft eine Farbe" },
+      { ...ZIMMER_GESPERRT, label: "gesperrt" },
+    ];
+  }
+  return [
+    { ...ZIMMER_FREI, label: "Zimmer (Betten frei)" },
+    { ...ZIMMER_VOLL, label: "Zimmer (voll)" },
+    { ...ZIMMER_GESPERRT, label: "gesperrt" },
+    { ...RAUM_STYLE.bad, label: "Sanitär" },
+    { ...RAUM_STYLE.flur, label: "Flur" },
+    { ...RAUM_STYLE.kueche, label: "Küche" },
+    { fill: "#fff", stroke: "#dc2626", label: "offene Mängel" },
+  ];
+}
+
+interface ZimmerFarbInput {
   art: UnterkunftZimmerArt;
   aktiv: boolean;
   frei: number;
   offene_maengel: number;
-}): { fill: string; stroke: string } {
-  const base = !z.aktiv
-    ? ZIMMER_INAKTIV
-    : z.art !== "zimmer"
-      ? RAUM_STYLE[z.art]
-      : z.frei > 0
-        ? ZIMMER_FREI
-        : ZIMMER_VOLL;
-  const stroke = z.aktiv && z.offene_maengel > 0 ? "#dc2626" : base.stroke;
+  gesperrt: boolean;
+  letzte_kontrolle_am: string | null;
+}
+
+function zimmerFarbe(
+  z: ZimmerFarbInput,
+  ansicht: Ansicht = "belegung",
+  dominant: string | null = null
+): { fill: string; stroke: string } {
+  if (!z.aktiv) return ZIMMER_INAKTIV;
+  if (ansicht === "kontrolle") {
+    return AMPEL_KACHEL[kontrollAmpel(z.letzte_kontrolle_am)];
+  }
+  if (ansicht === "maengel") {
+    return z.offene_maengel > 0 ? MAENGEL_KACHEL : MAENGEL_KEIN;
+  }
+  if (z.gesperrt) return ZIMMER_GESPERRT;
+  let base: { fill: string; stroke: string };
+  if (ansicht === "herkunft") {
+    base =
+      z.art !== "zimmer"
+        ? RAUM_STYLE[z.art]
+        : dominant
+          ? herkunftFarbe(dominant)
+          : ZIMMER_LEER_HERKUNFT;
+  } else {
+    base =
+      z.art !== "zimmer"
+        ? RAUM_STYLE[z.art]
+        : z.frei > 0
+          ? ZIMMER_FREI
+          : ZIMMER_VOLL;
+  }
+  const stroke = z.offene_maengel > 0 ? "#dc2626" : base.stroke;
   return { fill: base.fill, stroke };
 }
 
@@ -79,15 +164,32 @@ interface DragState {
   aktY: number;
 }
 
+interface UmzugState {
+  belegungId: number;
+  employeeId: string;
+  name: string;
+  vonZimmer: string;
+  vonDatum: string;
+}
+
 export default function UnterkunftGrundrissPage() {
   const { profile } = useProfile();
   const canEditPlan = profile?.role === "admin";
+  // Zimmer sperren: wie bei den übrigen Zimmer-Stammdaten (RLS: admin/hr).
+  const canManage = profile?.role === "admin" || profile?.role === "hr";
+  // Umzug wickelt der Hausmeister vor Ort ab (RLS unterkunft_belegung).
+  const canMove =
+    profile?.role === "admin" ||
+    profile?.role === "hr" ||
+    profile?.role === "hausmeister";
 
   const [gebaeude, setGebaeude] = useState<UnterkunftGebaeude[]>([]);
   const [einheiten, setEinheiten] = useState<UnterkunftWohneinheitUebersicht[]>([]);
   const [zimmer, setZimmer] = useState<UnterkunftZimmerUebersicht[]>([]);
+  const [betten, setBetten] = useState<UnterkunftBett[]>([]);
   const [belegungen, setBelegungen] = useState<UnterkunftBelegungAktuell[]>([]);
   const [zuordnungen, setZuordnungen] = useState<UnterkunftZuordnungOffen[]>([]);
+  const [personenOffen, setPersonenOffen] = useState<UnterkunftPersonOffen[]>([]);
   const [loading, setLoading] = useState(true);
   const [fehler, setFehler] = useState<string | null>(null);
 
@@ -96,27 +198,45 @@ export default function UnterkunftGrundrissPage() {
   const [einheitId, setEinheitId] = useState<number | null>(null);
   const [selId, setSelId] = useState<number | null>(null);
   const [bearbeiten, setBearbeiten] = useState(false);
+  const [ansicht, setAnsicht] = useState<Ansicht>("belegung");
   const [zoom, setZoom] = useState(1);
   const [drag, setDrag] = useState<DragState | null>(null);
+
+  // Umzug (Zimmerwechsel einer Person)
+  const [umzug, setUmzug] = useState<UmzugState | null>(null);
+  const [umzugZiel, setUmzugZiel] = useState({
+    wohneinheit_id: "",
+    zimmer_id: "",
+    bett_id: "",
+    datum: heuteIso(),
+  });
+  // Direkt belegen (nur admin), ohne Übergabe
+  const [direkt, setDirekt] = useState<{ suche: string; bett_id: string } | null>(
+    null
+  );
 
   const laden = useCallback(async () => {
     setLoading(true);
     const supabase = getSupabaseClient();
-    const [g, e, z, b, zu] = await Promise.all([
+    const [g, e, z, bt, b, zu, po] = await Promise.all([
       supabase.from("unterkunft_gebaeude").select("*").order("name"),
       supabase
         .from("unterkunft_wohneinheit_uebersicht")
         .select("*")
         .order("reihenfolge"),
       supabase.from("unterkunft_zimmer_uebersicht").select("*").order("nummer"),
+      supabase.from("unterkunft_bett").select("*").eq("aktiv", true),
       supabase.from("unterkunft_belegung_aktuell").select("*"),
       supabase.from("unterkunft_zuordnung_offen").select("*"),
+      supabase.from("unterkunft_person_offen").select("*").order("name"),
     ]);
     setGebaeude((g.data as UnterkunftGebaeude[]) ?? []);
     setEinheiten((e.data as UnterkunftWohneinheitUebersicht[]) ?? []);
     setZimmer((z.data as UnterkunftZimmerUebersicht[]) ?? []);
+    setBetten((bt.data as UnterkunftBett[]) ?? []);
     setBelegungen((b.data as UnterkunftBelegungAktuell[]) ?? []);
     setZuordnungen((zu.data as UnterkunftZuordnungOffen[]) ?? []);
+    setPersonenOffen((po.data as UnterkunftPersonOffen[]) ?? []);
     setLoading(false);
   }, []);
 
@@ -130,6 +250,13 @@ export default function UnterkunftGrundrissPage() {
       setGebaeudeId(gebaeude[0].id);
     }
   }, [gebaeude, gebaeudeId]);
+
+  // Umzug-/Direktbeleg-Formular schließen, sobald ein anderer Raum oder eine
+  // andere Wohneinheit gewählt wird.
+  useEffect(() => {
+    setUmzug(null);
+    setDirekt(null);
+  }, [selId, einheitId]);
 
   const einheitenDesGebaeudes = useMemo(
     () => einheiten.filter((e) => e.gebaeude_id === gebaeudeId && e.aktiv),
@@ -189,6 +316,205 @@ export default function UnterkunftGrundrissPage() {
     () => zuordnungen.filter((z) => z.wohneinheit_id === einheitId),
     [zuordnungen, einheitId]
   );
+
+  // Häufigste Herkunft je Zimmer (für die Herkunfts-Ansicht).
+  const dominantProZimmer = useMemo(() => {
+    const m: Record<number, string | null> = {};
+    for (const [zid, liste] of Object.entries(belegungProZimmer)) {
+      m[Number(zid)] = herkunftDominant(liste);
+    }
+    return m;
+  }, [belegungProZimmer]);
+
+  // Kennzahlen je Wohneinheit aus den Zimmerdaten (lock-bereinigt): ein
+  // gesperrtes Zimmer zählt nicht als "frei".
+  const statsProEinheit = useMemo(() => {
+    const m: Record<
+      number,
+      { betten: number; fest: number; schwebend: number; frei: number; gesperrt: number }
+    > = {};
+    zimmer.forEach((z) => {
+      if (z.art !== "zimmer" || !z.aktiv || z.wohneinheit_id == null) return;
+      const s = (m[z.wohneinheit_id] ??= {
+        betten: 0,
+        fest: 0,
+        schwebend: 0,
+        frei: 0,
+        gesperrt: 0,
+      });
+      s.betten += z.betten;
+      s.fest += z.belegt;
+      s.schwebend += z.schwebend;
+      if (z.gesperrt) s.gesperrt += 1;
+      else s.frei += z.frei;
+    });
+    return m;
+  }, [zimmer]);
+
+  // Kapazitäts-Kopfzeile für das gewählte Gebäude.
+  const gebStats = useMemo(() => {
+    const rooms = zimmer.filter(
+      (z) => z.gebaeude_id === gebaeudeId && z.art === "zimmer" && z.aktiv
+    );
+    let betten = 0,
+      belegt = 0,
+      schwebend = 0,
+      frei = 0,
+      gesperrt = 0,
+      ueber = 0;
+    for (const r of rooms) {
+      betten += r.betten;
+      belegt += r.belegt;
+      schwebend += r.schwebend;
+      if (r.gesperrt) gesperrt += 1;
+      else frei += r.frei;
+      const soll = r.belegt + r.schwebend;
+      if (soll > r.betten) ueber += soll - r.betten;
+    }
+    return { rooms: rooms.length, betten, belegt, schwebend, frei, gesperrt, ueber };
+  }, [zimmer, gebaeudeId]);
+
+  // Freie (heute unbelegte) Betten eines Zimmers.
+  const freieBetten = useCallback(
+    (zimmerId: number) => {
+      const belegt = new Set(
+        belegungen.filter((b) => b.zimmer_id === zimmerId).map((b) => b.bett_id)
+      );
+      return betten.filter(
+        (b) => b.zimmer_id === zimmerId && !belegt.has(b.id)
+      );
+    },
+    [belegungen, betten]
+  );
+
+  function doppelMsg(m: string): string {
+    return m.includes("unterkunft_belegung_kein_doppel")
+      ? "Dieses Bett ist im gewählten Zeitraum bereits belegt."
+      : m;
+  }
+
+  // Zimmer/Raum sperren oder entsperren (admin/hr).
+  async function sperreSetzen(z: UnterkunftZimmerUebersicht, sperren: boolean) {
+    let grund: string | null = null;
+    if (sperren) {
+      const eingabe = window.prompt(
+        `Grund der Sperre für „${z.nummer}" (z. B. Wasserschaden, Renovierung)`,
+        z.sperr_grund ?? ""
+      );
+      grund = eingabe?.trim() || null;
+      if (!grund) return;
+    }
+    setZimmer((prev) =>
+      prev.map((x) =>
+        x.zimmer_id === z.zimmer_id
+          ? { ...x, gesperrt: sperren, sperr_grund: sperren ? grund : null }
+          : x
+      )
+    );
+    const { error } = await getSupabaseClient()
+      .from("unterkunft_zimmer")
+      .update({
+        gesperrt: sperren,
+        sperr_grund: sperren ? grund : null,
+        updated_by: profile?.id ?? null,
+      })
+      .eq("id", z.zimmer_id);
+    if (error) {
+      setFehler(error.message);
+      laden();
+    } else {
+      setFehler(null);
+    }
+  }
+
+  function umzugStarten(b: UnterkunftBelegungAktuell, vonZimmer: string) {
+    setUmzug({
+      belegungId: b.id,
+      employeeId: b.employee_id,
+      name: `${b.vorname} ${b.name}`,
+      vonZimmer,
+      vonDatum: b.von,
+    });
+    setUmzugZiel({
+      wohneinheit_id: einheitId ? String(einheitId) : "",
+      zimmer_id: "",
+      bett_id: "",
+      datum: heuteIso(),
+    });
+  }
+
+  // Umzug: neue Belegung ab dem Umzugsdatum anlegen, alte zum selben Datum
+  // schließen (der Umzugstag zählt am neuen Platz; die eintägige Überschneidung
+  // löst sich am Folgetag auf).
+  async function umzugAusfuehren() {
+    if (!umzug) return;
+    const bettId = Number(umzugZiel.bett_id);
+    const datum = umzugZiel.datum;
+    if (!bettId || !datum) {
+      setFehler("Zielbett und Umzugsdatum wählen.");
+      return;
+    }
+    if (datum < umzug.vonDatum) {
+      setFehler(
+        `Das Umzugsdatum liegt vor dem Einzug in Zimmer ${umzug.vonZimmer} (${umzug.vonDatum}).`
+      );
+      return;
+    }
+    setFehler(null);
+    const sb = getSupabaseClient();
+    const { error: e1 } = await sb.from("unterkunft_belegung").insert({
+      bett_id: bettId,
+      employee_id: umzug.employeeId,
+      von: datum,
+      notiz: `Umzug aus Zimmer ${umzug.vonZimmer}`,
+    });
+    if (e1) {
+      setFehler(doppelMsg(e1.message));
+      return;
+    }
+    const { error: e2 } = await sb
+      .from("unterkunft_belegung")
+      .update({ bis: datum })
+      .eq("id", umzug.belegungId);
+    if (e2) {
+      setFehler(e2.message);
+      return;
+    }
+    setUmzug(null);
+    await laden();
+  }
+
+  // Direkt belegen (nur admin), ohne Übergabe. Optional eine schwebende
+  // Zuordnung mitschließen.
+  async function belegungDirekt(
+    employeeId: string,
+    bettId: number,
+    zuordnungId?: number
+  ) {
+    setFehler(null);
+    const sb = getSupabaseClient();
+    const { data, error } = await sb
+      .from("unterkunft_belegung")
+      .insert({ bett_id: bettId, employee_id: employeeId, von: heuteIso() })
+      .select("id")
+      .single();
+    if (error) {
+      setFehler(doppelMsg(error.message));
+      return;
+    }
+    if (zuordnungId != null) {
+      await sb
+        .from("unterkunft_zuordnung")
+        .update({
+          status: "erledigt",
+          belegung_id: (data as { id: number }).id,
+          updated_by: profile?.id ?? null,
+        })
+        .eq("id", zuordnungId);
+    }
+    setDirekt(null);
+    await laden();
+  }
 
   // Zur Orientierung: platzierte Zimmer der ANDEREN Wohneinheiten derselben
   // Etage (gleiches Gebäude, gleiches etage_label) - ausgegraut, nicht
@@ -459,6 +785,42 @@ export default function UnterkunftGrundrissPage() {
         </label>
       </div>
 
+      {/* Kapazitäts-Kopfzeile fürs ganze Gebäude */}
+      {gebaeudeId != null && gebStats.rooms > 0 && (
+        <div className="flex flex-wrap items-center gap-1.5 text-sm">
+          <span className="rounded bg-neutral-100 px-2 py-0.5">
+            <span className="font-semibold tabular-nums">
+              {gebStats.belegt}/{gebStats.betten}
+            </span>{" "}
+            Betten belegt
+          </span>
+          <span className="rounded bg-amber-50 px-2 py-0.5 text-amber-800">
+            <span className="font-semibold tabular-nums">{gebStats.schwebend}</span>{" "}
+            schwebend
+          </span>
+          <span
+            className={`rounded px-2 py-0.5 ${
+              gebStats.frei > 0
+                ? "bg-emerald-50 text-emerald-800"
+                : "bg-neutral-100 text-neutral-500"
+            }`}
+          >
+            <span className="font-semibold tabular-nums">{gebStats.frei}</span> frei
+          </span>
+          {gebStats.gesperrt > 0 && (
+            <span className="rounded bg-slate-200 px-2 py-0.5 text-slate-700">
+              <span className="font-semibold tabular-nums">{gebStats.gesperrt}</span>{" "}
+              gesperrt
+            </span>
+          )}
+          {gebStats.ueber > 0 && (
+            <span className="rounded bg-red-100 px-2 py-0.5 font-medium text-red-700">
+              Überbuchung: {gebStats.ueber}
+            </span>
+          )}
+        </div>
+      )}
+
       {fehler && (
         <p className="rounded border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
           {fehler}
@@ -503,6 +865,13 @@ export default function UnterkunftGrundrissPage() {
               ...belegungen.filter((b) => b.wohneinheit_id === e.wohneinheit_id),
               ...zuordnungen.filter((z) => z.wohneinheit_id === e.wohneinheit_id),
             ];
+            const s = statsProEinheit[e.wohneinheit_id] ?? {
+              betten: e.betten,
+              fest: e.fest,
+              schwebend: e.schwebend,
+              frei: e.frei,
+              gesperrt: 0,
+            };
             const aktiv = e.wohneinheit_id === einheitId;
             return (
               <button
@@ -524,12 +893,15 @@ export default function UnterkunftGrundrissPage() {
                   )}
                 </div>
                 <div className="mt-1 flex flex-wrap gap-x-3 gap-y-0.5 text-sm">
-                  <span>{e.betten} Betten</span>
-                  <span className="text-emerald-700">{e.fest} fest</span>
-                  <span className="text-amber-700">{e.schwebend} schwebend</span>
-                  <span className={e.frei > 0 ? "text-emerald-700" : "text-neutral-400"}>
-                    {e.frei} frei
+                  <span>{s.betten} Betten</span>
+                  <span className="text-emerald-700">{s.fest} fest</span>
+                  <span className="text-amber-700">{s.schwebend} schwebend</span>
+                  <span className={s.frei > 0 ? "text-emerald-700" : "text-neutral-400"}>
+                    {s.frei} frei
                   </span>
+                  {s.gesperrt > 0 && (
+                    <span className="text-slate-600">🔒 {s.gesperrt}</span>
+                  )}
                 </div>
                 {personen.length > 0 && (
                   <div className="mt-1 text-xs text-neutral-500">
@@ -564,6 +936,21 @@ export default function UnterkunftGrundrissPage() {
               )}
             </div>
             <div className="flex flex-wrap items-center gap-3 text-sm">
+              <div className="flex overflow-hidden rounded border border-neutral-300">
+                {(Object.keys(ANSICHT_LABELS) as Ansicht[]).map((a) => (
+                  <button
+                    key={a}
+                    onClick={() => setAnsicht(a)}
+                    className={`px-2 py-1 text-xs ${
+                      a === ansicht
+                        ? "bg-emerald-700 font-semibold text-white"
+                        : "bg-white text-neutral-600 hover:bg-neutral-50"
+                    }`}
+                  >
+                    {ANSICHT_LABELS[a]}
+                  </button>
+                ))}
+              </div>
               <div className="flex items-center gap-1">
                 <button
                   className="btn-secondary"
@@ -610,14 +997,7 @@ export default function UnterkunftGrundrissPage() {
           ) : (
             <>
               <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-neutral-500">
-                {[
-                  { ...ZIMMER_FREI, label: "Zimmer (Betten frei)" },
-                  { ...ZIMMER_VOLL, label: "Zimmer (voll)" },
-                  { ...RAUM_STYLE.bad, label: "Sanitär" },
-                  { ...RAUM_STYLE.flur, label: "Flur" },
-                  { ...RAUM_STYLE.kueche, label: "Küche" },
-                  { fill: "#fff", stroke: "#dc2626", label: "offene Mängel" },
-                ].map((e) => (
+                {legendeFuer(ansicht).map((e) => (
                   <span key={e.label} className="inline-flex items-center gap-1">
                     <span
                       className="inline-block h-3 w-3 rounded-sm border"
@@ -670,7 +1050,13 @@ export default function UnterkunftGrundrissPage() {
                         width={z.plan_w * Z}
                         height={z.plan_h * Z}
                         rx={5}
-                        fill={zimmerFarbe(z).fill}
+                        fill={
+                          zimmerFarbe(
+                            z,
+                            ansicht,
+                            dominantProZimmer[z.zimmer_id] ?? null
+                          ).fill
+                        }
                         stroke="#cbd5e1"
                         strokeWidth={1}
                         strokeDasharray="3 3"
@@ -706,7 +1092,11 @@ export default function UnterkunftGrundrissPage() {
                     const py = (wirdGezogen ? drag!.aktY : z.plan_y!) * Z;
                     const w = z.plan_w * Z;
                     const h = z.plan_h * Z;
-                    const { fill, stroke } = zimmerFarbe(z);
+                    const { fill, stroke } = zimmerFarbe(
+                      z,
+                      ansicht,
+                      dominantProZimmer[z.zimmer_id] ?? null
+                    );
                     const ausgewaehlt = z.zimmer_id === selId;
                     const ampel = kontrollAmpel(z.letzte_kontrolle_am);
                     const schwebendHier =
@@ -745,7 +1135,18 @@ export default function UnterkunftGrundrissPage() {
                         >
                           {z.nummer}
                         </text>
-                        {z.art === "zimmer" && (
+                        {z.gesperrt ? (
+                          <text
+                            x={w / 2}
+                            y={h - 6}
+                            textAnchor="middle"
+                            className="select-none"
+                            fontSize={10}
+                            fill="#475569"
+                          >
+                            🔒 gesperrt
+                          </text>
+                        ) : z.art === "zimmer" ? (
                           <text
                             x={w / 2}
                             y={h - 6}
@@ -757,7 +1158,7 @@ export default function UnterkunftGrundrissPage() {
                             {z.belegt}/{z.betten}
                             {schwebendHier > 0 ? ` +${schwebendHier}` : ""}
                           </text>
-                        )}
+                        ) : null}
                         <circle
                           cx={w - 9}
                           cy={9}
@@ -941,6 +1342,13 @@ export default function UnterkunftGrundrissPage() {
                       </div>
                     </dl>
 
+                    {sel.gesperrt && (
+                      <p className="mt-2 rounded bg-slate-100 px-2 py-1 text-xs text-slate-700">
+                        🔒 Gesperrt
+                        {sel.sperr_grund ? `: ${sel.sperr_grund}` : ""}
+                      </p>
+                    )}
+
                     {sel.art === "zimmer" && (
                       <>
                         <div className="mt-3">
@@ -954,14 +1362,29 @@ export default function UnterkunftGrundrissPage() {
                             <ul className="mt-1 space-y-0.5 text-sm">
                               {(belegungProZimmer[sel.zimmer_id] ?? []).map(
                                 (b) => (
-                                  <li key={b.id}>
-                                    {b.vorname} {b.name}
-                                    {b.herkunft ? (
-                                      <span className="text-neutral-400">
-                                        {" "}
-                                        · {b.herkunft}
-                                      </span>
-                                    ) : null}
+                                  <li
+                                    key={b.id}
+                                    className="flex items-center justify-between gap-2"
+                                  >
+                                    <span>
+                                      {b.vorname} {b.name}
+                                      {b.herkunft ? (
+                                        <span className="text-neutral-400">
+                                          {" "}
+                                          · {b.herkunft}
+                                        </span>
+                                      ) : null}
+                                    </span>
+                                    {canMove && (
+                                      <button
+                                        className="shrink-0 text-xs text-emerald-700 hover:underline"
+                                        onClick={() =>
+                                          umzugStarten(b, sel.nummer)
+                                        }
+                                      >
+                                        umziehen
+                                      </button>
+                                    )}
                                   </li>
                                 )
                               )}
@@ -985,6 +1408,242 @@ export default function UnterkunftGrundrissPage() {
                             </ul>
                           </div>
                         )}
+
+                        {umzug && (
+                          <div className="mt-3 rounded border border-emerald-300 bg-emerald-50 p-2 text-sm">
+                            <div className="font-medium text-emerald-900">
+                              Umzug: {umzug.name}
+                            </div>
+                            <p className="text-xs text-neutral-500">
+                              aus Zimmer {umzug.vonZimmer}
+                            </p>
+                            <div className="mt-2 space-y-2">
+                              <label className="block">
+                                Wohneinheit
+                                <select
+                                  className="ml-1 w-full"
+                                  value={umzugZiel.wohneinheit_id}
+                                  onChange={(e) =>
+                                    setUmzugZiel((s) => ({
+                                      ...s,
+                                      wohneinheit_id: e.target.value,
+                                      zimmer_id: "",
+                                      bett_id: "",
+                                    }))
+                                  }
+                                >
+                                  <option value="">–</option>
+                                  {einheitenDesGebaeudes.map((e) => (
+                                    <option
+                                      key={e.wohneinheit_id}
+                                      value={e.wohneinheit_id}
+                                    >
+                                      {e.name}
+                                      {e.etage_label ? ` · ${e.etage_label}` : ""}
+                                    </option>
+                                  ))}
+                                </select>
+                              </label>
+                              <label className="block">
+                                Zimmer
+                                <select
+                                  className="ml-1 w-full"
+                                  value={umzugZiel.zimmer_id}
+                                  disabled={!umzugZiel.wohneinheit_id}
+                                  onChange={(e) =>
+                                    setUmzugZiel((s) => ({
+                                      ...s,
+                                      zimmer_id: e.target.value,
+                                      bett_id: "",
+                                    }))
+                                  }
+                                >
+                                  <option value="">–</option>
+                                  {zimmer
+                                    .filter(
+                                      (z) =>
+                                        String(z.wohneinheit_id) ===
+                                          umzugZiel.wohneinheit_id &&
+                                        z.art === "zimmer" &&
+                                        z.aktiv &&
+                                        !z.gesperrt &&
+                                        z.zimmer_id !== sel.zimmer_id
+                                    )
+                                    .map((z) => (
+                                      <option key={z.zimmer_id} value={z.zimmer_id}>
+                                        {z.nummer} ({z.frei} frei)
+                                      </option>
+                                    ))}
+                                </select>
+                              </label>
+                              <label className="block">
+                                Bett
+                                <select
+                                  className="ml-1 w-full"
+                                  value={umzugZiel.bett_id}
+                                  disabled={!umzugZiel.zimmer_id}
+                                  onChange={(e) =>
+                                    setUmzugZiel((s) => ({
+                                      ...s,
+                                      bett_id: e.target.value,
+                                    }))
+                                  }
+                                >
+                                  <option value="">–</option>
+                                  {freieBetten(Number(umzugZiel.zimmer_id)).map(
+                                    (b) => (
+                                      <option key={b.id} value={b.id}>
+                                        {b.bezeichnung}
+                                      </option>
+                                    )
+                                  )}
+                                </select>
+                              </label>
+                              <label className="block">
+                                Umzug am
+                                <input
+                                  type="date"
+                                  className="ml-1"
+                                  value={umzugZiel.datum}
+                                  onChange={(e) =>
+                                    setUmzugZiel((s) => ({
+                                      ...s,
+                                      datum: e.target.value,
+                                    }))
+                                  }
+                                />
+                              </label>
+                              <div className="flex gap-2">
+                                <button className="btn" onClick={umzugAusfuehren}>
+                                  Umzug eintragen
+                                </button>
+                                <button
+                                  className="btn-secondary"
+                                  onClick={() => setUmzug(null)}
+                                >
+                                  Abbrechen
+                                </button>
+                              </div>
+                            </div>
+                          </div>
+                        )}
+
+                        {canEditPlan &&
+                          !umzug &&
+                          freieBetten(sel.zimmer_id).length > 0 && (
+                            <details className="mt-3 rounded border border-neutral-200 p-2 text-sm">
+                              <summary className="cursor-pointer font-medium text-neutral-700">
+                                Direkt belegen (ohne Übergabe)
+                              </summary>
+                              <div className="mt-2 space-y-2">
+                                {(zuordnungProZimmer[sel.zimmer_id] ?? []).length >
+                                  0 && (
+                                  <div>
+                                    <div className="text-xs text-neutral-500">
+                                      Für dieses Zimmer geplant
+                                    </div>
+                                    <div className="mt-1 flex flex-wrap gap-1.5">
+                                      {(
+                                        zuordnungProZimmer[sel.zimmer_id] ?? []
+                                      ).map((z) => {
+                                        const frei = freieBetten(sel.zimmer_id);
+                                        return (
+                                          <button
+                                            key={z.id}
+                                            disabled={frei.length === 0}
+                                            onClick={() =>
+                                              belegungDirekt(
+                                                z.employee_id,
+                                                frei[0].id,
+                                                z.id
+                                              )
+                                            }
+                                            className="rounded border border-amber-300 bg-amber-50 px-2 py-0.5 text-xs text-amber-800 disabled:opacity-40"
+                                          >
+                                            {z.vorname} {z.name} → Bett{" "}
+                                            {frei[0]?.bezeichnung ?? "–"}
+                                          </button>
+                                        );
+                                      })}
+                                    </div>
+                                  </div>
+                                )}
+                                <label className="block">
+                                  Bett
+                                  <select
+                                    className="ml-1"
+                                    value={direkt?.bett_id ?? ""}
+                                    onChange={(e) =>
+                                      setDirekt((s) => ({
+                                        suche: s?.suche ?? "",
+                                        bett_id: e.target.value,
+                                      }))
+                                    }
+                                  >
+                                    <option value="">–</option>
+                                    {freieBetten(sel.zimmer_id).map((b) => (
+                                      <option key={b.id} value={b.id}>
+                                        {b.bezeichnung}
+                                      </option>
+                                    ))}
+                                  </select>
+                                </label>
+                                <input
+                                  className="w-full text-sm"
+                                  placeholder="Person suchen (Name / Nr.)"
+                                  value={direkt?.suche ?? ""}
+                                  onChange={(e) =>
+                                    setDirekt((s) => ({
+                                      bett_id: s?.bett_id ?? "",
+                                      suche: e.target.value,
+                                    }))
+                                  }
+                                />
+                                {direkt?.suche.trim() && (
+                                  <ul className="max-h-40 space-y-0.5 overflow-y-auto text-sm">
+                                    {personenOffen
+                                      .filter((p) =>
+                                        `${p.vorname} ${p.name} ${p.personal_nr}`
+                                          .toLowerCase()
+                                          .includes(
+                                            direkt.suche.trim().toLowerCase()
+                                          )
+                                      )
+                                      .slice(0, 12)
+                                      .map((p) => (
+                                        <li key={p.employee_id}>
+                                          <button
+                                            disabled={!direkt?.bett_id}
+                                            onClick={() =>
+                                              belegungDirekt(
+                                                p.employee_id,
+                                                Number(direkt!.bett_id)
+                                              )
+                                            }
+                                            className="w-full rounded px-1 py-0.5 text-left hover:bg-neutral-100 disabled:opacity-40"
+                                          >
+                                            {p.vorname} {p.name}{" "}
+                                            <span className="text-neutral-400">
+                                              ({p.personal_nr})
+                                            </span>
+                                            {p.auf_anreiseliste ? (
+                                              <span className="ml-1 rounded bg-emerald-100 px-1 text-xs text-emerald-800">
+                                                Anreise
+                                              </span>
+                                            ) : null}
+                                          </button>
+                                        </li>
+                                      ))}
+                                  </ul>
+                                )}
+                                {!direkt?.bett_id && (
+                                  <p className="text-xs text-neutral-400">
+                                    Erst ein Bett wählen, dann die Person.
+                                  </p>
+                                )}
+                              </div>
+                            </details>
+                          )}
                       </>
                     )}
 
@@ -1006,6 +1665,14 @@ export default function UnterkunftGrundrissPage() {
                       <Link className="btn-secondary" href="/unterkunft/maengel">
                         Mängel
                       </Link>
+                      {canManage && (
+                        <button
+                          className="btn-secondary"
+                          onClick={() => sperreSetzen(sel, !sel.gesperrt)}
+                        >
+                          {sel.gesperrt ? "Entsperren" : "Sperren"}
+                        </button>
+                      )}
                     </div>
 
                     {bearbeiten && canEditPlan && sel.plan_x != null && (

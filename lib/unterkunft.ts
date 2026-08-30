@@ -128,13 +128,43 @@ export const KONTROLL_AMPEL_FARBE: Record<KontrollAmpel, string> = {
 export function herkunftMix(
   personen: ReadonlyArray<{ herkunft: string | null }>
 ): string {
+  return herkunftZaehler(personen)
+    .map(([k, n]) => `${k} ${n}`)
+    .join(" · ");
+}
+
+// Herkunft -> Anzahl, häufigste zuerst. Ohne Herkunft -> "?".
+export function herkunftZaehler(
+  personen: ReadonlyArray<{ herkunft: string | null }>
+): Array<[string, number]> {
   const zaehler = new Map<string, number>();
   for (const p of personen) {
     const k = p.herkunft?.trim() || "?";
     zaehler.set(k, (zaehler.get(k) ?? 0) + 1);
   }
-  return [...zaehler.entries()]
-    .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
-    .map(([k, n]) => `${k} ${n}`)
-    .join(" · ");
+  return [...zaehler.entries()].sort(
+    (a, b) => b[1] - a[1] || a[0].localeCompare(b[0])
+  );
+}
+
+// Häufigste Herkunft einer Personenliste (für die Herkunfts-Ansicht im
+// Grundriss). Leere Liste -> null.
+export function herkunftDominant(
+  personen: ReadonlyArray<{ herkunft: string | null }>
+): string | null {
+  const z = herkunftZaehler(personen);
+  return z.length > 0 ? z[0][0] : null;
+}
+
+// Deterministische, gut unterscheidbare Pastellfarbe je Herkunft (HSL über
+// einen einfachen String-Hash). "?" / leer -> neutrales Grau.
+export function herkunftFarbe(herkunft: string | null): {
+  fill: string;
+  stroke: string;
+} {
+  const k = herkunft?.trim();
+  if (!k || k === "?") return { fill: "#f1f5f9", stroke: "#94a3b8" };
+  let h = 0;
+  for (let i = 0; i < k.length; i++) h = (h * 31 + k.charCodeAt(i)) % 360;
+  return { fill: `hsl(${h} 70% 88%)`, stroke: `hsl(${h} 55% 55%)` };
 }

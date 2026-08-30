@@ -4999,6 +4999,10 @@ create table unterkunft_zimmer (
   -- unterkunft_bett-Zeilen.
   bettenzahl int,
   notiz text,
+  -- Sperre (Migration 2026-09-03): Wasserschaden, Renovierung, Quarantäne.
+  -- Ein gesperrter Raum zählt in der Kapazität nicht mehr als "frei".
+  gesperrt boolean not null default false,
+  sperr_grund text,
   aktiv boolean not null default true,
   erstellt_von uuid references profiles (id) default auth.uid(),
   erstellt_am timestamptz not null default now(),
@@ -5261,6 +5265,7 @@ grant select on unterkunft_belegung_aktuell to authenticated;
 create view unterkunft_zimmer_uebersicht as
 select
   z.id as zimmer_id, z.nummer, z.art, z.aktiv, z.notiz,
+  z.gesperrt, z.sperr_grund,
   z.wohneinheit_id, w.name as wohneinheit_name, w.etage_label,
   w.reihenfolge as wohneinheit_reihenfolge,
   z.plan_x, z.plan_y, z.plan_w, z.plan_h,
@@ -5299,7 +5304,7 @@ left join (
   group by zimmer_id
 ) zu on zu.zimmer_id = z.id
 group by
-  z.id, z.nummer, z.art, z.aktiv, z.notiz,
+  z.id, z.nummer, z.art, z.aktiv, z.notiz, z.gesperrt, z.sperr_grund,
   z.wohneinheit_id, w.name, w.etage_label, w.reihenfolge,
   z.plan_x, z.plan_y, z.plan_w, z.plan_h,
   g.id, g.name,

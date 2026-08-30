@@ -1255,6 +1255,9 @@ export interface UnterkunftZimmer {
   // den unterkunft_bett-Zeilen.
   bettenzahl: number | null;
   notiz: string | null;
+  // Sperre (Migration 2026-09-03): Wasserschaden/Renovierung/Quarantäne.
+  gesperrt: boolean;
+  sperr_grund: string | null;
   aktiv: boolean;
   erstellt_von: string | null;
   erstellt_am: string;
@@ -1513,6 +1516,8 @@ export interface UnterkunftZimmerUebersicht {
   art: UnterkunftZimmerArt;
   aktiv: boolean;
   notiz: string | null;
+  gesperrt: boolean;
+  sperr_grund: string | null;
   wohneinheit_id: number | null;
   wohneinheit_name: string | null;
   etage_label: string | null;
