@@ -1251,9 +1251,8 @@ export interface UnterkunftZimmer {
   plan_y: number | null;
   plan_w: number;
   plan_h: number;
-  // Soll-Bettenzahl (Planungshinweis) - die echte Kapazität ergibt sich aus
-  // den unterkunft_bett-Zeilen.
-  bettenzahl: number | null;
+  // Anzahl Schlafplätze = Kapazität des Zimmers (Belegung ist zimmergenau).
+  bettenzahl: number;
   notiz: string | null;
   // Sperre (Migration 2026-09-03): Wasserschaden/Renovierung/Quarantäne.
   gesperrt: boolean;
@@ -1265,18 +1264,9 @@ export interface UnterkunftZimmer {
   updated_at: string;
 }
 
-export interface UnterkunftBett {
-  id: number;
-  zimmer_id: number;
-  bezeichnung: string;
-  aktiv: boolean;
-  erstellt_von: string | null;
-  erstellt_am: string;
-}
-
 export interface UnterkunftBelegung {
   id: number;
-  bett_id: number;
+  zimmer_id: number;
   employee_id: string;
   von: string;
   // Offen (noch nicht ausgezogen), solange null.
@@ -1290,7 +1280,6 @@ export interface UnterkunftBelegung {
 // Personendaten.
 export interface UnterkunftBelegungAktuell {
   id: number;
-  bett_id: number;
   zimmer_id: number;
   wohneinheit_id: number | null;
   employee_id: string;
@@ -1304,14 +1293,13 @@ export interface UnterkunftBelegungAktuell {
 }
 
 // Aus der Sicht unterkunft_belegung_person - alle Belegungszeiträume einer
-// Person mit Gebäude/Wohneinheit/Zimmer/Bett (für den Suche-Block).
+// Person mit Gebäude/Wohneinheit/Zimmer (für den Suche-Block).
 export interface UnterkunftBelegungPerson {
   id: number;
   employee_id: string;
   von: string;
   bis: string | null;
   notiz: string | null;
-  bett: string;
   zimmer_id: number;
   zimmer_nummer: string;
   wohneinheit_id: number | null;

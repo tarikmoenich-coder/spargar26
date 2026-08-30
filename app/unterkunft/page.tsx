@@ -29,7 +29,6 @@ import {
 import {
   UNTERKUNFT_VORGANG_TYP_LABELS,
   type UnterkunftBelegungAktuell,
-  type UnterkunftBett,
   type UnterkunftGebaeude,
   type UnterkunftPersonOffen,
   type UnterkunftWohneinheitUebersicht,
@@ -186,7 +185,6 @@ export default function UnterkunftGrundrissPage() {
   const [gebaeude, setGebaeude] = useState<UnterkunftGebaeude[]>([]);
   const [einheiten, setEinheiten] = useState<UnterkunftWohneinheitUebersicht[]>([]);
   const [zimmer, setZimmer] = useState<UnterkunftZimmerUebersicht[]>([]);
-  const [betten, setBetten] = useState<UnterkunftBett[]>([]);
   const [belegungen, setBelegungen] = useState<UnterkunftBelegungAktuell[]>([]);
   const [zuordnungen, setZuordnungen] = useState<UnterkunftZuordnungOffen[]>([]);
   const [personenOffen, setPersonenOffen] = useState<UnterkunftPersonOffen[]>([]);
@@ -207,25 +205,21 @@ export default function UnterkunftGrundrissPage() {
   const [umzugZiel, setUmzugZiel] = useState({
     wohneinheit_id: "",
     zimmer_id: "",
-    bett_id: "",
     datum: heuteIso(),
   });
   // Direkt belegen (nur admin), ohne Übergabe
-  const [direkt, setDirekt] = useState<{ suche: string; bett_id: string } | null>(
-    null
-  );
+  const [direkt, setDirekt] = useState<{ suche: string } | null>(null);
 
   const laden = useCallback(async () => {
     setLoading(true);
     const supabase = getSupabaseClient();
-    const [g, e, z, bt, b, zu, po] = await Promise.all([
+    const [g, e, z, b, zu, po] = await Promise.all([
       supabase.from("unterkunft_gebaeude").select("*").order("name"),
       supabase
         .from("unterkunft_wohneinheit_uebersicht")
         .select("*")
         .order("reihenfolge"),
       supabase.from("unterkunft_zimmer_uebersicht").select("*").order("nummer"),
-      supabase.from("unterkunft_bett").select("*").eq("aktiv", true),
       supabase.from("unterkunft_belegung_aktuell").select("*"),
       supabase.from("unterkunft_zuordnung_offen").select("*"),
       supabase.from("unterkunft_person_offen").select("*").order("name"),
@@ -233,7 +227,6 @@ export default function UnterkunftGrundrissPage() {
     setGebaeude((g.data as UnterkunftGebaeude[]) ?? []);
     setEinheiten((e.data as UnterkunftWohneinheitUebersicht[]) ?? []);
     setZimmer((z.data as UnterkunftZimmerUebersicht[]) ?? []);
-    setBetten((bt.data as UnterkunftBett[]) ?? []);
     setBelegungen((b.data as UnterkunftBelegungAktuell[]) ?? []);
     setZuordnungen((zu.data as UnterkunftZuordnungOffen[]) ?? []);
     setPersonenOffen((po.data as UnterkunftPersonOffen[]) ?? []);
@@ -374,25 +367,6 @@ export default function UnterkunftGrundrissPage() {
     return { rooms: rooms.length, betten, belegt, schwebend, frei, gesperrt, ueber };
   }, [zimmer, gebaeudeId]);
 
-  // Freie (heute unbelegte) Betten eines Zimmers.
-  const freieBetten = useCallback(
-    (zimmerId: number) => {
-      const belegt = new Set(
-        belegungen.filter((b) => b.zimmer_id === zimmerId).map((b) => b.bett_id)
-      );
-      return betten.filter(
-        (b) => b.zimmer_id === zimmerId && !belegt.has(b.id)
-      );
-    },
-    [belegungen, betten]
-  );
-
-  function doppelMsg(m: string): string {
-    return m.includes("unterkunft_belegung_kein_doppel")
-      ? "Dieses Bett ist im gewählten Zeitraum bereits belegt."
-      : m;
-  }
-
   // Zimmer/Raum sperren oder entsperren (admin/hr).
   async function sperreSetzen(z: UnterkunftZimmerUebersicht, sperren: boolean) {
     let grund: string | null = null;
@@ -438,7 +412,6 @@ export default function UnterkunftGrundrissPage() {
     setUmzugZiel({
       wohneinheit_id: einheitId ? String(einheitId) : "",
       zimmer_id: "",
-      bett_id: "",
       datum: heuteIso(),
     });
   }
@@ -448,10 +421,10 @@ export default function UnterkunftGrundrissPage() {
   // löst sich am Folgetag auf).
   async function umzugAusfuehren() {
     if (!umzug) return;
-    const bettId = Number(umzugZiel.bett_id);
+    const zielId = Number(umzugZiel.zimmer_id);
     const datum = umzugZiel.datum;
-    if (!bettId || !datum) {
-      setFehler("Zielbett und Umzugsdatum wählen.");
+    if (!zielId || !datum) {
+      setFehler("Zielzimmer und Umzugsdatum wählen.");
       return;
     }
     if (datum < umzug.vonDatum) {
@@ -463,13 +436,13 @@ export default function UnterkunftGrundrissPage() {
     setFehler(null);
     const sb = getSupabaseClient();
     const { error: e1 } = await sb.from("unterkunft_belegung").insert({
-      bett_id: bettId,
+      zimmer_id: zielId,
       employee_id: umzug.employeeId,
       von: datum,
       notiz: `Umzug aus Zimmer ${umzug.vonZimmer}`,
     });
     if (e1) {
-      setFehler(doppelMsg(e1.message));
+      setFehler(e1.message);
       return;
     }
     const { error: e2 } = await sb
@@ -488,18 +461,18 @@ export default function UnterkunftGrundrissPage() {
   // Zuordnung mitschließen.
   async function belegungDirekt(
     employeeId: string,
-    bettId: number,
+    zimmerId: number,
     zuordnungId?: number
   ) {
     setFehler(null);
     const sb = getSupabaseClient();
     const { data, error } = await sb
       .from("unterkunft_belegung")
-      .insert({ bett_id: bettId, employee_id: employeeId, von: heuteIso() })
+      .insert({ zimmer_id: zimmerId, employee_id: employeeId, von: heuteIso() })
       .select("id")
       .single();
     if (error) {
-      setFehler(doppelMsg(error.message));
+      setFehler(error.message);
       return;
     }
     if (zuordnungId != null) {
@@ -1428,7 +1401,6 @@ export default function UnterkunftGrundrissPage() {
                                       ...s,
                                       wohneinheit_id: e.target.value,
                                       zimmer_id: "",
-                                      bett_id: "",
                                     }))
                                   }
                                 >
@@ -1454,7 +1426,6 @@ export default function UnterkunftGrundrissPage() {
                                     setUmzugZiel((s) => ({
                                       ...s,
                                       zimmer_id: e.target.value,
-                                      bett_id: "",
                                     }))
                                   }
                                 >
@@ -1471,32 +1442,10 @@ export default function UnterkunftGrundrissPage() {
                                     )
                                     .map((z) => (
                                       <option key={z.zimmer_id} value={z.zimmer_id}>
-                                        {z.nummer} ({z.frei} frei)
+                                        {z.nummer} — {z.belegt}/{z.betten}
+                                        {z.frei > 0 ? ` · ${z.frei} frei` : " · voll"}
                                       </option>
                                     ))}
-                                </select>
-                              </label>
-                              <label className="block">
-                                Bett
-                                <select
-                                  className="ml-1 w-full"
-                                  value={umzugZiel.bett_id}
-                                  disabled={!umzugZiel.zimmer_id}
-                                  onChange={(e) =>
-                                    setUmzugZiel((s) => ({
-                                      ...s,
-                                      bett_id: e.target.value,
-                                    }))
-                                  }
-                                >
-                                  <option value="">–</option>
-                                  {freieBetten(Number(umzugZiel.zimmer_id)).map(
-                                    (b) => (
-                                      <option key={b.id} value={b.id}>
-                                        {b.bezeichnung}
-                                      </option>
-                                    )
-                                  )}
                                 </select>
                               </label>
                               <label className="block">
@@ -1528,122 +1477,92 @@ export default function UnterkunftGrundrissPage() {
                           </div>
                         )}
 
-                        {canEditPlan &&
-                          !umzug &&
-                          freieBetten(sel.zimmer_id).length > 0 && (
-                            <details className="mt-3 rounded border border-neutral-200 p-2 text-sm">
-                              <summary className="cursor-pointer font-medium text-neutral-700">
-                                Direkt belegen (ohne Übergabe)
-                              </summary>
-                              <div className="mt-2 space-y-2">
-                                {(zuordnungProZimmer[sel.zimmer_id] ?? []).length >
-                                  0 && (
-                                  <div>
-                                    <div className="text-xs text-neutral-500">
-                                      Für dieses Zimmer geplant
-                                    </div>
-                                    <div className="mt-1 flex flex-wrap gap-1.5">
-                                      {(
-                                        zuordnungProZimmer[sel.zimmer_id] ?? []
-                                      ).map((z) => {
-                                        const frei = freieBetten(sel.zimmer_id);
-                                        return (
-                                          <button
-                                            key={z.id}
-                                            disabled={frei.length === 0}
-                                            onClick={() =>
-                                              belegungDirekt(
-                                                z.employee_id,
-                                                frei[0].id,
-                                                z.id
-                                              )
-                                            }
-                                            className="rounded border border-amber-300 bg-amber-50 px-2 py-0.5 text-xs text-amber-800 disabled:opacity-40"
-                                          >
-                                            {z.vorname} {z.name} → Bett{" "}
-                                            {frei[0]?.bezeichnung ?? "–"}
-                                          </button>
-                                        );
-                                      })}
-                                    </div>
+                        {canEditPlan && !umzug && (
+                          <details className="mt-3 rounded border border-neutral-200 p-2 text-sm">
+                            <summary className="cursor-pointer font-medium text-neutral-700">
+                              Direkt belegen (ohne Übergabe)
+                            </summary>
+                            <div className="mt-2 space-y-2">
+                              {sel.frei <= 0 && (
+                                <p className="rounded bg-amber-50 px-2 py-1 text-xs text-amber-800">
+                                  Zimmer ist voll ({sel.belegt}/{sel.betten}) –
+                                  weitere Belegung ist eine Überbuchung.
+                                </p>
+                              )}
+                              {(zuordnungProZimmer[sel.zimmer_id] ?? []).length >
+                                0 && (
+                                <div>
+                                  <div className="text-xs text-neutral-500">
+                                    Für dieses Zimmer geplant
                                   </div>
-                                )}
-                                <label className="block">
-                                  Bett
-                                  <select
-                                    className="ml-1"
-                                    value={direkt?.bett_id ?? ""}
-                                    onChange={(e) =>
-                                      setDirekt((s) => ({
-                                        suche: s?.suche ?? "",
-                                        bett_id: e.target.value,
-                                      }))
-                                    }
-                                  >
-                                    <option value="">–</option>
-                                    {freieBetten(sel.zimmer_id).map((b) => (
-                                      <option key={b.id} value={b.id}>
-                                        {b.bezeichnung}
-                                      </option>
-                                    ))}
-                                  </select>
-                                </label>
-                                <input
-                                  className="w-full text-sm"
-                                  placeholder="Person suchen (Name / Nr.)"
-                                  value={direkt?.suche ?? ""}
-                                  onChange={(e) =>
-                                    setDirekt((s) => ({
-                                      bett_id: s?.bett_id ?? "",
-                                      suche: e.target.value,
-                                    }))
-                                  }
-                                />
-                                {direkt?.suche.trim() && (
-                                  <ul className="max-h-40 space-y-0.5 overflow-y-auto text-sm">
-                                    {personenOffen
-                                      .filter((p) =>
-                                        `${p.vorname} ${p.name} ${p.personal_nr}`
-                                          .toLowerCase()
-                                          .includes(
-                                            direkt.suche.trim().toLowerCase()
-                                          )
+                                  <div className="mt-1 flex flex-wrap gap-1.5">
+                                    {(zuordnungProZimmer[sel.zimmer_id] ?? []).map(
+                                      (z) => (
+                                        <button
+                                          key={z.id}
+                                          onClick={() =>
+                                            belegungDirekt(
+                                              z.employee_id,
+                                              sel.zimmer_id,
+                                              z.id
+                                            )
+                                          }
+                                          className="rounded border border-amber-300 bg-amber-50 px-2 py-0.5 text-xs text-amber-800"
+                                        >
+                                          {z.vorname} {z.name} einziehen
+                                        </button>
                                       )
-                                      .slice(0, 12)
-                                      .map((p) => (
-                                        <li key={p.employee_id}>
-                                          <button
-                                            disabled={!direkt?.bett_id}
-                                            onClick={() =>
-                                              belegungDirekt(
-                                                p.employee_id,
-                                                Number(direkt!.bett_id)
-                                              )
-                                            }
-                                            className="w-full rounded px-1 py-0.5 text-left hover:bg-neutral-100 disabled:opacity-40"
-                                          >
-                                            {p.vorname} {p.name}{" "}
-                                            <span className="text-neutral-400">
-                                              ({p.personal_nr})
+                                    )}
+                                  </div>
+                                </div>
+                              )}
+                              <input
+                                className="w-full text-sm"
+                                placeholder="Person suchen (Name / Nr.)"
+                                value={direkt?.suche ?? ""}
+                                onChange={(e) =>
+                                  setDirekt({ suche: e.target.value })
+                                }
+                              />
+                              {direkt?.suche.trim() && (
+                                <ul className="max-h-40 space-y-0.5 overflow-y-auto text-sm">
+                                  {personenOffen
+                                    .filter((p) =>
+                                      `${p.vorname} ${p.name} ${p.personal_nr}`
+                                        .toLowerCase()
+                                        .includes(
+                                          direkt.suche.trim().toLowerCase()
+                                        )
+                                    )
+                                    .slice(0, 12)
+                                    .map((p) => (
+                                      <li key={p.employee_id}>
+                                        <button
+                                          onClick={() =>
+                                            belegungDirekt(
+                                              p.employee_id,
+                                              sel.zimmer_id
+                                            )
+                                          }
+                                          className="w-full rounded px-1 py-0.5 text-left hover:bg-neutral-100"
+                                        >
+                                          {p.vorname} {p.name}{" "}
+                                          <span className="text-neutral-400">
+                                            ({p.personal_nr})
+                                          </span>
+                                          {p.auf_anreiseliste ? (
+                                            <span className="ml-1 rounded bg-emerald-100 px-1 text-xs text-emerald-800">
+                                              Anreise
                                             </span>
-                                            {p.auf_anreiseliste ? (
-                                              <span className="ml-1 rounded bg-emerald-100 px-1 text-xs text-emerald-800">
-                                                Anreise
-                                              </span>
-                                            ) : null}
-                                          </button>
-                                        </li>
-                                      ))}
-                                  </ul>
-                                )}
-                                {!direkt?.bett_id && (
-                                  <p className="text-xs text-neutral-400">
-                                    Erst ein Bett wählen, dann die Person.
-                                  </p>
-                                )}
-                              </div>
-                            </details>
-                          )}
+                                          ) : null}
+                                        </button>
+                                      </li>
+                                    ))}
+                                </ul>
+                              )}
+                            </div>
+                          </details>
+                        )}
                       </>
                     )}
 

@@ -21,7 +21,6 @@ import {
   UNTERKUNFT_POSITION_ZUSTAND_LABELS,
   UNTERKUNFT_VORGANG_TYP_LABELS,
   type UnterkunftBelegungAktuell,
-  type UnterkunftBett,
   type UnterkunftChecklisteVorlage,
   type UnterkunftGebaeude,
   type UnterkunftGesamtzustand,
@@ -47,7 +46,6 @@ export default function UnterkunftUebergabePage() {
 
   const [gebaeude, setGebaeude] = useState<UnterkunftGebaeude[]>([]);
   const [zimmer, setZimmer] = useState<UnterkunftZimmer[]>([]);
-  const [betten, setBetten] = useState<UnterkunftBett[]>([]);
   const [employees, setEmployees] = useState<
     { id: string; personal_nr: string; name: string; vorname: string; aktiv: boolean }[]
   >([]);
@@ -67,10 +65,10 @@ export default function UnterkunftUebergabePage() {
     belegung_id: "",
   });
 
-  // Einzug: Personen (aus schwebenden Zuordnungen vorbelegt) + Bett je Person.
-  // key = employee_id, wert = bett_id ("" = noch offen). Wird beim Abschließen
-  // in unterkunft_belegung geschrieben und die Zuordnung geschlossen.
-  const [einzug, setEinzug] = useState<Record<string, string>>({});
+  // Einzug: Personen (aus schwebenden Zuordnungen vorbelegt). Beim Abschließen
+  // wird je Person die zimmergenaue unterkunft_belegung angelegt und die
+  // schwebende Zuordnung geschlossen.
+  const [einzug, setEinzug] = useState<Set<string>>(new Set());
   const [personSuche, setPersonSuche] = useState("");
 
   // Laufender Vorgang
@@ -89,10 +87,9 @@ export default function UnterkunftUebergabePage() {
   const laden = useCallback(async () => {
     setLoading(true);
     const supabase = getSupabaseClient();
-    const [g, z, bt, emp, v, bl, zu, lv] = await Promise.all([
+    const [g, z, emp, v, bl, zu, lv] = await Promise.all([
       supabase.from("unterkunft_gebaeude").select("*").eq("aktiv", true).order("name"),
       supabase.from("unterkunft_zimmer").select("*").eq("aktiv", true).order("nummer"),
-      supabase.from("unterkunft_bett").select("*").eq("aktiv", true).order("bezeichnung"),
       supabase
         .from("employees")
         .select("id, personal_nr, name, vorname, aktiv")
@@ -112,7 +109,6 @@ export default function UnterkunftUebergabePage() {
     ]);
     setGebaeude((g.data as UnterkunftGebaeude[]) ?? []);
     setZimmer((z.data as UnterkunftZimmer[]) ?? []);
-    setBetten((bt.data as UnterkunftBett[]) ?? []);
     setEmployees((emp.data as typeof employees) ?? []);
     setVorlage((v.data as UnterkunftChecklisteVorlage[]) ?? []);
     setBelegungen((bl.data as UnterkunftBelegungAktuell[]) ?? []);
@@ -159,29 +155,28 @@ export default function UnterkunftUebergabePage() {
     (b) => String(b.zimmer_id) === sel.zimmer_id
   );
 
-  // Freie Betten des gewählten Zimmers (nicht heute belegt).
-  const freieBetten = useMemo(() => {
-    if (!sel.zimmer_id) return [];
+  // Belegung des gewählten Zimmers heute (für die Kapazitäts-Anzeige).
+  const zimmerKapazitaet = useMemo(() => {
+    if (!sel.zimmer_id) return null;
     const zid = Number(sel.zimmer_id);
-    const belegt = new Set(belegungen.map((b) => b.bett_id));
-    return betten.filter((b) => b.zimmer_id === zid && !belegt.has(b.id));
-  }, [betten, belegungen, sel.zimmer_id]);
+    const z = zimmer.find((x) => x.id === zid);
+    const belegt = belegungen.filter((b) => b.zimmer_id === zid).length;
+    return { plaetze: z?.bettenzahl ?? 0, belegt };
+  }, [zimmer, belegungen, sel.zimmer_id]);
 
   // Beim Wählen eines Zimmers für einen Einzug: schwebende Zuordnungen dieses
   // Zimmers als Personen-Vorschlag übernehmen.
   useEffect(() => {
     if (sel.typ !== "einzug" || !sel.zimmer_id) {
-      setEinzug({});
+      setEinzug(new Set());
       return;
     }
     const zid = Number(sel.zimmer_id);
-    const vorbelegt: Record<string, string> = {};
-    zuordnungen
-      .filter((z) => z.zimmer_id === zid)
-      .forEach((z) => {
-        vorbelegt[z.employee_id] = "";
-      });
-    setEinzug(vorbelegt);
+    setEinzug(
+      new Set(
+        zuordnungen.filter((z) => z.zimmer_id === zid).map((z) => z.employee_id)
+      )
+    );
   }, [sel.typ, sel.zimmer_id, zuordnungen]);
 
   function personName(employeeId: string): string {
@@ -345,30 +340,21 @@ export default function UnterkunftUebergabePage() {
       return;
     }
 
-    // Einzug: je Person die bettgenaue Belegung anlegen und die schwebende
-    // Zuordnung schließen. Personen ohne gewähltes Bett werden übersprungen.
+    // Einzug: je Person die zimmergenaue Belegung anlegen und die schwebende
+    // Zuordnung schließen.
     if (vorgang.typ === "einzug") {
-      const ohneBett: string[] = [];
-      for (const [employeeId, bettId] of Object.entries(einzug)) {
-        if (!bettId) {
-          ohneBett.push(personName(employeeId));
-          continue;
-        }
+      for (const employeeId of einzug) {
         const { data: bel, error: bErr } = await supabase
           .from("unterkunft_belegung")
           .insert({
-            bett_id: Number(bettId),
+            zimmer_id: vorgang.zimmer_id,
             employee_id: employeeId,
             von: heuteIso(),
           })
           .select("id")
           .single();
         if (bErr) {
-          setFehler(
-            bErr.message.includes("unterkunft_belegung_kein_doppel")
-              ? `Bett von ${personName(employeeId)} ist schon belegt.`
-              : `Belegung ${personName(employeeId)}: ${bErr.message}`
-          );
+          setFehler(`Belegung ${personName(employeeId)}: ${bErr.message}`);
           continue;
         }
         await supabase
@@ -380,11 +366,6 @@ export default function UnterkunftUebergabePage() {
           })
           .eq("employee_id", employeeId)
           .eq("status", "schwebend");
-      }
-      if (ohneBett.length > 0) {
-        setHinweis(
-          `Ohne Bett übersprungen: ${ohneBett.join(", ")} – unter „Belegung“ nachtragen.`
-        );
       }
     }
 
@@ -405,7 +386,7 @@ export default function UnterkunftUebergabePage() {
     }
 
     setHinweis((h) => h ?? "Vorgang abgeschlossen.");
-    setEinzug({});
+    setEinzug(new Set());
     setDirty(false);
     setVorgang(null);
     setPositionen([]);
@@ -542,18 +523,31 @@ export default function UnterkunftUebergabePage() {
             {sel.typ === "einzug" && sel.zimmer_id && (
               <div className="mt-2 space-y-2 rounded border border-emerald-200 bg-emerald-50/50 p-2">
                 <div className="text-sm font-medium">
-                  Personen für den Einzug ({Object.keys(einzug).length})
+                  Personen für den Einzug ({einzug.size})
+                  {zimmerKapazitaet && (
+                    <span className="ml-2 font-normal text-neutral-500">
+                      Zimmer: {zimmerKapazitaet.belegt}/{zimmerKapazitaet.plaetze}{" "}
+                      Plätze belegt
+                    </span>
+                  )}
                 </div>
                 <p className="text-xs text-neutral-500">
                   Beim Abschließen wird je Person die Belegung angelegt und die
                   schwebende Zuordnung geschlossen.
                 </p>
-                {Object.keys(einzug).length === 0 && (
+                {zimmerKapazitaet &&
+                  zimmerKapazitaet.belegt + einzug.size >
+                    zimmerKapazitaet.plaetze && (
+                    <p className="rounded bg-amber-100 px-2 py-1 text-xs text-amber-800">
+                      Mehr Personen als Schlafplätze – Überbuchung.
+                    </p>
+                  )}
+                {einzug.size === 0 && (
                   <p className="text-sm text-neutral-400">
                     keine geplanten Personen – unten per Namen hinzufügen.
                   </p>
                 )}
-                {Object.entries(einzug).map(([empId, bettId]) => (
+                {[...einzug].map((empId) => (
                   <div
                     key={empId}
                     className="flex flex-wrap items-center gap-2 text-sm"
@@ -561,29 +555,12 @@ export default function UnterkunftUebergabePage() {
                     <span className="min-w-[10rem] font-medium">
                       {personName(empId)}
                     </span>
-                    <label>
-                      Bett
-                      <select
-                        className="ml-1"
-                        value={bettId}
-                        onChange={(e) =>
-                          setEinzug((s) => ({ ...s, [empId]: e.target.value }))
-                        }
-                      >
-                        <option value="">– wählen –</option>
-                        {freieBetten.map((b) => (
-                          <option key={b.id} value={b.id}>
-                            {b.bezeichnung}
-                          </option>
-                        ))}
-                      </select>
-                    </label>
                     <button
                       className="text-xs text-red-600 hover:underline"
                       onClick={() =>
                         setEinzug((s) => {
-                          const n = { ...s };
-                          delete n[empId];
+                          const n = new Set(s);
+                          n.delete(empId);
                           return n;
                         })
                       }
@@ -605,7 +582,7 @@ export default function UnterkunftUebergabePage() {
                         .filter(
                           (e) =>
                             e.aktiv &&
-                            !(e.id in einzug) &&
+                            !einzug.has(e.id) &&
                             `${e.vorname} ${e.name} ${e.personal_nr}`
                               .toLowerCase()
                               .includes(personSuche.trim().toLowerCase())
@@ -616,7 +593,7 @@ export default function UnterkunftUebergabePage() {
                             key={e.id}
                             className="rounded border border-neutral-300 px-2 py-0.5 text-xs hover:border-emerald-500"
                             onClick={() => {
-                              setEinzug((s) => ({ ...s, [e.id]: "" }));
+                              setEinzug((s) => new Set(s).add(e.id));
                               setPersonSuche("");
                             }}
                           >

@@ -18,7 +18,6 @@ import { formatDatumDE } from "@/lib/format";
 import { belegungLaeuft, heuteIso } from "@/lib/unterkunft";
 import type {
   UnterkunftBelegung,
-  UnterkunftBett,
   UnterkunftGebaeude,
   UnterkunftPersonOffen,
   UnterkunftWohneinheitUebersicht,
@@ -41,7 +40,6 @@ export default function UnterkunftBelegungPage() {
   const [gebaeude, setGebaeude] = useState<UnterkunftGebaeude[]>([]);
   const [einheiten, setEinheiten] = useState<UnterkunftWohneinheitUebersicht[]>([]);
   const [zimmer, setZimmer] = useState<UnterkunftZimmer[]>([]);
-  const [betten, setBetten] = useState<UnterkunftBett[]>([]);
   const [belegungen, setBelegungen] = useState<UnterkunftBelegung[]>([]);
   const [employees, setEmployees] = useState<EmployeeMini[]>([]);
   const [personenOffen, setPersonenOffen] = useState<UnterkunftPersonOffen[]>([]);
@@ -65,7 +63,6 @@ export default function UnterkunftBelegungPage() {
   const [neu, setNeu] = useState({
     gebaeude_id: "",
     zimmer_id: "",
-    bett_id: "",
     employee_id: "",
     von: heuteIso(),
     bis: "",
@@ -75,14 +72,13 @@ export default function UnterkunftBelegungPage() {
   const laden = useCallback(async () => {
     setLoading(true);
     const supabase = getSupabaseClient();
-    const [g, w, z, b, bl, e, po, zu] = await Promise.all([
+    const [g, w, z, bl, e, po, zu] = await Promise.all([
       supabase.from("unterkunft_gebaeude").select("*").eq("aktiv", true).order("name"),
       supabase
         .from("unterkunft_wohneinheit_uebersicht")
         .select("*")
         .order("reihenfolge"),
       supabase.from("unterkunft_zimmer").select("*").eq("aktiv", true).order("nummer"),
-      supabase.from("unterkunft_bett").select("*").eq("aktiv", true).order("bezeichnung"),
       supabase.from("unterkunft_belegung").select("*").order("von", { ascending: false }),
       supabase
         .from("employees")
@@ -94,7 +90,6 @@ export default function UnterkunftBelegungPage() {
     setGebaeude((g.data as UnterkunftGebaeude[]) ?? []);
     setEinheiten((w.data as UnterkunftWohneinheitUebersicht[]) ?? []);
     setZimmer((z.data as UnterkunftZimmer[]) ?? []);
-    setBetten((b.data as UnterkunftBett[]) ?? []);
     setBelegungen((bl.data as UnterkunftBelegung[]) ?? []);
     setEmployees((e.data as EmployeeMini[]) ?? []);
     setPersonenOffen((po.data as UnterkunftPersonOffen[]) ?? []);
@@ -197,45 +192,36 @@ export default function UnterkunftBelegungPage() {
   const zimmerDesGebaeudes = zimmer.filter(
     (z) => String(z.gebaeude_id) === neu.gebaeude_id && z.art === "zimmer"
   );
-  const bettenDesZimmers = betten.filter(
-    (b) => String(b.zimmer_id) === neu.zimmer_id
-  );
 
-  function bettInfo(bettId: number): string {
-    const laufend = belegungen.find(
-      (bl) => bl.bett_id === bettId && belegungLaeuft(bl.von, bl.bis)
-    );
-    if (!laufend) return "frei";
-    const emp = employees.find((e) => e.id === laufend.employee_id);
-    return `belegt: ${emp ? `${emp.vorname} ${emp.name}` : "?"}`;
+  // Heute belegte Plätze eines Zimmers.
+  function zimmerBelegt(zimmerId: number): number {
+    return belegungen.filter(
+      (bl) => bl.zimmer_id === zimmerId && belegungLaeuft(bl.von, bl.bis)
+    ).length;
   }
 
   async function direktAnlegen() {
     setFehler(null);
-    if (!neu.bett_id || !neu.employee_id || !neu.von) {
-      setFehler("Bett, Mitarbeiter und Von-Datum sind Pflicht.");
+    if (!neu.zimmer_id || !neu.employee_id || !neu.von) {
+      setFehler("Zimmer, Mitarbeiter und Von-Datum sind Pflicht.");
       return;
     }
     const { error } = await getSupabaseClient()
       .from("unterkunft_belegung")
       .insert({
-        bett_id: Number(neu.bett_id),
+        zimmer_id: Number(neu.zimmer_id),
         employee_id: neu.employee_id,
         von: neu.von,
         bis: neu.bis || null,
         notiz: neu.notiz.trim() || null,
       });
     if (error) {
-      setFehler(
-        error.message.includes("unterkunft_belegung_kein_doppel")
-          ? "Dieses Bett ist im gewählten Zeitraum bereits belegt."
-          : error.message
-      );
+      setFehler(error.message);
       return;
     }
     setNeu((s) => ({
       ...s,
-      bett_id: "",
+      zimmer_id: "",
       employee_id: "",
       von: heuteIso(),
       bis: "",
@@ -247,19 +233,17 @@ export default function UnterkunftBelegungPage() {
   const zeilen = useMemo(() => {
     return belegungen
       .map((bl) => {
-        const bett = betten.find((x) => x.id === bl.bett_id);
-        const zim = bett ? zimmer.find((x) => x.id === bett.zimmer_id) : undefined;
+        const zim = zimmer.find((x) => x.id === bl.zimmer_id);
         const geb = zim ? gebaeude.find((x) => x.id === zim.gebaeude_id) : undefined;
         return {
           ...bl,
-          bett_bezeichnung: bett?.bezeichnung ?? "?",
           zimmer_nummer: zim?.nummer ?? "?",
           gebaeude_name: geb?.name ?? "?",
           employee: employees.find((x) => x.id === bl.employee_id),
         };
       })
       .filter((z) => !nurLaufend || z.bis === null || z.bis >= heuteIso());
-  }, [belegungen, betten, zimmer, gebaeude, employees, nurLaufend]);
+  }, [belegungen, zimmer, gebaeude, employees, nurLaufend]);
 
   async function auszugEintragen(id: number, wer: string) {
     const bis = window.prompt(`Auszugsdatum für ${wer}`, heuteIso());
@@ -540,7 +524,6 @@ export default function UnterkunftBelegungPage() {
             <tr>
               <th>Gebäude</th>
               <th>Zimmer</th>
-              <th>Bett</th>
               <th>Mitarbeiter</th>
               <th>Von</th>
               <th>Bis</th>
@@ -556,7 +539,6 @@ export default function UnterkunftBelegungPage() {
                 <tr key={z.id}>
                   <td>{z.gebaeude_name}</td>
                   <td>{z.zimmer_nummer}</td>
-                  <td>{z.bett_bezeichnung}</td>
                   <td>
                     {wer}
                     {z.employee ? ` (${z.employee.personal_nr})` : ""}
@@ -584,7 +566,7 @@ export default function UnterkunftBelegungPage() {
             })}
             {zeilen.length === 0 && (
               <tr>
-                <td colSpan={7} className="text-sm text-neutral-400">
+                <td colSpan={6} className="text-sm text-neutral-400">
                   keine Belegungen
                 </td>
               </tr>
@@ -609,7 +591,6 @@ export default function UnterkunftBelegungPage() {
                   ...s,
                   gebaeude_id: e.target.value,
                   zimmer_id: "",
-                  bett_id: "",
                 }))
               }
             >
@@ -628,29 +609,13 @@ export default function UnterkunftBelegungPage() {
               value={neu.zimmer_id}
               disabled={!neu.gebaeude_id}
               onChange={(e) =>
-                setNeu((s) => ({ ...s, zimmer_id: e.target.value, bett_id: "" }))
+                setNeu((s) => ({ ...s, zimmer_id: e.target.value }))
               }
             >
               <option value="">–</option>
               {zimmerDesGebaeudes.map((z) => (
                 <option key={z.id} value={z.id}>
-                  {z.nummer}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label>
-            Bett
-            <select
-              className="ml-2"
-              value={neu.bett_id}
-              disabled={!neu.zimmer_id}
-              onChange={(e) => setNeu((s) => ({ ...s, bett_id: e.target.value }))}
-            >
-              <option value="">–</option>
-              {bettenDesZimmers.map((b) => (
-                <option key={b.id} value={b.id}>
-                  {b.bezeichnung} — {bettInfo(b.id)}
+                  {z.nummer} — {zimmerBelegt(z.id)}/{z.bettenzahl} belegt
                 </option>
               ))}
             </select>

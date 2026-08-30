@@ -652,7 +652,6 @@ export default function SuchePage() {
                           <th>Zeitraum</th>
                           <th>Gebäude</th>
                           <th>Zimmer</th>
-                          <th>Bett</th>
                           <th>{t("gemeinsam.notiz")}</th>
                         </tr>
                       </thead>
@@ -676,7 +675,6 @@ export default function SuchePage() {
                                 {u.wohneinheit_name ? ` · ${u.wohneinheit_name}` : ""}
                               </td>
                               <td>{u.zimmer_nummer}</td>
-                              <td>{u.bett}</td>
                               <td className="text-neutral-500">{u.notiz ?? "—"}</td>
                             </tr>
                           );

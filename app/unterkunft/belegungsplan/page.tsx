@@ -111,7 +111,7 @@ export default function UnterkunftBelegungsplanPage() {
               checked={nurMitLuecke}
               onChange={(e) => setNurMitLuecke(e.target.checked)}
             />
-            nur freie Betten / Mängel
+            nur freie Plätze / Mängel
           </label>
           <label className="flex items-center gap-1">
             <input
@@ -135,7 +135,7 @@ export default function UnterkunftBelegungsplanPage() {
               <th>Gebäude</th>
               <th>Zimmer</th>
               <th>Wohneinheit</th>
-              <th>Belegt / Betten</th>
+              <th>Belegt / Plätze</th>
               <th>Frei</th>
               <th>Schwebend</th>
               <th>Bewohner heute</th>

@@ -1,15 +1,15 @@
 "use client";
 
-// Unterkunft → Stammdaten (Migration 2026-08-29): Gebäude, Zimmer und Betten
-// pflegen, dazu die Checklisten-Vorlage für Übergabe/Abnahme/Kontrolle.
-// Pflege nur admin/hr (RLS), andere sehen die Seite schreibgeschützt.
+// Unterkunft → Stammdaten (Migration 2026-08-29): Gebäude und Zimmer pflegen
+// (je Zimmer nur die Anzahl Schlafplätze), dazu die Checklisten-Vorlage für
+// Übergabe/Abnahme/Kontrolle. Pflege nur admin/hr (RLS), andere sehen die
+// Seite schreibgeschützt.
 
-import { Fragment, useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { getSupabaseClient } from "@/lib/supabase/client";
 import { useProfile } from "@/lib/useProfile";
 import UnterkunftTabs from "@/components/UnterkunftTabs";
 import type {
-  UnterkunftBett,
   UnterkunftChecklisteVorlage,
   UnterkunftWohneinheit,
   UnterkunftGebaeude,
@@ -24,12 +24,10 @@ export default function UnterkunftStammdatenPage() {
   const [gebaeude, setGebaeude] = useState<UnterkunftGebaeude[]>([]);
   const [wohneinheiten, setWohneinheiten] = useState<UnterkunftWohneinheit[]>([]);
   const [zimmer, setZimmer] = useState<UnterkunftZimmer[]>([]);
-  const [betten, setBetten] = useState<UnterkunftBett[]>([]);
   const [vorlage, setVorlage] = useState<UnterkunftChecklisteVorlage[]>([]);
   const [loading, setLoading] = useState(true);
   const [fehler, setFehler] = useState<string | null>(null);
   const [offenesGebaeude, setOffenesGebaeude] = useState<number | null>(null);
-  const [offenesZimmer, setOffenesZimmer] = useState<number | null>(null);
 
   // Eingabe-Entwürfe
   const [neuesGebaeude, setNeuesGebaeude] = useState({ name: "", adresse: "" });
@@ -43,14 +41,12 @@ export default function UnterkunftStammdatenPage() {
     etage_label: "",
     reihenfolge: "",
   });
-  const [neuesBett, setNeuesBett] = useState("");
-  const [sammelAnzahl, setSammelAnzahl] = useState("");
   const [neuerBereich, setNeuerBereich] = useState({ bereich: "", reihenfolge: "" });
 
   const laden = useCallback(async () => {
     setLoading(true);
     const supabase = getSupabaseClient();
-    const [g, et, z, b, v] = await Promise.all([
+    const [g, et, z, v] = await Promise.all([
       supabase.from("unterkunft_gebaeude").select("*").order("name"),
       supabase
         .from("unterkunft_wohneinheit")
@@ -58,7 +54,6 @@ export default function UnterkunftStammdatenPage() {
         .order("gebaeude_id")
         .order("reihenfolge"),
       supabase.from("unterkunft_zimmer").select("*").order("nummer"),
-      supabase.from("unterkunft_bett").select("*").order("bezeichnung"),
       supabase
         .from("unterkunft_checkliste_vorlage")
         .select("*")
@@ -68,7 +63,6 @@ export default function UnterkunftStammdatenPage() {
     setGebaeude((g.data as UnterkunftGebaeude[]) ?? []);
     setWohneinheiten((et.data as UnterkunftWohneinheit[]) ?? []);
     setZimmer((z.data as UnterkunftZimmer[]) ?? []);
-    setBetten((b.data as UnterkunftBett[]) ?? []);
     setVorlage((v.data as UnterkunftChecklisteVorlage[]) ?? []);
     setLoading(false);
   }, []);
@@ -130,16 +124,13 @@ export default function UnterkunftStammdatenPage() {
     return true;
   }
 
-  // Zimmer + ALLES daran (Vorgänge inkl. Positionen/Fotos, Mängel, Belegungen,
-  // Betten) hart löschen - nur Admin, nur zur Testdaten-Bereinigung. Gibt eine
+  // Zimmer + ALLES daran (Vorgänge inkl. Positionen/Fotos, Mängel, Belegungen)
+  // hart löschen - nur Admin, nur zur Testdaten-Bereinigung. Gibt eine
   // Fehlermeldung zurück oder null bei Erfolg. Ruft laden() NICHT selbst auf.
   async function zimmerHartLoeschen(
     sb: ReturnType<typeof getSupabaseClient>,
     zimmerId: number
   ): Promise<string | null> {
-    const bettenIds = betten
-      .filter((b) => b.zimmer_id === zimmerId)
-      .map((b) => b.id);
     const { data: vg } = await sb
       .from("unterkunft_vorgang")
       .select("id, abgeschlossen")
@@ -159,16 +150,9 @@ export default function UnterkunftStammdatenPage() {
       () => sb.from("unterkunft_vorgang").delete().eq("zimmer_id", zimmerId),
       () => sb.from("unterkunft_mangel").delete().eq("zimmer_id", zimmerId),
       () => sb.from("unterkunft_zuordnung").delete().eq("zimmer_id", zimmerId),
+      () => sb.from("unterkunft_belegung").delete().eq("zimmer_id", zimmerId),
+      () => sb.from("unterkunft_zimmer").delete().eq("id", zimmerId),
     ];
-    if (bettenIds.length) {
-      schritte.push(
-        () => sb.from("unterkunft_belegung").delete().in("bett_id", bettenIds),
-        () => sb.from("unterkunft_bett").delete().in("id", bettenIds)
-      );
-    }
-    schritte.push(() =>
-      sb.from("unterkunft_zimmer").delete().eq("id", zimmerId)
-    );
     for (const schritt of schritte) {
       const { error } = await schritt();
       if (error) return error.message;
@@ -178,13 +162,10 @@ export default function UnterkunftStammdatenPage() {
 
   async function zimmerLoeschen(z: UnterkunftZimmer) {
     const sb = getSupabaseClient();
-    const bettenIds = betten.filter((b) => b.zimmer_id === z.id).map((b) => b.id);
     const [vg, mg, bl] = await Promise.all([
       sb.from("unterkunft_vorgang").select("id").eq("zimmer_id", z.id),
       sb.from("unterkunft_mangel").select("id").eq("zimmer_id", z.id),
-      bettenIds.length
-        ? sb.from("unterkunft_belegung").select("id").in("bett_id", bettenIds)
-        : Promise.resolve({ data: [] as { id: number }[] }),
+      sb.from("unterkunft_belegung").select("id").eq("zimmer_id", z.id),
     ]);
     const nVg = vg.data?.length ?? 0;
     const nMg = mg.data?.length ?? 0;
@@ -205,7 +186,7 @@ export default function UnterkunftStammdatenPage() {
           ? `Zimmer ${z.nummer} UNWIDERRUFLICH löschen – inklusive ${nVg} ` +
             `Übergabe/Kontrolle, ${nMg} Mangel/Mängel und ${nBl} Belegung(en)? ` +
             `(nur Testdaten!)`
-          : `Zimmer ${z.nummer} endgültig löschen? (samt seiner Betten)`
+          : `Zimmer ${z.nummer} endgültig löschen?`
       )
     )
       return;
@@ -310,22 +291,6 @@ export default function UnterkunftStammdatenPage() {
     await loeschen("unterkunft_gebaeude", g.id, "Das Gebäude");
   }
 
-  async function bettLoeschen(b: UnterkunftBett) {
-    if (!window.confirm(`Bett ${b.bezeichnung} endgültig löschen?`)) return;
-    if (isAdmin) {
-      // Testdaten: alte/laufende Belegungen dieses Bettes mitnehmen.
-      const { error } = await getSupabaseClient()
-        .from("unterkunft_belegung")
-        .delete()
-        .eq("bett_id", b.id);
-      if (error) {
-        setFehler(error.message);
-        return;
-      }
-    }
-    await loeschen("unterkunft_bett", b.id, `Bett ${b.bezeichnung}`);
-  }
-
   // --- Gebäude ---
   async function gebaeudeAnlegen() {
     if (!neuesGebaeude.name.trim()) return;
@@ -421,7 +386,7 @@ export default function UnterkunftStammdatenPage() {
           gebaeude_id: gebaeudeId,
           nummer: neuesZimmer.nummer.trim(),
           wohneinheit_id: Number(neuesZimmer.wohneinheitId),
-          bettenzahl: neuesZimmer.bettenzahl ? Number(neuesZimmer.bettenzahl) : null,
+          bettenzahl: Number(neuesZimmer.bettenzahl) || 0,
         })
     );
     if (ok) setNeuesZimmer({ nummer: "", wohneinheitId: "", bettenzahl: "" });
@@ -436,36 +401,14 @@ export default function UnterkunftStammdatenPage() {
     );
   }
 
-  // --- Betten ---
-  async function bettAnlegen(zimmerId: number) {
-    if (!neuesBett.trim()) return;
-    const ok = await ausfuehren(() =>
-      getSupabaseClient()
-        .from("unterkunft_bett")
-        .insert({ zimmer_id: zimmerId, bezeichnung: neuesBett.trim() })
-    );
-    if (ok) setNeuesBett("");
-  }
-
-  async function bettenSammelanlage(zimmerId: number) {
-    const anzahl = Number(sammelAnzahl);
-    if (!anzahl || anzahl < 1) return;
-    setFehler(null);
-    const { error } = await getSupabaseClient().rpc("unterkunft_bett_sammelanlage", {
-      p_zimmer_id: zimmerId,
-      p_anzahl: anzahl,
-    });
-    if (error) {
-      setFehler(error.message);
-      return;
-    }
-    setSammelAnzahl("");
-    await laden();
-  }
-
-  async function bettAktivSetzen(b: UnterkunftBett, aktiv: boolean) {
+  async function zimmerBettenzahlSetzen(z: UnterkunftZimmer, wert: string) {
+    const n = Math.max(0, Math.floor(Number(wert)) || 0);
+    if (n === z.bettenzahl) return;
     await ausfuehren(() =>
-      getSupabaseClient().from("unterkunft_bett").update({ aktiv }).eq("id", b.id)
+      getSupabaseClient()
+        .from("unterkunft_zimmer")
+        .update({ bettenzahl: n, updated_by: profile?.id ?? null })
+        .eq("id", z.id)
     );
   }
 
@@ -504,7 +447,7 @@ export default function UnterkunftStammdatenPage() {
       <div>
         <h1 className="text-lg font-semibold text-emerald-900">Stammdaten</h1>
         <p className="text-sm text-neutral-500">
-          Gebäude, Zimmer und Betten. {canEdit ? "" : "Nur admin/hr dürfen ändern."}
+          Gebäude und Zimmer. {canEdit ? "" : "Nur admin/hr dürfen ändern."}
         </p>
       </div>
 
@@ -752,9 +695,10 @@ export default function UnterkunftStammdatenPage() {
                           </select>
                         </label>
                         <label className="text-sm">
-                          Betten (Soll)
+                          Schlafplätze
                           <input
                             type="number"
+                            min={0}
                             className="ml-2 w-20"
                             value={neuesZimmer.bettenzahl}
                             onChange={(e) =>
@@ -776,159 +720,58 @@ export default function UnterkunftStammdatenPage() {
                         <tr>
                           <th>Zimmer</th>
                           <th>Wohneinheit</th>
-                          <th>Betten</th>
+                          <th>Schlafplätze</th>
                           <th>Status</th>
                           {canEdit && <th></th>}
                         </tr>
                       </thead>
                       <tbody>
-                        {zimmerDesGebaeudes.map((z) => {
-                          const bettenDesZimmers = betten.filter(
-                            (b) => b.zimmer_id === z.id
-                          );
-                          const aktiveBetten = bettenDesZimmers.filter((b) => b.aktiv);
-                          const zOffen = offenesZimmer === z.id;
-                          return (
-                            <Fragment key={z.id}>
-                              <tr>
-                                <td>
-                                  <button
-                                    className="font-medium text-emerald-800"
-                                    onClick={() =>
-                                      setOffenesZimmer(zOffen ? null : z.id)
-                                    }
-                                  >
-                                    {zOffen ? "▾" : "▸"} {z.nummer}
-                                  </button>
-                                </td>
-                                <td>{wohneinheitName(z.wohneinheit_id)}</td>
-                                <td>
-                                  {aktiveBetten.length}
-                                  {z.bettenzahl != null &&
-                                  z.bettenzahl !== aktiveBetten.length
-                                    ? ` / ${z.bettenzahl} Soll`
-                                    : ""}
-                                </td>
-                                <td>
-                                  {z.aktiv ? (
-                                    "aktiv"
-                                  ) : (
-                                    <span className="text-red-600">inaktiv</span>
-                                  )}
-                                </td>
-                                {canEdit && (
-                                  <td className="whitespace-nowrap">
-                                    <button
-                                      className="btn-secondary mr-1"
-                                      onClick={() => zimmerAktivSetzen(z, !z.aktiv)}
-                                    >
-                                      {z.aktiv ? "Deaktivieren" : "Aktivieren"}
-                                    </button>
-                                    <button
-                                      className="btn-danger"
-                                      onClick={() => zimmerLoeschen(z)}
-                                    >
-                                      Löschen
-                                    </button>
-                                  </td>
-                                )}
-                              </tr>
-                              {zOffen && (
-                                <tr>
-                                  <td colSpan={canEdit ? 5 : 4} className="bg-neutral-50">
-                                    <div className="space-y-2 p-2">
-                                      <div className="text-sm font-medium">
-                                        Betten in Zimmer {z.nummer}
-                                      </div>
-                                      <div className="flex flex-wrap gap-2">
-                                        {bettenDesZimmers.length === 0 && (
-                                          <span className="text-sm text-neutral-400">
-                                            noch keine Betten
-                                          </span>
-                                        )}
-                                        {bettenDesZimmers.map((b) => (
-                                          <span
-                                            key={b.id}
-                                            className={`inline-flex items-center gap-1 rounded border px-2 py-0.5 text-sm ${
-                                              b.aktiv
-                                                ? "border-neutral-300"
-                                                : "border-red-200 text-red-500 line-through"
-                                            }`}
-                                          >
-                                            {b.bezeichnung}
-                                            {canEdit && (
-                                              <>
-                                                <button
-                                                  title={
-                                                    b.aktiv
-                                                      ? "Bett deaktivieren"
-                                                      : "Bett aktivieren"
-                                                  }
-                                                  onClick={() =>
-                                                    bettAktivSetzen(b, !b.aktiv)
-                                                  }
-                                                  className="text-neutral-400 hover:text-neutral-700"
-                                                >
-                                                  {b.aktiv ? "×" : "↺"}
-                                                </button>
-                                                <button
-                                                  title="Bett löschen"
-                                                  onClick={() => bettLoeschen(b)}
-                                                  className="text-red-400 hover:text-red-600"
-                                                >
-                                                  🗑
-                                                </button>
-                                              </>
-                                            )}
-                                          </span>
-                                        ))}
-                                      </div>
-                                      {canEdit && (
-                                        <div className="flex flex-wrap items-end gap-2">
-                                          <label className="text-sm">
-                                            Bett
-                                            <input
-                                              className="ml-2 w-28"
-                                              value={neuesBett}
-                                              onChange={(e) =>
-                                                setNeuesBett(e.target.value)
-                                              }
-                                              placeholder="z.B. A"
-                                            />
-                                          </label>
-                                          <button
-                                            className="btn-secondary"
-                                            onClick={() => bettAnlegen(z.id)}
-                                          >
-                                            Bett anlegen
-                                          </button>
-                                          <span className="text-neutral-300">|</span>
-                                          <label className="text-sm">
-                                            Anzahl
-                                            <input
-                                              type="number"
-                                              className="ml-2 w-16"
-                                              value={sammelAnzahl}
-                                              onChange={(e) =>
-                                                setSammelAnzahl(e.target.value)
-                                              }
-                                            />
-                                          </label>
-                                          <button
-                                            className="btn-secondary"
-                                            onClick={() => bettenSammelanlage(z.id)}
-                                          >
-                                            Betten 1…n anlegen
-                                          </button>
-                                        </div>
-                                      )}
-                                    </div>
-                                  </td>
-                                </tr>
+                        {zimmerDesGebaeudes.map((z) => (
+                          <tr key={z.id}>
+                            <td className="font-medium text-emerald-800">
+                              {z.nummer}
+                            </td>
+                            <td>{wohneinheitName(z.wohneinheit_id)}</td>
+                            <td>
+                              {canEdit ? (
+                                <input
+                                  type="number"
+                                  min={0}
+                                  className="w-16"
+                                  defaultValue={z.bettenzahl}
+                                  onBlur={(e) =>
+                                    zimmerBettenzahlSetzen(z, e.target.value)
+                                  }
+                                />
+                              ) : (
+                                z.bettenzahl
                               )}
-                            </Fragment>
-                          );
-                        })}
+                            </td>
+                            <td>
+                              {z.aktiv ? (
+                                "aktiv"
+                              ) : (
+                                <span className="text-red-600">inaktiv</span>
+                              )}
+                            </td>
+                            {canEdit && (
+                              <td className="whitespace-nowrap">
+                                <button
+                                  className="btn-secondary mr-1"
+                                  onClick={() => zimmerAktivSetzen(z, !z.aktiv)}
+                                >
+                                  {z.aktiv ? "Deaktivieren" : "Aktivieren"}
+                                </button>
+                                <button
+                                  className="btn-danger"
+                                  onClick={() => zimmerLoeschen(z)}
+                                >
+                                  Löschen
+                                </button>
+                              </td>
+                            )}
+                          </tr>
+                        ))}
                         {zimmerDesGebaeudes.length === 0 && (
                           <tr>
                             <td
