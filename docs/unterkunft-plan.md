@@ -154,9 +154,20 @@ Umgesetzt:
       Reihenfolge); Zimmer-Anlage mit Wohneinheit-Auswahl.
 - [x] `npx tsc --noEmit` sauber · `npx next build` grün.
 
+### Nachtrag 2026-09-01: Gemeinschaftsräume im Grundriss
+- Neue Spalte `unterkunft_zimmer.art` ('zimmer' | 'gemeinschaft'). Migration
+  `migration_2026-09-01_unterkunft_gemeinschaftsraum.sql` (Spalte + zwei
+  Sichten neu). Gemeinschaftsräume (Küche / Bad/WC / Flur) hängen an einer
+  Wohneinheit, tragen `plan_*`, haben KEINE Betten/Belegung/Übergabe -
+  Kontrollen und Mängel gelten. Im Grundriss-Bearbeiten-Modus über
+  „+ Küche / + Bad/WC / + Flur" hinzufügbar (mehrfach, admin), indigo-Kachel,
+  Panel mit Kontrolle/Mängel + „Löschen". Aus Belegung/Übergabe/Belegungsplan/
+  Stammdaten-Zimmerliste herausgefiltert (`art = 'zimmer'`).
+
 Offen:
-- [ ] **Migration `migration_2026-08-31_unterkunft_wohneinheit_zuordnung.sql`
-      in der Supabase-Konsole ausführen** (ein Zug, kein ALTER TYPE).
+- [ ] **Migrationen ausführen**: `migration_2026-08-31_unterkunft_wohneinheit_zuordnung.sql`
+      **und** `migration_2026-09-01_unterkunft_gemeinschaftsraum.sql`
+      (beide je ein Zug, kein ALTER TYPE).
 - [ ] Smoke-Test: Wohneinheit + Zimmer anlegen → „Belegung planen"
       (Anreiseliste → Wohneinheit schwebend) → Grundriss-Karte → Zimmer →
       „Übergabe starten" → Person + Bett → Abschließen → wird „fest".

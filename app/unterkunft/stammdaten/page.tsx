@@ -382,7 +382,9 @@ export default function UnterkunftStammdatenPage() {
 
         <div className="space-y-2">
           {gebaeude.map((g) => {
-            const zimmerDesGebaeudes = zimmer.filter((z) => z.gebaeude_id === g.id);
+            const zimmerDesGebaeudes = zimmer.filter(
+              (z) => z.gebaeude_id === g.id && z.art === "zimmer"
+            );
             const wohneinheitenDesGebaeudes = wohneinheiten.filter((e) => e.gebaeude_id === g.id);
             const wohneinheitName = (id: number | null) =>
               wohneinheiten.find((e) => e.id === id)?.name ?? "—";

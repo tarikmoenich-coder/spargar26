@@ -126,7 +126,7 @@ export default function UnterkunftBelegungPage() {
     (e) => String(e.gebaeude_id) === ziel.gebaeude_id && e.aktiv
   );
   const zimmerDerEinheit = zimmer.filter(
-    (z) => String(z.wohneinheit_id) === ziel.wohneinheit_id
+    (z) => String(z.wohneinheit_id) === ziel.wohneinheit_id && z.art === "zimmer"
   );
 
   function toggleMarkiert(id: string) {
@@ -195,7 +195,7 @@ export default function UnterkunftBelegungPage() {
 
   // --- Direkt-Belegung + laufende Belegungen -----------------------------
   const zimmerDesGebaeudes = zimmer.filter(
-    (z) => String(z.gebaeude_id) === neu.gebaeude_id
+    (z) => String(z.gebaeude_id) === neu.gebaeude_id && z.art === "zimmer"
   );
   const bettenDesZimmers = betten.filter(
     (b) => String(b.zimmer_id) === neu.zimmer_id
@@ -477,7 +477,8 @@ export default function UnterkunftBelegungPage() {
             <tbody>
               {zuordnungen.map((z) => {
                 const zimmerWahl = zimmer.filter(
-                  (x) => x.wohneinheit_id === z.wohneinheit_id
+                  (x) =>
+                    x.wohneinheit_id === z.wohneinheit_id && x.art === "zimmer"
                 );
                 return (
                   <tr key={z.id}>

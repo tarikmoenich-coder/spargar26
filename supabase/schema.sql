@@ -4979,6 +4979,10 @@ create table unterkunft_zimmer (
   id bigint generated always as identity primary key,
   gebaeude_id bigint not null references unterkunft_gebaeude (id) on delete restrict,
   nummer text not null,
+  -- 'zimmer' = Schlafzimmer (Betten/Belegung/Übergabe). 'gemeinschaft' =
+  -- Küche/Bad/Flur - nur Grundriss-Kachel + Kontrollen/Mängel, keine Betten
+  -- (Migration 2026-09-01).
+  art text not null default 'zimmer' check (art in ('zimmer', 'gemeinschaft')),
   -- Freitext-Etage aus v1; seit Migration 2026-08-30 nicht mehr gepflegt.
   -- Bleibt für Altdaten stehen.
   etage text,
@@ -5255,7 +5259,7 @@ grant select on unterkunft_belegung_aktuell to authenticated;
 -- Zimmerübersicht (mit Wohneinheit + Anzahl schwebender Zuordnungen).
 create view unterkunft_zimmer_uebersicht as
 select
-  z.id as zimmer_id, z.nummer, z.aktiv, z.notiz,
+  z.id as zimmer_id, z.nummer, z.art, z.aktiv, z.notiz,
   z.wohneinheit_id, w.name as wohneinheit_name, w.etage_label,
   w.reihenfolge as wohneinheit_reihenfolge,
   z.plan_x, z.plan_y, z.plan_w, z.plan_h,
@@ -5294,7 +5298,7 @@ left join (
   group by zimmer_id
 ) zu on zu.zimmer_id = z.id
 group by
-  z.id, z.nummer, z.aktiv, z.notiz,
+  z.id, z.nummer, z.art, z.aktiv, z.notiz,
   z.wohneinheit_id, w.name, w.etage_label, w.reihenfolge,
   z.plan_x, z.plan_y, z.plan_w, z.plan_h,
   g.id, g.name,
@@ -5308,7 +5312,7 @@ create view unterkunft_wohneinheit_uebersicht as
 select
   w.id as wohneinheit_id, w.name, w.etage_label, w.reihenfolge, w.aktiv,
   g.id as gebaeude_id, g.name as gebaeude_name,
-  count(distinct z.id) filter (where z.aktiv)::int as zimmer,
+  count(distinct z.id) filter (where z.aktiv and z.art = 'zimmer')::int as zimmer,
   count(distinct bt.id)::int as betten,
   count(distinct ba.id)::int as fest,
   coalesce(zu.schwebend, 0)::int as schwebend,

@@ -153,7 +153,7 @@ export default function UnterkunftUebergabePage() {
   }, [dirty]);
 
   const zimmerDesGebaeudes = zimmer.filter(
-    (z) => String(z.gebaeude_id) === sel.gebaeude_id
+    (z) => String(z.gebaeude_id) === sel.gebaeude_id && z.art === "zimmer"
   );
   const belegungenDesZimmers = belegungen.filter(
     (b) => String(b.zimmer_id) === sel.zimmer_id

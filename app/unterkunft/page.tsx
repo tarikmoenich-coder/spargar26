@@ -192,7 +192,7 @@ export default function UnterkunftGrundrissPage() {
     [profile?.id, laden]
   );
 
-  function platziereAusAblage(zimmerId: number) {
+  function freieZelle(): { x: number; y: number } {
     const belegt = new Set(
       platziert.flatMap((z) => {
         const cells: string[] = [];
@@ -202,17 +202,71 @@ export default function UnterkunftGrundrissPage() {
         return cells;
       })
     );
-    let ziel = { x: 0, y: 0 };
-    outer: for (let y = 0; y < rows; y++) {
-      for (let x = 0; x < cols; x++) {
-        if (!belegt.has(`${x},${y}`)) {
-          ziel = { x, y };
-          break outer;
-        }
-      }
-    }
+    for (let y = 0; y < rows; y++)
+      for (let x = 0; x < cols; x++)
+        if (!belegt.has(`${x},${y}`)) return { x, y };
+    return { x: 0, y: 0 };
+  }
+
+  function platziereAusAblage(zimmerId: number) {
+    const ziel = freieZelle();
     speicherePlan(zimmerId, { plan_x: ziel.x, plan_y: ziel.y });
     setSelId(zimmerId);
+  }
+
+  // Küche / Bad/WC / Flur als Gemeinschaftsraum anlegen und direkt auf eine
+  // freie Rasterzelle legen. Keine Betten, keine Belegung/Übergabe -
+  // Kontrollen und Mängel gelten aber.
+  async function gemeinschaftHinzufuegen(label: string) {
+    if (!einheitId || gebaeudeId == null) return;
+    const vorhanden = new Set(
+      zimmer.filter((z) => z.gebaeude_id === gebaeudeId).map((z) => z.nummer)
+    );
+    let name = label;
+    let i = 2;
+    while (vorhanden.has(name)) name = `${label} ${i++}`;
+    const ziel = freieZelle();
+    const { data, error } = await getSupabaseClient()
+      .from("unterkunft_zimmer")
+      .insert({
+        gebaeude_id: gebaeudeId,
+        wohneinheit_id: einheitId,
+        nummer: name,
+        art: "gemeinschaft",
+        plan_x: ziel.x,
+        plan_y: ziel.y,
+        plan_w: 2,
+        plan_h: 2,
+      })
+      .select("id")
+      .single();
+    if (error) {
+      setFehler(error.message);
+      return;
+    }
+    await laden();
+    setSelId((data as { id: number }).id);
+  }
+
+  async function zimmerLoeschen(z: UnterkunftZimmerUebersicht) {
+    if (!window.confirm(`„${z.nummer}" aus dem Grundriss löschen?`)) return;
+    const { error } = await getSupabaseClient()
+      .from("unterkunft_zimmer")
+      .delete()
+      .eq("id", z.zimmer_id);
+    if (error) {
+      const fk =
+        (error as { code?: string }).code === "23503" ||
+        /foreign key|violates/i.test(error.message);
+      setFehler(
+        fk
+          ? `„${z.nummer}" kann nicht gelöscht werden – es hängen Kontrollen/Mängel daran.`
+          : error.message
+      );
+      return;
+    }
+    setSelId(null);
+    await laden();
   }
 
   function onZimmerPointerDown(
@@ -288,6 +342,7 @@ export default function UnterkunftGrundrissPage() {
   } {
     if (!z.aktiv) return { fill: "#fafafa", stroke: "#e5e5e5" };
     if (z.offene_maengel > 0) return { fill: "#fef2f2", stroke: "#dc2626" };
+    if (z.art === "gemeinschaft") return { fill: "#eef2ff", stroke: "#a5b4fc" };
     if (z.frei > 0) return { fill: "#ecfdf5", stroke: "#34d399" };
     return { fill: "#f1f5f9", stroke: "#cbd5e1" };
   }
@@ -543,17 +598,19 @@ export default function UnterkunftGrundrissPage() {
                         >
                           {z.nummer}
                         </text>
-                        <text
-                          x={w / 2}
-                          y={h - 6}
-                          textAnchor="middle"
-                          className="select-none"
-                          fontSize={10}
-                          fill="#64748b"
-                        >
-                          {z.belegt}/{z.betten}
-                          {schwebendHier > 0 ? ` +${schwebendHier}` : ""}
-                        </text>
+                        {z.art !== "gemeinschaft" && (
+                          <text
+                            x={w / 2}
+                            y={h - 6}
+                            textAnchor="middle"
+                            className="select-none"
+                            fontSize={10}
+                            fill="#64748b"
+                          >
+                            {z.belegt}/{z.betten}
+                            {schwebendHier > 0 ? ` +${schwebendHier}` : ""}
+                          </text>
+                        )}
                         <circle
                           cx={w - 9}
                           cy={9}
@@ -636,30 +693,52 @@ export default function UnterkunftGrundrissPage() {
                     <p className="mt-2 text-xs text-neutral-400">
                       Zimmer ziehen · Pfeiltasten für Feinjustage.
                     </p>
+                    <div className="mt-2 border-t border-neutral-100 pt-2">
+                      <div className="text-xs font-medium text-neutral-500">
+                        Gemeinschaftsraum hinzufügen
+                      </div>
+                      <div className="mt-1 flex flex-wrap gap-1.5">
+                        {["Küche", "Bad/WC", "Flur"].map((label) => (
+                          <button
+                            key={label}
+                            onClick={() => gemeinschaftHinzufuegen(label)}
+                            className="rounded border border-indigo-300 bg-indigo-50 px-2 py-0.5 text-sm text-indigo-800 hover:border-indigo-500"
+                          >
+                            + {label}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
                   </div>
                 )}
 
                 {sel && sel.wohneinheit_id === einheitId ? (
                   <div className="rounded border border-neutral-200 p-3">
                     <h3 className="text-base font-semibold text-emerald-900">
-                      Zimmer {sel.nummer}
+                      {sel.art === "gemeinschaft"
+                        ? sel.nummer
+                        : `Zimmer ${sel.nummer}`}
                     </h3>
                     {!sel.aktiv && <p className="text-xs text-red-600">inaktiv</p>}
 
                     <dl className="mt-2 space-y-1 text-sm">
-                      <div className="flex justify-between">
-                        <dt className="text-neutral-500">Betten</dt>
-                        <dd>
-                          {sel.belegt} / {sel.betten} ·{" "}
-                          <span
-                            className={
-                              sel.frei > 0 ? "font-medium text-emerald-700" : ""
-                            }
-                          >
-                            {sel.frei} frei
-                          </span>
-                        </dd>
-                      </div>
+                      {sel.art === "zimmer" && (
+                        <div className="flex justify-between">
+                          <dt className="text-neutral-500">Betten</dt>
+                          <dd>
+                            {sel.belegt} / {sel.betten} ·{" "}
+                            <span
+                              className={
+                                sel.frei > 0
+                                  ? "font-medium text-emerald-700"
+                                  : ""
+                              }
+                            >
+                              {sel.frei} frei
+                            </span>
+                          </dd>
+                        </div>
+                      )}
                       <div className="flex justify-between">
                         <dt className="text-neutral-500">Letzte Kontrolle</dt>
                         <dd className="text-right">
@@ -703,51 +782,62 @@ export default function UnterkunftGrundrissPage() {
                       </div>
                     </dl>
 
-                    <div className="mt-3">
-                      <div className="text-xs font-medium text-neutral-500">
-                        Bewohner heute
-                      </div>
-                      {(belegungProZimmer[sel.zimmer_id] ?? []).length === 0 ? (
-                        <p className="text-sm text-neutral-400">niemand</p>
-                      ) : (
-                        <ul className="mt-1 space-y-0.5 text-sm">
-                          {(belegungProZimmer[sel.zimmer_id] ?? []).map((b) => (
-                            <li key={b.id}>
-                              {b.vorname} {b.name}
-                              {b.herkunft ? (
-                                <span className="text-neutral-400">
-                                  {" "}
-                                  · {b.herkunft}
-                                </span>
-                              ) : null}
-                            </li>
-                          ))}
-                        </ul>
-                      )}
-                    </div>
-
-                    {(zuordnungProZimmer[sel.zimmer_id] ?? []).length > 0 && (
-                      <div className="mt-2">
-                        <div className="text-xs font-medium text-neutral-500">
-                          Geplant (schwebend)
+                    {sel.art === "zimmer" && (
+                      <>
+                        <div className="mt-3">
+                          <div className="text-xs font-medium text-neutral-500">
+                            Bewohner heute
+                          </div>
+                          {(belegungProZimmer[sel.zimmer_id] ?? []).length ===
+                          0 ? (
+                            <p className="text-sm text-neutral-400">niemand</p>
+                          ) : (
+                            <ul className="mt-1 space-y-0.5 text-sm">
+                              {(belegungProZimmer[sel.zimmer_id] ?? []).map(
+                                (b) => (
+                                  <li key={b.id}>
+                                    {b.vorname} {b.name}
+                                    {b.herkunft ? (
+                                      <span className="text-neutral-400">
+                                        {" "}
+                                        · {b.herkunft}
+                                      </span>
+                                    ) : null}
+                                  </li>
+                                )
+                              )}
+                            </ul>
+                          )}
                         </div>
-                        <ul className="mt-1 space-y-0.5 text-sm">
-                          {(zuordnungProZimmer[sel.zimmer_id] ?? []).map((z) => (
-                            <li key={z.id} className="text-amber-800">
-                              {z.vorname} {z.name}
-                            </li>
-                          ))}
-                        </ul>
-                      </div>
+
+                        {(zuordnungProZimmer[sel.zimmer_id] ?? []).length > 0 && (
+                          <div className="mt-2">
+                            <div className="text-xs font-medium text-neutral-500">
+                              Geplant (schwebend)
+                            </div>
+                            <ul className="mt-1 space-y-0.5 text-sm">
+                              {(zuordnungProZimmer[sel.zimmer_id] ?? []).map(
+                                (z) => (
+                                  <li key={z.id} className="text-amber-800">
+                                    {z.vorname} {z.name}
+                                  </li>
+                                )
+                              )}
+                            </ul>
+                          </div>
+                        )}
+                      </>
                     )}
 
                     <div className="mt-3 flex flex-wrap gap-2 border-t border-neutral-100 pt-3">
-                      <Link
-                        className="btn"
-                        href={`/unterkunft/uebergabe?zimmer=${sel.zimmer_id}`}
-                      >
-                        Übergabe starten
-                      </Link>
+                      {sel.art === "zimmer" && (
+                        <Link
+                          className="btn"
+                          href={`/unterkunft/uebergabe?zimmer=${sel.zimmer_id}`}
+                        >
+                          Übergabe starten
+                        </Link>
+                      )}
                       <Link
                         className="btn-secondary"
                         href={`/unterkunft/kontrolle?zimmer=${sel.zimmer_id}`}
@@ -811,17 +901,27 @@ export default function UnterkunftGrundrissPage() {
                             +
                           </button>
                         </div>
-                        <button
-                          className="text-xs text-red-600 hover:underline"
-                          onClick={() =>
-                            speicherePlan(sel.zimmer_id, {
-                              plan_x: null,
-                              plan_y: null,
-                            })
-                          }
-                        >
-                          vom Raster nehmen
-                        </button>
+                        <div className="flex gap-3">
+                          <button
+                            className="text-xs text-red-600 hover:underline"
+                            onClick={() =>
+                              speicherePlan(sel.zimmer_id, {
+                                plan_x: null,
+                                plan_y: null,
+                              })
+                            }
+                          >
+                            vom Raster nehmen
+                          </button>
+                          {sel.art === "gemeinschaft" && (
+                            <button
+                              className="text-xs text-red-600 hover:underline"
+                              onClick={() => zimmerLoeschen(sel)}
+                            >
+                              Löschen
+                            </button>
+                          )}
+                        </div>
                       </div>
                     )}
                   </div>

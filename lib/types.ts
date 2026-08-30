@@ -1227,10 +1227,15 @@ export interface UnterkunftWohneinheit {
   updated_at: string;
 }
 
+// 'zimmer' = Schlafzimmer; 'gemeinschaft' = Küche/Bad/Flur (nur
+// Grundriss-Kachel + Kontrollen/Mängel, keine Betten). Migration 2026-09-01.
+export type UnterkunftZimmerArt = "zimmer" | "gemeinschaft";
+
 export interface UnterkunftZimmer {
   id: number;
   gebaeude_id: number;
   nummer: string;
+  art: UnterkunftZimmerArt;
   // Freitext-Etage aus v1; seit Migration 2026-08-30 nicht mehr gepflegt.
   etage: string | null;
   wohneinheit_id: number | null;
@@ -1499,6 +1504,7 @@ export interface UnterkunftFoto {
 export interface UnterkunftZimmerUebersicht {
   zimmer_id: number;
   nummer: string;
+  art: UnterkunftZimmerArt;
   aktiv: boolean;
   notiz: string | null;
   wohneinheit_id: number | null;

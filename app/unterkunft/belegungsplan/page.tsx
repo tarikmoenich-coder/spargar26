@@ -58,6 +58,7 @@ export default function UnterkunftBelegungsplanPage() {
   }, [belegungen]);
 
   const gefiltert = zimmer.filter((z) => {
+    if (z.art !== "zimmer") return false;
     if (!z.aktiv && !zeigeInaktive) return false;
     if (gebaeudeFilter && z.gebaeude_name !== gebaeudeFilter) return false;
     if (nurMitLuecke && z.frei <= 0 && z.offene_maengel === 0) return false;
