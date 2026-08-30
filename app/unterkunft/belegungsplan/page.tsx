@@ -123,9 +123,10 @@ export default function UnterkunftBelegungsplanPage() {
             <tr>
               <th>Gebäude</th>
               <th>Zimmer</th>
-              <th>Etage</th>
+              <th>Wohneinheit</th>
               <th>Belegt / Betten</th>
               <th>Frei</th>
+              <th>Schwebend</th>
               <th>Bewohner heute</th>
               <th>Letzte Kontrolle</th>
               <th>Offene Mängel</th>
@@ -141,12 +142,18 @@ export default function UnterkunftBelegungsplanPage() {
                     {z.nummer}
                     {!z.aktiv && " (inaktiv)"}
                   </td>
-                  <td>{z.etage_name ?? z.etage ?? "—"}</td>
+                  <td>
+                    {z.wohneinheit_name ?? "—"}
+                    {z.etage_label ? ` · ${z.etage_label}` : ""}
+                  </td>
                   <td>
                     {z.belegt} / {z.betten}
                   </td>
                   <td className={z.frei > 0 ? "font-medium text-emerald-700" : ""}>
                     {z.frei}
+                  </td>
+                  <td className={z.schwebend > 0 ? "text-amber-700" : ""}>
+                    {z.schwebend > 0 ? z.schwebend : "—"}
                   </td>
                   <td>
                     {bew.length === 0

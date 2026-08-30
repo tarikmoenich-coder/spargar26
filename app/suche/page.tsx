@@ -671,7 +671,10 @@ export default function SuchePage() {
                                   </span>
                                 )}
                               </td>
-                              <td>{u.gebaeude_name}</td>
+                              <td>
+                                {u.gebaeude_name}
+                                {u.wohneinheit_name ? ` · ${u.wohneinheit_name}` : ""}
+                              </td>
                               <td>{u.zimmer_nummer}</td>
                               <td>{u.bett}</td>
                               <td className="text-neutral-500">{u.notiz ?? "—"}</td>

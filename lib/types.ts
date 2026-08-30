@@ -1211,13 +1211,14 @@ export interface UnterkunftGebaeude {
   updated_at: string;
 }
 
-// Etage als eigenes Stammdatum (Migration 2026-08-30): Gebäude > Etage >
-// Zimmer, feste Reihenfolge/Benennung je Gebäude - Grundlage für den
-// grafischen Grundriss.
-export interface UnterkunftEtage {
+// Wohneinheit (Migration 2026-08-31): Ebene zwischen Gebäude und Zimmer -
+// mehrere Zimmer + gemeinsam Bad/Küche. Die Etage ist nur ein Text-Label
+// (Umschalter in der UI). Ersetzt UnterkunftEtage.
+export interface UnterkunftWohneinheit {
   id: number;
   gebaeude_id: number;
   name: string;
+  etage_label: string | null;
   reihenfolge: number;
   aktiv: boolean;
   erstellt_von: string | null;
@@ -1230,10 +1231,9 @@ export interface UnterkunftZimmer {
   id: number;
   gebaeude_id: number;
   nummer: string;
-  // Freitext-Etage aus v1; seit Migration 2026-08-30 durch etage_id ersetzt
-  // und nicht mehr gepflegt.
+  // Freitext-Etage aus v1; seit Migration 2026-08-30 nicht mehr gepflegt.
   etage: string | null;
-  etage_id: number | null;
+  wohneinheit_id: number | null;
   // Rasterkoordinaten für den Grundriss (Migration 2026-08-30). plan_x/plan_y
   // null = noch nicht auf dem Grundriss platziert.
   plan_x: number | null;
@@ -1278,17 +1278,19 @@ export interface UnterkunftBelegungAktuell {
   id: number;
   bett_id: number;
   zimmer_id: number;
+  wohneinheit_id: number | null;
   employee_id: string;
   personal_nr: string;
   name: string;
   vorname: string;
+  herkunft: string | null;
   von: string;
   bis: string | null;
   notiz: string | null;
 }
 
 // Aus der Sicht unterkunft_belegung_person - alle Belegungszeiträume einer
-// Person mit Gebäude/Zimmer/Bett (für den Unterkunfts-Block in der Suche).
+// Person mit Gebäude/Wohneinheit/Zimmer/Bett (für den Suche-Block).
 export interface UnterkunftBelegungPerson {
   id: number;
   employee_id: string;
@@ -1298,8 +1300,76 @@ export interface UnterkunftBelegungPerson {
   bett: string;
   zimmer_id: number;
   zimmer_nummer: string;
+  wohneinheit_id: number | null;
+  wohneinheit_name: string | null;
   gebaeude_id: number;
   gebaeude_name: string;
+}
+
+export type UnterkunftZuordnungStatus = "schwebend" | "erledigt" | "storniert";
+
+// Schwebende Belegungsplanung (Migration 2026-08-31): Person -> Wohneinheit
+// (optional schon Zimmer), bevor die Übergabe läuft.
+export interface UnterkunftZuordnung {
+  id: number;
+  employee_id: string;
+  wohneinheit_id: number;
+  zimmer_id: number | null;
+  geplant_ab: string;
+  status: UnterkunftZuordnungStatus;
+  notiz: string | null;
+  belegung_id: number | null;
+  erfasst_von: string | null;
+  erfasst_am: string;
+  updated_by: string | null;
+  updated_at: string;
+}
+
+// Aus der Sicht unterkunft_zuordnung_offen - schwebende Zuordnungen mit
+// Person, Herkunft und geplantem Zimmer.
+export interface UnterkunftZuordnungOffen {
+  id: number;
+  employee_id: string;
+  wohneinheit_id: number;
+  zimmer_id: number | null;
+  geplant_ab: string;
+  notiz: string | null;
+  personal_nr: string;
+  name: string;
+  vorname: string;
+  herkunft: string | null;
+  wohneinheit_name: string;
+  etage_label: string | null;
+  gebaeude_id: number;
+  gebaeude_name: string;
+  zimmer_nummer: string | null;
+}
+
+// Aus der Sicht unterkunft_wohneinheit_uebersicht - Karten-Kennzahlen.
+export interface UnterkunftWohneinheitUebersicht {
+  wohneinheit_id: number;
+  name: string;
+  etage_label: string | null;
+  reihenfolge: number;
+  aktiv: boolean;
+  gebaeude_id: number;
+  gebaeude_name: string;
+  zimmer: number;
+  betten: number;
+  fest: number;
+  schwebend: number;
+  frei: number;
+}
+
+// Aus der Sicht unterkunft_person_offen - aktive Mitarbeiter ohne Bleibe.
+export interface UnterkunftPersonOffen {
+  employee_id: string;
+  personal_nr: string;
+  name: string;
+  vorname: string;
+  herkunft: string | null;
+  geplante_ankunft: string | null;
+  auf_anreiseliste: boolean;
 }
 
 export interface UnterkunftChecklisteVorlage {
@@ -1429,12 +1499,12 @@ export interface UnterkunftFoto {
 export interface UnterkunftZimmerUebersicht {
   zimmer_id: number;
   nummer: string;
-  etage: string | null;
   aktiv: boolean;
   notiz: string | null;
-  etage_id: number | null;
-  etage_name: string | null;
-  etage_reihenfolge: number | null;
+  wohneinheit_id: number | null;
+  wohneinheit_name: string | null;
+  etage_label: string | null;
+  wohneinheit_reihenfolge: number | null;
   plan_x: number | null;
   plan_y: number | null;
   plan_w: number;
@@ -1444,6 +1514,7 @@ export interface UnterkunftZimmerUebersicht {
   betten: number;
   belegt: number;
   frei: number;
+  schwebend: number;
   letzte_kontrolle_am: string | null;
   letzte_kontrolle_typ: UnterkunftVorgangTyp | null;
   offene_maengel: number;

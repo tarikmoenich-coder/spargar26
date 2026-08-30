@@ -11,7 +11,7 @@ import UnterkunftTabs from "@/components/UnterkunftTabs";
 import type {
   UnterkunftBett,
   UnterkunftChecklisteVorlage,
-  UnterkunftEtage,
+  UnterkunftWohneinheit,
   UnterkunftGebaeude,
   UnterkunftZimmer,
 } from "@/lib/types";
@@ -21,7 +21,7 @@ export default function UnterkunftStammdatenPage() {
   const canEdit = profile?.role === "admin" || profile?.role === "hr";
 
   const [gebaeude, setGebaeude] = useState<UnterkunftGebaeude[]>([]);
-  const [etagen, setEtagen] = useState<UnterkunftEtage[]>([]);
+  const [wohneinheiten, setWohneinheiten] = useState<UnterkunftWohneinheit[]>([]);
   const [zimmer, setZimmer] = useState<UnterkunftZimmer[]>([]);
   const [betten, setBetten] = useState<UnterkunftBett[]>([]);
   const [vorlage, setVorlage] = useState<UnterkunftChecklisteVorlage[]>([]);
@@ -34,10 +34,14 @@ export default function UnterkunftStammdatenPage() {
   const [neuesGebaeude, setNeuesGebaeude] = useState({ name: "", adresse: "" });
   const [neuesZimmer, setNeuesZimmer] = useState({
     nummer: "",
-    etageId: "",
+    wohneinheitId: "",
     bettenzahl: "",
   });
-  const [neueEtage, setNeueEtage] = useState({ name: "", reihenfolge: "" });
+  const [neueWohneinheit, setNeueWohneinheit] = useState({
+    name: "",
+    etage_label: "",
+    reihenfolge: "",
+  });
   const [neuesBett, setNeuesBett] = useState("");
   const [sammelAnzahl, setSammelAnzahl] = useState("");
   const [neuerBereich, setNeuerBereich] = useState({ bereich: "", reihenfolge: "" });
@@ -48,7 +52,7 @@ export default function UnterkunftStammdatenPage() {
     const [g, et, z, b, v] = await Promise.all([
       supabase.from("unterkunft_gebaeude").select("*").order("name"),
       supabase
-        .from("unterkunft_etage")
+        .from("unterkunft_wohneinheit")
         .select("*")
         .order("gebaeude_id")
         .order("reihenfolge"),
@@ -61,7 +65,7 @@ export default function UnterkunftStammdatenPage() {
         .order("reihenfolge"),
     ]);
     setGebaeude((g.data as UnterkunftGebaeude[]) ?? []);
-    setEtagen((et.data as UnterkunftEtage[]) ?? []);
+    setWohneinheiten((et.data as UnterkunftWohneinheit[]) ?? []);
     setZimmer((z.data as UnterkunftZimmer[]) ?? []);
     setBetten((b.data as UnterkunftBett[]) ?? []);
     setVorlage((v.data as UnterkunftChecklisteVorlage[]) ?? []);
@@ -108,51 +112,63 @@ export default function UnterkunftStammdatenPage() {
     );
   }
 
-  // --- Etagen ---
-  async function etageAnlegen(gebaeudeId: number) {
-    if (!neueEtage.name.trim()) return;
-    const maxR = etagen
+  // --- Wohneinheiten ---
+  async function wohneinheitAnlegen(gebaeudeId: number) {
+    if (!neueWohneinheit.name.trim()) return;
+    const maxR = wohneinheiten
       .filter((e) => e.gebaeude_id === gebaeudeId)
       .reduce((m, e) => Math.max(m, e.reihenfolge), 0);
     const ok = await ausfuehren(() =>
       getSupabaseClient()
-        .from("unterkunft_etage")
+        .from("unterkunft_wohneinheit")
         .insert({
           gebaeude_id: gebaeudeId,
-          name: neueEtage.name.trim(),
-          reihenfolge: neueEtage.reihenfolge
-            ? Number(neueEtage.reihenfolge)
+          name: neueWohneinheit.name.trim(),
+          etage_label: neueWohneinheit.etage_label.trim() || null,
+          reihenfolge: neueWohneinheit.reihenfolge
+            ? Number(neueWohneinheit.reihenfolge)
             : maxR + 10,
         })
     );
-    if (ok) setNeueEtage({ name: "", reihenfolge: "" });
+    if (ok) setNeueWohneinheit({ name: "", etage_label: "", reihenfolge: "" });
   }
 
-  async function etageUmbenennen(e: UnterkunftEtage) {
-    const name = window.prompt("Neuer Name der Etage", e.name)?.trim();
+  async function wohneinheitEtageLabel(e: UnterkunftWohneinheit, etage_label: string) {
+    const v = etage_label.trim() || null;
+    if (v === (e.etage_label ?? null)) return;
+    await ausfuehren(() =>
+      getSupabaseClient()
+        .from("unterkunft_wohneinheit")
+        .update({ etage_label: v, updated_by: profile?.id ?? null })
+        .eq("id", e.id)
+    );
+  }
+
+  async function wohneinheitUmbenennen(e: UnterkunftWohneinheit) {
+    const name = window.prompt("Neuer Name der Wohneinheit", e.name)?.trim();
     if (!name || name === e.name) return;
     await ausfuehren(() =>
       getSupabaseClient()
-        .from("unterkunft_etage")
+        .from("unterkunft_wohneinheit")
         .update({ name, updated_by: profile?.id ?? null })
         .eq("id", e.id)
     );
   }
 
-  async function etageReihenfolge(e: UnterkunftEtage, reihenfolge: number) {
+  async function wohneinheitReihenfolge(e: UnterkunftWohneinheit, reihenfolge: number) {
     if (Number.isNaN(reihenfolge) || reihenfolge === e.reihenfolge) return;
     await ausfuehren(() =>
       getSupabaseClient()
-        .from("unterkunft_etage")
+        .from("unterkunft_wohneinheit")
         .update({ reihenfolge, updated_by: profile?.id ?? null })
         .eq("id", e.id)
     );
   }
 
-  async function etageAktivSetzen(e: UnterkunftEtage, aktiv: boolean) {
+  async function wohneinheitAktivSetzen(e: UnterkunftWohneinheit, aktiv: boolean) {
     await ausfuehren(() =>
       getSupabaseClient()
-        .from("unterkunft_etage")
+        .from("unterkunft_wohneinheit")
         .update({ aktiv, updated_by: profile?.id ?? null })
         .eq("id", e.id)
     );
@@ -160,18 +176,18 @@ export default function UnterkunftStammdatenPage() {
 
   // --- Zimmer ---
   async function zimmerAnlegen(gebaeudeId: number) {
-    if (!neuesZimmer.nummer.trim() || !neuesZimmer.etageId) return;
+    if (!neuesZimmer.nummer.trim() || !neuesZimmer.wohneinheitId) return;
     const ok = await ausfuehren(() =>
       getSupabaseClient()
         .from("unterkunft_zimmer")
         .insert({
           gebaeude_id: gebaeudeId,
           nummer: neuesZimmer.nummer.trim(),
-          etage_id: Number(neuesZimmer.etageId),
+          wohneinheit_id: Number(neuesZimmer.wohneinheitId),
           bettenzahl: neuesZimmer.bettenzahl ? Number(neuesZimmer.bettenzahl) : null,
         })
     );
-    if (ok) setNeuesZimmer({ nummer: "", etageId: "", bettenzahl: "" });
+    if (ok) setNeuesZimmer({ nummer: "", wohneinheitId: "", bettenzahl: "" });
   }
 
   async function zimmerAktivSetzen(z: UnterkunftZimmer, aktiv: boolean) {
@@ -296,9 +312,9 @@ export default function UnterkunftStammdatenPage() {
         <div className="space-y-2">
           {gebaeude.map((g) => {
             const zimmerDesGebaeudes = zimmer.filter((z) => z.gebaeude_id === g.id);
-            const etagenDesGebaeudes = etagen.filter((e) => e.gebaeude_id === g.id);
-            const etageName = (id: number | null) =>
-              etagen.find((e) => e.id === id)?.name ?? "—";
+            const wohneinheitenDesGebaeudes = wohneinheiten.filter((e) => e.gebaeude_id === g.id);
+            const wohneinheitName = (id: number | null) =>
+              wohneinheiten.find((e) => e.id === id)?.name ?? "—";
             const offen = offenesGebaeude === g.id;
             return (
               <div key={g.id} className="rounded border border-neutral-200">
@@ -328,16 +344,20 @@ export default function UnterkunftStammdatenPage() {
 
                 {offen && (
                   <div className="space-y-3 px-3 py-3">
-                    {/* Etagen des Gebäudes */}
+                    {/* Wohneinheiten des Gebäudes */}
                     <div className="rounded border border-neutral-200 bg-neutral-50 p-2">
-                      <div className="text-sm font-medium">Etagen</div>
+                      <div className="text-sm font-medium">Wohneinheiten</div>
+                      <p className="text-xs text-neutral-500">
+                        Eine Wohneinheit = mehrere Zimmer mit gemeinsam Bad/Küche.
+                        „Etage“ ist nur das Etikett für den Umschalter im Grundriss.
+                      </p>
                       <div className="mt-1 space-y-1">
-                        {etagenDesGebaeudes.length === 0 && (
+                        {wohneinheitenDesGebaeudes.length === 0 && (
                           <span className="text-sm text-neutral-400">
-                            noch keine Etagen – für den Grundriss mindestens eine anlegen
+                            noch keine Wohneinheiten – für Zimmer mindestens eine anlegen
                           </span>
                         )}
-                        {etagenDesGebaeudes.map((e) => (
+                        {wohneinheitenDesGebaeudes.map((e) => (
                           <div
                             key={e.id}
                             className="flex flex-wrap items-center gap-2 text-sm"
@@ -352,25 +372,36 @@ export default function UnterkunftStammdatenPage() {
                             {canEdit && (
                               <>
                                 <label className="text-xs text-neutral-500">
+                                  Etage
+                                  <input
+                                    className="ml-1 w-20"
+                                    defaultValue={e.etage_label ?? ""}
+                                    placeholder="EG"
+                                    onBlur={(ev) =>
+                                      wohneinheitEtageLabel(e, ev.target.value)
+                                    }
+                                  />
+                                </label>
+                                <label className="text-xs text-neutral-500">
                                   Reihenfolge
                                   <input
                                     type="number"
                                     className="ml-1 w-16"
                                     defaultValue={e.reihenfolge}
                                     onBlur={(ev) =>
-                                      etageReihenfolge(e, Number(ev.target.value))
+                                      wohneinheitReihenfolge(e, Number(ev.target.value))
                                     }
                                   />
                                 </label>
                                 <button
                                   className="text-xs text-emerald-700 hover:underline"
-                                  onClick={() => etageUmbenennen(e)}
+                                  onClick={() => wohneinheitUmbenennen(e)}
                                 >
                                   umbenennen
                                 </button>
                                 <button
                                   className="text-xs text-neutral-500 hover:underline"
-                                  onClick={() => etageAktivSetzen(e, !e.aktiv)}
+                                  onClick={() => wohneinheitAktivSetzen(e, !e.aktiv)}
                                 >
                                   {e.aktiv ? "deaktivieren" : "aktivieren"}
                                 </button>
@@ -382,14 +413,28 @@ export default function UnterkunftStammdatenPage() {
                       {canEdit && (
                         <div className="mt-2 flex flex-wrap items-end gap-2">
                           <label className="text-sm">
-                            Neue Etage
+                            Neue Wohneinheit
                             <input
                               className="ml-2 w-40"
-                              value={neueEtage.name}
+                              value={neueWohneinheit.name}
                               onChange={(ev) =>
-                                setNeueEtage((s) => ({ ...s, name: ev.target.value }))
+                                setNeueWohneinheit((s) => ({ ...s, name: ev.target.value }))
                               }
-                              placeholder="z.B. 1. OG"
+                              placeholder="z.B. Wohnung unten rechts"
+                            />
+                          </label>
+                          <label className="text-sm">
+                            Etage
+                            <input
+                              className="ml-2 w-20"
+                              value={neueWohneinheit.etage_label}
+                              onChange={(ev) =>
+                                setNeueWohneinheit((s) => ({
+                                  ...s,
+                                  etage_label: ev.target.value,
+                                }))
+                              }
+                              placeholder="EG"
                             />
                           </label>
                           <label className="text-sm">
@@ -397,9 +442,9 @@ export default function UnterkunftStammdatenPage() {
                             <input
                               type="number"
                               className="ml-2 w-20"
-                              value={neueEtage.reihenfolge}
+                              value={neueWohneinheit.reihenfolge}
                               onChange={(ev) =>
-                                setNeueEtage((s) => ({
+                                setNeueWohneinheit((s) => ({
                                   ...s,
                                   reihenfolge: ev.target.value,
                                 }))
@@ -408,9 +453,9 @@ export default function UnterkunftStammdatenPage() {
                           </label>
                           <button
                             className="btn-secondary"
-                            onClick={() => etageAnlegen(g.id)}
+                            onClick={() => wohneinheitAnlegen(g.id)}
                           >
-                            Etage anlegen
+                            Wohneinheit anlegen
                           </button>
                         </div>
                       )}
@@ -432,19 +477,19 @@ export default function UnterkunftStammdatenPage() {
                           />
                         </label>
                         <label className="text-sm">
-                          Etage
+                          Wohneinheit
                           <select
                             className="ml-2"
-                            value={neuesZimmer.etageId}
+                            value={neuesZimmer.wohneinheitId}
                             onChange={(e) =>
                               setNeuesZimmer((s) => ({
                                 ...s,
-                                etageId: e.target.value,
+                                wohneinheitId: e.target.value,
                               }))
                             }
                           >
                             <option value="">– wählen –</option>
-                            {etagenDesGebaeudes
+                            {wohneinheitenDesGebaeudes
                               .filter((e) => e.aktiv)
                               .map((e) => (
                                 <option key={e.id} value={e.id}>
@@ -477,7 +522,7 @@ export default function UnterkunftStammdatenPage() {
                       <thead>
                         <tr>
                           <th>Zimmer</th>
-                          <th>Etage</th>
+                          <th>Wohneinheit</th>
                           <th>Betten</th>
                           <th>Status</th>
                           {canEdit && <th></th>}
@@ -503,7 +548,7 @@ export default function UnterkunftStammdatenPage() {
                                     {zOffen ? "▾" : "▸"} {z.nummer}
                                   </button>
                                 </td>
-                                <td>{etageName(z.etage_id)}</td>
+                                <td>{wohneinheitName(z.wohneinheit_id)}</td>
                                 <td>
                                   {aktiveBetten.length}
                                   {z.bettenzahl != null &&

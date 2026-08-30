@@ -21,6 +21,7 @@ import {
   UNTERKUNFT_POSITION_ZUSTAND_LABELS,
   UNTERKUNFT_VORGANG_TYP_LABELS,
   type UnterkunftBelegungAktuell,
+  type UnterkunftBett,
   type UnterkunftChecklisteVorlage,
   type UnterkunftGebaeude,
   type UnterkunftGesamtzustand,
@@ -29,6 +30,7 @@ import {
   type UnterkunftVorgangPosition,
   type UnterkunftVorgangTyp,
   type UnterkunftZimmer,
+  type UnterkunftZuordnungOffen,
 } from "@/lib/types";
 
 interface PosEntwurf {
@@ -45,8 +47,13 @@ export default function UnterkunftUebergabePage() {
 
   const [gebaeude, setGebaeude] = useState<UnterkunftGebaeude[]>([]);
   const [zimmer, setZimmer] = useState<UnterkunftZimmer[]>([]);
+  const [betten, setBetten] = useState<UnterkunftBett[]>([]);
+  const [employees, setEmployees] = useState<
+    { id: string; personal_nr: string; name: string; vorname: string; aktiv: boolean }[]
+  >([]);
   const [vorlage, setVorlage] = useState<UnterkunftChecklisteVorlage[]>([]);
   const [belegungen, setBelegungen] = useState<UnterkunftBelegungAktuell[]>([]);
+  const [zuordnungen, setZuordnungen] = useState<UnterkunftZuordnungOffen[]>([]);
   const [letzte, setLetzte] = useState<UnterkunftVorgang[]>([]);
   const [loading, setLoading] = useState(true);
   const [fehler, setFehler] = useState<string | null>(null);
@@ -59,6 +66,12 @@ export default function UnterkunftUebergabePage() {
     typ: "einzug" as UnterkunftVorgangTyp,
     belegung_id: "",
   });
+
+  // Einzug: Personen (aus schwebenden Zuordnungen vorbelegt) + Bett je Person.
+  // key = employee_id, wert = bett_id ("" = noch offen). Wird beim Abschließen
+  // in unterkunft_belegung geschrieben und die Zuordnung geschlossen.
+  const [einzug, setEinzug] = useState<Record<string, string>>({});
+  const [personSuche, setPersonSuche] = useState("");
 
   // Laufender Vorgang
   const [vorgang, setVorgang] = useState<UnterkunftVorgang | null>(null);
@@ -76,15 +89,21 @@ export default function UnterkunftUebergabePage() {
   const laden = useCallback(async () => {
     setLoading(true);
     const supabase = getSupabaseClient();
-    const [g, z, v, bl, lv] = await Promise.all([
+    const [g, z, bt, emp, v, bl, zu, lv] = await Promise.all([
       supabase.from("unterkunft_gebaeude").select("*").eq("aktiv", true).order("name"),
       supabase.from("unterkunft_zimmer").select("*").eq("aktiv", true).order("nummer"),
+      supabase.from("unterkunft_bett").select("*").eq("aktiv", true).order("bezeichnung"),
+      supabase
+        .from("employees")
+        .select("id, personal_nr, name, vorname, aktiv")
+        .order("name"),
       supabase
         .from("unterkunft_checkliste_vorlage")
         .select("*")
         .eq("aktiv", true)
         .order("reihenfolge"),
       supabase.from("unterkunft_belegung_aktuell").select("*"),
+      supabase.from("unterkunft_zuordnung_offen").select("*"),
       supabase
         .from("unterkunft_vorgang")
         .select("*")
@@ -93,8 +112,11 @@ export default function UnterkunftUebergabePage() {
     ]);
     setGebaeude((g.data as UnterkunftGebaeude[]) ?? []);
     setZimmer((z.data as UnterkunftZimmer[]) ?? []);
+    setBetten((bt.data as UnterkunftBett[]) ?? []);
+    setEmployees((emp.data as typeof employees) ?? []);
     setVorlage((v.data as UnterkunftChecklisteVorlage[]) ?? []);
     setBelegungen((bl.data as UnterkunftBelegungAktuell[]) ?? []);
+    setZuordnungen((zu.data as UnterkunftZuordnungOffen[]) ?? []);
     setLetzte((lv.data as UnterkunftVorgang[]) ?? []);
     setLoading(false);
   }, []);
@@ -102,6 +124,23 @@ export default function UnterkunftUebergabePage() {
   useEffect(() => {
     laden();
   }, [laden]);
+
+  // Deep-Link aus dem Grundriss: ?zimmer=<id> wählt Gebäude + Zimmer vor
+  // (bewusst über window.location statt useSearchParams - spart die
+  // Suspense-Grenze für diese eine Client-Seite).
+  useEffect(() => {
+    if (zimmer.length === 0) return;
+    const param = new URLSearchParams(window.location.search).get("zimmer");
+    if (!param) return;
+    const z = zimmer.find((x) => String(x.id) === param);
+    if (z) {
+      setSel((s) => ({
+        ...s,
+        gebaeude_id: String(z.gebaeude_id),
+        zimmer_id: String(z.id),
+      }));
+    }
+  }, [zimmer]);
 
   useEffect(() => {
     if (!dirty) return;
@@ -119,6 +158,38 @@ export default function UnterkunftUebergabePage() {
   const belegungenDesZimmers = belegungen.filter(
     (b) => String(b.zimmer_id) === sel.zimmer_id
   );
+
+  // Freie Betten des gewählten Zimmers (nicht heute belegt).
+  const freieBetten = useMemo(() => {
+    if (!sel.zimmer_id) return [];
+    const zid = Number(sel.zimmer_id);
+    const belegt = new Set(belegungen.map((b) => b.bett_id));
+    return betten.filter((b) => b.zimmer_id === zid && !belegt.has(b.id));
+  }, [betten, belegungen, sel.zimmer_id]);
+
+  // Beim Wählen eines Zimmers für einen Einzug: schwebende Zuordnungen dieses
+  // Zimmers als Personen-Vorschlag übernehmen.
+  useEffect(() => {
+    if (sel.typ !== "einzug" || !sel.zimmer_id) {
+      setEinzug({});
+      return;
+    }
+    const zid = Number(sel.zimmer_id);
+    const vorbelegt: Record<string, string> = {};
+    zuordnungen
+      .filter((z) => z.zimmer_id === zid)
+      .forEach((z) => {
+        vorbelegt[z.employee_id] = "";
+      });
+    setEinzug(vorbelegt);
+  }, [sel.typ, sel.zimmer_id, zuordnungen]);
+
+  function personName(employeeId: string): string {
+    const zu = zuordnungen.find((z) => z.employee_id === employeeId);
+    if (zu) return `${zu.vorname} ${zu.name}`;
+    const e = employees.find((x) => x.id === employeeId);
+    return e ? `${e.vorname} ${e.name}` : employeeId;
+  }
 
   const zimmerName = useMemo(() => {
     if (!vorgang) return "";
@@ -274,6 +345,49 @@ export default function UnterkunftUebergabePage() {
       return;
     }
 
+    // Einzug: je Person die bettgenaue Belegung anlegen und die schwebende
+    // Zuordnung schließen. Personen ohne gewähltes Bett werden übersprungen.
+    if (vorgang.typ === "einzug") {
+      const ohneBett: string[] = [];
+      for (const [employeeId, bettId] of Object.entries(einzug)) {
+        if (!bettId) {
+          ohneBett.push(personName(employeeId));
+          continue;
+        }
+        const { data: bel, error: bErr } = await supabase
+          .from("unterkunft_belegung")
+          .insert({
+            bett_id: Number(bettId),
+            employee_id: employeeId,
+            von: heuteIso(),
+          })
+          .select("id")
+          .single();
+        if (bErr) {
+          setFehler(
+            bErr.message.includes("unterkunft_belegung_kein_doppel")
+              ? `Bett von ${personName(employeeId)} ist schon belegt.`
+              : `Belegung ${personName(employeeId)}: ${bErr.message}`
+          );
+          continue;
+        }
+        await supabase
+          .from("unterkunft_zuordnung")
+          .update({
+            status: "erledigt",
+            belegung_id: (bel as { id: number }).id,
+            updated_by: profile?.id ?? null,
+          })
+          .eq("employee_id", employeeId)
+          .eq("status", "schwebend");
+      }
+      if (ohneBett.length > 0) {
+        setHinweis(
+          `Ohne Bett übersprungen: ${ohneBett.join(", ")} – unter „Belegung“ nachtragen.`
+        );
+      }
+    }
+
     // Positionen mit Mangel als Mängel übernehmen (optional).
     const maengelPos = positionen.filter((p) => posEntwurf[p.id]?.zustand === "mangel");
     if (maengelPos.length > 0 && window.confirm(
@@ -290,7 +404,8 @@ export default function UnterkunftUebergabePage() {
       if (mErr) setFehler(`Vorgang abgeschlossen, aber Mängel nicht angelegt: ${mErr.message}`);
     }
 
-    setHinweis("Vorgang abgeschlossen.");
+    setHinweis((h) => h ?? "Vorgang abgeschlossen.");
+    setEinzug({});
     setDirty(false);
     setVorgang(null);
     setPositionen([]);
@@ -423,6 +538,96 @@ export default function UnterkunftUebergabePage() {
             <p className="text-xs text-neutral-500">
               {vorlage.length} Checklisten-Bereiche werden angelegt.
             </p>
+
+            {sel.typ === "einzug" && sel.zimmer_id && (
+              <div className="mt-2 space-y-2 rounded border border-emerald-200 bg-emerald-50/50 p-2">
+                <div className="text-sm font-medium">
+                  Personen für den Einzug ({Object.keys(einzug).length})
+                </div>
+                <p className="text-xs text-neutral-500">
+                  Beim Abschließen wird je Person die Belegung angelegt und die
+                  schwebende Zuordnung geschlossen.
+                </p>
+                {Object.keys(einzug).length === 0 && (
+                  <p className="text-sm text-neutral-400">
+                    keine geplanten Personen – unten per Namen hinzufügen.
+                  </p>
+                )}
+                {Object.entries(einzug).map(([empId, bettId]) => (
+                  <div
+                    key={empId}
+                    className="flex flex-wrap items-center gap-2 text-sm"
+                  >
+                    <span className="min-w-[10rem] font-medium">
+                      {personName(empId)}
+                    </span>
+                    <label>
+                      Bett
+                      <select
+                        className="ml-1"
+                        value={bettId}
+                        onChange={(e) =>
+                          setEinzug((s) => ({ ...s, [empId]: e.target.value }))
+                        }
+                      >
+                        <option value="">– wählen –</option>
+                        {freieBetten.map((b) => (
+                          <option key={b.id} value={b.id}>
+                            {b.bezeichnung}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                    <button
+                      className="text-xs text-red-600 hover:underline"
+                      onClick={() =>
+                        setEinzug((s) => {
+                          const n = { ...s };
+                          delete n[empId];
+                          return n;
+                        })
+                      }
+                    >
+                      entfernen
+                    </button>
+                  </div>
+                ))}
+                <div className="flex flex-wrap items-center gap-2">
+                  <input
+                    className="w-48 text-sm"
+                    placeholder="Person per Name suchen"
+                    value={personSuche}
+                    onChange={(e) => setPersonSuche(e.target.value)}
+                  />
+                  {personSuche.trim() && (
+                    <div className="flex flex-wrap gap-1">
+                      {employees
+                        .filter(
+                          (e) =>
+                            e.aktiv &&
+                            !(e.id in einzug) &&
+                            `${e.vorname} ${e.name} ${e.personal_nr}`
+                              .toLowerCase()
+                              .includes(personSuche.trim().toLowerCase())
+                        )
+                        .slice(0, 6)
+                        .map((e) => (
+                          <button
+                            key={e.id}
+                            className="rounded border border-neutral-300 px-2 py-0.5 text-xs hover:border-emerald-500"
+                            onClick={() => {
+                              setEinzug((s) => ({ ...s, [e.id]: "" }));
+                              setPersonSuche("");
+                            }}
+                          >
+                            + {e.vorname} {e.name}
+                          </button>
+                        ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
           </section>
 
           <section className="space-y-2">

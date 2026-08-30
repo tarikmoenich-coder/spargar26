@@ -122,3 +122,19 @@ export const KONTROLL_AMPEL_FARBE: Record<KontrollAmpel, string> = {
   gelb: "#f59e0b", // amber-500
   rot: "#dc2626", // red-600
 };
+
+// Herkunfts-Mix einer Personenliste als kompakter Text, z.B.
+// "Rumänien 3 · Polen 2". Häufigste zuerst. Ohne Herkunft -> "?".
+export function herkunftMix(
+  personen: ReadonlyArray<{ herkunft: string | null }>
+): string {
+  const zaehler = new Map<string, number>();
+  for (const p of personen) {
+    const k = p.herkunft?.trim() || "?";
+    zaehler.set(k, (zaehler.get(k) ?? 0) + 1);
+  }
+  return [...zaehler.entries()]
+    .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
+    .map(([k, n]) => `${k} ${n}`)
+    .join(" · ");
+}

@@ -4956,13 +4956,15 @@ create table unterkunft_gebaeude (
   updated_at timestamptz not null default now()
 );
 
--- Etage als eigenes Stammdatum (Migration 2026-08-30): Gebäude > Etage >
--- Zimmer, damit Stockwerke je Gebäude eine feste Reihenfolge/Benennung haben
--- (Grundlage für den grafischen Grundriss).
-create table unterkunft_etage (
+-- Wohneinheit (Migration 2026-08-31): Ebene zwischen Gebäude und Zimmer -
+-- mehrere Zimmer + gemeinsam Bad/Küche. Die "Etage" ist nur noch ein
+-- Text-Label darauf (Umschalter in der UI). Ersetzt die kurzlebige Tabelle
+-- unterkunft_etage aus Migration 2026-08-30.
+create table unterkunft_wohneinheit (
   id bigint generated always as identity primary key,
   gebaeude_id bigint not null references unterkunft_gebaeude (id) on delete restrict,
   name text not null,
+  etage_label text,
   reihenfolge int not null default 0,
   aktiv boolean not null default true,
   erstellt_von uuid references profiles (id) default auth.uid(),
@@ -4971,16 +4973,16 @@ create table unterkunft_etage (
   updated_at timestamptz not null default now(),
   unique (gebaeude_id, name)
 );
-create index idx_unterkunft_etage_gebaeude on unterkunft_etage (gebaeude_id);
+create index idx_unterkunft_wohneinheit_gebaeude on unterkunft_wohneinheit (gebaeude_id);
 
 create table unterkunft_zimmer (
   id bigint generated always as identity primary key,
   gebaeude_id bigint not null references unterkunft_gebaeude (id) on delete restrict,
   nummer text not null,
-  -- Freitext-Etage aus v1; seit Migration 2026-08-30 nicht mehr gepflegt,
-  -- ersetzt durch etage_id. Bleibt für Altdaten stehen.
+  -- Freitext-Etage aus v1; seit Migration 2026-08-30 nicht mehr gepflegt.
+  -- Bleibt für Altdaten stehen.
   etage text,
-  etage_id bigint references unterkunft_etage (id) on delete set null,
+  wohneinheit_id bigint references unterkunft_wohneinheit (id) on delete set null,
   -- Rasterkoordinaten für den Grundriss (Migration 2026-08-30). plan_x/plan_y
   -- = Position, plan_w/plan_h = Größe in Rastereinheiten. NULL bei plan_x/
   -- plan_y = noch nicht auf dem Grundriss platziert.
@@ -5000,7 +5002,7 @@ create table unterkunft_zimmer (
   unique (gebaeude_id, nummer)
 );
 create index idx_unterkunft_zimmer_gebaeude on unterkunft_zimmer (gebaeude_id);
-create index idx_unterkunft_zimmer_etage on unterkunft_zimmer (etage_id);
+create index idx_unterkunft_zimmer_wohneinheit on unterkunft_zimmer (wohneinheit_id);
 
 create table unterkunft_bett (
   id bigint generated always as identity primary key,
@@ -5047,6 +5049,31 @@ create table unterkunft_belegung (
 );
 create index idx_unterkunft_belegung_bett on unterkunft_belegung (bett_id);
 create index idx_unterkunft_belegung_employee on unterkunft_belegung (employee_id);
+
+-- Schwebende Belegungsplanung (Migration 2026-08-31): Person -> Wohneinheit
+-- (optional schon Zimmer), bevor die Zimmerübergabe läuft. "fest" entsteht
+-- erst mit der Übergabe (dann bettgenaue unterkunft_belegung, Zuordnung wird
+-- 'erledigt'). Nur zimmergenau (kein Bett).
+create table unterkunft_zuordnung (
+  id bigint generated always as identity primary key,
+  employee_id uuid not null references employees (id) on delete restrict,
+  wohneinheit_id bigint not null references unterkunft_wohneinheit (id) on delete restrict,
+  zimmer_id bigint references unterkunft_zimmer (id) on delete set null,
+  geplant_ab date not null default current_date,
+  status text not null default 'schwebend'
+    check (status in ('schwebend', 'erledigt', 'storniert')),
+  notiz text,
+  belegung_id bigint references unterkunft_belegung (id) on delete set null,
+  erfasst_von uuid references profiles (id) default auth.uid(),
+  erfasst_am timestamptz not null default now(),
+  updated_by uuid references profiles (id),
+  updated_at timestamptz not null default now()
+);
+create index idx_unterkunft_zuordnung_employee on unterkunft_zuordnung (employee_id);
+create index idx_unterkunft_zuordnung_wohneinheit on unterkunft_zuordnung (wohneinheit_id);
+create index idx_unterkunft_zuordnung_zimmer on unterkunft_zuordnung (zimmer_id);
+create unique index uq_unterkunft_zuordnung_offen
+  on unterkunft_zuordnung (employee_id) where status = 'schwebend';
 
 create table unterkunft_checkliste_vorlage (
   id bigint generated always as identity primary key,
@@ -5188,9 +5215,11 @@ create trigger trg_unterkunft_foto_schutz
 
 create trigger trg_unterkunft_gebaeude_updated_at before update on unterkunft_gebaeude
   for each row execute function set_updated_at();
-create trigger trg_unterkunft_etage_updated_at before update on unterkunft_etage
+create trigger trg_unterkunft_wohneinheit_updated_at before update on unterkunft_wohneinheit
   for each row execute function set_updated_at();
 create trigger trg_unterkunft_zimmer_updated_at before update on unterkunft_zimmer
+  for each row execute function set_updated_at();
+create trigger trg_unterkunft_zuordnung_updated_at before update on unterkunft_zuordnung
   for each row execute function set_updated_at();
 create trigger trg_unterkunft_vorgang_updated_at before update on unterkunft_vorgang
   for each row execute function set_updated_at();
@@ -5200,6 +5229,9 @@ create trigger trg_unterkunft_mangel_updated_at before update on unterkunft_mang
 create trigger trg_audit_unterkunft_belegung
   after insert or update or delete on unterkunft_belegung
   for each row execute function write_audit_log();
+create trigger trg_audit_unterkunft_zuordnung
+  after insert or update on unterkunft_zuordnung
+  for each row execute function write_audit_log();
 create trigger trg_audit_unterkunft_vorgang
   after insert or update or delete on unterkunft_vorgang
   for each row execute function write_audit_log();
@@ -5207,33 +5239,36 @@ create trigger trg_audit_unterkunft_mangel
   after insert or update on unterkunft_mangel
   for each row execute function write_audit_log();
 
-create or replace view unterkunft_belegung_aktuell as
+create view unterkunft_belegung_aktuell as
 select
-  b.id, b.bett_id, bt.zimmer_id, b.employee_id,
-  e.personal_nr, e.name, e.vorname,
+  b.id, b.bett_id, bt.zimmer_id, z.wohneinheit_id, b.employee_id,
+  e.personal_nr, e.name, e.vorname, e.herkunft,
   b.von, b.bis, b.notiz
 from unterkunft_belegung b
 join unterkunft_bett bt on bt.id = b.bett_id
+join unterkunft_zimmer z on z.id = bt.zimmer_id
 join employees e on e.id = b.employee_id
 where b.von <= current_date and (b.bis is null or b.bis >= current_date);
 alter view unterkunft_belegung_aktuell set (security_invoker = true);
 grant select on unterkunft_belegung_aktuell to authenticated;
 
-drop view if exists unterkunft_zimmer_uebersicht;
+-- Zimmerübersicht (mit Wohneinheit + Anzahl schwebender Zuordnungen).
 create view unterkunft_zimmer_uebersicht as
 select
-  z.id as zimmer_id, z.nummer, z.etage, z.aktiv, z.notiz,
-  z.etage_id, et.name as etage_name, et.reihenfolge as etage_reihenfolge,
+  z.id as zimmer_id, z.nummer, z.aktiv, z.notiz,
+  z.wohneinheit_id, w.name as wohneinheit_name, w.etage_label,
+  w.reihenfolge as wohneinheit_reihenfolge,
   z.plan_x, z.plan_y, z.plan_w, z.plan_h,
   g.id as gebaeude_id, g.name as gebaeude_name,
   count(distinct bt.id) filter (where bt.aktiv)::int as betten,
   count(distinct ba.id)::int as belegt,
   (count(distinct bt.id) filter (where bt.aktiv) - count(distinct ba.id))::int as frei,
+  coalesce(zu.schwebend, 0)::int as schwebend,
   lk.letzte_kontrolle_am, lk.letzte_kontrolle_typ,
   coalesce(m.offene_maengel, 0)::int as offene_maengel
 from unterkunft_zimmer z
 join unterkunft_gebaeude g on g.id = z.gebaeude_id
-left join unterkunft_etage et on et.id = z.etage_id
+left join unterkunft_wohneinheit w on w.id = z.wohneinheit_id
 left join unterkunft_bett bt on bt.zimmer_id = z.id
 left join unterkunft_belegung ba
   on ba.bett_id = bt.id
@@ -5252,33 +5287,109 @@ left join (
   where status <> 'behoben'
   group by zimmer_id
 ) m on m.zimmer_id = z.id
+left join (
+  select zimmer_id, count(*) as schwebend
+  from unterkunft_zuordnung
+  where status = 'schwebend' and zimmer_id is not null
+  group by zimmer_id
+) zu on zu.zimmer_id = z.id
 group by
-  z.id, z.nummer, z.etage, z.aktiv, z.notiz,
-  z.etage_id, et.name, et.reihenfolge,
+  z.id, z.nummer, z.aktiv, z.notiz,
+  z.wohneinheit_id, w.name, w.etage_label, w.reihenfolge,
   z.plan_x, z.plan_y, z.plan_w, z.plan_h,
   g.id, g.name,
+  zu.schwebend,
   lk.letzte_kontrolle_am, lk.letzte_kontrolle_typ, m.offene_maengel;
 alter view unterkunft_zimmer_uebersicht set (security_invoker = true);
 grant select on unterkunft_zimmer_uebersicht to authenticated;
 
+-- Wohneinheit-Übersicht (Karten): Betten, fest belegt (heute), schwebend, frei.
+create view unterkunft_wohneinheit_uebersicht as
+select
+  w.id as wohneinheit_id, w.name, w.etage_label, w.reihenfolge, w.aktiv,
+  g.id as gebaeude_id, g.name as gebaeude_name,
+  count(distinct z.id) filter (where z.aktiv)::int as zimmer,
+  count(distinct bt.id)::int as betten,
+  count(distinct ba.id)::int as fest,
+  coalesce(zu.schwebend, 0)::int as schwebend,
+  (count(distinct bt.id) - count(distinct ba.id))::int as frei
+from unterkunft_wohneinheit w
+join unterkunft_gebaeude g on g.id = w.gebaeude_id
+left join unterkunft_zimmer z on z.wohneinheit_id = w.id and z.aktiv
+left join unterkunft_bett bt on bt.zimmer_id = z.id and bt.aktiv
+left join unterkunft_belegung ba
+  on ba.bett_id = bt.id
+  and ba.von <= current_date
+  and (ba.bis is null or ba.bis >= current_date)
+left join (
+  select wohneinheit_id, count(*) as schwebend
+  from unterkunft_zuordnung
+  where status = 'schwebend'
+  group by wohneinheit_id
+) zu on zu.wohneinheit_id = w.id
+group by w.id, w.name, w.etage_label, w.reihenfolge, w.aktiv, g.id, g.name, zu.schwebend;
+alter view unterkunft_wohneinheit_uebersicht set (security_invoker = true);
+grant select on unterkunft_wohneinheit_uebersicht to authenticated;
+
+-- Schwebende Zuordnungen mit Person + Herkunft + geplantem Zimmer.
+create view unterkunft_zuordnung_offen as
+select
+  zu.id, zu.employee_id, zu.wohneinheit_id, zu.zimmer_id, zu.geplant_ab, zu.notiz,
+  e.personal_nr, e.name, e.vorname, e.herkunft,
+  w.name as wohneinheit_name, w.etage_label, w.gebaeude_id,
+  g.name as gebaeude_name, z.nummer as zimmer_nummer
+from unterkunft_zuordnung zu
+join employees e on e.id = zu.employee_id
+join unterkunft_wohneinheit w on w.id = zu.wohneinheit_id
+join unterkunft_gebaeude g on g.id = w.gebaeude_id
+left join unterkunft_zimmer z on z.id = zu.zimmer_id
+where zu.status = 'schwebend';
+alter view unterkunft_zuordnung_offen set (security_invoker = true);
+grant select on unterkunft_zuordnung_offen to authenticated;
+
+-- Personen ohne Bleibe: aktive Mitarbeiter ohne laufende Belegung UND ohne
+-- schwebende Zuordnung (Ausgangsliste fuer "Belegung planen").
+create view unterkunft_person_offen as
+select
+  e.id as employee_id, e.personal_nr, e.name, e.vorname, e.herkunft,
+  k.geplante_ankunft, (k.status = 'anreiseliste') as auf_anreiseliste
+from employees e
+left join personal_kandidaten k
+  on k.aktivierter_employee_id = e.id and k.status = 'anreiseliste'
+where e.aktiv
+  and not exists (
+    select 1 from unterkunft_zuordnung zu
+    where zu.employee_id = e.id and zu.status = 'schwebend'
+  )
+  and not exists (
+    select 1 from unterkunft_belegung b
+    where b.employee_id = e.id
+      and b.von <= current_date and (b.bis is null or b.bis >= current_date)
+  );
+alter view unterkunft_person_offen set (security_invoker = true);
+grant select on unterkunft_person_offen to authenticated;
+
 -- Belegungen je Person (für den Unterkunfts-Block in der Suche) - alle
--- Zeiträume, mit Gebäude/Zimmer/Bett.
-create or replace view unterkunft_belegung_person as
+-- Zeiträume, mit Gebäude/Wohneinheit/Zimmer/Bett.
+create view unterkunft_belegung_person as
 select
   b.id, b.employee_id, b.von, b.bis, b.notiz,
   bt.bezeichnung as bett,
-  z.id as zimmer_id, z.nummer as zimmer_nummer,
+  z.id as zimmer_id, z.nummer as zimmer_nummer, z.wohneinheit_id,
+  w.name as wohneinheit_name,
   g.id as gebaeude_id, g.name as gebaeude_name
 from unterkunft_belegung b
 join unterkunft_bett bt on bt.id = b.bett_id
 join unterkunft_zimmer z on z.id = bt.zimmer_id
+left join unterkunft_wohneinheit w on w.id = z.wohneinheit_id
 join unterkunft_gebaeude g on g.id = z.gebaeude_id;
 alter view unterkunft_belegung_person set (security_invoker = true);
 grant select on unterkunft_belegung_person to authenticated;
 
 alter table unterkunft_gebaeude enable row level security;
-alter table unterkunft_etage enable row level security;
+alter table unterkunft_wohneinheit enable row level security;
 alter table unterkunft_zimmer enable row level security;
+alter table unterkunft_zuordnung enable row level security;
 alter table unterkunft_bett enable row level security;
 alter table unterkunft_belegung enable row level security;
 alter table unterkunft_checkliste_vorlage enable row level security;
@@ -5292,9 +5403,9 @@ create policy "unterkunft_gebaeude_select" on unterkunft_gebaeude for select
 create policy "unterkunft_gebaeude_write" on unterkunft_gebaeude for all
   using (current_role_name() in ('admin', 'hr'))
   with check (current_role_name() in ('admin', 'hr'));
-create policy "unterkunft_etage_select" on unterkunft_etage for select
+create policy "unterkunft_wohneinheit_select" on unterkunft_wohneinheit for select
   using (auth.uid() is not null);
-create policy "unterkunft_etage_write" on unterkunft_etage for all
+create policy "unterkunft_wohneinheit_write" on unterkunft_wohneinheit for all
   using (current_role_name() in ('admin', 'hr'))
   with check (current_role_name() in ('admin', 'hr'));
 create policy "unterkunft_zimmer_select" on unterkunft_zimmer for select
@@ -5302,6 +5413,16 @@ create policy "unterkunft_zimmer_select" on unterkunft_zimmer for select
 create policy "unterkunft_zimmer_write" on unterkunft_zimmer for all
   using (current_role_name() in ('admin', 'hr'))
   with check (current_role_name() in ('admin', 'hr'));
+-- Belegungsplanung: anlegen/umplanen nur admin + hr; hausmeister darf eine
+-- Zuordnung nur abschliessen/stornieren (im Rahmen der Uebergabe).
+create policy "unterkunft_zuordnung_select" on unterkunft_zuordnung for select
+  using (auth.uid() is not null);
+create policy "unterkunft_zuordnung_write" on unterkunft_zuordnung for all
+  using (current_role_name() in ('admin', 'hr'))
+  with check (current_role_name() in ('admin', 'hr'));
+create policy "unterkunft_zuordnung_hausmeister_abschluss" on unterkunft_zuordnung for update
+  using (current_role_name() = 'hausmeister')
+  with check (current_role_name() = 'hausmeister' and status in ('erledigt', 'storniert'));
 create policy "unterkunft_bett_select" on unterkunft_bett for select
   using (auth.uid() is not null);
 create policy "unterkunft_bett_write" on unterkunft_bett for all

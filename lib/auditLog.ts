@@ -20,6 +20,7 @@ export const BEREICH_LABELS: Record<string, string> = {
   periods: "Monatsabschluss",
   personal_kandidaten: "Personalplanung",
   unterkunft_belegung: "Zimmerbelegung",
+  unterkunft_zuordnung: "Belegungsplanung",
   unterkunft_vorgang: "Zimmer-Vorgang",
   unterkunft_mangel: "Zimmer-Mangel",
 };

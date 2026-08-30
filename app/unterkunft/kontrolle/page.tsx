@@ -86,6 +86,15 @@ export default function UnterkunftKontrollePage() {
     laden();
   }, [laden]);
 
+  // Deep-Link aus dem Grundriss: ?zimmer=<id> wählt Gebäude + Zimmer vor.
+  useEffect(() => {
+    if (zimmer.length === 0) return;
+    const param = new URLSearchParams(window.location.search).get("zimmer");
+    if (!param) return;
+    const z = zimmer.find((x) => String(x.id) === param);
+    if (z) setSel({ gebaeude_id: String(z.gebaeude_id), zimmer_id: String(z.id) });
+  }, [zimmer]);
+
   useEffect(() => {
     if (!dirty) return;
     const handler = (e: BeforeUnloadEvent) => {

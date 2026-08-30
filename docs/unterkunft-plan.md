@@ -94,17 +94,74 @@ Umgesetzt:
 - [x] `app/suche/page.tsx`: Block „Unterkunft" (alle Belegungszeiträume der Person)
 - [x] `npx tsc --noEmit` sauber · `npx next build` grün
 
-Offen:
-- [ ] **Migrationen in der Supabase-Konsole ausführen** – Reihenfolge:
-      `…hausmeister_1_enum.sql` allein + committen, dann `…hausmeister_2_policies.sql`
-      und `…unterkunft_grundriss.sql`
+Offen (Stand 2026-08-30, teils überholt durch die Erweiterung 2026-08-31):
+- [x] Migrationen 2026-08-30 in Supabase ausgeführt, auf `main` gemerged
+- [x] `?zimmer=`-Deep-Link aus dem Grundriss (jetzt in Übergabe + Kontrolle)
 - [ ] `hausmeister`-Benutzer in Supabase anlegen (profiles.role = 'hausmeister')
-- [ ] Smoke-Test: Grundriss zeichnen (admin), Zimmer anklicken; Login als
-      `hausmeister` → sieht nur Unterkunft + Suche
-- [ ] Kontrollmuster festlegen (Intervall je Zimmertyp/Saison) → Schwellen in
-      `lib/unterkunft.ts` anpassen
+- [ ] Kontrollmuster festlegen → Schwellen in `lib/unterkunft.ts` anpassen
 - [ ] später: Freitext-Spalte `unterkunft_zimmer.etage` per Migration entfernen
-- [ ] optional: `?zimmer=`-Deep-Link aus dem Grundriss-Panel in die Arbeits-Tabs
+
+## Erweiterung (2026-08-31): Wohneinheit-Ebene + schwebende Belegung
+
+Ziel: weniger Klicks für den Hausmeister am Smartphone, Belegungsplanung vor
+der Übergabe.
+
+Entscheidungen (2026-08-31):
+
+| Frage | Entscheidung |
+|---|---|
+| `unterkunft_etage` | durch `unterkunft_wohneinheit` **ersetzt** (Etage = Text-Label) |
+| Belegungs-Zustände | zwei Tabellen: `unterkunft_zuordnung` (schwebend) + `unterkunft_belegung` (fest) |
+| Wohneinheit-Übersicht | Karten/Liste, kein gezeichneter Gebäude-Grundriss |
+| „Belegung planen" (schwebend) | nur admin/hr; hausmeister nur Übergabe-Abschluss |
+| Schwebende Zuordnung | nur zimmergenau (Bett erst bei der Übergabe) |
+
+Umgesetzt:
+- [x] Migration `migration_2026-08-31_unterkunft_wohneinheit_zuordnung.sql`:
+      Tabelle `unterkunft_wohneinheit` (+ `etage_label`, `reihenfolge`),
+      `unterkunft_zimmer.wohneinheit_id` (Daten aus `unterkunft_etage` gezogen,
+      dann `etage_id` + `unterkunft_etage` gedroppt); Tabelle
+      `unterkunft_zuordnung` (schwebend/erledigt/storniert, nur zimmergenau,
+      Unique-Index „eine offene je Person", Audit-Trigger); RLS (Zuordnung
+      anlegen admin/hr, hausmeister nur Update auf erledigt/storniert).
+      Sichten neu: `unterkunft_zimmer_uebersicht` (+ wohneinheit, + schwebend),
+      `unterkunft_wohneinheit_uebersicht`, `unterkunft_zuordnung_offen`,
+      `unterkunft_person_offen`; `unterkunft_belegung_aktuell`/`_person` um
+      Herkunft/Wohneinheit erweitert.
+- [x] `supabase/schema.sql` Abschnitt 15 gespiegelt.
+- [x] `lib/types.ts`: `UnterkunftWohneinheit`, `UnterkunftZuordnung(+Offen)`,
+      `UnterkunftWohneinheitUebersicht`, `UnterkunftPersonOffen`;
+      `UnterkunftZimmer`/`…Uebersicht` auf Wohneinheit umgestellt;
+      `UnterkunftBelegungAktuell/Person` + herkunft/wohneinheit.
+- [x] `lib/unterkunft.ts`: `herkunftMix()`.
+- [x] `lib/auditLog.ts`: BEREICH_LABELS `unterkunft_zuordnung`.
+- [x] `/unterkunft` (Grundriss): Gebäude-Auswahl → **Etage-Umschalter**
+      (Chips) → **Wohneinheit-Karten** (Betten · fest · schwebend · frei ·
+      Herkunfts-Mix · „Übergaben offen") → Karte antippen → Zimmer-Raster der
+      Einheit + Liste „Noch offen" (schwebende Personen) + Zimmer-Panel mit
+      „Übergabe starten" (`?zimmer=`). Platzieren nur admin.
+- [x] `/unterkunft/belegung` → „**Belegung planen**": Liste „Ohne Bleibe"
+      (`unterkunft_person_offen`, Anreiseliste zuerst) ↔ Ziel (Gebäude/
+      Wohneinheit/optional Zimmer/ab-Datum) → schwebend zuordnen (Mehrfach);
+      Tabelle „Schwebend" (Zimmer nachtragen / aufheben); „Fest belegt"-
+      Tabelle; „Direkt belegen" als `<details>`-Notnagel. Nur admin/hr.
+- [x] `/unterkunft/uebergabe`: `?zimmer=` Vorwahl; für **Einzug** Personen-
+      Auswahl (aus schwebenden Zuordnungen des Zimmers vorbelegt, + Namens-
+      suche), je Person Bett-Wahl; „Abschließen" legt je Person die
+      `unterkunft_belegung` an und setzt die Zuordnung auf `erledigt`.
+- [x] `/unterkunft/kontrolle`: `?zimmer=` Vorwahl.
+- [x] Stammdaten: „Etagen"-Block → „Wohneinheiten" (Name + Etage-Label +
+      Reihenfolge); Zimmer-Anlage mit Wohneinheit-Auswahl.
+- [x] `npx tsc --noEmit` sauber · `npx next build` grün.
+
+Offen:
+- [ ] **Migration `migration_2026-08-31_unterkunft_wohneinheit_zuordnung.sql`
+      in der Supabase-Konsole ausführen** (ein Zug, kein ALTER TYPE).
+- [ ] Smoke-Test: Wohneinheit + Zimmer anlegen → „Belegung planen"
+      (Anreiseliste → Wohneinheit schwebend) → Grundriss-Karte → Zimmer →
+      „Übergabe starten" → Person + Bett → Abschließen → wird „fest".
+- [ ] Zimmerkontrollen-Workflow: weiter offen, separat besprechen.
+- [ ] optional: Übergabe direkt als Bottom-Sheet im Wohneinheit-Detail.
 
 ### Wiedereinstieg nach Konsolen-Neustart
 `claude --continue` in `~/projekte/spargar26`. Diese Datei ist die Quelle der Wahrheit.
