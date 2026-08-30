@@ -331,6 +331,47 @@ export default function UnterkunftUebergabePage() {
     if (!ok) return;
 
     const supabase = getSupabaseClient();
+
+    // Positionen mit Mangel als Mängel übernehmen (optional) - VOR dem
+    // Abschließen, damit die Bereichs-Fotos noch an den neuen Mangel gehängt
+    // werden können (danach ist der Vorgang schreibgeschützt).
+    const maengelPos = positionen.filter(
+      (p) => posEntwurf[p.id]?.zustand === "mangel"
+    );
+    if (
+      maengelPos.length > 0 &&
+      window.confirm(
+        `${maengelPos.length} Position(en) mit Zustand „Mangel“ – als offene Mängel für dieses Zimmer anlegen?`
+      )
+    ) {
+      for (const p of maengelPos) {
+        const { data: mg, error: mErr } = await supabase
+          .from("unterkunft_mangel")
+          .insert({
+            zimmer_id: vorgang.zimmer_id,
+            quelle_vorgang_id: vorgang.id,
+            beschreibung: `${p.bereich}: ${
+              posEntwurf[p.id]?.bemerkung?.trim() || "Mangel bei Übergabe/Abnahme"
+            }`,
+            schwere: "mittel" as const,
+          })
+          .select("id")
+          .single();
+        if (mErr) {
+          setFehler(`Mangel „${p.bereich}“ nicht angelegt: ${mErr.message}`);
+          continue;
+        }
+        // Die zu diesem Bereich aufgenommenen Fotos zusätzlich an den Mangel
+        // hängen, damit sie in der Mängelliste erscheinen.
+        await supabase
+          .from("unterkunft_foto")
+          .update({ mangel_id: (mg as { id: number }).id })
+          .eq("vorgang_id", vorgang.id)
+          .eq("bereich", p.bereich)
+          .is("mangel_id", null);
+      }
+    }
+
     const { error } = await supabase
       .from("unterkunft_vorgang")
       .update({ abgeschlossen: true, abgeschlossen_am: new Date().toISOString() })
@@ -367,22 +408,6 @@ export default function UnterkunftUebergabePage() {
           .eq("employee_id", employeeId)
           .eq("status", "schwebend");
       }
-    }
-
-    // Positionen mit Mangel als Mängel übernehmen (optional).
-    const maengelPos = positionen.filter((p) => posEntwurf[p.id]?.zustand === "mangel");
-    if (maengelPos.length > 0 && window.confirm(
-      `${maengelPos.length} Position(en) mit Zustand „Mangel“ – als offene Mängel für dieses Zimmer anlegen?`
-    )) {
-      const { error: mErr } = await supabase.from("unterkunft_mangel").insert(
-        maengelPos.map((p) => ({
-          zimmer_id: vorgang.zimmer_id,
-          quelle_vorgang_id: vorgang.id,
-          beschreibung: `${p.bereich}: ${posEntwurf[p.id]?.bemerkung?.trim() || "Mangel bei Übergabe/Abnahme"}`,
-          schwere: "mittel" as const,
-        }))
-      );
-      if (mErr) setFehler(`Vorgang abgeschlossen, aber Mängel nicht angelegt: ${mErr.message}`);
     }
 
     setHinweis((h) => h ?? "Vorgang abgeschlossen.");

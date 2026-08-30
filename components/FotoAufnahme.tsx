@@ -142,35 +142,46 @@ export default function FotoAufnahme({
     <div className="space-y-2">
       {fotos.length > 0 && (
         <div className="flex flex-wrap gap-2">
-          {fotos.map((foto) => (
-            <div key={foto.id} className="relative">
-              {foto.signierteUrl ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <a href={foto.signierteUrl} target="_blank" rel="noreferrer">
-                  <img
-                    src={foto.signierteUrl}
-                    alt={foto.dateiname}
-                    className="h-24 w-24 rounded border border-neutral-300 object-cover"
-                  />
-                </a>
-              ) : (
-                <div className="flex h-24 w-24 items-center justify-center rounded border border-neutral-300 text-xs text-neutral-400">
-                  ?
-                </div>
-              )}
-              {!disabled && (
-                <button
-                  type="button"
-                  onClick={() => loeschen(foto)}
-                  disabled={laeuft}
-                  title="Foto löschen"
-                  className="absolute -right-2 -top-2 h-6 w-6 rounded-full bg-red-600 text-xs text-white hover:bg-red-700 disabled:opacity-50"
-                >
-                  ×
-                </button>
-              )}
-            </div>
-          ))}
+          {fotos.map((foto) => {
+            // Im Mangel-Kontext: Fotos, die zusätzlich an einem Vorgang hängen,
+            // stammen aus einer Übergabe/Kontrolle. Sie werden hier nur gezeigt
+            // (löschen ginge nur im - abgeschlossenen - Vorgang).
+            const geerbt = anMangel && foto.vorgang_id != null;
+            return (
+              <div key={foto.id} className="relative">
+                {foto.signierteUrl ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <a href={foto.signierteUrl} target="_blank" rel="noreferrer">
+                    <img
+                      src={foto.signierteUrl}
+                      alt={foto.dateiname}
+                      className="h-24 w-24 rounded border border-neutral-300 object-cover"
+                    />
+                  </a>
+                ) : (
+                  <div className="flex h-24 w-24 items-center justify-center rounded border border-neutral-300 text-xs text-neutral-400">
+                    ?
+                  </div>
+                )}
+                {geerbt && (
+                  <span className="absolute bottom-0 left-0 right-0 rounded-b bg-black/55 px-1 py-0.5 text-center text-[10px] leading-tight text-white">
+                    aus Kontrolle
+                  </span>
+                )}
+                {!disabled && !geerbt && (
+                  <button
+                    type="button"
+                    onClick={() => loeschen(foto)}
+                    disabled={laeuft}
+                    title="Foto löschen"
+                    className="absolute -right-2 -top-2 h-6 w-6 rounded-full bg-red-600 text-xs text-white hover:bg-red-700 disabled:opacity-50"
+                  >
+                    ×
+                  </button>
+                )}
+              </div>
+            );
+          })}
         </div>
       )}
 

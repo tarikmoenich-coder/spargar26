@@ -382,7 +382,14 @@ export default function UnterkunftMaengelPage() {
                           </label>
                         )}
                         <div>
-                          <div className="mb-1 text-sm font-medium">Fotos</div>
+                          <div className="mb-1 text-sm font-medium">
+                            Fotos
+                            {m.quelle_vorgang_id && (
+                              <span className="ml-1 font-normal text-neutral-400">
+                                (inkl. Fotos aus der Kontrolle)
+                              </span>
+                            )}
+                          </div>
                           <FotoAufnahme
                             zimmerId={m.zimmer_id}
                             mangelId={m.id}

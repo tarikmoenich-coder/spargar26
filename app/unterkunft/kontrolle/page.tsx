@@ -241,6 +241,44 @@ export default function UnterkunftKontrollePage() {
     const ok = await speichernAlle();
     if (!ok) return;
     const supabase = getSupabaseClient();
+
+    // Mängel VOR dem Abschließen übernehmen, damit die Bereichs-Fotos noch an
+    // den neuen Mangel gehängt werden können (danach ist der Vorgang gesperrt).
+    const maengelPos = positionen.filter(
+      (p) => posEntwurf[p.id]?.zustand === "mangel"
+    );
+    if (
+      maengelPos.length > 0 &&
+      window.confirm(
+        `${maengelPos.length} Position(en) mit „Mangel“ – als offene Mängel für dieses Zimmer anlegen?`
+      )
+    ) {
+      for (const p of maengelPos) {
+        const { data: mg, error: mErr } = await supabase
+          .from("unterkunft_mangel")
+          .insert({
+            zimmer_id: vorgang.zimmer_id,
+            quelle_vorgang_id: vorgang.id,
+            beschreibung: `${p.bereich}: ${
+              posEntwurf[p.id]?.bemerkung?.trim() || "Mangel bei Zwischenkontrolle"
+            }`,
+            schwere: "mittel" as const,
+          })
+          .select("id")
+          .single();
+        if (mErr) {
+          setFehler(`Mangel „${p.bereich}“ nicht angelegt: ${mErr.message}`);
+          continue;
+        }
+        await supabase
+          .from("unterkunft_foto")
+          .update({ mangel_id: (mg as { id: number }).id })
+          .eq("vorgang_id", vorgang.id)
+          .eq("bereich", p.bereich)
+          .is("mangel_id", null);
+      }
+    }
+
     const { error } = await supabase
       .from("unterkunft_vorgang")
       .update({ abgeschlossen: true, abgeschlossen_am: new Date().toISOString() })
@@ -248,26 +286,6 @@ export default function UnterkunftKontrollePage() {
     if (error) {
       setFehler(error.message);
       return;
-    }
-
-    const maengelPos = positionen.filter((p) => posEntwurf[p.id]?.zustand === "mangel");
-    if (
-      maengelPos.length > 0 &&
-      window.confirm(
-        `${maengelPos.length} Position(en) mit „Mangel“ – als offene Mängel für dieses Zimmer anlegen?`
-      )
-    ) {
-      const { error: mErr } = await supabase.from("unterkunft_mangel").insert(
-        maengelPos.map((p) => ({
-          zimmer_id: vorgang.zimmer_id,
-          quelle_vorgang_id: vorgang.id,
-          beschreibung: `${p.bereich}: ${
-            posEntwurf[p.id]?.bemerkung?.trim() || "Mangel bei Zwischenkontrolle"
-          }`,
-          schwere: "mittel" as const,
-        }))
-      );
-      if (mErr) setFehler(`Kontrolle abgeschlossen, aber Mängel nicht angelegt: ${mErr.message}`);
     }
 
     setHinweis("Zwischenkontrolle abgeschlossen.");
