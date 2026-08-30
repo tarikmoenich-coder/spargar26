@@ -48,7 +48,11 @@ create type user_role as enum (
   -- Nutzer-Vorgabe 2026-08-09: nur Zugriff auf Prämien (Erfassung) und
   -- Statistik, sonst nichts - eigener Arbeitsbereich wie zeiterfassung
   -- bei Stundenerfassung.
-  'erntewirtschaft'
+  'erntewirtschaft',
+  -- Nutzer-Vorgabe 2026-08-30: sieht ausschliesslich das Modul "Unterkunft"
+  -- (+ Suche) und pflegt dort die laufende Arbeit (Belegung, Uebergabe/
+  -- Abnahme, Kontrolle, Maengel, Fotos) - Stammdaten bleiben admin/hr.
+  'hausmeister'
 );
 
 create table profiles (
@@ -4952,11 +4956,38 @@ create table unterkunft_gebaeude (
   updated_at timestamptz not null default now()
 );
 
+-- Etage als eigenes Stammdatum (Migration 2026-08-30): Gebäude > Etage >
+-- Zimmer, damit Stockwerke je Gebäude eine feste Reihenfolge/Benennung haben
+-- (Grundlage für den grafischen Grundriss).
+create table unterkunft_etage (
+  id bigint generated always as identity primary key,
+  gebaeude_id bigint not null references unterkunft_gebaeude (id) on delete restrict,
+  name text not null,
+  reihenfolge int not null default 0,
+  aktiv boolean not null default true,
+  erstellt_von uuid references profiles (id) default auth.uid(),
+  erstellt_am timestamptz not null default now(),
+  updated_by uuid references profiles (id),
+  updated_at timestamptz not null default now(),
+  unique (gebaeude_id, name)
+);
+create index idx_unterkunft_etage_gebaeude on unterkunft_etage (gebaeude_id);
+
 create table unterkunft_zimmer (
   id bigint generated always as identity primary key,
   gebaeude_id bigint not null references unterkunft_gebaeude (id) on delete restrict,
   nummer text not null,
+  -- Freitext-Etage aus v1; seit Migration 2026-08-30 nicht mehr gepflegt,
+  -- ersetzt durch etage_id. Bleibt für Altdaten stehen.
   etage text,
+  etage_id bigint references unterkunft_etage (id) on delete set null,
+  -- Rasterkoordinaten für den Grundriss (Migration 2026-08-30). plan_x/plan_y
+  -- = Position, plan_w/plan_h = Größe in Rastereinheiten. NULL bei plan_x/
+  -- plan_y = noch nicht auf dem Grundriss platziert.
+  plan_x int,
+  plan_y int,
+  plan_w int not null default 2,
+  plan_h int not null default 2,
   -- Soll-Bettenzahl (Planungshinweis) - echte Kapazität = Anzahl aktiver
   -- unterkunft_bett-Zeilen.
   bettenzahl int,
@@ -4969,6 +5000,7 @@ create table unterkunft_zimmer (
   unique (gebaeude_id, nummer)
 );
 create index idx_unterkunft_zimmer_gebaeude on unterkunft_zimmer (gebaeude_id);
+create index idx_unterkunft_zimmer_etage on unterkunft_zimmer (etage_id);
 
 create table unterkunft_bett (
   id bigint generated always as identity primary key,
@@ -5156,6 +5188,8 @@ create trigger trg_unterkunft_foto_schutz
 
 create trigger trg_unterkunft_gebaeude_updated_at before update on unterkunft_gebaeude
   for each row execute function set_updated_at();
+create trigger trg_unterkunft_etage_updated_at before update on unterkunft_etage
+  for each row execute function set_updated_at();
 create trigger trg_unterkunft_zimmer_updated_at before update on unterkunft_zimmer
   for each row execute function set_updated_at();
 create trigger trg_unterkunft_vorgang_updated_at before update on unterkunft_vorgang
@@ -5185,9 +5219,12 @@ where b.von <= current_date and (b.bis is null or b.bis >= current_date);
 alter view unterkunft_belegung_aktuell set (security_invoker = true);
 grant select on unterkunft_belegung_aktuell to authenticated;
 
-create or replace view unterkunft_zimmer_uebersicht as
+drop view if exists unterkunft_zimmer_uebersicht;
+create view unterkunft_zimmer_uebersicht as
 select
-  z.id as zimmer_id, z.nummer, z.etage, z.aktiv,
+  z.id as zimmer_id, z.nummer, z.etage, z.aktiv, z.notiz,
+  z.etage_id, et.name as etage_name, et.reihenfolge as etage_reihenfolge,
+  z.plan_x, z.plan_y, z.plan_w, z.plan_h,
   g.id as gebaeude_id, g.name as gebaeude_name,
   count(distinct bt.id) filter (where bt.aktiv)::int as betten,
   count(distinct ba.id)::int as belegt,
@@ -5196,6 +5233,7 @@ select
   coalesce(m.offene_maengel, 0)::int as offene_maengel
 from unterkunft_zimmer z
 join unterkunft_gebaeude g on g.id = z.gebaeude_id
+left join unterkunft_etage et on et.id = z.etage_id
 left join unterkunft_bett bt on bt.zimmer_id = z.id
 left join unterkunft_belegung ba
   on ba.bett_id = bt.id
@@ -5215,12 +5253,31 @@ left join (
   group by zimmer_id
 ) m on m.zimmer_id = z.id
 group by
-  z.id, z.nummer, z.etage, z.aktiv, g.id, g.name,
+  z.id, z.nummer, z.etage, z.aktiv, z.notiz,
+  z.etage_id, et.name, et.reihenfolge,
+  z.plan_x, z.plan_y, z.plan_w, z.plan_h,
+  g.id, g.name,
   lk.letzte_kontrolle_am, lk.letzte_kontrolle_typ, m.offene_maengel;
 alter view unterkunft_zimmer_uebersicht set (security_invoker = true);
 grant select on unterkunft_zimmer_uebersicht to authenticated;
 
+-- Belegungen je Person (für den Unterkunfts-Block in der Suche) - alle
+-- Zeiträume, mit Gebäude/Zimmer/Bett.
+create or replace view unterkunft_belegung_person as
+select
+  b.id, b.employee_id, b.von, b.bis, b.notiz,
+  bt.bezeichnung as bett,
+  z.id as zimmer_id, z.nummer as zimmer_nummer,
+  g.id as gebaeude_id, g.name as gebaeude_name
+from unterkunft_belegung b
+join unterkunft_bett bt on bt.id = b.bett_id
+join unterkunft_zimmer z on z.id = bt.zimmer_id
+join unterkunft_gebaeude g on g.id = z.gebaeude_id;
+alter view unterkunft_belegung_person set (security_invoker = true);
+grant select on unterkunft_belegung_person to authenticated;
+
 alter table unterkunft_gebaeude enable row level security;
+alter table unterkunft_etage enable row level security;
 alter table unterkunft_zimmer enable row level security;
 alter table unterkunft_bett enable row level security;
 alter table unterkunft_belegung enable row level security;
@@ -5233,6 +5290,11 @@ alter table unterkunft_foto enable row level security;
 create policy "unterkunft_gebaeude_select" on unterkunft_gebaeude for select
   using (auth.uid() is not null);
 create policy "unterkunft_gebaeude_write" on unterkunft_gebaeude for all
+  using (current_role_name() in ('admin', 'hr'))
+  with check (current_role_name() in ('admin', 'hr'));
+create policy "unterkunft_etage_select" on unterkunft_etage for select
+  using (auth.uid() is not null);
+create policy "unterkunft_etage_write" on unterkunft_etage for all
   using (current_role_name() in ('admin', 'hr'))
   with check (current_role_name() in ('admin', 'hr'));
 create policy "unterkunft_zimmer_select" on unterkunft_zimmer for select
@@ -5248,8 +5310,8 @@ create policy "unterkunft_bett_write" on unterkunft_bett for all
 create policy "unterkunft_belegung_select" on unterkunft_belegung for select
   using (auth.uid() is not null);
 create policy "unterkunft_belegung_write" on unterkunft_belegung for all
-  using (current_role_name() in ('admin', 'hr'))
-  with check (current_role_name() in ('admin', 'hr'));
+  using (current_role_name() in ('admin', 'hr', 'hausmeister'))
+  with check (current_role_name() in ('admin', 'hr', 'hausmeister'));
 create policy "unterkunft_checkliste_vorlage_select" on unterkunft_checkliste_vorlage for select
   using (auth.uid() is not null);
 create policy "unterkunft_checkliste_vorlage_write" on unterkunft_checkliste_vorlage for all
@@ -5258,28 +5320,30 @@ create policy "unterkunft_checkliste_vorlage_write" on unterkunft_checkliste_vor
 create policy "unterkunft_vorgang_select" on unterkunft_vorgang for select
   using (auth.uid() is not null);
 create policy "unterkunft_vorgang_write" on unterkunft_vorgang for all
-  using (current_role_name() in ('admin', 'hr'))
-  with check (current_role_name() in ('admin', 'hr'));
+  using (current_role_name() in ('admin', 'hr', 'hausmeister'))
+  with check (current_role_name() in ('admin', 'hr', 'hausmeister'));
 create policy "unterkunft_vorgang_position_select" on unterkunft_vorgang_position for select
   using (auth.uid() is not null);
 create policy "unterkunft_vorgang_position_write" on unterkunft_vorgang_position for all
-  using (current_role_name() in ('admin', 'hr'))
-  with check (current_role_name() in ('admin', 'hr'));
+  using (current_role_name() in ('admin', 'hr', 'hausmeister'))
+  with check (current_role_name() in ('admin', 'hr', 'hausmeister'));
 create policy "unterkunft_mangel_select" on unterkunft_mangel for select
   using (auth.uid() is not null);
 create policy "unterkunft_mangel_write" on unterkunft_mangel for all
-  using (current_role_name() in ('admin', 'hr'))
-  with check (current_role_name() in ('admin', 'hr'));
+  using (current_role_name() in ('admin', 'hr', 'hausmeister'))
+  with check (current_role_name() in ('admin', 'hr', 'hausmeister'));
 create policy "unterkunft_foto_select" on unterkunft_foto for select
   using (auth.uid() is not null);
 create policy "unterkunft_foto_write" on unterkunft_foto for all
-  using (current_role_name() in ('admin', 'hr'))
-  with check (current_role_name() in ('admin', 'hr'));
+  using (current_role_name() in ('admin', 'hr', 'hausmeister'))
+  with check (current_role_name() in ('admin', 'hr', 'hausmeister'));
 
 insert into storage.buckets (id, name, public)
 values ('unterkunft-fotos', 'unterkunft-fotos', false)
 on conflict (id) do nothing;
 
-create policy "unterkunft_fotos_storage_admin_hr" on storage.objects for all
-  using (bucket_id = 'unterkunft-fotos' and current_role_name() in ('admin', 'hr'))
-  with check (bucket_id = 'unterkunft-fotos' and current_role_name() in ('admin', 'hr'));
+create policy "unterkunft_fotos_storage_select" on storage.objects for select
+  using (bucket_id = 'unterkunft-fotos' and auth.uid() is not null);
+create policy "unterkunft_fotos_storage_write" on storage.objects for all
+  using (bucket_id = 'unterkunft-fotos' and current_role_name() in ('admin', 'hr', 'hausmeister'))
+  with check (bucket_id = 'unterkunft-fotos' and current_role_name() in ('admin', 'hr', 'hausmeister'));

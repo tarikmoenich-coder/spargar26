@@ -10,6 +10,7 @@ import type {
   EmployeeStundenkontoSaldo,
   ErdbeerenPraemieTag,
   StundenkontoBewegung,
+  UnterkunftBelegungPerson,
   VorschussHistorieEintrag,
   WorkEntry,
   ZuckermaisPraemieTag,
@@ -127,6 +128,10 @@ export default function SuchePage() {
   >([]);
   const [zuckermais, setZuckermais] = useState<ZuckermaisPraemieTag[]>([]);
   const [erdbeeren, setErdbeeren] = useState<ErdbeerenPraemieTag[]>([]);
+  // Unterkunft: alle Belegungszeiträume der Person (Nutzer-Vorgabe
+  // 2026-08-30 - auch der hausmeister sucht hier nach). Nicht saison-
+  // gefiltert, jede Zeile trägt ihren eigenen Zeitraum.
+  const [unterkunft, setUnterkunft] = useState<UnterkunftBelegungPerson[]>([]);
   const [ladenListe, setLadenListe] = useState(true);
   const [ladenDetail, setLadenDetail] = useState(false);
 
@@ -170,6 +175,7 @@ export default function SuchePage() {
       { data: skb },
       { data: zm },
       { data: eb },
+      { data: ub },
     ] = await Promise.all([
       supabase
         .from("work_entries")
@@ -215,6 +221,11 @@ export default function SuchePage() {
         .gte("datum", `${saisonJahr}-01-01`)
         .lte("datum", `${saisonJahr}-12-31`)
         .order("datum"),
+      supabase
+        .from("unterkunft_belegung_person")
+        .select("*")
+        .eq("employee_id", m.id)
+        .order("von", { ascending: false }),
     ]);
     setStunden((we as WorkEntry[]) ?? []);
     setVorschuesse((vh as VorschussHistorieEintrag[]) ?? []);
@@ -225,6 +236,7 @@ export default function SuchePage() {
     setStundenkontoBewegungen((skb as StundenkontoBewegung[]) ?? []);
     setZuckermais((zm as ZuckermaisPraemieTag[]) ?? []);
     setErdbeeren((eb as ErdbeerenPraemieTag[]) ?? []);
+    setUnterkunft((ub as UnterkunftBelegungPerson[]) ?? []);
     setLadenDetail(false);
   }
 
@@ -618,6 +630,54 @@ export default function SuchePage() {
                             </td>
                           </tr>
                         ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
+
+              <div className="rounded border border-neutral-200 bg-white p-4">
+                <h2 className="mb-2 text-base font-semibold text-emerald-800">
+                  Unterkunft
+                </h2>
+                {unterkunft.length === 0 ? (
+                  <p className="text-sm text-neutral-500">
+                    Keine Belegung erfasst.
+                  </p>
+                ) : (
+                  <div className="max-h-96 overflow-y-auto">
+                    <table>
+                      <thead>
+                        <tr>
+                          <th>Zeitraum</th>
+                          <th>Gebäude</th>
+                          <th>Zimmer</th>
+                          <th>Bett</th>
+                          <th>{t("gemeinsam.notiz")}</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {unterkunft.map((u) => {
+                          const heute = new Date().toISOString().slice(0, 10);
+                          const laeuft = u.von <= heute && (!u.bis || u.bis >= heute);
+                          return (
+                            <tr key={u.id}>
+                              <td>
+                                {formatDatumDE(u.von)} –{" "}
+                                {u.bis ? formatDatumDE(u.bis) : "offen"}
+                                {laeuft && (
+                                  <span className="ml-2 rounded bg-emerald-100 px-1.5 py-0.5 text-xs text-emerald-800">
+                                    aktuell
+                                  </span>
+                                )}
+                              </td>
+                              <td>{u.gebaeude_name}</td>
+                              <td>{u.zimmer_nummer}</td>
+                              <td>{u.bett}</td>
+                              <td className="text-neutral-500">{u.notiz ?? "—"}</td>
+                            </tr>
+                          );
+                        })}
                       </tbody>
                     </table>
                   </div>

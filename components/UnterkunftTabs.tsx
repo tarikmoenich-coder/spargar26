@@ -8,7 +8,8 @@ import { useEffect, useRef } from "react";
 // + Zwischenkontrollen + Mängel. Gleiches Tab-Muster wie PraemienTabs
 // (siehe dort für die ResizeObserver-/--subtabs-h-Logik).
 const tabs = [
-  { href: "/unterkunft", label: "Belegungsplan", exakt: true },
+  { href: "/unterkunft", label: "Grundriss", exakt: true },
+  { href: "/unterkunft/belegungsplan", label: "Belegungsplan" },
   { href: "/unterkunft/belegung", label: "Belegung" },
   { href: "/unterkunft/uebergabe", label: "Übergabe / Abnahme" },
   { href: "/unterkunft/kontrolle", label: "Zwischenkontrolle" },

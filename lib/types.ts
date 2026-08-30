@@ -11,7 +11,11 @@ export type UserRole =
   | 'management'
   // Nur Zugriff auf Prämien (Erfassung) und Statistik, sonst nichts
   // (Nutzer-Vorgabe 2026-08-09).
-  | 'erntewirtschaft';
+  | 'erntewirtschaft'
+  // Nur das Modul "Unterkunft" (+ Suche); pflegt dort Belegung, Übergabe/
+  // Abnahme, Kontrolle, Mängel, Fotos - keine Stammdaten (Nutzer-Vorgabe
+  // 2026-08-30).
+  | 'hausmeister';
 
 export type Abrechnungsart =
   | 'pauschal'
@@ -1207,11 +1211,35 @@ export interface UnterkunftGebaeude {
   updated_at: string;
 }
 
+// Etage als eigenes Stammdatum (Migration 2026-08-30): Gebäude > Etage >
+// Zimmer, feste Reihenfolge/Benennung je Gebäude - Grundlage für den
+// grafischen Grundriss.
+export interface UnterkunftEtage {
+  id: number;
+  gebaeude_id: number;
+  name: string;
+  reihenfolge: number;
+  aktiv: boolean;
+  erstellt_von: string | null;
+  erstellt_am: string;
+  updated_by: string | null;
+  updated_at: string;
+}
+
 export interface UnterkunftZimmer {
   id: number;
   gebaeude_id: number;
   nummer: string;
+  // Freitext-Etage aus v1; seit Migration 2026-08-30 durch etage_id ersetzt
+  // und nicht mehr gepflegt.
   etage: string | null;
+  etage_id: number | null;
+  // Rasterkoordinaten für den Grundriss (Migration 2026-08-30). plan_x/plan_y
+  // null = noch nicht auf dem Grundriss platziert.
+  plan_x: number | null;
+  plan_y: number | null;
+  plan_w: number;
+  plan_h: number;
   // Soll-Bettenzahl (Planungshinweis) - die echte Kapazität ergibt sich aus
   // den unterkunft_bett-Zeilen.
   bettenzahl: number | null;
@@ -1257,6 +1285,21 @@ export interface UnterkunftBelegungAktuell {
   von: string;
   bis: string | null;
   notiz: string | null;
+}
+
+// Aus der Sicht unterkunft_belegung_person - alle Belegungszeiträume einer
+// Person mit Gebäude/Zimmer/Bett (für den Unterkunfts-Block in der Suche).
+export interface UnterkunftBelegungPerson {
+  id: number;
+  employee_id: string;
+  von: string;
+  bis: string | null;
+  notiz: string | null;
+  bett: string;
+  zimmer_id: number;
+  zimmer_nummer: string;
+  gebaeude_id: number;
+  gebaeude_name: string;
 }
 
 export interface UnterkunftChecklisteVorlage {
@@ -1388,6 +1431,14 @@ export interface UnterkunftZimmerUebersicht {
   nummer: string;
   etage: string | null;
   aktiv: boolean;
+  notiz: string | null;
+  etage_id: number | null;
+  etage_name: string | null;
+  etage_reihenfolge: number | null;
+  plan_x: number | null;
+  plan_y: number | null;
+  plan_w: number;
+  plan_h: number;
   gebaeude_id: number;
   gebaeude_name: string;
   betten: number;

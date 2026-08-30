@@ -30,7 +30,10 @@ interface PosEntwurf {
 
 export default function UnterkunftKontrollePage() {
   const { profile } = useProfile();
-  const canEdit = profile?.role === "admin" || profile?.role === "hr";
+  const canEdit =
+    profile?.role === "admin" ||
+    profile?.role === "hr" ||
+    profile?.role === "hausmeister";
 
   const [gebaeude, setGebaeude] = useState<UnterkunftGebaeude[]>([]);
   const [zimmer, setZimmer] = useState<UnterkunftZimmer[]>([]);

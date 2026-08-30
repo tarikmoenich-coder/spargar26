@@ -344,6 +344,10 @@ export default function DashboardPage() {
   }
 
   if (keinDashboard) {
+    const ziel =
+      profile.role === "hausmeister"
+        ? { href: "/unterkunft", text: "Zur Unterkunft" }
+        : { href: "/erfassung", text: "Zur Stundenerfassung" };
     return (
       <div className="flex flex-col gap-2">
         <h1 className="text-lg font-semibold text-emerald-800">
@@ -352,8 +356,8 @@ export default function DashboardPage() {
         <p className="text-sm text-neutral-500">
           Für deine Rolle gibt es aktuell kein eigenes Dashboard.
         </p>
-        <Link href="/erfassung" className="btn w-fit">
-          Zur Stundenerfassung
+        <Link href={ziel.href} className="btn w-fit">
+          {ziel.text}
         </Link>
       </div>
     );

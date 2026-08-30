@@ -79,3 +79,46 @@ export function belegungLaeuft(
 ): boolean {
   return von <= stichtag && (bis === null || bis >= stichtag);
 }
+
+// --- Grundriss (Migration 2026-08-30) --------------------------------------
+
+// Kantenlänge einer Rasterzelle in SVG-Einheiten. Zimmer liegen auf ganzen
+// Zellen (plan_x/plan_y/plan_w/plan_h), gezoomt wird über den SVG-viewBox.
+export const GRUNDRISS_ZELLE = 44;
+
+// Kontroll-Ampel je Zimmer: wie lange ist die letzte abgeschlossene
+// Kontrolle her? Schwellen bewusst als Konstante - das eigentliche
+// Kontrollmuster (Intervall je Zimmertyp/Saison) wird später festgelegt,
+// siehe docs/unterkunft-plan.md.
+export const KONTROLLE_WARNUNG_TAGE = 75;
+export const KONTROLLE_FAELLIG_TAGE = 90;
+
+export type KontrollAmpel = "keine" | "gruen" | "gelb" | "rot";
+
+export function kontrollAmpel(
+  letzteKontrolleAm: string | null,
+  jetzt: Date = new Date()
+): KontrollAmpel {
+  if (!letzteKontrolleAm) return "keine";
+  const tage = Math.floor(
+    (jetzt.getTime() - new Date(letzteKontrolleAm).getTime()) / 86400000
+  );
+  if (tage <= KONTROLLE_WARNUNG_TAGE) return "gruen";
+  if (tage <= KONTROLLE_FAELLIG_TAGE) return "gelb";
+  return "rot";
+}
+
+export const KONTROLL_AMPEL_LABELS: Record<KontrollAmpel, string> = {
+  keine: "Noch keine Kontrolle",
+  gruen: "Kontrolle aktuell",
+  gelb: "Kontrolle bald fällig",
+  rot: "Kontrolle überfällig",
+};
+
+// Farbwerte für die Ampel-Punkte im Grundriss (Tailwind-nah gehalten).
+export const KONTROLL_AMPEL_FARBE: Record<KontrollAmpel, string> = {
+  keine: "#a3a3a3", // neutral-400
+  gruen: "#16a34a", // green-600
+  gelb: "#f59e0b", // amber-500
+  rot: "#dc2626", // red-600
+};

@@ -47,7 +47,9 @@ const items: NavItem[] = [
   {
     href: "/unterkunft",
     label: "Unterkunft",
-    roles: ["admin", "hr"],
+    // hausmeister sieht ausschliesslich dieses Modul + "Suche" (roles: "all").
+    // erntewirtschaft nur lesend (Durchsetzung serverseitig via RLS).
+    roles: ["admin", "hr", "erntewirtschaft", "hausmeister"],
   },
   {
     href: "/erfassung",

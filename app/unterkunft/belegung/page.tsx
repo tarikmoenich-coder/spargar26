@@ -36,7 +36,10 @@ interface BelegungZeile extends UnterkunftBelegung {
 
 export default function UnterkunftBelegungPage() {
   const { profile } = useProfile();
-  const canEdit = profile?.role === "admin" || profile?.role === "hr";
+  const canEdit =
+    profile?.role === "admin" ||
+    profile?.role === "hr" ||
+    profile?.role === "hausmeister";
 
   const [gebaeude, setGebaeude] = useState<UnterkunftGebaeude[]>([]);
   const [zimmer, setZimmer] = useState<UnterkunftZimmer[]>([]);

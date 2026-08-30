@@ -45,6 +45,67 @@ Stand: 2026-08-29. Arbeitsdokument, damit der Planungsstand einen Konsolen-Neust
 Code auf Branch `unterkunft-modul` (Commit b74c19e), Migration in Supabase
 ausgeführt. Nächster Schritt: `npm run dev` und Smoke-Test.
 
+## Erweiterung (2026-08-30): Grundriss + Rolle „hausmeister"
+
+Nutzer-Vorgaben:
+1. Zimmerplanung grafischer: Gebäudeliste, dann als zweite Ebene ein
+   schematischer **Grundriss je Stockwerk** mit anklickbaren Zimmer-Kacheln.
+2. Neue Rolle **`hausmeister`** – sieht ausschließlich das Unterkunfts-Modul
+   (+ Suche). `admin`/`hr` weiterhin voll; `erntewirtschaft` **nur lesen**.
+
+Entscheidungen (2026-08-30):
+
+| Frage | Entscheidung |
+|---|---|
+| `erntewirtschaft` | nur Lesezugriff (kein RLS-Change nötig, Menüpunkt sichtbar) |
+| `hausmeister` abgrenzen | Nav-Ausblendung reicht (kein URL-Guard) |
+| `hausmeister` + Suche | ja, inkl. neuem Unterkunfts-Block in der Suche |
+| `hausmeister` + Stammdaten | nein – nur Belegung/Übergabe/Kontrolle/Mängel/Fotos |
+| Grundriss-Variante | Vektor-Editor auf Raster (SVG), kein Hintergrundbild |
+| Etage | eigenes Stammdatum `unterkunft_etage` (Bestandsdaten umgezogen) |
+| Kontroll-Ampel | ja; Schwellen 75/90 Tage als Konstante, Kontrollmuster noch offen |
+| Grundriss = Einstieg | ja; alte Tabelle → `/unterkunft/belegungsplan` |
+| Zimmer platzieren | nur `admin` (UI-seitig) |
+
+Umgesetzt:
+- [x] Migration `migration_2026-08-30_rolle_hausmeister_1_enum.sql`
+      (`alter type user_role add value 'hausmeister'`) – **eigener Lauf zuerst**
+- [x] Migration `migration_2026-08-30_rolle_hausmeister_2_policies.sql`
+      (Write-Policies belegung/vorgang/position/mangel/foto + Storage → +hausmeister)
+- [x] Migration `migration_2026-08-30_unterkunft_grundriss.sql`
+      (Tabelle `unterkunft_etage`, Spalten `plan_x/y/w/h` auf `unterkunft_zimmer`,
+      Datenumzug aus `etage`-Text, View `unterkunft_zimmer_uebersicht` neu,
+      View `unterkunft_belegung_person`, RLS)
+- [x] `supabase/schema.sql` Abschnitt 1 (enum) + 15 gespiegelt
+- [x] `lib/types.ts`: `UserRole` +`hausmeister`; `UnterkunftEtage`,
+      `UnterkunftBelegungPerson`; `UnterkunftZimmer`/`…Uebersicht` um
+      `etage_id`/`plan_*` erweitert
+- [x] `lib/unterkunft.ts`: `GRUNDRISS_ZELLE`, `kontrollAmpel()` + Ampel-Labels/Farben
+- [x] `components/Nav.tsx`: Unterkunft-Rollen = admin/hr/erntewirtschaft/hausmeister
+- [x] `components/UnterkunftTabs.tsx`: Tabs „Grundriss" + „Belegungsplan"
+- [x] `app/unterkunft/page.tsx`: neuer Grundriss (SVG-Canvas, Zimmer-Panel,
+      Bearbeiten-Modus mit Ziehen/Pfeiltasten/Größe – nur admin)
+- [x] `app/unterkunft/belegungsplan/page.tsx`: bisherige Tabelle hierher verschoben
+- [x] `app/unterkunft/stammdaten/page.tsx`: Etagen-Verwaltung je Gebäude,
+      Zimmer-Anlage mit Etagen-Auswahl statt Freitext
+- [x] `app/unterkunft/{belegung,uebergabe,kontrolle,maengel}/page.tsx`:
+      `canEdit` um `hausmeister` erweitert
+- [x] `app/page.tsx` + `app/dashboard/page.tsx`: `hausmeister` → `/unterkunft`
+- [x] `app/suche/page.tsx`: Block „Unterkunft" (alle Belegungszeiträume der Person)
+- [x] `npx tsc --noEmit` sauber · `npx next build` grün
+
+Offen:
+- [ ] **Migrationen in der Supabase-Konsole ausführen** – Reihenfolge:
+      `…hausmeister_1_enum.sql` allein + committen, dann `…hausmeister_2_policies.sql`
+      und `…unterkunft_grundriss.sql`
+- [ ] `hausmeister`-Benutzer in Supabase anlegen (profiles.role = 'hausmeister')
+- [ ] Smoke-Test: Grundriss zeichnen (admin), Zimmer anklicken; Login als
+      `hausmeister` → sieht nur Unterkunft + Suche
+- [ ] Kontrollmuster festlegen (Intervall je Zimmertyp/Saison) → Schwellen in
+      `lib/unterkunft.ts` anpassen
+- [ ] später: Freitext-Spalte `unterkunft_zimmer.etage` per Migration entfernen
+- [ ] optional: `?zimmer=`-Deep-Link aus dem Grundriss-Panel in die Arbeits-Tabs
+
 ### Wiedereinstieg nach Konsolen-Neustart
 `claude --continue` in `~/projekte/spargar26`. Diese Datei ist die Quelle der Wahrheit.
 

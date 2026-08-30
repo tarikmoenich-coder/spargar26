@@ -11,6 +11,7 @@ import UnterkunftTabs from "@/components/UnterkunftTabs";
 import type {
   UnterkunftBett,
   UnterkunftChecklisteVorlage,
+  UnterkunftEtage,
   UnterkunftGebaeude,
   UnterkunftZimmer,
 } from "@/lib/types";
@@ -20,6 +21,7 @@ export default function UnterkunftStammdatenPage() {
   const canEdit = profile?.role === "admin" || profile?.role === "hr";
 
   const [gebaeude, setGebaeude] = useState<UnterkunftGebaeude[]>([]);
+  const [etagen, setEtagen] = useState<UnterkunftEtage[]>([]);
   const [zimmer, setZimmer] = useState<UnterkunftZimmer[]>([]);
   const [betten, setBetten] = useState<UnterkunftBett[]>([]);
   const [vorlage, setVorlage] = useState<UnterkunftChecklisteVorlage[]>([]);
@@ -32,9 +34,10 @@ export default function UnterkunftStammdatenPage() {
   const [neuesGebaeude, setNeuesGebaeude] = useState({ name: "", adresse: "" });
   const [neuesZimmer, setNeuesZimmer] = useState({
     nummer: "",
-    etage: "",
+    etageId: "",
     bettenzahl: "",
   });
+  const [neueEtage, setNeueEtage] = useState({ name: "", reihenfolge: "" });
   const [neuesBett, setNeuesBett] = useState("");
   const [sammelAnzahl, setSammelAnzahl] = useState("");
   const [neuerBereich, setNeuerBereich] = useState({ bereich: "", reihenfolge: "" });
@@ -42,8 +45,13 @@ export default function UnterkunftStammdatenPage() {
   const laden = useCallback(async () => {
     setLoading(true);
     const supabase = getSupabaseClient();
-    const [g, z, b, v] = await Promise.all([
+    const [g, et, z, b, v] = await Promise.all([
       supabase.from("unterkunft_gebaeude").select("*").order("name"),
+      supabase
+        .from("unterkunft_etage")
+        .select("*")
+        .order("gebaeude_id")
+        .order("reihenfolge"),
       supabase.from("unterkunft_zimmer").select("*").order("nummer"),
       supabase.from("unterkunft_bett").select("*").order("bezeichnung"),
       supabase
@@ -53,6 +61,7 @@ export default function UnterkunftStammdatenPage() {
         .order("reihenfolge"),
     ]);
     setGebaeude((g.data as UnterkunftGebaeude[]) ?? []);
+    setEtagen((et.data as UnterkunftEtage[]) ?? []);
     setZimmer((z.data as UnterkunftZimmer[]) ?? []);
     setBetten((b.data as UnterkunftBett[]) ?? []);
     setVorlage((v.data as UnterkunftChecklisteVorlage[]) ?? []);
@@ -99,20 +108,70 @@ export default function UnterkunftStammdatenPage() {
     );
   }
 
+  // --- Etagen ---
+  async function etageAnlegen(gebaeudeId: number) {
+    if (!neueEtage.name.trim()) return;
+    const maxR = etagen
+      .filter((e) => e.gebaeude_id === gebaeudeId)
+      .reduce((m, e) => Math.max(m, e.reihenfolge), 0);
+    const ok = await ausfuehren(() =>
+      getSupabaseClient()
+        .from("unterkunft_etage")
+        .insert({
+          gebaeude_id: gebaeudeId,
+          name: neueEtage.name.trim(),
+          reihenfolge: neueEtage.reihenfolge
+            ? Number(neueEtage.reihenfolge)
+            : maxR + 10,
+        })
+    );
+    if (ok) setNeueEtage({ name: "", reihenfolge: "" });
+  }
+
+  async function etageUmbenennen(e: UnterkunftEtage) {
+    const name = window.prompt("Neuer Name der Etage", e.name)?.trim();
+    if (!name || name === e.name) return;
+    await ausfuehren(() =>
+      getSupabaseClient()
+        .from("unterkunft_etage")
+        .update({ name, updated_by: profile?.id ?? null })
+        .eq("id", e.id)
+    );
+  }
+
+  async function etageReihenfolge(e: UnterkunftEtage, reihenfolge: number) {
+    if (Number.isNaN(reihenfolge) || reihenfolge === e.reihenfolge) return;
+    await ausfuehren(() =>
+      getSupabaseClient()
+        .from("unterkunft_etage")
+        .update({ reihenfolge, updated_by: profile?.id ?? null })
+        .eq("id", e.id)
+    );
+  }
+
+  async function etageAktivSetzen(e: UnterkunftEtage, aktiv: boolean) {
+    await ausfuehren(() =>
+      getSupabaseClient()
+        .from("unterkunft_etage")
+        .update({ aktiv, updated_by: profile?.id ?? null })
+        .eq("id", e.id)
+    );
+  }
+
   // --- Zimmer ---
   async function zimmerAnlegen(gebaeudeId: number) {
-    if (!neuesZimmer.nummer.trim()) return;
+    if (!neuesZimmer.nummer.trim() || !neuesZimmer.etageId) return;
     const ok = await ausfuehren(() =>
       getSupabaseClient()
         .from("unterkunft_zimmer")
         .insert({
           gebaeude_id: gebaeudeId,
           nummer: neuesZimmer.nummer.trim(),
-          etage: neuesZimmer.etage.trim() || null,
+          etage_id: Number(neuesZimmer.etageId),
           bettenzahl: neuesZimmer.bettenzahl ? Number(neuesZimmer.bettenzahl) : null,
         })
     );
-    if (ok) setNeuesZimmer({ nummer: "", etage: "", bettenzahl: "" });
+    if (ok) setNeuesZimmer({ nummer: "", etageId: "", bettenzahl: "" });
   }
 
   async function zimmerAktivSetzen(z: UnterkunftZimmer, aktiv: boolean) {
@@ -237,6 +296,9 @@ export default function UnterkunftStammdatenPage() {
         <div className="space-y-2">
           {gebaeude.map((g) => {
             const zimmerDesGebaeudes = zimmer.filter((z) => z.gebaeude_id === g.id);
+            const etagenDesGebaeudes = etagen.filter((e) => e.gebaeude_id === g.id);
+            const etageName = (id: number | null) =>
+              etagen.find((e) => e.id === id)?.name ?? "—";
             const offen = offenesGebaeude === g.id;
             return (
               <div key={g.id} className="rounded border border-neutral-200">
@@ -266,6 +328,94 @@ export default function UnterkunftStammdatenPage() {
 
                 {offen && (
                   <div className="space-y-3 px-3 py-3">
+                    {/* Etagen des Gebäudes */}
+                    <div className="rounded border border-neutral-200 bg-neutral-50 p-2">
+                      <div className="text-sm font-medium">Etagen</div>
+                      <div className="mt-1 space-y-1">
+                        {etagenDesGebaeudes.length === 0 && (
+                          <span className="text-sm text-neutral-400">
+                            noch keine Etagen – für den Grundriss mindestens eine anlegen
+                          </span>
+                        )}
+                        {etagenDesGebaeudes.map((e) => (
+                          <div
+                            key={e.id}
+                            className="flex flex-wrap items-center gap-2 text-sm"
+                          >
+                            <span
+                              className={
+                                e.aktiv ? "font-medium" : "text-neutral-400 line-through"
+                              }
+                            >
+                              {e.name}
+                            </span>
+                            {canEdit && (
+                              <>
+                                <label className="text-xs text-neutral-500">
+                                  Reihenfolge
+                                  <input
+                                    type="number"
+                                    className="ml-1 w-16"
+                                    defaultValue={e.reihenfolge}
+                                    onBlur={(ev) =>
+                                      etageReihenfolge(e, Number(ev.target.value))
+                                    }
+                                  />
+                                </label>
+                                <button
+                                  className="text-xs text-emerald-700 hover:underline"
+                                  onClick={() => etageUmbenennen(e)}
+                                >
+                                  umbenennen
+                                </button>
+                                <button
+                                  className="text-xs text-neutral-500 hover:underline"
+                                  onClick={() => etageAktivSetzen(e, !e.aktiv)}
+                                >
+                                  {e.aktiv ? "deaktivieren" : "aktivieren"}
+                                </button>
+                              </>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                      {canEdit && (
+                        <div className="mt-2 flex flex-wrap items-end gap-2">
+                          <label className="text-sm">
+                            Neue Etage
+                            <input
+                              className="ml-2 w-40"
+                              value={neueEtage.name}
+                              onChange={(ev) =>
+                                setNeueEtage((s) => ({ ...s, name: ev.target.value }))
+                              }
+                              placeholder="z.B. 1. OG"
+                            />
+                          </label>
+                          <label className="text-sm">
+                            Reihenfolge
+                            <input
+                              type="number"
+                              className="ml-2 w-20"
+                              value={neueEtage.reihenfolge}
+                              onChange={(ev) =>
+                                setNeueEtage((s) => ({
+                                  ...s,
+                                  reihenfolge: ev.target.value,
+                                }))
+                              }
+                            />
+                          </label>
+                          <button
+                            className="btn-secondary"
+                            onClick={() => etageAnlegen(g.id)}
+                          >
+                            Etage anlegen
+                          </button>
+                        </div>
+                      )}
+                    </div>
+
                     {canEdit && (
                       <div className="flex flex-wrap items-end gap-2">
                         <label className="text-sm">
@@ -283,16 +433,25 @@ export default function UnterkunftStammdatenPage() {
                         </label>
                         <label className="text-sm">
                           Etage
-                          <input
-                            className="ml-2 w-20"
-                            value={neuesZimmer.etage}
+                          <select
+                            className="ml-2"
+                            value={neuesZimmer.etageId}
                             onChange={(e) =>
                               setNeuesZimmer((s) => ({
                                 ...s,
-                                etage: e.target.value,
+                                etageId: e.target.value,
                               }))
                             }
-                          />
+                          >
+                            <option value="">– wählen –</option>
+                            {etagenDesGebaeudes
+                              .filter((e) => e.aktiv)
+                              .map((e) => (
+                                <option key={e.id} value={e.id}>
+                                  {e.name}
+                                </option>
+                              ))}
+                          </select>
                         </label>
                         <label className="text-sm">
                           Betten (Soll)
@@ -344,7 +503,7 @@ export default function UnterkunftStammdatenPage() {
                                     {zOffen ? "▾" : "▸"} {z.nummer}
                                   </button>
                                 </td>
-                                <td>{z.etage ?? "—"}</td>
+                                <td>{etageName(z.etage_id)}</td>
                                 <td>
                                   {aktiveBetten.length}
                                   {z.bettenzahl != null &&
