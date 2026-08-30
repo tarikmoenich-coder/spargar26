@@ -27,12 +27,46 @@ import {
   type UnterkunftBelegungAktuell,
   type UnterkunftGebaeude,
   type UnterkunftWohneinheitUebersicht,
+  type UnterkunftZimmerArt,
   type UnterkunftZimmerUebersicht,
   type UnterkunftZuordnungOffen,
 } from "@/lib/types";
 
 const MIN_COLS = 14;
 const MIN_ROWS = 10;
+
+// Farbschema je Raumtyp (Fläche + Rand). Schlafzimmer werden zusätzlich
+// nach Belegung eingefärbt (siehe zimmerFarbe), offene Mängel setzen den
+// Rand auf Rot.
+const RAUM_STYLE: Record<
+  Exclude<UnterkunftZimmerArt, "zimmer">,
+  { fill: string; stroke: string; label: string }
+> = {
+  bad: { fill: "#e0f2fe", stroke: "#0ea5e9", label: "Sanitär" },
+  flur: { fill: "#ede9fe", stroke: "#8b5cf6", label: "Flur" },
+  kueche: { fill: "#fef3c7", stroke: "#f59e0b", label: "Küche" },
+  gemeinschaft: { fill: "#eef2ff", stroke: "#a5b4fc", label: "Gemeinschaft" },
+};
+const ZIMMER_FREI = { fill: "#dcfce7", stroke: "#22c55e" };
+const ZIMMER_VOLL = { fill: "#f1f5f9", stroke: "#94a3b8" };
+const ZIMMER_INAKTIV = { fill: "#fafafa", stroke: "#e5e5e5" };
+
+function zimmerFarbe(z: {
+  art: UnterkunftZimmerArt;
+  aktiv: boolean;
+  frei: number;
+  offene_maengel: number;
+}): { fill: string; stroke: string } {
+  const base = !z.aktiv
+    ? ZIMMER_INAKTIV
+    : z.art !== "zimmer"
+      ? RAUM_STYLE[z.art]
+      : z.frei > 0
+        ? ZIMMER_FREI
+        : ZIMMER_VOLL;
+  const stroke = z.aktiv && z.offene_maengel > 0 ? "#dc2626" : base.stroke;
+  return { fill: base.fill, stroke };
+}
 
 interface DragState {
   zimmerId: number;
@@ -240,10 +274,13 @@ export default function UnterkunftGrundrissPage() {
     setSelId(zimmerId);
   }
 
-  // Küche / Bad/WC / Flur als Gemeinschaftsraum anlegen und direkt auf eine
+  // Küche / Bad/WC / Flur als eigenen Raumtyp anlegen und direkt auf eine
   // freie Rasterzelle legen. Keine Betten, keine Belegung/Übergabe -
   // Kontrollen und Mängel gelten aber.
-  async function gemeinschaftHinzufuegen(label: string) {
+  async function gemeinschaftHinzufuegen(
+    label: string,
+    art: UnterkunftZimmerArt
+  ) {
     if (!einheitId || gebaeudeId == null) return;
     const vorhanden = new Set(
       zimmer.filter((z) => z.gebaeude_id === gebaeudeId).map((z) => z.nummer)
@@ -258,7 +295,7 @@ export default function UnterkunftGrundrissPage() {
         gebaeude_id: gebaeudeId,
         wohneinheit_id: einheitId,
         nummer: name,
-        art: "gemeinschaft",
+        art,
         plan_x: ziel.x,
         plan_y: ziel.y,
         plan_w: 2,
@@ -385,17 +422,6 @@ export default function UnterkunftGrundrissPage() {
     if (nx !== sel.plan_x || ny !== sel.plan_y) {
       speicherePlan(sel.zimmer_id, { plan_x: nx, plan_y: ny });
     }
-  }
-
-  function zimmerFarbe(z: UnterkunftZimmerUebersicht): {
-    fill: string;
-    stroke: string;
-  } {
-    if (!z.aktiv) return { fill: "#fafafa", stroke: "#e5e5e5" };
-    if (z.offene_maengel > 0) return { fill: "#fef2f2", stroke: "#dc2626" };
-    if (z.art === "gemeinschaft") return { fill: "#eef2ff", stroke: "#a5b4fc" };
-    if (z.frei > 0) return { fill: "#ecfdf5", stroke: "#34d399" };
-    return { fill: "#f1f5f9", stroke: "#cbd5e1" };
   }
 
   if (loading) return <p className="p-4 text-sm text-neutral-500">Lädt …</p>;
@@ -532,7 +558,7 @@ export default function UnterkunftGrundrissPage() {
               </h2>
               {nachbarZimmer.length > 0 && (
                 <p className="text-xs text-neutral-400">
-                  Graue Kacheln = andere Wohneinheiten der Etage{" "}
+                  Blasse, gestrichelte Kacheln = andere Wohneinheiten der Etage{" "}
                   {einheit.etage_label} (nur zur Orientierung).
                 </p>
               )}
@@ -582,7 +608,27 @@ export default function UnterkunftGrundrissPage() {
               anlegen.
             </p>
           ) : (
-            <div className="flex flex-col gap-4 lg:flex-row">
+            <>
+              <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-neutral-500">
+                {[
+                  { ...ZIMMER_FREI, label: "Zimmer (Betten frei)" },
+                  { ...ZIMMER_VOLL, label: "Zimmer (voll)" },
+                  { ...RAUM_STYLE.bad, label: "Sanitär" },
+                  { ...RAUM_STYLE.flur, label: "Flur" },
+                  { ...RAUM_STYLE.kueche, label: "Küche" },
+                  { fill: "#fff", stroke: "#dc2626", label: "offene Mängel" },
+                ].map((e) => (
+                  <span key={e.label} className="inline-flex items-center gap-1">
+                    <span
+                      className="inline-block h-3 w-3 rounded-sm border"
+                      style={{ backgroundColor: e.fill, borderColor: e.stroke }}
+                    />
+                    {e.label}
+                  </span>
+                ))}
+              </div>
+
+              <div className="flex flex-col gap-4 lg:flex-row">
               <div
                 tabIndex={0}
                 onKeyDown={onWrapKeyDown}
@@ -624,7 +670,7 @@ export default function UnterkunftGrundrissPage() {
                         width={z.plan_w * Z}
                         height={z.plan_h * Z}
                         rx={5}
-                        fill="#f5f5f5"
+                        fill={zimmerFarbe(z).fill}
                         stroke="#cbd5e1"
                         strokeWidth={1}
                         strokeDasharray="3 3"
@@ -699,7 +745,7 @@ export default function UnterkunftGrundrissPage() {
                         >
                           {z.nummer}
                         </text>
-                        {z.art !== "gemeinschaft" && (
+                        {z.art === "zimmer" && (
                           <text
                             x={w / 2}
                             y={h - 6}
@@ -796,18 +842,32 @@ export default function UnterkunftGrundrissPage() {
                     </p>
                     <div className="mt-2 border-t border-neutral-100 pt-2">
                       <div className="text-xs font-medium text-neutral-500">
-                        Gemeinschaftsraum hinzufügen
+                        Weiteren Raum hinzufügen
                       </div>
                       <div className="mt-1 flex flex-wrap gap-1.5">
-                        {["Küche", "Bad/WC", "Flur"].map((label) => (
-                          <button
-                            key={label}
-                            onClick={() => gemeinschaftHinzufuegen(label)}
-                            className="rounded border border-indigo-300 bg-indigo-50 px-2 py-0.5 text-sm text-indigo-800 hover:border-indigo-500"
-                          >
-                            + {label}
-                          </button>
-                        ))}
+                        {(
+                          [
+                            { label: "Küche", art: "kueche" },
+                            { label: "Bad/WC", art: "bad" },
+                            { label: "Flur", art: "flur" },
+                          ] as const
+                        ).map(({ label, art }) => {
+                          const s = RAUM_STYLE[art];
+                          return (
+                            <button
+                              key={art}
+                              onClick={() => gemeinschaftHinzufuegen(label, art)}
+                              className="rounded border px-2 py-0.5 text-sm hover:brightness-95"
+                              style={{
+                                borderColor: s.stroke,
+                                backgroundColor: s.fill,
+                                color: "#1f2937",
+                              }}
+                            >
+                              + {label}
+                            </button>
+                          );
+                        })}
                       </div>
                     </div>
                   </div>
@@ -816,9 +876,7 @@ export default function UnterkunftGrundrissPage() {
                 {sel && sel.wohneinheit_id === einheitId ? (
                   <div className="rounded border border-neutral-200 p-3">
                     <h3 className="text-base font-semibold text-emerald-900">
-                      {sel.art === "gemeinschaft"
-                        ? sel.nummer
-                        : `Zimmer ${sel.nummer}`}
+                      {sel.art === "zimmer" ? `Zimmer ${sel.nummer}` : sel.nummer}
                     </h3>
                     {!sel.aktiv && <p className="text-xs text-red-600">inaktiv</p>}
 
@@ -1014,7 +1072,7 @@ export default function UnterkunftGrundrissPage() {
                           >
                             vom Raster nehmen
                           </button>
-                          {sel.art === "gemeinschaft" && (
+                          {sel.art !== "zimmer" && (
                             <button
                               className="text-xs text-red-600 hover:underline"
                               onClick={() => zimmerLoeschen(sel)}
@@ -1033,6 +1091,7 @@ export default function UnterkunftGrundrissPage() {
                 )}
               </div>
             </div>
+            </>
           )}
         </div>
       )}

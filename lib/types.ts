@@ -1227,9 +1227,15 @@ export interface UnterkunftWohneinheit {
   updated_at: string;
 }
 
-// 'zimmer' = Schlafzimmer; 'gemeinschaft' = Küche/Bad/Flur (nur
-// Grundriss-Kachel + Kontrollen/Mängel, keine Betten). Migration 2026-09-01.
-export type UnterkunftZimmerArt = "zimmer" | "gemeinschaft";
+// Raumtyp im Grundriss. 'zimmer' = Schlafzimmer; die übrigen sind nur
+// Grundriss-Kacheln (Küche / Bad / Flur / sonstiger Gemeinschaftsraum) -
+// keine Betten/Belegung, aber Kontrollen/Mängel gelten. Migration 2026-09-02.
+export type UnterkunftZimmerArt =
+  | "zimmer"
+  | "kueche"
+  | "bad"
+  | "flur"
+  | "gemeinschaft";
 
 export interface UnterkunftZimmer {
   id: number;

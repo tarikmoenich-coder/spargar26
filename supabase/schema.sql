@@ -4979,10 +4979,11 @@ create table unterkunft_zimmer (
   id bigint generated always as identity primary key,
   gebaeude_id bigint not null references unterkunft_gebaeude (id) on delete restrict,
   nummer text not null,
-  -- 'zimmer' = Schlafzimmer (Betten/Belegung/Übergabe). 'gemeinschaft' =
-  -- Küche/Bad/Flur - nur Grundriss-Kachel + Kontrollen/Mängel, keine Betten
-  -- (Migration 2026-09-01).
-  art text not null default 'zimmer' check (art in ('zimmer', 'gemeinschaft')),
+  -- Raumtyp (Migration 2026-09-01, erweitert 2026-09-02). 'zimmer' =
+  -- Schlafzimmer (Betten/Belegung/Übergabe). 'kueche'/'bad'/'flur'/
+  -- 'gemeinschaft' = nur Grundriss-Kachel + Kontrollen/Mängel, keine Betten.
+  art text not null default 'zimmer'
+    check (art in ('zimmer', 'kueche', 'bad', 'flur', 'gemeinschaft')),
   -- Freitext-Etage aus v1; seit Migration 2026-08-30 nicht mehr gepflegt.
   -- Bleibt für Altdaten stehen.
   etage text,
