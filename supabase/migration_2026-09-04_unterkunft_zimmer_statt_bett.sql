@@ -10,45 +10,57 @@
 --   * Ueberbuchung wird NICHT mehr hart verhindert (frueher GIST-EXCLUDE je
 --     Bett) - Grundriss/Kopfzeile zeigen sie nur noch als Warnung.
 --
+-- Idempotent gehalten (if exists / to_regclass-Guards), damit ein erneuter
+-- Lauf nach einem Teilabbruch sauber durchlaeuft.
+--
 -- In der Supabase SQL-Konsole ausfuehren (ein Zug). Laeuft NACH den
 -- Migrationen 2026-08-31 / 09-01 / 09-02 / 09-03.
 -- ============================================================================
 
--- 1. unterkunft_belegung: zimmer_id statt bett_id -----------------------------
-alter table unterkunft_belegung
-  add column zimmer_id bigint references unterkunft_zimmer (id) on delete restrict;
-
-update unterkunft_belegung b
-set zimmer_id = bt.zimmer_id
-from unterkunft_bett bt
-where bt.id = b.bett_id;
-
-alter table unterkunft_belegung alter column zimmer_id set not null;
-alter table unterkunft_belegung drop constraint unterkunft_belegung_kein_doppel;
-drop index if exists idx_unterkunft_belegung_bett;
-alter table unterkunft_belegung drop column bett_id;
-create index idx_unterkunft_belegung_zimmer on unterkunft_belegung (zimmer_id);
-
--- 2. bettenzahl wird Pflicht-Kapazitaet -------------------------------------
-update unterkunft_zimmer z
-set bettenzahl = coalesce(
-  (select count(*) from unterkunft_bett b where b.zimmer_id = z.id and b.aktiv),
-  0
-)
-where bettenzahl is null;
-update unterkunft_zimmer set bettenzahl = 0 where bettenzahl is null;
-alter table unterkunft_zimmer alter column bettenzahl set default 0;
-alter table unterkunft_zimmer alter column bettenzahl set not null;
-
--- 3. Betten-Tabelle + Sichten weg -----------------------------------------
+-- 0. Abhaengige Sichten MUESSEN vor dem Spalten-Umbau weg -------------------
 drop view if exists unterkunft_belegung_person;
 drop view if exists unterkunft_belegung_aktuell;
 drop view if exists unterkunft_zimmer_uebersicht;
 drop view if exists unterkunft_wohneinheit_uebersicht;
+
+-- 1. unterkunft_belegung: zimmer_id statt bett_id -------------------------
+alter table unterkunft_belegung
+  add column if not exists zimmer_id bigint references unterkunft_zimmer (id) on delete restrict;
+
+-- Backfill nur solange die Betten-Tabelle noch existiert.
+do $$
+begin
+  if to_regclass('public.unterkunft_bett') is not null then
+    update unterkunft_belegung b
+    set zimmer_id = bt.zimmer_id
+    from unterkunft_bett bt
+    where bt.id = b.bett_id and b.zimmer_id is null;
+
+    update unterkunft_zimmer z
+    set bettenzahl = coalesce(
+      (select count(*) from unterkunft_bett b where b.zimmer_id = z.id and b.aktiv),
+      0
+    )
+    where z.bettenzahl is null;
+  end if;
+end $$;
+
+alter table unterkunft_belegung alter column zimmer_id set not null;
+alter table unterkunft_belegung drop constraint if exists unterkunft_belegung_kein_doppel;
+drop index if exists idx_unterkunft_belegung_bett;
+alter table unterkunft_belegung drop column if exists bett_id;
+create index if not exists idx_unterkunft_belegung_zimmer on unterkunft_belegung (zimmer_id);
+
+-- 2. bettenzahl wird Pflicht-Kapazitaet -----------------------------------
+update unterkunft_zimmer set bettenzahl = 0 where bettenzahl is null;
+alter table unterkunft_zimmer alter column bettenzahl set default 0;
+alter table unterkunft_zimmer alter column bettenzahl set not null;
+
+-- 3. Betten-Tabelle + Funktion weg --------------------------------------
 drop table if exists unterkunft_bett cascade;
 drop function if exists unterkunft_bett_sammelanlage(bigint, int);
 
--- 4. Sichten neu (ohne Bett) --------------------------------------------------
+-- 4. Sichten neu (ohne Bett) --------------------------------------------
 create view unterkunft_belegung_aktuell as
 select
   b.id, b.zimmer_id, z.wohneinheit_id, b.employee_id,
