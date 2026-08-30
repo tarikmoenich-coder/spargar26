@@ -156,13 +156,39 @@ export default function UnterkunftGrundrissPage() {
     [zuordnungen, einheitId]
   );
 
+  // Zur Orientierung: platzierte Zimmer der ANDEREN Wohneinheiten derselben
+  // Etage (gleiches Gebäude, gleiches etage_label) - ausgegraut, nicht
+  // anklickbar. Nur wenn die Wohneinheit ein Etage-Label trägt.
+  const nachbarZimmer = useMemo(() => {
+    if (!einheit || !einheit.etage_label) return [];
+    const sibIds = new Set(
+      einheiten
+        .filter(
+          (e) =>
+            e.gebaeude_id === einheit.gebaeude_id &&
+            e.etage_label === einheit.etage_label &&
+            e.wohneinheit_id !== einheit.wohneinheit_id
+        )
+        .map((e) => e.wohneinheit_id)
+    );
+    return zimmer.filter(
+      (z) =>
+        z.wohneinheit_id != null &&
+        sibIds.has(z.wohneinheit_id) &&
+        z.plan_x != null &&
+        z.plan_y != null &&
+        z.aktiv
+    );
+  }, [einheit, einheiten, zimmer]);
+
+  const rasterZimmer = [...platziert, ...nachbarZimmer];
   const cols = Math.max(
     MIN_COLS,
-    ...platziert.map((z) => (z.plan_x ?? 0) + z.plan_w + 1)
+    ...rasterZimmer.map((z) => (z.plan_x ?? 0) + z.plan_w + 1)
   );
   const rows = Math.max(
     MIN_ROWS,
-    ...platziert.map((z) => (z.plan_y ?? 0) + z.plan_h + 1)
+    ...rasterZimmer.map((z) => (z.plan_y ?? 0) + z.plan_h + 1)
   );
 
   const sel =
@@ -194,7 +220,7 @@ export default function UnterkunftGrundrissPage() {
 
   function freieZelle(): { x: number; y: number } {
     const belegt = new Set(
-      platziert.flatMap((z) => {
+      rasterZimmer.flatMap((z) => {
         const cells: string[] = [];
         for (let x = z.plan_x!; x < z.plan_x! + z.plan_w; x++)
           for (let y = z.plan_y!; y < z.plan_y! + z.plan_h; y++)
@@ -499,10 +525,18 @@ export default function UnterkunftGrundrissPage() {
       {einheit && (
         <div className="space-y-3 rounded border border-neutral-200 p-3">
           <div className="flex flex-wrap items-end justify-between gap-3">
-            <h2 className="text-base font-semibold text-emerald-900">
-              {einheit.name}
-              {einheit.etage_label ? ` · ${einheit.etage_label}` : ""} — Zimmer
-            </h2>
+            <div>
+              <h2 className="text-base font-semibold text-emerald-900">
+                {einheit.name}
+                {einheit.etage_label ? ` · ${einheit.etage_label}` : ""} — Zimmer
+              </h2>
+              {nachbarZimmer.length > 0 && (
+                <p className="text-xs text-neutral-400">
+                  Graue Kacheln = andere Wohneinheiten der Etage{" "}
+                  {einheit.etage_label} (nur zur Orientierung).
+                </p>
+              )}
+            </div>
             <div className="flex flex-wrap items-center gap-3 text-sm">
               <div className="flex items-center gap-1">
                 <button
@@ -577,6 +611,48 @@ export default function UnterkunftGrundrissPage() {
                     </pattern>
                   </defs>
                   <rect width={cols * Z} height={rows * Z} fill="url(#raster)" />
+
+                  {/* Nachbar-Wohneinheiten derselben Etage - nur Orientierung */}
+                  {nachbarZimmer.map((z) => (
+                    <g
+                      key={`nachbar-${z.zimmer_id}`}
+                      transform={`translate(${z.plan_x! * Z} ${z.plan_y! * Z})`}
+                      style={{ pointerEvents: "none" }}
+                      opacity={0.4}
+                    >
+                      <rect
+                        width={z.plan_w * Z}
+                        height={z.plan_h * Z}
+                        rx={5}
+                        fill="#f5f5f5"
+                        stroke="#cbd5e1"
+                        strokeWidth={1}
+                        strokeDasharray="3 3"
+                      />
+                      <text
+                        x={(z.plan_w * Z) / 2}
+                        y={(z.plan_h * Z) / 2}
+                        textAnchor="middle"
+                        dominantBaseline="middle"
+                        className="select-none"
+                        fontSize={11}
+                        fill="#94a3b8"
+                      >
+                        {z.nummer}
+                      </text>
+                      <text
+                        x={(z.plan_w * Z) / 2}
+                        y={z.plan_h * Z - 5}
+                        textAnchor="middle"
+                        className="select-none"
+                        fontSize={8}
+                        fill="#94a3b8"
+                      >
+                        {einheiten.find((e) => e.wohneinheit_id === z.wohneinheit_id)
+                          ?.name ?? ""}
+                      </text>
+                    </g>
+                  ))}
 
                   {platziert.map((z) => {
                     const wirdGezogen = drag?.zimmerId === z.zimmer_id;
