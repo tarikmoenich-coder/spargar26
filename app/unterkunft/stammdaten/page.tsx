@@ -77,23 +77,36 @@ export default function UnterkunftStammdatenPage() {
     laden();
   }, [laden]);
 
+  function fehlerText(error: { message: string; code?: string }): string {
+    if (error.code === "23505")
+      return (
+        "Name ist schon vergeben – der Eintrag existiert vermutlich noch " +
+        "(evtl. inaktiv) in der Liste."
+      );
+    if (error.code === "23503")
+      return (
+        "Es hängen noch verknüpfte Daten daran – erst diese entfernen oder " +
+        "deaktivieren."
+      );
+    return error.message;
+  }
+
   async function ausfuehren(
-    fn: () => PromiseLike<{ error: { message: string } | null }>
+    fn: () => PromiseLike<{ error: { message: string; code?: string } | null }>
   ) {
     setFehler(null);
     const { error } = await fn();
     if (error) {
-      setFehler(error.message);
+      setFehler(fehlerText(error));
       return false;
     }
     await laden();
     return true;
   }
 
-  // Endgültiges Löschen (nur für versehentlich/testweise Angelegtes). Klappt
-  // nur, solange nichts daran hängt - sonst greift der FK-Schutz der DB und
-  // wir zeigen einen verständlichen Hinweis. Für „echte" Bestände bleibt
-  // Deaktivieren der richtige Weg (ADR-011).
+  // Einfaches Löschen (Eintrag ohne Abhängigkeiten). Bei FK-Schutz ein
+  // verständlicher Hinweis. Für „echte" Bestände bleibt Deaktivieren der
+  // richtige Weg (ADR-011).
   async function loeschen(
     tabelle: string,
     id: number,
@@ -107,9 +120,8 @@ export default function UnterkunftStammdatenPage() {
         /foreign key|verletzt|violates/i.test(error.message);
       setFehler(
         fk
-          ? `${was} kann nicht gelöscht werden – es hängen noch Daten daran ` +
-            `(Betten, Belegungen, Vorgänge oder Mängel). Erst diese entfernen ` +
-            `oder ${was} deaktivieren.`
+          ? `${was} kann nicht gelöscht werden – es hängen noch Daten daran. ` +
+            `Erst diese entfernen oder ${was} deaktivieren.`
           : error.message
       );
       return false;
@@ -118,120 +130,190 @@ export default function UnterkunftStammdatenPage() {
     return true;
   }
 
-  async function gebaeudeLoeschen(g: UnterkunftGebaeude) {
-    if (
-      zimmer.some((z) => z.gebaeude_id === g.id) ||
-      wohneinheiten.some((w) => w.gebaeude_id === g.id)
-    ) {
-      setFehler(
-        `„${g.name}" hat noch Wohneinheiten/Zimmer – diese zuerst löschen.`
+  // Zimmer + ALLES daran (Vorgänge inkl. Positionen/Fotos, Mängel, Belegungen,
+  // Betten) hart löschen - nur Admin, nur zur Testdaten-Bereinigung. Gibt eine
+  // Fehlermeldung zurück oder null bei Erfolg. Ruft laden() NICHT selbst auf.
+  async function zimmerHartLoeschen(
+    sb: ReturnType<typeof getSupabaseClient>,
+    zimmerId: number
+  ): Promise<string | null> {
+    const bettenIds = betten
+      .filter((b) => b.zimmer_id === zimmerId)
+      .map((b) => b.id);
+    const { data: vg } = await sb
+      .from("unterkunft_vorgang")
+      .select("id, abgeschlossen")
+      .eq("zimmer_id", zimmerId);
+    const abg = ((vg as { id: string; abgeschlossen: boolean }[]) ?? [])
+      .filter((v) => v.abgeschlossen)
+      .map((v) => v.id);
+    // Abgeschlossene Vorgänge sind trigger-geschützt: als Admin erst „öffnen".
+    if (abg.length) {
+      const { error } = await sb
+        .from("unterkunft_vorgang")
+        .update({ abgeschlossen: false })
+        .in("id", abg);
+      if (error) return error.message;
+    }
+    const schritte: (() => PromiseLike<{ error: { message: string } | null }>)[] = [
+      () => sb.from("unterkunft_vorgang").delete().eq("zimmer_id", zimmerId),
+      () => sb.from("unterkunft_mangel").delete().eq("zimmer_id", zimmerId),
+      () => sb.from("unterkunft_zuordnung").delete().eq("zimmer_id", zimmerId),
+    ];
+    if (bettenIds.length) {
+      schritte.push(
+        () => sb.from("unterkunft_belegung").delete().in("bett_id", bettenIds),
+        () => sb.from("unterkunft_bett").delete().in("id", bettenIds)
       );
-      return;
     }
-    if (!window.confirm(`Gebäude „${g.name}" endgültig löschen?`)) return;
-    await loeschen("unterkunft_gebaeude", g.id, "Das Gebäude");
-  }
-
-  async function wohneinheitLoeschen(w: UnterkunftWohneinheit) {
-    if (zimmer.some((z) => z.wohneinheit_id === w.id)) {
-      setFehler(`„${w.name}" hat noch Zimmer – diese zuerst löschen.`);
-      return;
+    schritte.push(() =>
+      sb.from("unterkunft_zimmer").delete().eq("id", zimmerId)
+    );
+    for (const schritt of schritte) {
+      const { error } = await schritt();
+      if (error) return error.message;
     }
-    if (!window.confirm(`Wohneinheit „${w.name}" endgültig löschen?`)) return;
-    await loeschen("unterkunft_wohneinheit", w.id, "Die Wohneinheit");
+    return null;
   }
 
   async function zimmerLoeschen(z: UnterkunftZimmer) {
     const sb = getSupabaseClient();
     const bettenIds = betten.filter((b) => b.zimmer_id === z.id).map((b) => b.id);
-    // Was hängt dran? (Vorgänge/Mängel/Belegungen)
     const [vg, mg, bl] = await Promise.all([
-      sb.from("unterkunft_vorgang").select("id, abgeschlossen").eq("zimmer_id", z.id),
+      sb.from("unterkunft_vorgang").select("id").eq("zimmer_id", z.id),
       sb.from("unterkunft_mangel").select("id").eq("zimmer_id", z.id),
       bettenIds.length
         ? sb.from("unterkunft_belegung").select("id").in("bett_id", bettenIds)
         : Promise.resolve({ data: [] as { id: number }[] }),
     ]);
-    const vorgaenge = (vg.data as { id: string; abgeschlossen: boolean }[]) ?? [];
+    const nVg = vg.data?.length ?? 0;
     const nMg = mg.data?.length ?? 0;
     const nBl = bl.data?.length ?? 0;
-    const hatVorgeschichte = vorgaenge.length + nMg + nBl > 0;
+    const hatVorgeschichte = nVg + nMg + nBl > 0;
 
     if (hatVorgeschichte && !isAdmin) {
       setFehler(
-        `Zimmer ${z.nummer} hat ${vorgaenge.length} Vorgang/Vorgänge, ${nMg} ` +
-          `Mangel/Mängel und ${nBl} Belegung(en). Nur ein Admin kann es ` +
-          `endgültig mit allem löschen – sonst deaktivieren.`
+        `Zimmer ${z.nummer} hat ${nVg} Vorgang/Vorgänge, ${nMg} Mangel/Mängel ` +
+          `und ${nBl} Belegung(en). Nur ein Admin kann es endgültig mit allem ` +
+          `löschen – sonst deaktivieren.`
       );
       return;
     }
-
     if (
       !window.confirm(
         hatVorgeschichte
-          ? `Zimmer ${z.nummer} UNWIDERRUFLICH löschen – inklusive ` +
-            `${vorgaenge.length} Übergabe/Kontrolle, ${nMg} Mangel/Mängel und ` +
-            `${nBl} Belegung(en)? (nur Testdaten!)`
+          ? `Zimmer ${z.nummer} UNWIDERRUFLICH löschen – inklusive ${nVg} ` +
+            `Übergabe/Kontrolle, ${nMg} Mangel/Mängel und ${nBl} Belegung(en)? ` +
+            `(nur Testdaten!)`
           : `Zimmer ${z.nummer} endgültig löschen? (samt seiner Betten)`
       )
     )
       return;
     setFehler(null);
+    const err = await zimmerHartLoeschen(sb, z.id);
+    if (err) {
+      setFehler(err);
+      return;
+    }
+    await laden();
+  }
 
-    // Abgeschlossene Vorgänge sind per Trigger schreib-/löschgeschützt -
-    // als Admin erst „öffnen", dann löschen (kaskadiert Positionen + Fotos).
-    const abgeschlossen = vorgaenge.filter((v) => v.abgeschlossen).map((v) => v.id);
-    if (abgeschlossen.length) {
-      const { error } = await sb
-        .from("unterkunft_vorgang")
-        .update({ abgeschlossen: false })
-        .in("id", abgeschlossen);
-      if (error) {
-        setFehler(error.message);
+  async function wohneinheitLoeschen(w: UnterkunftWohneinheit) {
+    const sb = getSupabaseClient();
+    const zimmerDW = zimmer.filter((z) => z.wohneinheit_id === w.id);
+    if (zimmerDW.length && !isAdmin) {
+      setFehler(
+        `„${w.name}" hat noch ${zimmerDW.length} Zimmer – erst diese löschen.`
+      );
+      return;
+    }
+    if (
+      !window.confirm(
+        zimmerDW.length
+          ? `Wohneinheit „${w.name}" UNWIDERRUFLICH löschen – mit ${zimmerDW.length} ` +
+            `Zimmer und allem daran? (nur Testdaten!)`
+          : `Wohneinheit „${w.name}" endgültig löschen?`
+      )
+    )
+      return;
+    setFehler(null);
+    for (const z of zimmerDW) {
+      const err = await zimmerHartLoeschen(sb, z.id);
+      if (err) {
+        setFehler(err);
+        await laden();
         return;
       }
     }
-    if (vorgaenge.length) {
+    const { error } = await sb
+      .from("unterkunft_zuordnung")
+      .delete()
+      .eq("wohneinheit_id", w.id);
+    if (error) {
+      setFehler(error.message);
+      return;
+    }
+    await loeschen("unterkunft_wohneinheit", w.id, "Die Wohneinheit");
+  }
+
+  async function gebaeudeLoeschen(g: UnterkunftGebaeude) {
+    const sb = getSupabaseClient();
+    const zimmerDG = zimmer.filter((z) => z.gebaeude_id === g.id);
+    const wohnDG = wohneinheiten.filter((w) => w.gebaeude_id === g.id);
+    const hat = zimmerDG.length + wohnDG.length > 0;
+    if (hat && !isAdmin) {
+      setFehler(
+        `„${g.name}" hat noch ${wohnDG.length} Wohneinheit(en) / ${zimmerDG.length} ` +
+          `Zimmer – erst diese löschen.`
+      );
+      return;
+    }
+    if (
+      !window.confirm(
+        hat
+          ? `Gebäude „${g.name}" UNWIDERRUFLICH löschen – mit ${wohnDG.length} ` +
+            `Wohneinheit(en), ${zimmerDG.length} Zimmer und allem daran? ` +
+            `(nur Testdaten!)`
+          : `Gebäude „${g.name}" endgültig löschen?`
+      )
+    )
+      return;
+    setFehler(null);
+    for (const z of zimmerDG) {
+      const err = await zimmerHartLoeschen(sb, z.id);
+      if (err) {
+        setFehler(err);
+        await laden();
+        return;
+      }
+    }
+    for (const w of wohnDG) {
       const { error } = await sb
-        .from("unterkunft_vorgang")
+        .from("unterkunft_zuordnung")
         .delete()
-        .eq("zimmer_id", z.id);
+        .eq("wohneinheit_id", w.id);
       if (error) {
         setFehler(error.message);
+        await laden();
         return;
       }
-    }
-    if (nMg) {
-      const { error } = await sb
-        .from("unterkunft_mangel")
+      const { error: e2 } = await sb
+        .from("unterkunft_wohneinheit")
         .delete()
-        .eq("zimmer_id", z.id);
-      if (error) {
-        setFehler(error.message);
+        .eq("id", w.id);
+      if (e2) {
+        setFehler(e2.message);
+        await laden();
         return;
       }
     }
-    if (nBl) {
-      const { error } = await sb
-        .from("unterkunft_belegung")
-        .delete()
-        .in("bett_id", bettenIds);
-      if (error) {
-        setFehler(error.message);
-        return;
-      }
-    }
-    for (const b of betten.filter((b) => b.zimmer_id === z.id)) {
-      const ok = await loeschen("unterkunft_bett", b.id, `Bett ${b.bezeichnung}`);
-      if (!ok) return;
-    }
-    await loeschen("unterkunft_zimmer", z.id, `Zimmer ${z.nummer}`);
+    await loeschen("unterkunft_gebaeude", g.id, "Das Gebäude");
   }
 
   async function bettLoeschen(b: UnterkunftBett) {
     if (!window.confirm(`Bett ${b.bezeichnung} endgültig löschen?`)) return;
     if (isAdmin) {
-      // Testdaten: laufende/alte Belegungen dieses Bettes mitnehmen.
+      // Testdaten: alte/laufende Belegungen dieses Bettes mitnehmen.
       const { error } = await getSupabaseClient()
         .from("unterkunft_belegung")
         .delete()
