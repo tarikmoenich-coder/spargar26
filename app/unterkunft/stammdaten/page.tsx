@@ -89,6 +89,77 @@ export default function UnterkunftStammdatenPage() {
     return true;
   }
 
+  // Endgültiges Löschen (nur für versehentlich/testweise Angelegtes). Klappt
+  // nur, solange nichts daran hängt - sonst greift der FK-Schutz der DB und
+  // wir zeigen einen verständlichen Hinweis. Für „echte" Bestände bleibt
+  // Deaktivieren der richtige Weg (ADR-011).
+  async function loeschen(
+    tabelle: string,
+    id: number,
+    was: string
+  ): Promise<boolean> {
+    setFehler(null);
+    const { error } = await getSupabaseClient().from(tabelle).delete().eq("id", id);
+    if (error) {
+      const fk =
+        error.code === "23503" ||
+        /foreign key|verletzt|violates/i.test(error.message);
+      setFehler(
+        fk
+          ? `${was} kann nicht gelöscht werden – es hängen noch Daten daran ` +
+            `(Betten, Belegungen, Vorgänge oder Mängel). Erst diese entfernen ` +
+            `oder ${was} deaktivieren.`
+          : error.message
+      );
+      return false;
+    }
+    await laden();
+    return true;
+  }
+
+  async function gebaeudeLoeschen(g: UnterkunftGebaeude) {
+    if (
+      zimmer.some((z) => z.gebaeude_id === g.id) ||
+      wohneinheiten.some((w) => w.gebaeude_id === g.id)
+    ) {
+      setFehler(
+        `„${g.name}" hat noch Wohneinheiten/Zimmer – diese zuerst löschen.`
+      );
+      return;
+    }
+    if (!window.confirm(`Gebäude „${g.name}" endgültig löschen?`)) return;
+    await loeschen("unterkunft_gebaeude", g.id, "Das Gebäude");
+  }
+
+  async function wohneinheitLoeschen(w: UnterkunftWohneinheit) {
+    if (zimmer.some((z) => z.wohneinheit_id === w.id)) {
+      setFehler(`„${w.name}" hat noch Zimmer – diese zuerst löschen.`);
+      return;
+    }
+    if (!window.confirm(`Wohneinheit „${w.name}" endgültig löschen?`)) return;
+    await loeschen("unterkunft_wohneinheit", w.id, "Die Wohneinheit");
+  }
+
+  async function zimmerLoeschen(z: UnterkunftZimmer) {
+    if (
+      !window.confirm(
+        `Zimmer ${z.nummer} endgültig löschen? (samt seiner Betten)`
+      )
+    )
+      return;
+    // Betten zuerst weg (die haben ihrerseits FK-Schutz durch Belegungen).
+    for (const b of betten.filter((b) => b.zimmer_id === z.id)) {
+      const ok = await loeschen("unterkunft_bett", b.id, `Bett ${b.bezeichnung}`);
+      if (!ok) return;
+    }
+    await loeschen("unterkunft_zimmer", z.id, `Zimmer ${z.nummer}`);
+  }
+
+  async function bettLoeschen(b: UnterkunftBett) {
+    if (!window.confirm(`Bett ${b.bezeichnung} endgültig löschen?`)) return;
+    await loeschen("unterkunft_bett", b.id, `Bett ${b.bezeichnung}`);
+  }
+
   // --- Gebäude ---
   async function gebaeudeAnlegen() {
     if (!neuesGebaeude.name.trim()) return;
@@ -333,12 +404,20 @@ export default function UnterkunftStammdatenPage() {
                     )}
                   </button>
                   {canEdit && (
-                    <button
-                      className="btn-secondary"
-                      onClick={() => gebaeudeAktivSetzen(g, !g.aktiv)}
-                    >
-                      {g.aktiv ? "Deaktivieren" : "Aktivieren"}
-                    </button>
+                    <div className="flex shrink-0 gap-1">
+                      <button
+                        className="btn-secondary"
+                        onClick={() => gebaeudeAktivSetzen(g, !g.aktiv)}
+                      >
+                        {g.aktiv ? "Deaktivieren" : "Aktivieren"}
+                      </button>
+                      <button
+                        className="btn-danger"
+                        onClick={() => gebaeudeLoeschen(g)}
+                      >
+                        Löschen
+                      </button>
+                    </div>
                   )}
                 </div>
 
@@ -404,6 +483,12 @@ export default function UnterkunftStammdatenPage() {
                                   onClick={() => wohneinheitAktivSetzen(e, !e.aktiv)}
                                 >
                                   {e.aktiv ? "deaktivieren" : "aktivieren"}
+                                </button>
+                                <button
+                                  className="text-xs text-red-600 hover:underline"
+                                  onClick={() => wohneinheitLoeschen(e)}
+                                >
+                                  löschen
                                 </button>
                               </>
                             )}
@@ -564,12 +649,18 @@ export default function UnterkunftStammdatenPage() {
                                   )}
                                 </td>
                                 {canEdit && (
-                                  <td>
+                                  <td className="whitespace-nowrap">
                                     <button
-                                      className="btn-secondary"
+                                      className="btn-secondary mr-1"
                                       onClick={() => zimmerAktivSetzen(z, !z.aktiv)}
                                     >
                                       {z.aktiv ? "Deaktivieren" : "Aktivieren"}
+                                    </button>
+                                    <button
+                                      className="btn-danger"
+                                      onClick={() => zimmerLoeschen(z)}
+                                    >
+                                      Löschen
                                     </button>
                                   </td>
                                 )}
@@ -598,19 +689,28 @@ export default function UnterkunftStammdatenPage() {
                                           >
                                             {b.bezeichnung}
                                             {canEdit && (
-                                              <button
-                                                title={
-                                                  b.aktiv
-                                                    ? "Bett deaktivieren"
-                                                    : "Bett aktivieren"
-                                                }
-                                                onClick={() =>
-                                                  bettAktivSetzen(b, !b.aktiv)
-                                                }
-                                                className="text-neutral-400 hover:text-neutral-700"
-                                              >
-                                                {b.aktiv ? "×" : "↺"}
-                                              </button>
+                                              <>
+                                                <button
+                                                  title={
+                                                    b.aktiv
+                                                      ? "Bett deaktivieren"
+                                                      : "Bett aktivieren"
+                                                  }
+                                                  onClick={() =>
+                                                    bettAktivSetzen(b, !b.aktiv)
+                                                  }
+                                                  className="text-neutral-400 hover:text-neutral-700"
+                                                >
+                                                  {b.aktiv ? "×" : "↺"}
+                                                </button>
+                                                <button
+                                                  title="Bett löschen"
+                                                  onClick={() => bettLoeschen(b)}
+                                                  className="text-red-400 hover:text-red-600"
+                                                >
+                                                  🗑
+                                                </button>
+                                              </>
                                             )}
                                           </span>
                                         ))}

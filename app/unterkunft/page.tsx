@@ -119,9 +119,14 @@ export default function UnterkunftGrundrissPage() {
       ? einheiten.find((e) => e.wohneinheit_id === einheitId) ?? null
       : null;
 
+  // Inaktive Zimmer werden im Grundriss nur im Bearbeiten-Modus gezeigt
+  // (sonst nicht mehr im Weg).
   const zimmerDerEinheit = useMemo(
-    () => zimmer.filter((z) => z.wohneinheit_id === einheitId),
-    [zimmer, einheitId]
+    () =>
+      zimmer.filter(
+        (z) => z.wohneinheit_id === einheitId && (z.aktiv || bearbeiten)
+      ),
+    [zimmer, einheitId, bearbeiten]
   );
   const platziert = zimmerDerEinheit.filter(
     (z) => z.plan_x != null && z.plan_y != null

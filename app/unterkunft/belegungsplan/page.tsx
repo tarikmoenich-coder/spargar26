@@ -22,6 +22,7 @@ export default function UnterkunftBelegungsplanPage() {
   const [loading, setLoading] = useState(true);
   const [gebaeudeFilter, setGebaeudeFilter] = useState("");
   const [nurMitLuecke, setNurMitLuecke] = useState(false);
+  const [zeigeInaktive, setZeigeInaktive] = useState(false);
 
   const laden = useCallback(async () => {
     setLoading(true);
@@ -57,6 +58,7 @@ export default function UnterkunftBelegungsplanPage() {
   }, [belegungen]);
 
   const gefiltert = zimmer.filter((z) => {
+    if (!z.aktiv && !zeigeInaktive) return false;
     if (gebaeudeFilter && z.gebaeude_name !== gebaeudeFilter) return false;
     if (nurMitLuecke && z.frei <= 0 && z.offene_maengel === 0) return false;
     return true;
@@ -109,6 +111,14 @@ export default function UnterkunftBelegungsplanPage() {
               onChange={(e) => setNurMitLuecke(e.target.checked)}
             />
             nur freie Betten / Mängel
+          </label>
+          <label className="flex items-center gap-1">
+            <input
+              type="checkbox"
+              checked={zeigeInaktive}
+              onChange={(e) => setZeigeInaktive(e.target.checked)}
+            />
+            inaktive Zimmer zeigen
           </label>
         </div>
       </div>
