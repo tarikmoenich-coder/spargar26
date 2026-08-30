@@ -249,20 +249,45 @@ export default function UnterkunftGrundrissPage() {
   }
 
   async function zimmerLoeschen(z: UnterkunftZimmerUebersicht) {
-    if (!window.confirm(`„${z.nummer}" aus dem Grundriss löschen?`)) return;
-    const { error } = await getSupabaseClient()
+    if (
+      !window.confirm(
+        `„${z.nummer}" endgültig löschen – samt evtl. Kontrollen und Mängeln?`
+      )
+    )
+      return;
+    const sb = getSupabaseClient();
+    // Abgeschlossene Vorgänge sind trigger-geschützt: als Admin erst „öffnen",
+    // dann löschen (kaskadiert Positionen + Fotos), dann die Mängel.
+    const { data: vg } = await sb
+      .from("unterkunft_vorgang")
+      .select("id, abgeschlossen")
+      .eq("zimmer_id", z.zimmer_id);
+    const abg = ((vg as { id: string; abgeschlossen: boolean }[]) ?? [])
+      .filter((v) => v.abgeschlossen)
+      .map((v) => v.id);
+    if (abg.length) {
+      const { error } = await sb
+        .from("unterkunft_vorgang")
+        .update({ abgeschlossen: false })
+        .in("id", abg);
+      if (error) {
+        setFehler(error.message);
+        return;
+      }
+    }
+    for (const t of ["unterkunft_vorgang", "unterkunft_mangel"] as const) {
+      const { error } = await sb.from(t).delete().eq("zimmer_id", z.zimmer_id);
+      if (error) {
+        setFehler(error.message);
+        return;
+      }
+    }
+    const { error } = await sb
       .from("unterkunft_zimmer")
       .delete()
       .eq("id", z.zimmer_id);
     if (error) {
-      const fk =
-        (error as { code?: string }).code === "23503" ||
-        /foreign key|violates/i.test(error.message);
-      setFehler(
-        fk
-          ? `„${z.nummer}" kann nicht gelöscht werden – es hängen Kontrollen/Mängel daran.`
-          : error.message
-      );
+      setFehler(error.message);
       return;
     }
     setSelId(null);

@@ -19,6 +19,7 @@ import type {
 export default function UnterkunftStammdatenPage() {
   const { profile } = useProfile();
   const canEdit = profile?.role === "admin" || profile?.role === "hr";
+  const isAdmin = profile?.role === "admin";
 
   const [gebaeude, setGebaeude] = useState<UnterkunftGebaeude[]>([]);
   const [wohneinheiten, setWohneinheiten] = useState<UnterkunftWohneinheit[]>([]);
@@ -141,13 +142,85 @@ export default function UnterkunftStammdatenPage() {
   }
 
   async function zimmerLoeschen(z: UnterkunftZimmer) {
+    const sb = getSupabaseClient();
+    const bettenIds = betten.filter((b) => b.zimmer_id === z.id).map((b) => b.id);
+    // Was hängt dran? (Vorgänge/Mängel/Belegungen)
+    const [vg, mg, bl] = await Promise.all([
+      sb.from("unterkunft_vorgang").select("id, abgeschlossen").eq("zimmer_id", z.id),
+      sb.from("unterkunft_mangel").select("id").eq("zimmer_id", z.id),
+      bettenIds.length
+        ? sb.from("unterkunft_belegung").select("id").in("bett_id", bettenIds)
+        : Promise.resolve({ data: [] as { id: number }[] }),
+    ]);
+    const vorgaenge = (vg.data as { id: string; abgeschlossen: boolean }[]) ?? [];
+    const nMg = mg.data?.length ?? 0;
+    const nBl = bl.data?.length ?? 0;
+    const hatVorgeschichte = vorgaenge.length + nMg + nBl > 0;
+
+    if (hatVorgeschichte && !isAdmin) {
+      setFehler(
+        `Zimmer ${z.nummer} hat ${vorgaenge.length} Vorgang/Vorgänge, ${nMg} ` +
+          `Mangel/Mängel und ${nBl} Belegung(en). Nur ein Admin kann es ` +
+          `endgültig mit allem löschen – sonst deaktivieren.`
+      );
+      return;
+    }
+
     if (
       !window.confirm(
-        `Zimmer ${z.nummer} endgültig löschen? (samt seiner Betten)`
+        hatVorgeschichte
+          ? `Zimmer ${z.nummer} UNWIDERRUFLICH löschen – inklusive ` +
+            `${vorgaenge.length} Übergabe/Kontrolle, ${nMg} Mangel/Mängel und ` +
+            `${nBl} Belegung(en)? (nur Testdaten!)`
+          : `Zimmer ${z.nummer} endgültig löschen? (samt seiner Betten)`
       )
     )
       return;
-    // Betten zuerst weg (die haben ihrerseits FK-Schutz durch Belegungen).
+    setFehler(null);
+
+    // Abgeschlossene Vorgänge sind per Trigger schreib-/löschgeschützt -
+    // als Admin erst „öffnen", dann löschen (kaskadiert Positionen + Fotos).
+    const abgeschlossen = vorgaenge.filter((v) => v.abgeschlossen).map((v) => v.id);
+    if (abgeschlossen.length) {
+      const { error } = await sb
+        .from("unterkunft_vorgang")
+        .update({ abgeschlossen: false })
+        .in("id", abgeschlossen);
+      if (error) {
+        setFehler(error.message);
+        return;
+      }
+    }
+    if (vorgaenge.length) {
+      const { error } = await sb
+        .from("unterkunft_vorgang")
+        .delete()
+        .eq("zimmer_id", z.id);
+      if (error) {
+        setFehler(error.message);
+        return;
+      }
+    }
+    if (nMg) {
+      const { error } = await sb
+        .from("unterkunft_mangel")
+        .delete()
+        .eq("zimmer_id", z.id);
+      if (error) {
+        setFehler(error.message);
+        return;
+      }
+    }
+    if (nBl) {
+      const { error } = await sb
+        .from("unterkunft_belegung")
+        .delete()
+        .in("bett_id", bettenIds);
+      if (error) {
+        setFehler(error.message);
+        return;
+      }
+    }
     for (const b of betten.filter((b) => b.zimmer_id === z.id)) {
       const ok = await loeschen("unterkunft_bett", b.id, `Bett ${b.bezeichnung}`);
       if (!ok) return;
@@ -157,6 +230,17 @@ export default function UnterkunftStammdatenPage() {
 
   async function bettLoeschen(b: UnterkunftBett) {
     if (!window.confirm(`Bett ${b.bezeichnung} endgültig löschen?`)) return;
+    if (isAdmin) {
+      // Testdaten: laufende/alte Belegungen dieses Bettes mitnehmen.
+      const { error } = await getSupabaseClient()
+        .from("unterkunft_belegung")
+        .delete()
+        .eq("bett_id", b.id);
+      if (error) {
+        setFehler(error.message);
+        return;
+      }
+    }
     await loeschen("unterkunft_bett", b.id, `Bett ${b.bezeichnung}`);
   }
 
