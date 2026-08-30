@@ -1293,15 +1293,21 @@ export interface UnterkunftBelegungAktuell {
 }
 
 // Aus der Sicht unterkunft_belegung_person - alle Belegungszeiträume einer
-// Person mit Gebäude/Wohneinheit/Zimmer (für den Suche-Block).
+// Person mit Gebäude/Wohneinheit/Zimmer (für den Suche-Block und die
+// Bewohner-Rückverfolgung in der Mängelliste).
 export interface UnterkunftBelegungPerson {
   id: number;
   employee_id: string;
   von: string;
   bis: string | null;
   notiz: string | null;
+  personal_nr: string;
+  name: string;
+  vorname: string;
+  herkunft: string | null;
   zimmer_id: number;
   zimmer_nummer: string;
+  zimmer_art: UnterkunftZimmerArt;
   wohneinheit_id: number | null;
   wohneinheit_name: string | null;
   gebaeude_id: number;

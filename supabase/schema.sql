@@ -5348,15 +5348,18 @@ where e.aktiv
 alter view unterkunft_person_offen set (security_invoker = true);
 grant select on unterkunft_person_offen to authenticated;
 
--- Belegungen je Person (für den Unterkunfts-Block in der Suche) - alle
--- Zeiträume, mit Gebäude/Wohneinheit/Zimmer.
+-- Belegungen je Person (für den Unterkunfts-Block in der Suche und die
+-- Bewohner-Rückverfolgung in der Mängelliste) - alle Zeiträume, mit
+-- Person, Gebäude/Wohneinheit/Zimmer.
 create view unterkunft_belegung_person as
 select
   b.id, b.employee_id, b.von, b.bis, b.notiz,
-  z.id as zimmer_id, z.nummer as zimmer_nummer, z.wohneinheit_id,
-  w.name as wohneinheit_name,
+  e.personal_nr, e.name, e.vorname, e.herkunft,
+  z.id as zimmer_id, z.nummer as zimmer_nummer, z.art as zimmer_art,
+  z.wohneinheit_id, w.name as wohneinheit_name,
   g.id as gebaeude_id, g.name as gebaeude_name
 from unterkunft_belegung b
+join employees e on e.id = b.employee_id
 join unterkunft_zimmer z on z.id = b.zimmer_id
 left join unterkunft_wohneinheit w on w.id = z.wohneinheit_id
 join unterkunft_gebaeude g on g.id = z.gebaeude_id;

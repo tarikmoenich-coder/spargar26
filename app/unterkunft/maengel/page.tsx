@@ -13,6 +13,7 @@ import { formatDatumDE } from "@/lib/format";
 import {
   UNTERKUNFT_MANGEL_SCHWERE_LABELS,
   UNTERKUNFT_MANGEL_STATUS_LABELS,
+  type UnterkunftBelegungPerson,
   type UnterkunftGebaeude,
   type UnterkunftMangel,
   type UnterkunftMangelSchwere,
@@ -30,6 +31,7 @@ export default function UnterkunftMaengelPage() {
   const [gebaeude, setGebaeude] = useState<UnterkunftGebaeude[]>([]);
   const [zimmer, setZimmer] = useState<UnterkunftZimmer[]>([]);
   const [maengel, setMaengel] = useState<UnterkunftMangel[]>([]);
+  const [belegungen, setBelegungen] = useState<UnterkunftBelegungPerson[]>([]);
   const [loading, setLoading] = useState(true);
   const [fehler, setFehler] = useState<string | null>(null);
   const [statusFilter, setStatusFilter] = useState<"offen_arbeit" | "alle" | UnterkunftMangelStatus>(
@@ -48,17 +50,22 @@ export default function UnterkunftMaengelPage() {
   const laden = useCallback(async () => {
     setLoading(true);
     const supabase = getSupabaseClient();
-    const [g, z, m] = await Promise.all([
+    const [g, z, m, bp] = await Promise.all([
       supabase.from("unterkunft_gebaeude").select("*").order("name"),
       supabase.from("unterkunft_zimmer").select("*").order("nummer"),
       supabase
         .from("unterkunft_mangel")
         .select("*")
         .order("gemeldet_am", { ascending: false }),
+      supabase
+        .from("unterkunft_belegung_person")
+        .select("*")
+        .order("von", { ascending: false }),
     ]);
     setGebaeude((g.data as UnterkunftGebaeude[]) ?? []);
     setZimmer((z.data as UnterkunftZimmer[]) ?? []);
     setMaengel((m.data as UnterkunftMangel[]) ?? []);
+    setBelegungen((bp.data as UnterkunftBelegungPerson[]) ?? []);
     setLoading(false);
   }, []);
 
@@ -70,6 +77,41 @@ export default function UnterkunftMaengelPage() {
     const z = zimmer.find((x) => x.id === zimmerId);
     const g = z ? gebaeude.find((x) => x.id === z.gebaeude_id) : undefined;
     return z ? `${g?.name ?? "?"} · Zimmer ${z.nummer}` : `Zimmer ${zimmerId}`;
+  }
+
+  // Bewohner zur Rückverfolgung: bei einem Zimmer-Mangel die Bewohner dieses
+  // Zimmers, bei einem Allgemeinraum (Küche/Bad/Flur/…) die der ganzen
+  // Wohneinheit. Zeitraum: alle, deren Aufenthalt seit der Meldung (mit)lief.
+  function bewohnerFuerMangel(m: UnterkunftMangel): {
+    abZimmer: boolean;
+    titel: string;
+    personen: UnterkunftBelegungPerson[];
+  } {
+    const z = zimmer.find((x) => x.id === m.zimmer_id);
+    const abZimmer = z?.art === "zimmer";
+    const gemeldet = m.gemeldet_am.slice(0, 10);
+    const heute = new Date().toISOString().slice(0, 10);
+    const personen = !z
+      ? []
+      : belegungen.filter((b) => {
+          const passt = abZimmer
+            ? b.zimmer_id === z.id
+            : z.wohneinheit_id != null && b.wohneinheit_id === z.wohneinheit_id;
+          return (
+            passt && (b.bis === null || b.bis >= gemeldet) && b.von <= heute
+          );
+        });
+    const weName =
+      z && !abZimmer
+        ? (belegungen.find((b) => b.wohneinheit_id === z.wohneinheit_id)
+            ?.wohneinheit_name ?? null)
+        : null;
+    const titel = !z
+      ? "Bewohner"
+      : abZimmer
+        ? `Bewohner Zimmer ${z.nummer}`
+        : `Bewohner Wohneinheit${weName ? ` ${weName}` : ""}`;
+    return { abZimmer, titel, personen };
   }
 
   const zimmerDesGebaeudes = zimmer.filter(
@@ -365,6 +407,49 @@ export default function UnterkunftMaengelPage() {
                           {m.behoben_am &&
                             ` · Behoben am ${formatDatumDE(m.behoben_am)}.`}
                         </div>
+
+                        {(() => {
+                          const { abZimmer, titel, personen } =
+                            bewohnerFuerMangel(m);
+                          return (
+                            <details className="text-sm">
+                              <summary className="cursor-pointer font-medium text-neutral-700">
+                                {titel} ({personen.length})
+                              </summary>
+                              {personen.length === 0 ? (
+                                <p className="mt-1 text-neutral-400">
+                                  niemand seit der Meldung (
+                                  {formatDatumDE(m.gemeldet_am)}).
+                                </p>
+                              ) : (
+                                <ul className="mt-1 space-y-0.5">
+                                  {personen.map((b) => (
+                                    <li key={b.id}>
+                                      {b.vorname} {b.name}
+                                      {b.herkunft ? (
+                                        <span className="text-neutral-400">
+                                          {" "}
+                                          · {b.herkunft}
+                                        </span>
+                                      ) : null}
+                                      {!abZimmer && (
+                                        <span className="text-neutral-400">
+                                          {" "}
+                                          · Zi. {b.zimmer_nummer}
+                                        </span>
+                                      )}
+                                      <span className="text-neutral-400">
+                                        {" "}
+                                        — {formatDatumDE(b.von)}–
+                                        {b.bis ? formatDatumDE(b.bis) : "offen"}
+                                      </span>
+                                    </li>
+                                  ))}
+                                </ul>
+                              )}
+                            </details>
+                          );
+                        })()}
                         {canEdit && (
                           <label className="block text-sm">
                             Behebungs-Notiz
