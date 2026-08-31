@@ -346,7 +346,7 @@ export default function DashboardPage() {
   if (keinDashboard) {
     const ziel =
       profile.role === "hausmeister"
-        ? { href: "/unterkunft", text: "Zur Unterkunft" }
+        ? { href: "/unterkunft/kontrollplan", text: "Zum Kontrollplan" }
         : { href: "/erfassung", text: "Zur Stundenerfassung" };
     return (
       <div className="flex flex-col gap-2">

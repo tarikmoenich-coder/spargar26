@@ -11,6 +11,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { getSupabaseClient } from "@/lib/supabase/client";
 import { useProfile } from "@/lib/useProfile";
 import UnterkunftTabs from "@/components/UnterkunftTabs";
@@ -186,6 +187,11 @@ interface UmzugState {
 
 export default function UnterkunftGrundrissPage() {
   const { profile } = useProfile();
+  const router = useRouter();
+  // Der Hausmeister arbeitet nicht mit dem Grundriss (Vorgabe 2026-09-14).
+  useEffect(() => {
+    if (profile?.role === "hausmeister") router.replace("/unterkunft/kontrollplan");
+  }, [profile?.role, router]);
   const canEditPlan = profile?.role === "admin";
   // Zimmer sperren: wie bei den übrigen Zimmer-Stammdaten (RLS: admin/hr).
   const canManage = profile?.role === "admin" || profile?.role === "hr";

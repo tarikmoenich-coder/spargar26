@@ -3,17 +3,24 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useRef } from "react";
+import { useProfile } from "@/lib/useProfile";
 
 // Unterkunft-Modul (Migration 2026-08-29): Zimmerplanung + Übergabe/Abnahme
 // + Zwischenkontrollen + Mängel. Gleiches Tab-Muster wie PraemienTabs
 // (siehe dort für die ResizeObserver-/--subtabs-h-Logik).
+// nurHausmeister: der Hausmeister macht nur Kontrollen - für ihn wird die
+// Navigation auf das Nötige reduziert (Vorgabe 2026-09-14).
 const tabs = [
-  { href: "/unterkunft/kontrollplan", label: "Kontrollplan" },
+  { href: "/unterkunft/kontrollplan", label: "Kontrollplan", nurHausmeister: true },
   { href: "/unterkunft", label: "Grundriss", exakt: true },
   { href: "/unterkunft/belegungsplan", label: "Belegungsplan" },
   { href: "/unterkunft/belegung", label: "Belegung" },
   { href: "/unterkunft/uebergabe", label: "Übergabe / Abnahme" },
-  { href: "/unterkunft/kontrolle", label: "Zwischenkontrolle" },
+  {
+    href: "/unterkunft/kontrolle",
+    label: "Zwischenkontrolle",
+    nurHausmeister: true,
+  },
   { href: "/unterkunft/maengel", label: "Mängel" },
   { href: "/unterkunft/reparaturen", label: "Reparaturen" },
   { href: "/unterkunft/stammdaten", label: "Stammdaten" },
@@ -21,7 +28,13 @@ const tabs = [
 
 export default function UnterkunftTabs() {
   const pathname = usePathname();
+  const { profile } = useProfile();
   const ref = useRef<HTMLDivElement>(null);
+
+  const sichtbar =
+    profile?.role === "hausmeister"
+      ? tabs.filter((t) => t.nurHausmeister)
+      : tabs;
 
   useEffect(() => {
     const el = ref.current;
@@ -43,7 +56,7 @@ export default function UnterkunftTabs() {
       ref={ref}
       className="sticky top-14 z-40 -mt-6 flex gap-4 overflow-x-auto border-b border-neutral-200 bg-neutral-50 [scrollbar-width:thin] sm:flex-wrap sm:overflow-visible print:hidden"
     >
-      {tabs.map((tab) => {
+      {sichtbar.map((tab) => {
         const aktiv = tab.exakt
           ? pathname === tab.href
           : pathname === tab.href || pathname?.startsWith(`${tab.href}/`);

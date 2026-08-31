@@ -23,7 +23,7 @@ export default function Home() {
       profile?.role === "zeiterfassung"
         ? "/erfassung"
         : profile?.role === "hausmeister"
-          ? "/unterkunft"
+          ? "/unterkunft/kontrollplan"
           : "/dashboard";
     router.replace(start);
   }, [loading, profile, userId, router]);
