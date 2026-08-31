@@ -13,6 +13,7 @@ const tabs = [
   { href: "/unterkunft/belegung", label: "Belegung" },
   { href: "/unterkunft/uebergabe", label: "Übergabe / Abnahme" },
   { href: "/unterkunft/kontrolle", label: "Zwischenkontrolle" },
+  { href: "/unterkunft/kontrollplan", label: "Kontrollplan" },
   { href: "/unterkunft/maengel", label: "Mängel" },
   { href: "/unterkunft/stammdaten", label: "Stammdaten" },
 ];

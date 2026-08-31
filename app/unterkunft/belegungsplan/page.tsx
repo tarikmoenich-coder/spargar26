@@ -2,16 +2,14 @@
 
 // Unterkunft → Belegungsplan (Migration 2026-08-29, verschoben von /unterkunft
 // nach /unterkunft/belegungsplan am 2026-08-30, seit der Grundriss die
-// Einstiegsseite ist). Je Zimmer wer heute dort wohnt, freie Betten, letzte
-// abgeschlossene Kontrolle und offene Mängel. Nur lesend – Pflege läuft über
-// die anderen Tabs.
+// Einstiegsseite ist). Je Zimmer wer heute dort wohnt und freie Betten. Nur
+// lesend – Pflege läuft über die anderen Tabs. Kontrolle/Mängel stehen im
+// eigenen Tab „Kontrollplan“.
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { getSupabaseClient } from "@/lib/supabase/client";
 import UnterkunftTabs from "@/components/UnterkunftTabs";
-import { formatDatumDE } from "@/lib/format";
 import {
-  UNTERKUNFT_VORGANG_TYP_LABELS,
   type UnterkunftBelegungAktuell,
   type UnterkunftZimmerUebersicht,
 } from "@/lib/types";
@@ -61,7 +59,7 @@ export default function UnterkunftBelegungsplanPage() {
     if (z.art !== "zimmer") return false;
     if (!z.aktiv && !zeigeInaktive) return false;
     if (gebaeudeFilter && z.gebaeude_name !== gebaeudeFilter) return false;
-    if (nurMitLuecke && z.frei <= 0 && z.offene_maengel === 0) return false;
+    if (nurMitLuecke && z.frei <= 0) return false;
     return true;
   });
 
@@ -70,9 +68,8 @@ export default function UnterkunftBelegungsplanPage() {
       betten: acc.betten + z.betten,
       belegt: acc.belegt + z.belegt,
       frei: acc.frei + z.frei,
-      maengel: acc.maengel + z.offene_maengel,
     }),
-    { betten: 0, belegt: 0, frei: 0, maengel: 0 }
+    { betten: 0, belegt: 0, frei: 0 }
   );
 
   if (loading) return <p className="p-4 text-sm text-neutral-500">Lädt …</p>;
@@ -85,8 +82,7 @@ export default function UnterkunftBelegungsplanPage() {
         <div>
           <h1 className="text-lg font-semibold text-emerald-900">Belegungsplan</h1>
           <p className="text-sm text-neutral-500">
-            Stand heute · {summe.belegt} belegt · {summe.frei} frei · {summe.maengel}{" "}
-            offene Mängel
+            Stand heute · {summe.belegt} belegt · {summe.frei} frei
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-3 text-sm">
@@ -111,7 +107,7 @@ export default function UnterkunftBelegungsplanPage() {
               checked={nurMitLuecke}
               onChange={(e) => setNurMitLuecke(e.target.checked)}
             />
-            nur freie Plätze / Mängel
+            nur freie Plätze
           </label>
           <label className="flex items-center gap-1">
             <input
@@ -139,8 +135,6 @@ export default function UnterkunftBelegungsplanPage() {
               <th>Frei</th>
               <th>Schwebend</th>
               <th>Bewohner heute</th>
-              <th>Letzte Kontrolle</th>
-              <th>Offene Mängel</th>
             </tr>
           </thead>
           <tbody>
@@ -172,18 +166,6 @@ export default function UnterkunftBelegungsplanPage() {
                       : bew
                           .map((b) => `${b.vorname} ${b.name} (${b.personal_nr})`)
                           .join(", ")}
-                  </td>
-                  <td>
-                    {z.letzte_kontrolle_am
-                      ? `${formatDatumDE(z.letzte_kontrolle_am)}${
-                          z.letzte_kontrolle_typ
-                            ? ` · ${UNTERKUNFT_VORGANG_TYP_LABELS[z.letzte_kontrolle_typ]}`
-                            : ""
-                        }`
-                      : "noch keine"}
-                  </td>
-                  <td className={z.offene_maengel > 0 ? "font-medium text-red-600" : ""}>
-                    {z.offene_maengel > 0 ? z.offene_maengel : "—"}
                   </td>
                 </tr>
               );

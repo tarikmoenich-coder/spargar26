@@ -121,20 +121,35 @@ export default function UnterkunftKontrollePage() {
     laden();
   }, [laden]);
 
-  // Deep-Link aus dem Grundriss: ?zimmer=<id> wählt Gebäude + Zimmer vor.
+  // Deep-Link aus dem Grundriss / Kontrollplan: ?zimmer=<id> wählt Gebäude +
+  // Zimmer vor, ?wohneinheit=<id> den Wohneinheit-Modus.
   useEffect(() => {
     if (zimmer.length === 0) return;
-    const param = new URLSearchParams(window.location.search).get("zimmer");
-    if (!param) return;
-    const z = zimmer.find((x) => String(x.id) === param);
-    if (z)
-      setSel((s) => ({
-        ...s,
-        modus: "zimmer",
-        gebaeude_id: String(z.gebaeude_id),
-        zimmer_id: String(z.id),
-      }));
-  }, [zimmer]);
+    const q = new URLSearchParams(window.location.search);
+    const zParam = q.get("zimmer");
+    if (zParam) {
+      const z = zimmer.find((x) => String(x.id) === zParam);
+      if (z)
+        setSel((s) => ({
+          ...s,
+          modus: "zimmer",
+          gebaeude_id: String(z.gebaeude_id),
+          zimmer_id: String(z.id),
+        }));
+      return;
+    }
+    const wParam = q.get("wohneinheit");
+    if (wParam) {
+      const w = wohneinheiten.find((x) => String(x.id) === wParam);
+      if (w)
+        setSel((s) => ({
+          ...s,
+          modus: "wohneinheit",
+          gebaeude_id: String(w.gebaeude_id),
+          wohneinheit_id: String(w.id),
+        }));
+    }
+  }, [zimmer, wohneinheiten]);
 
   useEffect(() => {
     if (!dirty) return;
