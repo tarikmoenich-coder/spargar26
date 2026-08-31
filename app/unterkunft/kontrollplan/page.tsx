@@ -44,7 +44,12 @@ export default function UnterkunftKontrollplanPage() {
     {}
   );
   const [maengel, setMaengel] = useState<
-    { id: number; zimmer_id: number; gemeldet_am: string }[]
+    {
+      id: number;
+      zimmer_id: number;
+      gemeldet_am: string;
+      kategorie: string;
+    }[]
   >([]);
   const [vorgaenge, setVorgaenge] = useState<
     { zimmer_id: number; gesamtzustand: string | null }[]
@@ -70,7 +75,7 @@ export default function UnterkunftKontrollplanPage() {
       supabase.from("unterkunft_kontroll_intervall").select("*"),
       supabase
         .from("unterkunft_mangel")
-        .select("id, zimmer_id, gemeldet_am")
+        .select("id, zimmer_id, gemeldet_am, kategorie")
         .neq("status", "behoben"),
       supabase
         .from("unterkunft_vorgang")
@@ -89,7 +94,12 @@ export default function UnterkunftKontrollplanPage() {
       )
     );
     setMaengel(
-      (m.data as { id: number; zimmer_id: number; gemeldet_am: string }[]) ?? []
+      (m.data as {
+        id: number;
+        zimmer_id: number;
+        gemeldet_am: string;
+        kategorie: string;
+      }[]) ?? []
     );
     setVorgaenge(
       (v.data as { zimmer_id: number; gesamtzustand: string | null }[]) ?? []
@@ -102,12 +112,24 @@ export default function UnterkunftKontrollplanPage() {
   }, [laden]);
 
   const offeneMaengelProZimmer = useMemo(() => {
-    const map: Record<number, { id: number; gemeldet_am: string }[]> = {};
+    const map: Record<
+      number,
+      { id: number; gemeldet_am: string; kategorie: string }[]
+    > = {};
     maengel.forEach((m) => {
-      (map[m.zimmer_id] ??= []).push({ id: m.id, gemeldet_am: m.gemeldet_am });
+      (map[m.zimmer_id] ??= []).push({
+        id: m.id,
+        gemeldet_am: m.gemeldet_am,
+        kategorie: m.kategorie,
+      });
     });
     return map;
   }, [maengel]);
+
+  const offeneReparaturen = useMemo(
+    () => maengel.filter((m) => m.kategorie === "reparatur").length,
+    [maengel]
+  );
 
   // Belegte + geplante Personen je Wohneinheit (für Allgemeinräume).
   const belegtProEinheit = useMemo(() => {
@@ -144,12 +166,16 @@ export default function UnterkunftKontrollplanPage() {
   }, [vorgaenge]);
 
   // { frist, ampel } je Raum – Zeitzyklus, offene Mängel, Nutzung, Sauber-Serie.
+  // Reparaturen zählen hier NICHT: sie haben ein eigenes Board (Reiter
+  // "Reparaturen") und dürfen die Kontrollfrist nicht vorziehen.
   const infoVon = useCallback(
     (z: UnterkunftZimmerUebersicht) =>
       naechsteKontrolle({
         letzteKontrolleAm: z.letzte_kontrolle_am,
         schwellen: intervalle[z.art] ?? null,
-        offeneMaengel: offeneMaengelProZimmer[z.zimmer_id] ?? [],
+        offeneMaengel: (offeneMaengelProZimmer[z.zimmer_id] ?? []).filter(
+          (m) => m.kategorie !== "reparatur"
+        ),
         inNutzung: inNutzungVon(z),
         sauberStreak: sauberStreakProZimmer[z.zimmer_id] ?? 0,
       }),
@@ -255,18 +281,24 @@ export default function UnterkunftKontrollplanPage() {
     relevantVon,
   ]);
 
-  // Flache Arbeitsliste "heute zu erledigen": aktive, genutzte Räume, deren
-  // spätester Kontrolltermin heute oder früher liegt (bzw. noch nie
-  // kontrolliert). Gesperrte Räume bleiben aussen vor. Respektiert den
-  // Gebäude-Filter, ignoriert die übrigen Anzeige-Schalter.
+  // Flache Arbeitsliste "heute zu erledigen": aktive, genutzte Räume (oder mit
+  // offenem Reinigungs-Mangel), deren spätester Kontrolltermin heute oder
+  // früher liegt (bzw. noch nie kontrolliert). Gesperrte Räume + reine
+  // Reparatur-Räume bleiben aussen vor. Respektiert den Gebäude-Filter,
+  // ignoriert die übrigen Anzeige-Schalter.
   const heuteListe = useMemo(() => {
     const heute = new Date().toISOString().slice(0, 10);
+    const kontrollpflichtig = (z: UnterkunftZimmerUebersicht) =>
+      inNutzungVon(z) ||
+      (offeneMaengelProZimmer[z.zimmer_id] ?? []).some(
+        (m) => m.kategorie !== "reparatur"
+      );
     return zimmer
       .filter(
         (z) =>
           z.aktiv &&
           !z.gesperrt &&
-          relevantVon(z) &&
+          kontrollpflichtig(z) &&
           (!gebaeudeFilter || z.gebaeude_name === gebaeudeFilter)
       )
       .map((z) => ({ z, info: infoVon(z) }))
@@ -281,7 +313,7 @@ export default function UnterkunftKontrollplanPage() {
           a.z.gebaeude_name.localeCompare(b.z.gebaeude_name) ||
           a.z.nummer.localeCompare(b.z.nummer, "de", { numeric: true })
       );
-  }, [zimmer, gebaeudeFilter, relevantVon, infoVon]);
+  }, [zimmer, gebaeudeFilter, inNutzungVon, offeneMaengelProZimmer, infoVon]);
 
   // "Heute zu erledigen" nach Gebäude gruppiert.
   const heuteProGebaeude = useMemo(() => {
@@ -702,6 +734,27 @@ export default function UnterkunftKontrollplanPage() {
           </div>
         )}
       </div>
+
+      <p className="text-sm">
+        <Link
+          href="/unterkunft/reparaturen"
+          className="inline-flex items-center gap-2 text-emerald-700 underline"
+        >
+          Offene Reparaturen
+          <span
+            className={`rounded-full px-2 py-0.5 text-xs font-semibold ${
+              offeneReparaturen > 0
+                ? "bg-red-600 text-white"
+                : "bg-neutral-300 text-neutral-700"
+            }`}
+          >
+            {offeneReparaturen}
+          </span>
+        </Link>{" "}
+        <span className="text-neutral-400">
+          – eigenes Board, beeinflussen die Kontroll-Ampel nicht.
+        </span>
+      </p>
 
       {baum.length === 0 ? (
         <p className="text-sm text-neutral-500">

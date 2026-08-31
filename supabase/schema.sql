@@ -5166,6 +5166,12 @@ create table unterkunft_vorgang_position (
   bereich text not null,
   zustand text not null default 'io' check (zustand in ('io', 'mangel', 'na')),
   bemerkung text,
+  -- Bei zustand='mangel' (Migration 2026-09-12): wie der übernommene Mangel
+  -- eingeordnet wird. NULL, solange kein Mangel.
+  mangel_kategorie text
+    check (mangel_kategorie in ('reinigung', 'reparatur', 'sonstiges')),
+  mangel_verursachung text
+    check (mangel_verursachung in ('verschleiss', 'bewohner', 'unklar')),
   unique (vorgang_id, bereich)
 );
 create index idx_unterkunft_vorgang_position_vorgang
@@ -5178,6 +5184,20 @@ create table unterkunft_mangel (
   beschreibung text not null,
   schwere text not null default 'mittel' check (schwere in ('gering', 'mittel', 'hoch')),
   status text not null default 'offen' check (status in ('offen', 'in_arbeit', 'behoben')),
+  -- Kategorie (Migration 2026-09-12): 'reinigung' = Bewohner behebt selbst
+  -- (Sauberkeit/Ordnung), treibt die Kontrollfrist. 'reparatur' = muss instand
+  -- gesetzt werden (Hausmeister/Handwerker), eigenes Board, treibt die
+  -- Kontrollfrist NICHT. 'sonstiges' = unklassifiziert (Altbestand).
+  kategorie text not null default 'sonstiges'
+    check (kategorie in ('reinigung', 'reparatur', 'sonstiges')),
+  -- Nur bei Reparaturen: Verschulden. 'bewohner' = mutwillig/fahrlässig ->
+  -- Kostenweitergabe; 'verschleiss' = normale Instandhaltung; 'unklar' = offen.
+  verursachung text not null default 'unklar'
+    check (verursachung in ('verschleiss', 'bewohner', 'unklar')),
+  verursacher_employee_id uuid references employees (id) on delete set null,
+  kosten_geschaetzt numeric(10, 2),
+  -- Fälligkeit einer Reparatur (z. B. Handwerkertermin).
+  faellig_am date,
   gemeldet_von uuid references profiles (id) default auth.uid(),
   gemeldet_am timestamptz not null default now(),
   behoben_von uuid references profiles (id),
@@ -5188,6 +5208,7 @@ create table unterkunft_mangel (
 );
 create index idx_unterkunft_mangel_zimmer on unterkunft_mangel (zimmer_id);
 create index idx_unterkunft_mangel_status on unterkunft_mangel (status);
+create index idx_unterkunft_mangel_kategorie on unterkunft_mangel (kategorie);
 
 create table unterkunft_foto (
   id bigint generated always as identity primary key,

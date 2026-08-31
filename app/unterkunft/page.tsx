@@ -29,6 +29,7 @@ import {
   type KontrollSchwellen,
 } from "@/lib/unterkunft";
 import {
+  UNTERKUNFT_MANGEL_KATEGORIE_LABELS,
   UNTERKUNFT_MANGEL_SCHWERE_LABELS,
   UNTERKUNFT_MANGEL_STATUS_LABELS,
   UNTERKUNFT_VORGANG_TYP_LABELS,
@@ -36,6 +37,7 @@ import {
   type UnterkunftGebaeude,
   type UnterkunftKontrollIntervall,
   type UnterkunftMangel,
+  type UnterkunftMangelKategorie,
   type UnterkunftMangelSchwere,
   type UnterkunftMangelStatus,
   type UnterkunftPersonOffen,
@@ -231,6 +233,7 @@ export default function UnterkunftGrundrissPage() {
   const [neuerMangel, setNeuerMangel] = useState<{
     beschreibung: string;
     schwere: UnterkunftMangelSchwere;
+    kategorie: UnterkunftMangelKategorie;
   } | null>(null);
 
   const laden = useCallback(async () => {
@@ -559,6 +562,7 @@ export default function UnterkunftGrundrissPage() {
         zimmer_id: zimmerId,
         beschreibung: neuerMangel.beschreibung.trim(),
         schwere: neuerMangel.schwere,
+        kategorie: neuerMangel.kategorie,
       });
     if (error) {
       setFehler(error.message);
@@ -1527,6 +1531,15 @@ export default function UnterkunftGrundrissPage() {
                                 </Link>
                               </div>
                               <div className="flex flex-wrap items-center gap-2 text-xs text-neutral-500">
+                                <span
+                                  className={`rounded px-1.5 py-0.5 ${
+                                    m.kategorie === "reparatur"
+                                      ? "bg-orange-100 text-orange-800"
+                                      : "bg-white"
+                                  }`}
+                                >
+                                  {UNTERKUNFT_MANGEL_KATEGORIE_LABELS[m.kategorie]}
+                                </span>
                                 <span className="rounded bg-white px-1.5 py-0.5">
                                   {UNTERKUNFT_MANGEL_SCHWERE_LABELS[m.schwere]}
                                 </span>
@@ -1842,7 +1855,13 @@ export default function UnterkunftGrundrissPage() {
                           className="btn-secondary"
                           onClick={() =>
                             setNeuerMangel((v) =>
-                              v ? null : { beschreibung: "", schwere: "mittel" }
+                              v
+                                ? null
+                                : {
+                                    beschreibung: "",
+                                    schwere: "mittel",
+                                    kategorie: "reinigung",
+                                  }
                             )
                           }
                         >
@@ -1885,6 +1904,33 @@ export default function UnterkunftGrundrissPage() {
                             )
                           }
                         />
+                        <label className="flex items-center gap-2">
+                          Art
+                          <select
+                            value={neuerMangel.kategorie}
+                            onChange={(e) =>
+                              setNeuerMangel((v) =>
+                                v
+                                  ? {
+                                      ...v,
+                                      kategorie: e.target
+                                        .value as UnterkunftMangelKategorie,
+                                    }
+                                  : v
+                              )
+                            }
+                          >
+                            {(
+                              Object.keys(
+                                UNTERKUNFT_MANGEL_KATEGORIE_LABELS
+                              ) as UnterkunftMangelKategorie[]
+                            ).map((k) => (
+                              <option key={k} value={k}>
+                                {UNTERKUNFT_MANGEL_KATEGORIE_LABELS[k]}
+                              </option>
+                            ))}
+                          </select>
+                        </label>
                         <label className="flex items-center gap-2">
                           Schwere
                           <select

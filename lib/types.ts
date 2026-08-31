@@ -1466,6 +1466,10 @@ export interface UnterkunftVorgangPosition {
   bereich: string;
   zustand: UnterkunftPositionZustand;
   bemerkung: string | null;
+  // Nur bei zustand='mangel' (Migration 2026-09-12) - Einordnung des Mangels,
+  // die beim Abschließen übernommen wird.
+  mangel_kategorie: UnterkunftMangelKategorie | null;
+  mangel_verursachung: UnterkunftMangelVerursachung | null;
 }
 
 export type UnterkunftMangelSchwere = "gering" | "mittel" | "hoch";
@@ -1490,6 +1494,43 @@ export const UNTERKUNFT_MANGEL_STATUS_LABELS: Record<
   behoben: "Behoben",
 };
 
+// Dieselben drei Status, aber im Reparatur-Board mit passenderen Begriffen.
+export const UNTERKUNFT_REPARATUR_STATUS_LABELS: Record<
+  UnterkunftMangelStatus,
+  string
+> = {
+  offen: "Gemeldet",
+  in_arbeit: "Beauftragt",
+  behoben: "Erledigt",
+};
+
+// Kategorie (Migration 2026-09-12).
+export type UnterkunftMangelKategorie = "reinigung" | "reparatur" | "sonstiges";
+
+export const UNTERKUNFT_MANGEL_KATEGORIE_LABELS: Record<
+  UnterkunftMangelKategorie,
+  string
+> = {
+  reinigung: "Reinigung / Ordnung",
+  reparatur: "Reparatur",
+  sonstiges: "Sonstiges",
+};
+
+// Verschulden einer Reparatur.
+export type UnterkunftMangelVerursachung =
+  | "verschleiss"
+  | "bewohner"
+  | "unklar";
+
+export const UNTERKUNFT_MANGEL_VERURSACHUNG_LABELS: Record<
+  UnterkunftMangelVerursachung,
+  string
+> = {
+  verschleiss: "Verschleiß / nicht verschuldet",
+  bewohner: "Vom Bewohner verschuldet",
+  unklar: "Unklar",
+};
+
 export interface UnterkunftMangel {
   id: number;
   zimmer_id: number;
@@ -1497,6 +1538,11 @@ export interface UnterkunftMangel {
   beschreibung: string;
   schwere: UnterkunftMangelSchwere;
   status: UnterkunftMangelStatus;
+  kategorie: UnterkunftMangelKategorie;
+  verursachung: UnterkunftMangelVerursachung;
+  verursacher_employee_id: string | null;
+  kosten_geschaetzt: number | null;
+  faellig_am: string | null;
   gemeldet_von: string | null;
   gemeldet_am: string;
   behoben_von: string | null;

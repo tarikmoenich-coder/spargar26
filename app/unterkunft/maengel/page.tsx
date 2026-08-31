@@ -12,11 +12,13 @@ import FotoAufnahme from "@/components/FotoAufnahme";
 import { formatDatumDE } from "@/lib/format";
 import { raumName } from "@/lib/unterkunft";
 import {
+  UNTERKUNFT_MANGEL_KATEGORIE_LABELS,
   UNTERKUNFT_MANGEL_SCHWERE_LABELS,
   UNTERKUNFT_MANGEL_STATUS_LABELS,
   type UnterkunftBelegungPerson,
   type UnterkunftGebaeude,
   type UnterkunftMangel,
+  type UnterkunftMangelKategorie,
   type UnterkunftMangelSchwere,
   type UnterkunftMangelStatus,
   type UnterkunftZimmer,
@@ -39,6 +41,9 @@ export default function UnterkunftMaengelPage() {
     "offen_arbeit"
   );
   const [gebaeudeFilter, setGebaeudeFilter] = useState("");
+  const [kategorieFilter, setKategorieFilter] = useState<
+    "alle" | UnterkunftMangelKategorie
+  >("alle");
   const [offenId, setOffenId] = useState<number | null>(null);
   // Deep-Link aus Grundriss / Kontrollplan: ?mangel=<id> zeigt genau diesen
   // Mangel, ?zimmer=<id> alle Mängel dieses Raums.
@@ -51,6 +56,7 @@ export default function UnterkunftMaengelPage() {
     zimmer_id: "",
     beschreibung: "",
     schwere: "mittel" as UnterkunftMangelSchwere,
+    kategorie: "reinigung" as UnterkunftMangelKategorie,
   });
 
   const laden = useCallback(async () => {
@@ -155,6 +161,8 @@ export default function UnterkunftMaengelPage() {
     if (fokus?.mangelId) return maengel.filter((m) => m.id === fokus.mangelId);
     return maengel.filter((m) => {
       if (fokus?.zimmerId && m.zimmer_id !== fokus.zimmerId) return false;
+      if (kategorieFilter !== "alle" && m.kategorie !== kategorieFilter)
+        return false;
       if (statusFilter === "offen_arbeit" && m.status === "behoben") return false;
       if (
         statusFilter !== "offen_arbeit" &&
@@ -168,7 +176,7 @@ export default function UnterkunftMaengelPage() {
       }
       return true;
     });
-  }, [maengel, statusFilter, gebaeudeFilter, zimmer, fokus]);
+  }, [maengel, statusFilter, gebaeudeFilter, kategorieFilter, zimmer, fokus]);
 
   async function anlegen() {
     setFehler(null);
@@ -182,6 +190,7 @@ export default function UnterkunftMaengelPage() {
         zimmer_id: Number(neu.zimmer_id),
         beschreibung: neu.beschreibung.trim(),
         schwere: neu.schwere,
+        kategorie: neu.kategorie,
       });
     if (error) {
       setFehler(error.message);
@@ -257,6 +266,29 @@ export default function UnterkunftMaengelPage() {
               ))}
             </select>
           </label>
+          <label>
+            Kategorie
+            <select
+              className="ml-2"
+              value={kategorieFilter}
+              onChange={(e) =>
+                setKategorieFilter(
+                  e.target.value as "alle" | UnterkunftMangelKategorie
+                )
+              }
+            >
+              <option value="alle">alle</option>
+              {(
+                Object.keys(
+                  UNTERKUNFT_MANGEL_KATEGORIE_LABELS
+                ) as UnterkunftMangelKategorie[]
+              ).map((k) => (
+                <option key={k} value={k}>
+                  {UNTERKUNFT_MANGEL_KATEGORIE_LABELS[k]}
+                </option>
+              ))}
+            </select>
+          </label>
         </div>
       </div>
 
@@ -323,6 +355,29 @@ export default function UnterkunftMaengelPage() {
               </select>
             </label>
             <label>
+              Kategorie
+              <select
+                className="ml-2"
+                value={neu.kategorie}
+                onChange={(e) =>
+                  setNeu((s) => ({
+                    ...s,
+                    kategorie: e.target.value as UnterkunftMangelKategorie,
+                  }))
+                }
+              >
+                {(
+                  Object.keys(
+                    UNTERKUNFT_MANGEL_KATEGORIE_LABELS
+                  ) as UnterkunftMangelKategorie[]
+                ).map((k) => (
+                  <option key={k} value={k}>
+                    {UNTERKUNFT_MANGEL_KATEGORIE_LABELS[k]}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label>
               Schwere
               <select
                 className="ml-2"
@@ -368,6 +423,7 @@ export default function UnterkunftMaengelPage() {
             <th>Gemeldet</th>
             <th>Zimmer</th>
             <th>Beschreibung</th>
+            <th>Kategorie</th>
             <th>Schwere</th>
             <th>Status</th>
             <th></th>
@@ -382,6 +438,31 @@ export default function UnterkunftMaengelPage() {
                   <td className="whitespace-nowrap">{formatDatumDE(m.gemeldet_am)}</td>
                   <td>{zimmerLabel(m.zimmer_id)}</td>
                   <td>{m.beschreibung}</td>
+                  <td>
+                    {canEdit ? (
+                      <select
+                        value={m.kategorie}
+                        onChange={(e) =>
+                          aktualisieren(m, {
+                            kategorie: e.target
+                              .value as UnterkunftMangelKategorie,
+                          })
+                        }
+                      >
+                        {(
+                          Object.keys(
+                            UNTERKUNFT_MANGEL_KATEGORIE_LABELS
+                          ) as UnterkunftMangelKategorie[]
+                        ).map((k) => (
+                          <option key={k} value={k}>
+                            {UNTERKUNFT_MANGEL_KATEGORIE_LABELS[k]}
+                          </option>
+                        ))}
+                      </select>
+                    ) : (
+                      UNTERKUNFT_MANGEL_KATEGORIE_LABELS[m.kategorie]
+                    )}
+                  </td>
                   <td>
                     {canEdit ? (
                       <select
@@ -448,7 +529,7 @@ export default function UnterkunftMaengelPage() {
                 </tr>
                 {offen && (
                   <tr>
-                    <td colSpan={6} className="bg-neutral-50">
+                    <td colSpan={7} className="bg-neutral-50">
                       <div className="space-y-3 p-3">
                         <div className="text-sm text-neutral-600">
                           {m.quelle_vorgang_id
@@ -540,7 +621,7 @@ export default function UnterkunftMaengelPage() {
           })}
           {gefiltert.length === 0 && (
             <tr>
-              <td colSpan={6} className="text-sm text-neutral-400">
+              <td colSpan={7} className="text-sm text-neutral-400">
                 keine Mängel im Filter
               </td>
             </tr>

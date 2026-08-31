@@ -155,6 +155,17 @@ export const MANGEL_UNBEHOBEN_FRIST_TAGE = 1;
 // Mangel auftaucht) wird der Kontrolltakt auf diese Zahl Tage gestreckt.
 export const SAUBER_STREAK_INTERVALL_TAGE = 14;
 
+// Vorschlag für die Mangel-Kategorie anhand des Checklisten-Bereichs:
+// Sauberkeit/Ordnung -> "reinigung" (Bewohner behebt selbst), sonst
+// "reparatur". Nur ein Default, der Prüfer kann umstellen.
+export function mangelKategorieVorschlag(
+  bereich: string
+): "reinigung" | "reparatur" {
+  return /sauber|reinig|ordnung|m(ü|ue)ll|schmutz/i.test(bereich)
+    ? "reinigung"
+    : "reparatur";
+}
+
 function nurDatum(iso: string): string {
   return iso.slice(0, 10);
 }

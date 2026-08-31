@@ -15,15 +15,19 @@ import { useProfile } from "@/lib/useProfile";
 import UnterkunftTabs from "@/components/UnterkunftTabs";
 import FotoAufnahme from "@/components/FotoAufnahme";
 import { formatDatumDE } from "@/lib/format";
-import { heuteIso } from "@/lib/unterkunft";
+import { heuteIso, mangelKategorieVorschlag } from "@/lib/unterkunft";
 import {
   UNTERKUNFT_GESAMTZUSTAND_LABELS,
+  UNTERKUNFT_MANGEL_KATEGORIE_LABELS,
+  UNTERKUNFT_MANGEL_VERURSACHUNG_LABELS,
   UNTERKUNFT_POSITION_ZUSTAND_LABELS,
   UNTERKUNFT_VORGANG_TYP_LABELS,
   type UnterkunftBelegungAktuell,
   type UnterkunftChecklisteVorlage,
   type UnterkunftGebaeude,
   type UnterkunftGesamtzustand,
+  type UnterkunftMangelKategorie,
+  type UnterkunftMangelVerursachung,
   type UnterkunftPositionZustand,
   type UnterkunftVorgang,
   type UnterkunftVorgangPosition,
@@ -35,6 +39,8 @@ import {
 interface PosEntwurf {
   zustand: UnterkunftPositionZustand;
   bemerkung: string;
+  kategorie: UnterkunftMangelKategorie;
+  verursachung: UnterkunftMangelVerursachung;
 }
 
 export default function UnterkunftUebergabePage() {
@@ -283,7 +289,16 @@ export default function UnterkunftUebergabePage() {
     setPositionen(liste);
     setPosEntwurf(
       Object.fromEntries(
-        liste.map((p) => [p.id, { zustand: p.zustand, bemerkung: p.bemerkung ?? "" }])
+        liste.map((p) => [
+          p.id,
+          {
+            zustand: p.zustand,
+            bemerkung: p.bemerkung ?? "",
+            kategorie:
+              p.mangel_kategorie ?? mangelKategorieVorschlag(p.bereich),
+            verursachung: p.mangel_verursachung ?? "unklar",
+          },
+        ])
       )
     );
     setKopf({
@@ -339,12 +354,25 @@ export default function UnterkunftUebergabePage() {
       for (const p of positionen) {
         const e = posEntwurf[p.id];
         if (!e) continue;
-        if (e.zustand === p.zustand && (e.bemerkung || "") === (p.bemerkung || "")) {
+        const istMangel = e.zustand === "mangel";
+        const neueKat = istMangel ? e.kategorie : null;
+        const neueVer = istMangel ? e.verursachung : null;
+        if (
+          e.zustand === p.zustand &&
+          (e.bemerkung || "") === (p.bemerkung || "") &&
+          neueKat === (p.mangel_kategorie ?? null) &&
+          neueVer === (p.mangel_verursachung ?? null)
+        ) {
           continue;
         }
         const { error } = await supabase
           .from("unterkunft_vorgang_position")
-          .update({ zustand: e.zustand, bemerkung: e.bemerkung.trim() || null })
+          .update({
+            zustand: e.zustand,
+            bemerkung: e.bemerkung.trim() || null,
+            mangel_kategorie: neueKat,
+            mangel_verursachung: neueVer,
+          })
           .eq("id", p.id);
         if (error) throw new Error(error.message);
       }
@@ -428,15 +456,21 @@ export default function UnterkunftUebergabePage() {
       )
     ) {
       for (const p of maengelPos) {
+        const meta = posEntwurf[p.id];
         const { data: mg, error: mErr } = await supabase
           .from("unterkunft_mangel")
           .insert({
             zimmer_id: vorgang.zimmer_id,
             quelle_vorgang_id: vorgang.id,
             beschreibung: `${p.bereich}: ${
-              posEntwurf[p.id]?.bemerkung?.trim() || "Mangel bei Übergabe/Abnahme"
+              meta?.bemerkung?.trim() || "Mangel bei Übergabe/Abnahme"
             }`,
             schwere: "mittel" as const,
+            kategorie: meta?.kategorie ?? "sonstiges",
+            verursachung:
+              meta?.kategorie === "reparatur"
+                ? meta?.verursachung ?? "unklar"
+                : "unklar",
           })
           .select("id")
           .single();
@@ -845,7 +879,12 @@ export default function UnterkunftUebergabePage() {
 
           <div className="space-y-4">
             {positionen.map((p) => {
-              const e = posEntwurf[p.id] ?? { zustand: p.zustand, bemerkung: "" };
+              const e = posEntwurf[p.id] ?? {
+                zustand: p.zustand,
+                bemerkung: "",
+                kategorie: mangelKategorieVorschlag(p.bereich),
+                verursachung: "unklar" as const,
+              };
               return (
                 <div key={p.id} className="rounded border border-neutral-200 p-3">
                   <div className="flex flex-wrap items-center gap-3">
@@ -879,6 +918,56 @@ export default function UnterkunftUebergabePage() {
                       }
                     />
                   </div>
+                  {e.zustand === "mangel" && (
+                    <div className="mt-2 flex flex-wrap items-center gap-2 text-sm">
+                      <span className="text-neutral-500">Mangel-Art:</span>
+                      <select
+                        value={e.kategorie}
+                        disabled={abgeschlossen}
+                        onChange={(ev) =>
+                          setPos(p.id, {
+                            kategorie: ev.target
+                              .value as UnterkunftMangelKategorie,
+                          })
+                        }
+                      >
+                        {(
+                          Object.keys(
+                            UNTERKUNFT_MANGEL_KATEGORIE_LABELS
+                          ) as UnterkunftMangelKategorie[]
+                        ).map((k) => (
+                          <option key={k} value={k}>
+                            {UNTERKUNFT_MANGEL_KATEGORIE_LABELS[k]}
+                          </option>
+                        ))}
+                      </select>
+                      {e.kategorie === "reparatur" && (
+                        <>
+                          <span className="text-neutral-500">Ursache:</span>
+                          <select
+                            value={e.verursachung}
+                            disabled={abgeschlossen}
+                            onChange={(ev) =>
+                              setPos(p.id, {
+                                verursachung: ev.target
+                                  .value as UnterkunftMangelVerursachung,
+                              })
+                            }
+                          >
+                            {(
+                              Object.keys(
+                                UNTERKUNFT_MANGEL_VERURSACHUNG_LABELS
+                              ) as UnterkunftMangelVerursachung[]
+                            ).map((k) => (
+                              <option key={k} value={k}>
+                                {UNTERKUNFT_MANGEL_VERURSACHUNG_LABELS[k]}
+                              </option>
+                            ))}
+                          </select>
+                        </>
+                      )}
+                    </div>
+                  )}
                   <div className="mt-2">
                     <FotoAufnahme
                       zimmerId={vorgang.zimmer_id}
