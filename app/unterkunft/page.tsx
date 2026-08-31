@@ -428,6 +428,36 @@ export default function UnterkunftGrundrissPage() {
       ? einheiten.find((e) => e.wohneinheit_id === einheitId) ?? null
       : null;
 
+  // Zur nächsten/vorigen Wohneinheit springen (dir: 1 = weiter, -1 = zurück).
+  // Am Rand der aktuellen Etage geht es in die nächste/vorige Etage über -
+  // dadurch reicht die Wisch-Geste nach links/rechts fürs ganze Haus.
+  function wischNaechste(dir: 1 | -1) {
+    const liste = gefilterteEinheiten;
+    if (liste.length === 0) return;
+    const i = liste.findIndex((e) => e.wohneinheit_id === einheitId);
+    const n = i + dir;
+    if (i >= 0 && n >= 0 && n < liste.length) {
+      setEinheitId(liste[n].wohneinheit_id);
+    } else if (etageFilter && etagen.length > 1) {
+      const ei = etagen.indexOf(etageFilter);
+      const zielEtage = etagen[ei + dir];
+      if (!zielEtage) return;
+      const zielListe = einheitenDesGebaeudes.filter(
+        (e) => e.etage_label === zielEtage
+      );
+      if (zielListe.length === 0) return;
+      setEtageFilter(zielEtage);
+      setEinheitId(
+        (dir > 0 ? zielListe[0] : zielListe[zielListe.length - 1]).wohneinheit_id
+      );
+    } else {
+      return;
+    }
+    setSelId(null);
+    setUebersichtAuf(false);
+  }
+  const wischRef = useRef<{ x: number; y: number } | null>(null);
+
   // Inaktive Zimmer werden im Grundriss nur im Bearbeiten-Modus gezeigt
   // (sonst nicht mehr im Weg).
   const zimmerDerEinheit = useMemo(
@@ -1201,7 +1231,39 @@ export default function UnterkunftGrundrissPage() {
 
       {/* Wohneinheit-Detail: Zimmer-Raster + offene Personen */}
       {einheit && (
-        <div className="space-y-3 rounded border border-neutral-200 p-3">
+        <div
+          className="space-y-3 rounded border border-neutral-200 p-3"
+          onTouchStart={(e) => {
+            if (bearbeiten || e.touches.length !== 1) {
+              wischRef.current = null;
+              return;
+            }
+            const el = e.target as HTMLElement;
+            if (
+              el.closest("[data-plan-scroll]") ||
+              el.closest("[data-panel-sheet]") ||
+              el.closest("input,select,textarea,button")
+            ) {
+              wischRef.current = null;
+              return;
+            }
+            wischRef.current = {
+              x: e.touches[0].clientX,
+              y: e.touches[0].clientY,
+            };
+          }}
+          onTouchEnd={(e) => {
+            const s = wischRef.current;
+            wischRef.current = null;
+            if (!s) return;
+            const t = e.changedTouches[0];
+            const dx = t.clientX - s.x;
+            const dy = t.clientY - s.y;
+            if (Math.abs(dx) > 70 && Math.abs(dx) > Math.abs(dy) * 1.8) {
+              wischNaechste(dx < 0 ? 1 : -1);
+            }
+          }}
+        >
           {/* Klebende Steuerleiste: Wohneinheit wechseln + Ansicht + Zoom,
               bleibt beim Scrollen im (großen) Plan stehen. */}
           <div className="sticky top-[calc(3.5rem+var(--subtabs-h,2.5rem))] z-30 -mx-3 -mt-3 mb-1 flex flex-wrap items-center gap-x-3 gap-y-2 border-b border-neutral-200 bg-white px-3 py-2 text-sm">
@@ -1344,6 +1406,9 @@ export default function UnterkunftGrundrissPage() {
               {einheit.name}
               {einheit.etage_label ? ` · ${einheit.etage_label}` : ""} — Zimmer
             </h2>
+            <p className="text-xs text-neutral-400 sm:hidden">
+              ← nach links/rechts wischen für die nächste Wohneinheit →
+            </p>
             {nachbarZimmer.length > 0 && !belegen && (
               <p className="text-xs text-neutral-400">
                 Blasse, gestrichelte Kacheln = andere Wohneinheiten der Etage{" "}
@@ -1440,6 +1505,7 @@ export default function UnterkunftGrundrissPage() {
               <div className="flex flex-col gap-4 lg:flex-row">
               <div
                 tabIndex={0}
+                data-plan-scroll
                 onKeyDown={onWrapKeyDown}
                 className="max-w-full flex-1 overflow-auto rounded border border-neutral-200 bg-white p-2 outline-none"
               >
@@ -1750,7 +1816,10 @@ export default function UnterkunftGrundrissPage() {
                   />
                 )}
                 {sel && sel.wohneinheit_id === einheitId ? (
-                  <div className="fixed inset-x-0 bottom-0 z-40 max-h-[82vh] overflow-y-auto rounded-t-2xl border border-neutral-300 bg-white p-3 shadow-2xl lg:static lg:z-auto lg:max-h-none lg:rounded lg:border-neutral-200 lg:shadow-none">
+                  <div
+                    data-panel-sheet
+                    className="fixed inset-x-0 bottom-0 z-40 max-h-[82vh] overflow-y-auto rounded-t-2xl border border-neutral-300 bg-white p-3 shadow-2xl lg:static lg:z-auto lg:max-h-none lg:rounded lg:border-neutral-200 lg:shadow-none"
+                  >
                     <div className="mb-1 flex items-center justify-between">
                       <h3 className="text-base font-semibold text-emerald-900">
                         {sel.art === "zimmer"
