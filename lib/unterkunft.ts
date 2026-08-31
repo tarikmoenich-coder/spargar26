@@ -3,6 +3,27 @@
 // Migration mit Prefix unterkunft_), damit es sich später sauber in ein
 // gemeinsames Portal heben lässt - siehe docs/unterkunft-plan.md.
 
+import type { UnterkunftZimmerArt } from "./types";
+
+// Anzeigename eines Raums: Schlafzimmer über ihre Nummer, Gemeinschaftsräume
+// nur über den Typ (Küche, Bad/WC, …) - die interne Durchnummerierung
+// (unterkunft_zimmer.nummer, wegen der Unique-Bedingung je Gebäude nötig)
+// wird bewusst nicht angezeigt.
+export const RAUM_ART_LABEL: Record<UnterkunftZimmerArt, string> = {
+  zimmer: "Zimmer",
+  kueche: "Küche",
+  bad: "Bad/WC",
+  flur: "Flur",
+  gemeinschaft: "Gemeinschaftsraum",
+};
+
+export function raumName(z: {
+  art: UnterkunftZimmerArt;
+  nummer: string;
+}): string {
+  return z.art === "zimmer" ? z.nummer : RAUM_ART_LABEL[z.art];
+}
+
 // Privater Storage-Bucket für die Fotos (angelegt in der Migration).
 // Downloads laufen wie bei mitarbeiter-dokumente über signierte URLs.
 export const UNTERKUNFT_FOTOS_BUCKET = "unterkunft-fotos";

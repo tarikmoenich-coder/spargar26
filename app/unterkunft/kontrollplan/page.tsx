@@ -15,23 +15,15 @@ import {
   KONTROLL_AMPEL_FARBE,
   KONTROLL_AMPEL_LABELS,
   naechsteKontrolle,
+  raumName,
   type KontrollAmpel,
   type KontrollSchwellen,
 } from "@/lib/unterkunft";
 import {
   UNTERKUNFT_VORGANG_TYP_LABELS,
   type UnterkunftKontrollIntervall,
-  type UnterkunftZimmerArt,
   type UnterkunftZimmerUebersicht,
 } from "@/lib/types";
-
-const ART_LABEL: Record<UnterkunftZimmerArt, string> = {
-  zimmer: "",
-  kueche: "Küche",
-  bad: "Bad/WC",
-  flur: "Flur",
-  gemeinschaft: "Gemeinschaft",
-};
 
 // Dringlichkeit für Sortierung/Rollup: nie kontrolliert und überfällig zuerst.
 const AMPEL_RANG: Record<KontrollAmpel, number> = {
@@ -369,12 +361,7 @@ export default function UnterkunftKontrollplanPage() {
           }
         />
         <span className="min-w-[6rem] font-medium">
-          {z.nummer}
-          {z.art !== "zimmer" && (
-            <span className="ml-1 text-xs font-normal text-neutral-400">
-              {ART_LABEL[z.art]}
-            </span>
-          )}
+          {raumName(z)}
           {!z.aktiv && (
             <span className="ml-1 text-xs font-normal text-red-500">inaktiv</span>
           )}

@@ -16,6 +16,7 @@ import { useProfile } from "@/lib/useProfile";
 import UnterkunftTabs from "@/components/UnterkunftTabs";
 import FotoAufnahme from "@/components/FotoAufnahme";
 import { formatDatumDE } from "@/lib/format";
+import { raumName } from "@/lib/unterkunft";
 import {
   UNTERKUNFT_GESAMTZUSTAND_LABELS,
   UNTERKUNFT_POSITION_ZUSTAND_LABELS,
@@ -190,7 +191,7 @@ export default function UnterkunftKontrollePage() {
     if (!vorgang) return "";
     const z = zimmer.find((x) => x.id === vorgang.zimmer_id);
     const g = z ? gebaeude.find((x) => x.id === z.gebaeude_id) : undefined;
-    return z ? `${g?.name ?? "?"} · ${z.nummer}` : `Zimmer ${vorgang.zimmer_id}`;
+    return z ? `${g?.name ?? "?"} · ${raumName(z)}` : `Zimmer ${vorgang.zimmer_id}`;
   }, [vorgang, zimmer, gebaeude]);
 
   const durchgefuehrtVon =
@@ -583,7 +584,7 @@ export default function UnterkunftKontrollePage() {
                     <option value="">–</option>
                     {zimmerDesGebaeudes.map((z) => (
                       <option key={z.id} value={z.id}>
-                        {z.nummer}
+                        {raumName(z)}
                       </option>
                     ))}
                   </select>
@@ -638,7 +639,7 @@ export default function UnterkunftKontrollePage() {
                           })
                         }
                       />
-                      {z.nummer}
+                      {raumName(z)}
                     </label>
                   ))}
                   {raeumeDerEinheit.length === 0 && (
@@ -675,7 +676,7 @@ export default function UnterkunftKontrollePage() {
                     <tr key={v.id}>
                       <td>{formatDatumDE(v.durchgefuehrt_am)}</td>
                       <td>
-                        {g?.name ?? "?"} · {z?.nummer ?? v.zimmer_id}
+                        {g?.name ?? "?"} · {z ? raumName(z) : v.zimmer_id}
                       </td>
                       <td>
                         {v.gesamtzustand
@@ -758,7 +759,7 @@ export default function UnterkunftKontrollePage() {
                       }`}
                     >
                       {raumStatus[i] ? "✓ " : ""}
-                      {z?.nummer ?? v.zimmer_id}
+                      {z ? raumName(z) : v.zimmer_id}
                     </button>
                   );
                 })}

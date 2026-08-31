@@ -10,6 +10,7 @@ import { useProfile } from "@/lib/useProfile";
 import UnterkunftTabs from "@/components/UnterkunftTabs";
 import FotoAufnahme from "@/components/FotoAufnahme";
 import { formatDatumDE } from "@/lib/format";
+import { raumName } from "@/lib/unterkunft";
 import {
   UNTERKUNFT_MANGEL_SCHWERE_LABELS,
   UNTERKUNFT_MANGEL_STATUS_LABELS,
@@ -76,7 +77,10 @@ export default function UnterkunftMaengelPage() {
   function zimmerLabel(zimmerId: number): string {
     const z = zimmer.find((x) => x.id === zimmerId);
     const g = z ? gebaeude.find((x) => x.id === z.gebaeude_id) : undefined;
-    return z ? `${g?.name ?? "?"} · Zimmer ${z.nummer}` : `Zimmer ${zimmerId}`;
+    if (!z) return `Zimmer ${zimmerId}`;
+    return `${g?.name ?? "?"} · ${
+      z.art === "zimmer" ? `Zimmer ${z.nummer}` : raumName(z)
+    }`;
   }
 
   // Bewohner zur Rückverfolgung: bei einem Zimmer-Mangel die Bewohner dieses
@@ -267,7 +271,7 @@ export default function UnterkunftMaengelPage() {
                 <option value="">–</option>
                 {zimmerDesGebaeudes.map((z) => (
                   <option key={z.id} value={z.id}>
-                    {z.nummer}
+                    {raumName(z)}
                   </option>
                 ))}
               </select>

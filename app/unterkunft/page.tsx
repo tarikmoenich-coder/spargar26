@@ -24,6 +24,7 @@ import {
   herkunftMix,
   heuteIso,
   kontrollAmpel,
+  raumName,
   type KontrollAmpel,
   type KontrollSchwellen,
 } from "@/lib/unterkunft";
@@ -425,7 +426,7 @@ export default function UnterkunftGrundrissPage() {
     let grund: string | null = null;
     if (sperren) {
       const eingabe = window.prompt(
-        `Grund der Sperre für „${z.nummer}" (z. B. Wasserschaden, Renovierung)`,
+        `Grund der Sperre für „${raumName(z)}" (z. B. Wasserschaden, Renovierung)`,
         z.sperr_grund ?? ""
       );
       grund = eingabe?.trim() || null;
@@ -717,7 +718,7 @@ export default function UnterkunftGrundrissPage() {
   async function zimmerLoeschen(z: UnterkunftZimmerUebersicht) {
     if (
       !window.confirm(
-        `„${z.nummer}" endgültig löschen – samt evtl. Kontrollen und Mängeln?`
+        `„${raumName(z)}" endgültig löschen – samt evtl. Kontrollen und Mängeln?`
       )
     )
       return;
@@ -1207,7 +1208,7 @@ export default function UnterkunftGrundrissPage() {
                         fontSize={11}
                         fill="#94a3b8"
                       >
-                        {z.nummer}
+                        {raumName(z)}
                       </text>
                       <text
                         x={(z.plan_w * Z) / 2}
@@ -1274,7 +1275,7 @@ export default function UnterkunftGrundrissPage() {
                           fontWeight={600}
                           fill={z.aktiv ? "#0f172a" : "#a3a3a3"}
                         >
-                          {z.nummer}
+                          {raumName(z)}
                         </text>
                         {z.gesperrt ? (
                           <text
@@ -1374,7 +1375,7 @@ export default function UnterkunftGrundrissPage() {
                             onClick={() => platziereAusAblage(z.zimmer_id)}
                             className="rounded border border-neutral-300 px-2 py-0.5 text-sm hover:border-emerald-500"
                           >
-                            {z.nummer}
+                            {raumName(z)}
                           </button>
                         ))}
                       </div>
@@ -1418,7 +1419,7 @@ export default function UnterkunftGrundrissPage() {
                 {sel && sel.wohneinheit_id === einheitId ? (
                   <div className="rounded border border-neutral-200 p-3">
                     <h3 className="text-base font-semibold text-emerald-900">
-                      {sel.art === "zimmer" ? `Zimmer ${sel.nummer}` : sel.nummer}
+                      {sel.art === "zimmer" ? `Zimmer ${sel.nummer}` : raumName(sel)}
                     </h3>
                     {!sel.aktiv && <p className="text-xs text-red-600">inaktiv</p>}
 
@@ -1857,8 +1858,10 @@ export default function UnterkunftGrundrissPage() {
                     {neuerMangel && canEditMangel && (
                       <div className="mt-3 space-y-2 rounded border border-red-200 bg-red-50 p-2 text-sm">
                         <div className="font-medium text-red-900">
-                          Mangel für {sel.art === "zimmer" ? "Zimmer " : ""}
-                          {sel.nummer}
+                          Mangel für{" "}
+                          {sel.art === "zimmer"
+                            ? `Zimmer ${sel.nummer}`
+                            : raumName(sel)}
                         </div>
                         <textarea
                           className="w-full rounded border border-neutral-300 px-2 py-1 text-sm"
