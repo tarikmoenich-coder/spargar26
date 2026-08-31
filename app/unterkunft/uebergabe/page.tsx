@@ -53,6 +53,7 @@ export default function UnterkunftUebergabePage() {
   const [belegungen, setBelegungen] = useState<UnterkunftBelegungAktuell[]>([]);
   const [zuordnungen, setZuordnungen] = useState<UnterkunftZuordnungOffen[]>([]);
   const [letzte, setLetzte] = useState<UnterkunftVorgang[]>([]);
+  const [namen, setNamen] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(true);
   const [fehler, setFehler] = useState<string | null>(null);
   const [hinweis, setHinweis] = useState<string | null>(null);
@@ -87,7 +88,7 @@ export default function UnterkunftUebergabePage() {
   const laden = useCallback(async () => {
     setLoading(true);
     const supabase = getSupabaseClient();
-    const [g, z, emp, v, bl, zu, lv] = await Promise.all([
+    const [g, z, emp, v, bl, zu, lv, pn] = await Promise.all([
       supabase.from("unterkunft_gebaeude").select("*").eq("aktiv", true).order("name"),
       supabase.from("unterkunft_zimmer").select("*").eq("aktiv", true).order("nummer"),
       supabase
@@ -106,6 +107,7 @@ export default function UnterkunftUebergabePage() {
         .select("*")
         .order("durchgefuehrt_am", { ascending: false })
         .limit(25),
+      supabase.from("profile_namen").select("*"),
     ]);
     setGebaeude((g.data as UnterkunftGebaeude[]) ?? []);
     setZimmer((z.data as UnterkunftZimmer[]) ?? []);
@@ -114,6 +116,14 @@ export default function UnterkunftUebergabePage() {
     setBelegungen((bl.data as UnterkunftBelegungAktuell[]) ?? []);
     setZuordnungen((zu.data as UnterkunftZuordnungOffen[]) ?? []);
     setLetzte((lv.data as UnterkunftVorgang[]) ?? []);
+    setNamen(
+      Object.fromEntries(
+        ((pn.data as { id: string; full_name: string }[]) ?? []).map((p) => [
+          p.id,
+          p.full_name,
+        ])
+      )
+    );
     setLoading(false);
   }, []);
 
@@ -258,7 +268,13 @@ export default function UnterkunftUebergabePage() {
     setKopf({
       gesamtzustand: vg.gesamtzustand ?? "",
       notiz: vg.notiz ?? "",
-      unterschrift_name: vg.unterschrift_name ?? "",
+      // Namensfeld für einen noch offenen Vorgang mit dem angemeldeten
+      // Benutzer vorbelegen (überschreibbar, z. B. wenn bei einer
+      // Auszugs-Abnahme der Mieter gegenzeichnet). Bei abgeschlossenen
+      // Vorgängen nur zeigen, was gespeichert ist.
+      unterschrift_name:
+        vg.unterschrift_name ??
+        (vg.abgeschlossen ? "" : profile?.full_name ?? ""),
       zustand_bestaetigt: vg.zustand_bestaetigt,
     });
     setDirty(false);
@@ -407,6 +423,44 @@ export default function UnterkunftUebergabePage() {
           })
           .eq("employee_id", employeeId)
           .eq("status", "schwebend");
+      }
+    }
+
+    // Auszug: die laufende(n) Belegung(en) tatsächlich beenden - sonst zählt
+    // die Person in Suche/Grundriss/Übersicht weiter als "aktuell". Ist im
+    // Startformular eine bestimmte Belegung gewählt, wird nur diese
+    // geschlossen, sonst alle offenen Belegungen des Zimmers.
+    if (vorgang.typ === "auszug") {
+      const offene = belegungen.filter(
+        (b) =>
+          b.zimmer_id === vorgang.zimmer_id &&
+          b.bis === null &&
+          (!vorgang.belegung_id || b.id === vorgang.belegung_id)
+      );
+      if (offene.length > 0) {
+        const wer = offene
+          .map((b) => `${b.vorname} ${b.name}`)
+          .join(", ");
+        const datum = window.prompt(
+          `Auszugsdatum – die Belegung von ${wer} wird zu diesem Datum beendet.`,
+          heuteIso()
+        );
+        if (datum) {
+          const { error: aErr } = await supabase
+            .from("unterkunft_belegung")
+            .update({ bis: datum })
+            .in(
+              "id",
+              offene.map((b) => b.id)
+            )
+            .is("bis", null);
+          if (aErr) setFehler(`Belegung beenden: ${aErr.message}`);
+        } else {
+          setHinweis(
+            "Vorgang abgeschlossen – die Belegung wurde NICHT beendet " +
+              "(kein Datum). Bei Bedarf unter „Belegung“ nachtragen."
+          );
+        }
       }
     }
 
@@ -706,6 +760,13 @@ export default function UnterkunftUebergabePage() {
               <p className="text-sm text-neutral-500">
                 {formatDatumDE(vorgang.durchgefuehrt_am)}
                 {abgeschlossen && " · abgeschlossen (schreibgeschützt)"}
+              </p>
+              <p className="text-sm text-neutral-500">
+                Durchgeführt von:{" "}
+                {(vorgang.durchgefuehrt_von &&
+                  namen[vorgang.durchgefuehrt_von]) ||
+                  profile?.full_name ||
+                  "—"}
               </p>
             </div>
             <button className="btn-secondary" onClick={abbrechen}>

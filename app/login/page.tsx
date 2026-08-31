@@ -30,7 +30,11 @@ function LoginFormular() {
       setError("Anmeldung fehlgeschlagen: " + error.message);
       return;
     }
-    router.replace("/erfassung");
+    // Auf die Startseite - die verteilt rollenabhängig weiter (zeiterfassung
+    // → /erfassung, hausmeister → /unterkunft, sonst → /dashboard), siehe
+    // app/page.tsx. Früher stand hier fix /erfassung, dadurch landete jede
+    // Rolle in der Stundenerfassung.
+    router.replace("/");
   }
 
   return (
