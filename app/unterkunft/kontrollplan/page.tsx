@@ -53,7 +53,9 @@ export default function UnterkunftKontrollplanPage() {
   const [gebaeudeFilter, setGebaeudeFilter] = useState("");
   const [nurFaellig, setNurFaellig] = useState(false);
   const [zeigeInaktive, setZeigeInaktive] = useState(false);
+  const [zeigeLeere, setZeigeLeere] = useState(false);
   const [zu, setZu] = useState<Set<string>>(new Set()); // eingeklappte Knoten
+  const [heuteAuf, setHeuteAuf] = useState(true);
 
   const laden = useCallback(async () => {
     setLoading(true);
@@ -173,6 +175,7 @@ export default function UnterkunftKontrollplanPage() {
   const baum = useMemo(() => {
     const sichtbar = zimmer.filter((z) => {
       if (!z.aktiv && !zeigeInaktive) return false;
+      if (!zeigeLeere && !relevantVon(z)) return false;
       if (gebaeudeFilter && z.gebaeude_name !== gebaeudeFilter) return false;
       if (nurFaellig && (ampelVon(z) === "gruen" || !relevantVon(z)))
         return false;
@@ -241,7 +244,43 @@ export default function UnterkunftKontrollplanPage() {
             : null;
         return { ...g, einheiten, ohne };
       });
-  }, [zimmer, gebaeudeFilter, nurFaellig, zeigeInaktive, ampelVon, relevantVon]);
+  }, [
+    zimmer,
+    gebaeudeFilter,
+    nurFaellig,
+    zeigeInaktive,
+    zeigeLeere,
+    ampelVon,
+    relevantVon,
+  ]);
+
+  // Flache Arbeitsliste "heute zu erledigen": aktive, genutzte Räume, deren
+  // spätester Kontrolltermin heute oder früher liegt (bzw. noch nie
+  // kontrolliert). Gesperrte Räume bleiben aussen vor. Respektiert den
+  // Gebäude-Filter, ignoriert die übrigen Anzeige-Schalter.
+  const heuteListe = useMemo(() => {
+    const heute = new Date().toISOString().slice(0, 10);
+    return zimmer
+      .filter(
+        (z) =>
+          z.aktiv &&
+          !z.gesperrt &&
+          relevantVon(z) &&
+          (!gebaeudeFilter || z.gebaeude_name === gebaeudeFilter)
+      )
+      .map((z) => ({ z, info: infoVon(z) }))
+      .filter(
+        ({ info }) => info.frist == null || info.frist <= heute
+      )
+      .sort(
+        (a, b) =>
+          (a.info.frist ?? "0000-00-00").localeCompare(
+            b.info.frist ?? "0000-00-00"
+          ) ||
+          a.z.gebaeude_name.localeCompare(b.z.gebaeude_name) ||
+          a.z.nummer.localeCompare(b.z.nummer, "de", { numeric: true })
+      );
+  }, [zimmer, gebaeudeFilter, relevantVon, infoVon]);
 
   // Rollup-Zähler für einen Knoten. Leere Räume ohne Mangel zählen nicht mit.
   const rollup = useCallback(
@@ -455,8 +494,8 @@ export default function UnterkunftKontrollplanPage() {
             </Link>
             . Offener Mangel: Kontrolle binnen 3 Tagen; bei einer Kontrolle
             nicht behoben: binnen 1 Tag. 2× in Folge „alles in Ordnung“ →
-            14-Tage-Takt (bis wieder ein Mangel auftaucht). Leere Zimmer sind
-            nicht kontrollpflichtig.
+            14-Tage-Takt (bis wieder ein Mangel auftaucht). Nicht belegte
+            Zimmer sind nicht kontrollpflichtig und standardmäßig ausgeblendet.
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-3 text-sm">
@@ -492,6 +531,14 @@ export default function UnterkunftKontrollplanPage() {
           <label className="flex items-center gap-1">
             <input
               type="checkbox"
+              checked={zeigeLeere}
+              onChange={(e) => setZeigeLeere(e.target.checked)}
+            />
+            nicht belegte Zimmer
+          </label>
+          <label className="flex items-center gap-1">
+            <input
+              type="checkbox"
               checked={zeigeInaktive}
               onChange={(e) => setZeigeInaktive(e.target.checked)}
             />
@@ -510,6 +557,100 @@ export default function UnterkunftKontrollplanPage() {
             {KONTROLL_AMPEL_LABELS[a]}
           </span>
         ))}
+      </div>
+
+      {/* Arbeitsliste für heute */}
+      <div className="rounded border border-emerald-300 bg-emerald-50/60">
+        <button
+          className="flex w-full items-center gap-2 px-3 py-2 text-left"
+          onClick={() => setHeuteAuf((v) => !v)}
+        >
+          <span className="font-semibold text-emerald-900">
+            {heuteAuf ? "▾" : "▸"} Heute zu erledigen
+          </span>
+          <span
+            className={`rounded-full px-2 py-0.5 text-xs font-semibold ${
+              heuteListe.length > 0
+                ? "bg-red-600 text-white"
+                : "bg-emerald-600 text-white"
+            }`}
+          >
+            {heuteListe.length}
+          </span>
+          {gebaeudeFilter && (
+            <span className="text-xs text-neutral-500">
+              (nur {gebaeudeFilter})
+            </span>
+          )}
+        </button>
+        {heuteAuf && (
+          <div className="px-2 pb-2">
+            {heuteListe.length === 0 ? (
+              <p className="px-1 py-1 text-sm text-emerald-800">
+                Heute ist keine Kontrolle fällig. 👍
+              </p>
+            ) : (
+              <ul className="divide-y divide-emerald-100">
+                {heuteListe.map(({ z, info }) => {
+                  const heute = new Date().toISOString().slice(0, 10);
+                  const grund =
+                    info.frist == null
+                      ? "noch nie kontrolliert"
+                      : info.frist < heute
+                        ? `überfällig seit ${formatDatumDE(info.frist)}`
+                        : "heute fällig";
+                  return (
+                    <li
+                      key={z.zimmer_id}
+                      className="flex flex-wrap items-center gap-x-3 gap-y-1 px-1 py-1.5 text-sm"
+                    >
+                      <span
+                        className="inline-block h-2.5 w-2.5 shrink-0 rounded-full"
+                        style={{ backgroundColor: KONTROLL_AMPEL_FARBE[info.ampel] }}
+                      />
+                      <span className="font-medium">
+                        {z.gebaeude_name}
+                        {z.wohneinheit_name ? ` · ${z.wohneinheit_name}` : ""} ·{" "}
+                        {raumName(z)}
+                      </span>
+                      <span
+                        className={
+                          info.frist != null && info.frist < heute
+                            ? "font-medium text-red-600"
+                            : "text-neutral-600"
+                        }
+                      >
+                        {grund}
+                      </span>
+                      {z.offene_maengel > 0 && (
+                        <span className="text-red-600">
+                          · {z.offene_maengel}{" "}
+                          {z.offene_maengel === 1 ? "Mangel" : "Mängel"}
+                        </span>
+                      )}
+                      <span className="ml-auto flex gap-2">
+                        <Link
+                          href={`/unterkunft/kontrolle?zimmer=${z.zimmer_id}`}
+                          className="rounded bg-emerald-700 px-2 py-0.5 text-xs font-medium text-white"
+                        >
+                          Kontrolle starten
+                        </Link>
+                        {z.offene_maengel > 0 && (
+                          <Link
+                            href={`/unterkunft/maengel?zimmer=${z.zimmer_id}`}
+                            className="text-xs text-emerald-700 underline"
+                          >
+                            Mängel
+                          </Link>
+                        )}
+                      </span>
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
+          </div>
+        )}
       </div>
 
       {baum.length === 0 ? (
