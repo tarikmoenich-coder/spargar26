@@ -1554,6 +1554,28 @@ export interface UnterkunftMangel {
   updated_at: string;
 }
 
+// Aus der Sicht unterkunft_auszug_offen (Migration 2026-09-16): Personen,
+// deren Auszug noch abgenommen werden muss.
+export interface UnterkunftAuszugOffen {
+  belegung_id: number;
+  employee_id: string;
+  personal_nr: string;
+  name: string;
+  vorname: string;
+  employee_aktiv: boolean;
+  belegung_von: string;
+  zimmer_id: number;
+  zimmer_nummer: string;
+  zimmer_art: UnterkunftZimmerArt;
+  wohneinheit_id: number | null;
+  wohneinheit_name: string | null;
+  gebaeude_id: number;
+  gebaeude_name: string;
+  // null, wenn der Auslöser nur "Mitarbeiter inaktiv" ist.
+  ausgezahlt_am: string | null;
+  hat_kaution: boolean;
+}
+
 // Belastung aus einer Reparatur (Migration 2026-09-14). status 'offen' =
 // Vorschlag; 'bestaetigt' = als Vorschuss (Strafe/Rechnung) gebucht und vom
 // Lohn abgezogen; 'abgelehnt' = verworfen.

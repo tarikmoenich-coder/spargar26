@@ -2,15 +2,14 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
+import { getSupabaseClient } from "@/lib/supabase/client";
 import { useProfile } from "@/lib/useProfile";
 
-// Unterkunft-Modul (Migration 2026-08-29): Zimmerplanung + Übergabe/Abnahme
-// + Zwischenkontrollen + Mängel. Gleiches Tab-Muster wie PraemienTabs
-// (siehe dort für die ResizeObserver-/--subtabs-h-Logik).
-// nurHausmeister: der Hausmeister arbeitet über die Immobilien-Ansicht
-// (Einzug/Auszug/Umzug/Belegen direkt am Zimmer) + Reparaturen; keine
-// Zwischenkontrollen/Stammdaten (Vorgabe 2026-09-15).
+// Unterkunft-Modul. nurHausmeister: der Hausmeister arbeitet über die
+// Immobilien-Ansicht + Reparaturen (+ Auszüge, solange welche offen sind);
+// keine Zwischenkontrollen/Stammdaten (Vorgabe 2026-09-15).
+// nurWennOffen: Reiter erscheint nur, wenn die Liste Einträge hat.
 const tabs = [
   { href: "/unterkunft/kontrollplan", label: "Kontrollplan" },
   { href: "/unterkunft", label: "Immobilien", exakt: true, nurHausmeister: true },
@@ -21,6 +20,12 @@ const tabs = [
   },
   { href: "/unterkunft/belegung", label: "Belegung" },
   { href: "/unterkunft/uebergabe", label: "Übergabe / Abnahme" },
+  {
+    href: "/unterkunft/auszuege",
+    label: "Auszüge",
+    nurHausmeister: true,
+    nurWennOffen: true,
+  },
   { href: "/unterkunft/kontrolle", label: "Zwischenkontrolle" },
   { href: "/unterkunft/maengel", label: "Mängel" },
   { href: "/unterkunft/reparaturen", label: "Reparaturen", nurHausmeister: true },
@@ -31,11 +36,20 @@ export default function UnterkunftTabs() {
   const pathname = usePathname();
   const { profile } = useProfile();
   const ref = useRef<HTMLDivElement>(null);
+  const [auszugCount, setAuszugCount] = useState(0);
 
-  const sichtbar =
-    profile?.role === "hausmeister"
-      ? tabs.filter((t) => t.nurHausmeister)
-      : tabs;
+  useEffect(() => {
+    getSupabaseClient()
+      .from("unterkunft_auszug_offen")
+      .select("belegung_id", { count: "exact", head: true })
+      .then(({ count }) => setAuszugCount(count ?? 0));
+  }, [pathname]);
+
+  const sichtbar = tabs.filter((t) => {
+    if (t.nurWennOffen && auszugCount === 0) return false;
+    if (profile?.role === "hausmeister") return !!t.nurHausmeister;
+    return true;
+  });
 
   useEffect(() => {
     const el = ref.current;
@@ -61,6 +75,10 @@ export default function UnterkunftTabs() {
         const aktiv = tab.exakt
           ? pathname === tab.href
           : pathname === tab.href || pathname?.startsWith(`${tab.href}/`);
+        const label =
+          tab.href === "/unterkunft/auszuege"
+            ? `${tab.label} (${auszugCount})`
+            : tab.label;
         return (
           <Link
             key={tab.href}
@@ -71,7 +89,7 @@ export default function UnterkunftTabs() {
                 : "border-transparent text-neutral-600 hover:text-emerald-800"
             }`}
           >
-            {tab.label}
+            {label}
           </Link>
         );
       })}
