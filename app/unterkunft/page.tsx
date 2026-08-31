@@ -9,7 +9,7 @@
 //
 // Zimmer im Raster platzieren/verschieben: nur admin.
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { getSupabaseClient } from "@/lib/supabase/client";
@@ -234,6 +234,15 @@ export default function UnterkunftGrundrissPage() {
   });
   // Direkt belegen (nur admin), ohne Übergabe
   const [direkt, setDirekt] = useState<{ suche: string } | null>(null);
+  // Belegen-Modus: Person antippen → Zimmer antippen (2 Taps, kein Panel).
+  const [belegen, setBelegen] = useState(false);
+  const [handPerson, setHandPerson] = useState<UnterkunftPersonOffen | null>(null);
+  const [belegenSuche, setBelegenSuche] = useState("");
+  const [hinweis, setHinweis] = useState<string | null>(null);
+  // Karten-Übersicht der Wohneinheiten ein-/ausklappen; Plan-Werkzeuge (Zoom/
+  // Bearbeiten) im aufklappbaren Menü statt dauerhaft in der Leiste.
+  const [uebersichtAuf, setUebersichtAuf] = useState(true);
+  const [werkzeugeAuf, setWerkzeugeAuf] = useState(false);
   // Zimmer-Panel: offene Mängel aufgeklappt / Mangel-melden-Formular offen
   const [maengelAuf, setMaengelAuf] = useState(false);
   const [neuerMangel, setNeuerMangel] = useState<{
@@ -284,12 +293,62 @@ export default function UnterkunftGrundrissPage() {
     laden();
   }, [laden]);
 
+  // Zuletzt gewähltes Gebäude/Wohneinheit wiederherstellen.
   useEffect(() => {
     if (gebaeude.length === 0) return;
+    let gespeichert: number | null = null;
+    try {
+      const v = window.localStorage.getItem("unterkunft.gebaeudeId");
+      if (v) gespeichert = Number(v);
+    } catch {
+      /* Storage nicht verfügbar */
+    }
     if (gebaeudeId == null || !gebaeude.some((g) => g.id === gebaeudeId)) {
-      setGebaeudeId(gebaeude[0].id);
+      const ziel =
+        gespeichert != null && gebaeude.some((g) => g.id === gespeichert)
+          ? gespeichert
+          : gebaeude[0].id;
+      setGebaeudeId(ziel);
     }
   }, [gebaeude, gebaeudeId]);
+
+  useEffect(() => {
+    try {
+      if (gebaeudeId != null)
+        window.localStorage.setItem("unterkunft.gebaeudeId", String(gebaeudeId));
+    } catch {
+      /* egal */
+    }
+  }, [gebaeudeId]);
+
+  // Beim ersten Laden die zuletzt gewählte Wohneinheit übernehmen (nur wenn
+  // sie zum aktuellen Gebäude passt).
+  const einheitWiederhergestellt = useRef(false);
+  useEffect(() => {
+    if (einheitWiederhergestellt.current || einheiten.length === 0) return;
+    einheitWiederhergestellt.current = true;
+    try {
+      const v = window.localStorage.getItem("unterkunft.einheitId");
+      if (!v) return;
+      const id = Number(v);
+      const e = einheiten.find((x) => x.wohneinheit_id === id);
+      if (e && e.gebaeude_id === gebaeudeId) {
+        setEinheitId(id);
+        setUebersichtAuf(false);
+      }
+    } catch {
+      /* egal */
+    }
+  }, [einheiten, gebaeudeId]);
+
+  useEffect(() => {
+    try {
+      if (einheitId != null)
+        window.localStorage.setItem("unterkunft.einheitId", String(einheitId));
+    } catch {
+      /* egal */
+    }
+  }, [einheitId]);
 
   // Umzug-/Direktbeleg-Formular schließen, sobald ein anderer Raum oder eine
   // andere Wohneinheit gewählt wird.
@@ -299,6 +358,11 @@ export default function UnterkunftGrundrissPage() {
     setMaengelAuf(false);
     setNeuerMangel(null);
   }, [selId, einheitId]);
+
+  // Beim Verlassen des Belegen-Modus die „Person in der Hand" loslassen.
+  useEffect(() => {
+    if (!belegen) setHandPerson(null);
+  }, [belegen]);
 
   const einheitenDesGebaeudes = useMemo(
     () => einheiten.filter((e) => e.gebaeude_id === gebaeudeId && e.aktiv),
@@ -554,6 +618,31 @@ export default function UnterkunftGrundrissPage() {
     await laden();
   }
 
+  // Belegen-Modus: „Person in der Hand" auf ein Zimmer setzen.
+  async function belegenAufZimmer(z: UnterkunftZimmerUebersicht) {
+    if (!handPerson || z.art !== "zimmer" || !z.aktiv || z.gesperrt) return;
+    const p = handPerson;
+    setHandPerson(null);
+    setFehler(null);
+    const { error } = await getSupabaseClient()
+      .from("unterkunft_belegung")
+      .insert({
+        zimmer_id: z.zimmer_id,
+        employee_id: p.employee_id,
+        von: heuteIso(),
+      });
+    if (error) {
+      setFehler(error.message);
+      return;
+    }
+    setHinweis(
+      `${p.vorname} ${p.name} → ${z.nummer}${
+        z.frei <= 0 ? " (Überbuchung!)" : ""
+      }`
+    );
+    await laden();
+  }
+
   // Mangel direkt im Zimmer-Panel anlegen (admin/hr/hausmeister). Danach
   // erscheint er in der aufklappbaren Liste, wo auch Fotos möglich sind.
   async function mangelAnlegen(zimmerId: number) {
@@ -777,6 +866,11 @@ export default function UnterkunftGrundrissPage() {
     e: React.PointerEvent,
     z: UnterkunftZimmerUebersicht
   ) {
+    if (belegen) {
+      if (handPerson) belegenAufZimmer(z);
+      else setHinweis("Erst eine Person antippen, dann das Zimmer.");
+      return;
+    }
     setSelId(z.zimmer_id);
     if (!bearbeiten || !canEditPlan || e.button !== 0) return;
     if (z.plan_x == null || z.plan_y == null) return;
@@ -850,30 +944,59 @@ export default function UnterkunftGrundrissPage() {
         <div>
           <h1 className="text-lg font-semibold text-emerald-900">Grundriss</h1>
           <p className="text-sm text-neutral-500">
-            Wohneinheit antippen für Zimmer &amp; Übergaben.
+            Wohneinheit wählen → Zimmer antippen. „Belegen": Person antippen,
+            dann Zimmer antippen.
           </p>
         </div>
-        <label className="text-sm">
-          Gebäude
-          <select
-            className="ml-2"
-            value={gebaeudeId ?? ""}
-            onChange={(e) => {
-              setGebaeudeId(Number(e.target.value));
-              setEinheitId(null);
-              setSelId(null);
-              setEtageFilter("");
-            }}
-          >
+      </div>
+
+      {gebaeude.length > 0 &&
+        (gebaeude.length <= 8 ? (
+          <div className="flex flex-wrap gap-1">
             {gebaeude.map((g) => (
-              <option key={g.id} value={g.id}>
+              <button
+                key={g.id}
+                onClick={() => {
+                  setGebaeudeId(g.id);
+                  setEinheitId(null);
+                  setSelId(null);
+                  setEtageFilter("");
+                  setUebersichtAuf(true);
+                }}
+                className={`rounded-full border px-3 py-1 text-sm ${
+                  g.id === gebaeudeId
+                    ? "border-emerald-700 bg-emerald-700 font-semibold text-white"
+                    : "border-neutral-300 text-neutral-600 hover:border-emerald-400"
+                }`}
+              >
                 {g.name}
                 {!g.aktiv ? " (inaktiv)" : ""}
-              </option>
+              </button>
             ))}
-          </select>
-        </label>
-      </div>
+          </div>
+        ) : (
+          <label className="text-sm">
+            Gebäude
+            <select
+              className="ml-2"
+              value={gebaeudeId ?? ""}
+              onChange={(e) => {
+                setGebaeudeId(Number(e.target.value));
+                setEinheitId(null);
+                setSelId(null);
+                setEtageFilter("");
+                setUebersichtAuf(true);
+              }}
+            >
+              {gebaeude.map((g) => (
+                <option key={g.id} value={g.id}>
+                  {g.name}
+                  {!g.aktiv ? " (inaktiv)" : ""}
+                </option>
+              ))}
+            </select>
+          </label>
+        ))}
 
       {/* Kapazitäts-Kopfzeile fürs ganze Gebäude */}
       {gebaeudeId != null && gebStats.rooms > 0 && (
@@ -916,6 +1039,17 @@ export default function UnterkunftGrundrissPage() {
           {fehler}
         </p>
       )}
+      {hinweis && (
+        <p className="rounded border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-800">
+          {hinweis}{" "}
+          <button
+            className="ml-2 text-xs underline"
+            onClick={() => setHinweis(null)}
+          >
+            ok
+          </button>
+        </p>
+      )}
 
       {/* Etage-Umschalter */}
       {etagen.length > 0 && (
@@ -949,6 +1083,17 @@ export default function UnterkunftGrundrissPage() {
           beginnen.
         </p>
       ) : (
+        <>
+          {einheit && (
+            <button
+              className="text-sm text-emerald-700 underline"
+              onClick={() => setUebersichtAuf((v) => !v)}
+            >
+              {uebersichtAuf ? "▾" : "▸"} Wohneinheiten-Übersicht (
+              {gefilterteEinheiten.length})
+            </button>
+          )}
+          {(!einheit || uebersichtAuf) && (
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
           {gefilterteEinheiten.map((e) => {
             const personen = [
@@ -969,6 +1114,7 @@ export default function UnterkunftGrundrissPage() {
                 onClick={() => {
                   setEinheitId(aktiv ? null : e.wohneinheit_id);
                   setSelId(null);
+                  if (!aktiv) setUebersichtAuf(false);
                 }}
                 className={`rounded border p-3 text-left ${
                   aktiv
@@ -1007,6 +1153,8 @@ export default function UnterkunftGrundrissPage() {
             );
           })}
         </div>
+          )}
+        </>
       )}
 
       {/* Wohneinheit-Detail: Zimmer-Raster + offene Personen */}
@@ -1073,6 +1221,22 @@ export default function UnterkunftGrundrissPage() {
                 ›
               </button>
             </div>
+            {canEditPlan && (
+              <button
+                onClick={() => {
+                  setBelegen((v) => !v);
+                  setSelId(null);
+                  setBearbeiten(false);
+                }}
+                className={`rounded px-3 py-1 font-medium ${
+                  belegen
+                    ? "bg-emerald-700 text-white"
+                    : "border border-emerald-600 text-emerald-700"
+                }`}
+              >
+                {belegen ? "Belegen: an" : "Belegen"}
+              </button>
+            )}
             <div className="flex overflow-hidden rounded border border-neutral-300">
               {(Object.keys(ANSICHT_LABELS) as Ansicht[]).map((a) => (
                 <button
@@ -1088,35 +1252,49 @@ export default function UnterkunftGrundrissPage() {
                 </button>
               ))}
             </div>
-            <div className="flex items-center gap-1">
-              <button
-                className="btn-secondary"
-                onClick={() => setZoom((z) => Math.max(0.5, z - 0.25))}
-                title="Verkleinern"
-              >
-                −
-              </button>
-              <span className="w-10 text-center tabular-nums">
-                {Math.round(zoom * 100)}%
-              </span>
-              <button
-                className="btn-secondary"
-                onClick={() => setZoom((z) => Math.min(2, z + 0.25))}
-                title="Vergrößern"
-              >
-                +
-              </button>
-            </div>
-            {canEditPlan && (
-              <label className="flex items-center gap-1">
-                <input
-                  type="checkbox"
-                  checked={bearbeiten}
-                  onChange={(e) => setBearbeiten(e.target.checked)}
-                />
-                Bearbeiten
-              </label>
-            )}
+            <details
+              className="relative"
+              open={werkzeugeAuf}
+              onToggle={(e) =>
+                setWerkzeugeAuf((e.target as HTMLDetailsElement).open)
+              }
+            >
+              <summary className="btn-secondary cursor-pointer list-none">
+                ⚙ Ansicht
+              </summary>
+              <div className="absolute right-0 z-10 mt-1 flex flex-col gap-2 rounded border border-neutral-200 bg-white p-2 shadow-lg">
+                <div className="flex items-center gap-1">
+                  <button
+                    className="btn-secondary"
+                    onClick={() => setZoom((z) => Math.max(0.5, z - 0.25))}
+                  >
+                    −
+                  </button>
+                  <span className="w-10 text-center tabular-nums">
+                    {Math.round(zoom * 100)}%
+                  </span>
+                  <button
+                    className="btn-secondary"
+                    onClick={() => setZoom((z) => Math.min(2, z + 0.25))}
+                  >
+                    +
+                  </button>
+                </div>
+                {canEditPlan && (
+                  <label className="flex items-center gap-1 whitespace-nowrap">
+                    <input
+                      type="checkbox"
+                      checked={bearbeiten}
+                      onChange={(e) => {
+                        setBearbeiten(e.target.checked);
+                        if (e.target.checked) setBelegen(false);
+                      }}
+                    />
+                    Kacheln bearbeiten
+                  </label>
+                )}
+              </div>
+            </details>
           </div>
 
           <div>
@@ -1124,13 +1302,73 @@ export default function UnterkunftGrundrissPage() {
               {einheit.name}
               {einheit.etage_label ? ` · ${einheit.etage_label}` : ""} — Zimmer
             </h2>
-            {nachbarZimmer.length > 0 && (
+            {nachbarZimmer.length > 0 && !belegen && (
               <p className="text-xs text-neutral-400">
                 Blasse, gestrichelte Kacheln = andere Wohneinheiten der Etage{" "}
                 {einheit.etage_label} (nur zur Orientierung).
               </p>
             )}
           </div>
+
+          {/* Belegen-Modus: Person antippen → Zimmer antippen */}
+          {belegen && (
+            <div className="rounded border border-emerald-300 bg-emerald-50 p-2">
+              <div className="flex flex-wrap items-center gap-2 text-sm">
+                <span className="font-medium text-emerald-900">
+                  {handPerson
+                    ? `„${handPerson.vorname} ${handPerson.name}" in der Hand – jetzt Zimmer antippen`
+                    : "Person antippen, dann ein freies Zimmer antippen."}
+                </span>
+                {handPerson && (
+                  <button
+                    className="text-xs text-emerald-700 underline"
+                    onClick={() => setHandPerson(null)}
+                  >
+                    loslassen
+                  </button>
+                )}
+              </div>
+              <input
+                className="mt-2 w-full text-sm"
+                placeholder="Person ohne Bleibe suchen (Name / Nr.)"
+                value={belegenSuche}
+                onChange={(e) => setBelegenSuche(e.target.value)}
+              />
+              <div className="mt-2 flex max-h-40 flex-wrap gap-1.5 overflow-y-auto">
+                {personenOffen
+                  .filter((p) =>
+                    `${p.vorname} ${p.name} ${p.personal_nr}`
+                      .toLowerCase()
+                      .includes(belegenSuche.trim().toLowerCase())
+                  )
+                  .slice(0, 40)
+                  .map((p) => {
+                    const inHand = handPerson?.employee_id === p.employee_id;
+                    return (
+                      <button
+                        key={p.employee_id}
+                        onClick={() =>
+                          setHandPerson(inHand ? null : p)
+                        }
+                        className={`rounded-full border px-2.5 py-1 text-sm ${
+                          inHand
+                            ? "border-emerald-700 bg-emerald-700 font-semibold text-white"
+                            : "border-emerald-300 bg-white text-emerald-800"
+                        }`}
+                      >
+                        {p.vorname} {p.name}
+                        {p.auf_anreiseliste ? " · Anreise" : ""}
+                      </button>
+                    );
+                  })}
+                {personenOffen.length === 0 && (
+                  <span className="text-sm text-neutral-500">
+                    niemand ohne Bleibe.
+                  </span>
+                )}
+              </div>
+            </div>
+          )}
 
           {zimmerDerEinheit.length === 0 ? (
             <p className="text-sm text-neutral-500">
@@ -1255,6 +1493,16 @@ export default function UnterkunftGrundrissPage() {
                     );
                     const schwebendHier =
                       (zuordnungProZimmer[z.zimmer_id] ?? []).length;
+                    // Belegen-Modus: mit „Person in der Hand" sind belegbare
+                    // Zimmer hervorgehoben, alles andere gedimmt.
+                    const belegbar =
+                      belegen &&
+                      handPerson != null &&
+                      z.art === "zimmer" &&
+                      z.aktiv &&
+                      !z.gesperrt;
+                    const gedimmt =
+                      belegen && handPerson != null && !belegbar;
                     return (
                       <g
                         key={z.zimmer_id}
@@ -1262,6 +1510,7 @@ export default function UnterkunftGrundrissPage() {
                         onPointerDown={(e) => onZimmerPointerDown(e, z)}
                         onPointerMove={(e) => onZimmerPointerMove(e, z)}
                         onPointerUp={(e) => onZimmerPointerUp(e, z)}
+                        opacity={gedimmt ? 0.35 : 1}
                         style={{
                           cursor: bearbeiten && canEditPlan ? "move" : "pointer",
                         }}
@@ -1271,12 +1520,35 @@ export default function UnterkunftGrundrissPage() {
                           height={h}
                           rx={5}
                           fill={fill}
-                          stroke={ausgewaehlt ? "#047857" : stroke}
+                          stroke={
+                            belegbar
+                              ? "#047857"
+                              : ausgewaehlt
+                                ? "#047857"
+                                : stroke
+                          }
                           strokeWidth={
-                            ausgewaehlt ? 3 : z.offene_maengel > 0 ? 2 : 1.5
+                            belegbar || ausgewaehlt
+                              ? 3
+                              : z.offene_maengel > 0
+                                ? 2
+                                : 1.5
                           }
                           strokeDasharray={z.aktiv ? undefined : "4 3"}
                         />
+                        {belegbar && (
+                          <text
+                            x={w - 10}
+                            y={h - 7}
+                            textAnchor="end"
+                            fontSize={14}
+                            fontWeight={700}
+                            fill="#047857"
+                            className="select-none"
+                          >
+                            ＋
+                          </text>
+                        )}
                         <text
                           x={w / 2}
                           y={h / 2}
@@ -1429,11 +1701,27 @@ export default function UnterkunftGrundrissPage() {
                   </div>
                 )}
 
+                {sel && sel.wohneinheit_id === einheitId && (
+                  <div
+                    className="fixed inset-0 z-30 bg-black/25 lg:hidden"
+                    onClick={() => setSelId(null)}
+                  />
+                )}
                 {sel && sel.wohneinheit_id === einheitId ? (
-                  <div className="rounded border border-neutral-200 p-3">
-                    <h3 className="text-base font-semibold text-emerald-900">
-                      {sel.art === "zimmer" ? `Zimmer ${sel.nummer}` : raumName(sel)}
-                    </h3>
+                  <div className="fixed inset-x-0 bottom-0 z-40 max-h-[82vh] overflow-y-auto rounded-t-2xl border border-neutral-300 bg-white p-3 shadow-2xl lg:static lg:z-auto lg:max-h-none lg:rounded lg:border-neutral-200 lg:shadow-none">
+                    <div className="mb-1 flex items-center justify-between">
+                      <h3 className="text-base font-semibold text-emerald-900">
+                        {sel.art === "zimmer"
+                          ? `Zimmer ${sel.nummer}`
+                          : raumName(sel)}
+                      </h3>
+                      <button
+                        className="text-sm text-neutral-500 lg:hidden"
+                        onClick={() => setSelId(null)}
+                      >
+                        ✕ Schließen
+                      </button>
+                    </div>
                     {!sel.aktiv && <p className="text-xs text-red-600">inaktiv</p>}
 
                     <dl className="mt-2 space-y-1 text-sm">
@@ -1753,10 +2041,14 @@ export default function UnterkunftGrundrissPage() {
                         )}
 
                         {canEditPlan && !umzug && (
-                          <details className="mt-3 rounded border border-neutral-200 p-2 text-sm">
-                            <summary className="cursor-pointer font-medium text-neutral-700">
-                              Direkt belegen (ohne Übergabe)
-                            </summary>
+                          <div className="mt-3 rounded border border-emerald-200 bg-emerald-50/60 p-2 text-sm">
+                            <div className="font-medium text-emerald-900">
+                              Person hinzufügen
+                            </div>
+                            <p className="text-xs text-neutral-500">
+                              Bewohner sofort ins Zimmer setzen (ohne
+                              Übergabe-Protokoll).
+                            </p>
                             <div className="mt-2 space-y-2">
                               {sel.frei <= 0 && (
                                 <p className="rounded bg-amber-50 px-2 py-1 text-xs text-amber-800">
@@ -1836,7 +2128,7 @@ export default function UnterkunftGrundrissPage() {
                                 </ul>
                               )}
                             </div>
-                          </details>
+                          </div>
                         )}
                       </>
                     )}
@@ -2062,8 +2354,10 @@ export default function UnterkunftGrundrissPage() {
                     )}
                   </div>
                 ) : (
-                  <div className="rounded border border-dashed border-neutral-200 p-3 text-sm text-neutral-400">
-                    Kein Zimmer ausgewählt.
+                  <div className="hidden rounded border border-dashed border-neutral-200 p-3 text-sm text-neutral-400 lg:block">
+                    {belegen
+                      ? "Belegen-Modus: Person antippen, dann ein Zimmer."
+                      : "Zimmer im Plan antippen für Details."}
                   </div>
                 )}
               </div>
