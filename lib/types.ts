@@ -1237,6 +1237,17 @@ export type UnterkunftZimmerArt =
   | "flur"
   | "gemeinschaft";
 
+// Kontrollzeitraum je Raumtyp (Migration 2026-09-08). Steuert die Ampel für
+// die letzte Zimmerkontrolle: letzte Kontrolle ≤ gruen_bis_tage → grün,
+// ≤ gelb_bis_tage → gelb, darüber → rot. Pflege in den Stammdaten (admin/hr).
+export interface UnterkunftKontrollIntervall {
+  art: UnterkunftZimmerArt;
+  gruen_bis_tage: number;
+  gelb_bis_tage: number;
+  updated_by: string | null;
+  updated_at: string;
+}
+
 export interface UnterkunftZimmer {
   id: number;
   gebaeude_id: number;

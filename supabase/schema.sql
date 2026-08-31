@@ -5014,6 +5014,26 @@ create table unterkunft_zimmer (
 create index idx_unterkunft_zimmer_gebaeude on unterkunft_zimmer (gebaeude_id);
 create index idx_unterkunft_zimmer_wohneinheit on unterkunft_zimmer (wohneinheit_id);
 
+-- Kontrollzeitraum je Raumtyp (Migration 2026-09-08). Steuert die Ampel für
+-- die letzte Zimmerkontrolle im Grundriss; davor steckten 75/90 Tage fix im
+-- Code. gruen_bis_tage = letzte Kontrolle ≤ X Tage her → grün;
+-- gelb_bis_tage = ≤ Y Tage → gelb, darüber → rot. Pflege in den Stammdaten.
+create table unterkunft_kontroll_intervall (
+  art text primary key
+    check (art in ('zimmer', 'kueche', 'bad', 'flur', 'gemeinschaft')),
+  gruen_bis_tage int not null,
+  gelb_bis_tage int not null,
+  updated_by uuid references profiles (id),
+  updated_at timestamptz not null default now(),
+  check (gelb_bis_tage >= gruen_bis_tage)
+);
+insert into unterkunft_kontroll_intervall (art, gruen_bis_tage, gelb_bis_tage) values
+  ('zimmer', 7, 21),
+  ('kueche', 7, 21),
+  ('bad', 7, 21),
+  ('flur', 7, 21),
+  ('gemeinschaft', 7, 21);
+
 -- Belegung erfolgt zimmergenau (Migration 2026-09-04). Kapazität eines
 -- Zimmers = unterkunft_zimmer.bettenzahl; eine Überbuchung wird nicht mehr
 -- hart verhindert, sondern im Grundriss nur als Warnung angezeigt.
@@ -5200,6 +5220,8 @@ create trigger trg_unterkunft_wohneinheit_updated_at before update on unterkunft
   for each row execute function set_updated_at();
 create trigger trg_unterkunft_zimmer_updated_at before update on unterkunft_zimmer
   for each row execute function set_updated_at();
+create trigger trg_unterkunft_kontroll_intervall_updated_at before update on unterkunft_kontroll_intervall
+  for each row execute function set_updated_at();
 create trigger trg_unterkunft_zuordnung_updated_at before update on unterkunft_zuordnung
   for each row execute function set_updated_at();
 create trigger trg_unterkunft_vorgang_updated_at before update on unterkunft_vorgang
@@ -5369,6 +5391,7 @@ grant select on unterkunft_belegung_person to authenticated;
 alter table unterkunft_gebaeude enable row level security;
 alter table unterkunft_wohneinheit enable row level security;
 alter table unterkunft_zimmer enable row level security;
+alter table unterkunft_kontroll_intervall enable row level security;
 alter table unterkunft_zuordnung enable row level security;
 alter table unterkunft_belegung enable row level security;
 alter table unterkunft_checkliste_vorlage enable row level security;
@@ -5390,6 +5413,11 @@ create policy "unterkunft_wohneinheit_write" on unterkunft_wohneinheit for all
 create policy "unterkunft_zimmer_select" on unterkunft_zimmer for select
   using (auth.uid() is not null);
 create policy "unterkunft_zimmer_write" on unterkunft_zimmer for all
+  using (current_role_name() in ('admin', 'hr'))
+  with check (current_role_name() in ('admin', 'hr'));
+create policy "unterkunft_kontroll_intervall_select" on unterkunft_kontroll_intervall for select
+  using (auth.uid() is not null);
+create policy "unterkunft_kontroll_intervall_write" on unterkunft_kontroll_intervall for all
   using (current_role_name() in ('admin', 'hr'))
   with check (current_role_name() in ('admin', 'hr'));
 -- Belegungsplanung: anlegen/umplanen nur admin + hr; hausmeister darf eine

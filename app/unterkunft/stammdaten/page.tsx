@@ -11,10 +11,20 @@ import { useProfile } from "@/lib/useProfile";
 import UnterkunftTabs from "@/components/UnterkunftTabs";
 import type {
   UnterkunftChecklisteVorlage,
+  UnterkunftKontrollIntervall,
   UnterkunftWohneinheit,
   UnterkunftGebaeude,
   UnterkunftZimmer,
+  UnterkunftZimmerArt,
 } from "@/lib/types";
+
+const RAUMTYP_LABEL: Record<UnterkunftZimmerArt, string> = {
+  zimmer: "Schlafzimmer",
+  kueche: "Küche",
+  bad: "Bad / WC",
+  flur: "Flur",
+  gemeinschaft: "Gemeinschaftsraum",
+};
 
 export default function UnterkunftStammdatenPage() {
   const { profile } = useProfile();
@@ -25,6 +35,7 @@ export default function UnterkunftStammdatenPage() {
   const [wohneinheiten, setWohneinheiten] = useState<UnterkunftWohneinheit[]>([]);
   const [zimmer, setZimmer] = useState<UnterkunftZimmer[]>([]);
   const [vorlage, setVorlage] = useState<UnterkunftChecklisteVorlage[]>([]);
+  const [intervalle, setIntervalle] = useState<UnterkunftKontrollIntervall[]>([]);
   const [loading, setLoading] = useState(true);
   const [fehler, setFehler] = useState<string | null>(null);
   const [offenesGebaeude, setOffenesGebaeude] = useState<number | null>(null);
@@ -46,7 +57,7 @@ export default function UnterkunftStammdatenPage() {
   const laden = useCallback(async () => {
     setLoading(true);
     const supabase = getSupabaseClient();
-    const [g, et, z, v] = await Promise.all([
+    const [g, et, z, v, ki] = await Promise.all([
       supabase.from("unterkunft_gebaeude").select("*").order("name"),
       supabase
         .from("unterkunft_wohneinheit")
@@ -59,11 +70,13 @@ export default function UnterkunftStammdatenPage() {
         .select("*")
         .eq("aktiv", true)
         .order("reihenfolge"),
+      supabase.from("unterkunft_kontroll_intervall").select("*"),
     ]);
     setGebaeude((g.data as UnterkunftGebaeude[]) ?? []);
     setWohneinheiten((et.data as UnterkunftWohneinheit[]) ?? []);
     setZimmer((z.data as UnterkunftZimmer[]) ?? []);
     setVorlage((v.data as UnterkunftChecklisteVorlage[]) ?? []);
+    setIntervalle((ki.data as UnterkunftKontrollIntervall[]) ?? []);
     setLoading(false);
   }, []);
 
@@ -435,6 +448,31 @@ export default function UnterkunftStammdatenPage() {
         .from("unterkunft_checkliste_vorlage")
         .update({ aktiv: false })
         .eq("id", v.id)
+    );
+  }
+
+  // --- Kontrollzeitraum je Raumtyp ---
+  async function intervallSetzen(
+    i: UnterkunftKontrollIntervall,
+    feld: "gruen_bis_tage" | "gelb_bis_tage",
+    wert: string
+  ) {
+    const n = Math.max(0, Math.floor(Number(wert)) || 0);
+    if (n === i[feld]) return;
+    const gruen = feld === "gruen_bis_tage" ? n : i.gruen_bis_tage;
+    const gelb = feld === "gelb_bis_tage" ? n : i.gelb_bis_tage;
+    if (gelb < gruen) {
+      setFehler(
+        "Der Gelb-Wert muss mindestens so groß sein wie der Grün-Wert."
+      );
+      await laden();
+      return;
+    }
+    await ausfuehren(() =>
+      getSupabaseClient()
+        .from("unterkunft_kontroll_intervall")
+        .update({ [feld]: n, updated_by: profile?.id ?? null })
+        .eq("art", i.art)
     );
   }
 
@@ -845,6 +883,72 @@ export default function UnterkunftStammdatenPage() {
             </button>
           </div>
         )}
+      </section>
+
+      {/* Kontrollzeitraum je Raumtyp */}
+      <section className="space-y-3">
+        <h2 className="font-semibold text-neutral-800">
+          Kontrollzeitraum je Raumtyp
+        </h2>
+        <p className="text-sm text-neutral-500">
+          Steuert die Ampel „letzte Kontrolle“ im Grundriss. Grün: letzte
+          Kontrolle ≤ X Tage her · Gelb: ≤ Y Tage her · darüber Rot.
+        </p>
+        <table>
+          <thead>
+            <tr>
+              <th>Raumtyp</th>
+              <th>Grün bis (Tage)</th>
+              <th>Gelb bis (Tage)</th>
+            </tr>
+          </thead>
+          <tbody>
+            {intervalle.length === 0 && (
+              <tr>
+                <td colSpan={3} className="text-sm text-neutral-400">
+                  Noch nicht angelegt – Migration 2026-09-08 ausführen.
+                </td>
+              </tr>
+            )}
+            {intervalle.map((i) => (
+              <tr key={i.art}>
+                <td className="font-medium text-emerald-800">
+                  {RAUMTYP_LABEL[i.art]}
+                </td>
+                <td>
+                  {canEdit ? (
+                    <input
+                      type="number"
+                      min={0}
+                      className="w-20"
+                      defaultValue={i.gruen_bis_tage}
+                      onBlur={(e) =>
+                        intervallSetzen(i, "gruen_bis_tage", e.target.value)
+                      }
+                    />
+                  ) : (
+                    i.gruen_bis_tage
+                  )}
+                </td>
+                <td>
+                  {canEdit ? (
+                    <input
+                      type="number"
+                      min={0}
+                      className="w-20"
+                      defaultValue={i.gelb_bis_tage}
+                      onBlur={(e) =>
+                        intervallSetzen(i, "gelb_bis_tage", e.target.value)
+                      }
+                    />
+                  ) : (
+                    i.gelb_bis_tage
+                  )}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
       </section>
     </div>
   );

@@ -87,24 +87,32 @@ export function belegungLaeuft(
 export const GRUNDRISS_ZELLE = 44;
 
 // Kontroll-Ampel je Zimmer: wie lange ist die letzte abgeschlossene
-// Kontrolle her? Schwellen bewusst als Konstante - das eigentliche
-// Kontrollmuster (Intervall je Zimmertyp/Saison) wird später festgelegt,
-// siehe docs/unterkunft-plan.md.
+// Kontrolle her? Die Schwellen kommen seit Migration 2026-09-08 je Raumtyp
+// aus unterkunft_kontroll_intervall (Pflege in den Stammdaten). Diese
+// Konstanten bleiben der Fallback, wenn kein Intervall übergeben wird.
 export const KONTROLLE_WARNUNG_TAGE = 75;
 export const KONTROLLE_FAELLIG_TAGE = 90;
+
+export interface KontrollSchwellen {
+  gruen: number; // letzte Kontrolle ≤ so viele Tage her → grün
+  gelb: number; //  ≤ so viele Tage her → gelb, darüber → rot
+}
 
 export type KontrollAmpel = "keine" | "gruen" | "gelb" | "rot";
 
 export function kontrollAmpel(
   letzteKontrolleAm: string | null,
+  schwellen?: KontrollSchwellen | null,
   jetzt: Date = new Date()
 ): KontrollAmpel {
   if (!letzteKontrolleAm) return "keine";
+  const gruen = schwellen?.gruen ?? KONTROLLE_WARNUNG_TAGE;
+  const gelb = schwellen?.gelb ?? KONTROLLE_FAELLIG_TAGE;
   const tage = Math.floor(
     (jetzt.getTime() - new Date(letzteKontrolleAm).getTime()) / 86400000
   );
-  if (tage <= KONTROLLE_WARNUNG_TAGE) return "gruen";
-  if (tage <= KONTROLLE_FAELLIG_TAGE) return "gelb";
+  if (tage <= gruen) return "gruen";
+  if (tage <= gelb) return "gelb";
   return "rot";
 }
 
