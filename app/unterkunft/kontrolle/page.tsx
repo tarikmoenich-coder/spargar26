@@ -4,6 +4,11 @@
 // aber ohne Belegungsbezug und mit Typ "zwischenkontrolle". Zweck: schnelle
 // Sichtkontrolle je Zimmer mit Fotos, auffällige Punkte werden als Mängel
 // übernommen. Abgeschlossene Kontrollen sind schreibgeschützt (Trigger).
+//
+// Seit 2026-09: entweder ein einzelnes Zimmer ODER eine ganze Wohneinheit am
+// Stück. Bei der Wohneinheit legt "Starten" pro Raum einen eigenen Vorgang an
+// und die Seite führt Raum für Raum durch ("Raum 2 von 6"). Kontrolliert-von /
+// Gesamtzustand / Notiz gelten für die ganze Runde.
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { getSupabaseClient } from "@/lib/supabase/client";
@@ -20,6 +25,7 @@ import {
   type UnterkunftPositionZustand,
   type UnterkunftVorgang,
   type UnterkunftVorgangPosition,
+  type UnterkunftWohneinheit,
   type UnterkunftZimmer,
 } from "@/lib/types";
 
@@ -36,14 +42,28 @@ export default function UnterkunftKontrollePage() {
     profile?.role === "hausmeister";
 
   const [gebaeude, setGebaeude] = useState<UnterkunftGebaeude[]>([]);
+  const [wohneinheiten, setWohneinheiten] = useState<UnterkunftWohneinheit[]>([]);
   const [zimmer, setZimmer] = useState<UnterkunftZimmer[]>([]);
   const [vorlage, setVorlage] = useState<UnterkunftChecklisteVorlage[]>([]);
   const [letzte, setLetzte] = useState<UnterkunftVorgang[]>([]);
+  const [namen, setNamen] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(true);
   const [fehler, setFehler] = useState<string | null>(null);
   const [hinweis, setHinweis] = useState<string | null>(null);
 
-  const [sel, setSel] = useState({ gebaeude_id: "", zimmer_id: "" });
+  const [sel, setSel] = useState({
+    gebaeude_id: "",
+    modus: "zimmer" as "zimmer" | "wohneinheit",
+    zimmer_id: "",
+    wohneinheit_id: "",
+  });
+  // Wohneinheit-Modus: welche Räume werden kontrolliert (alle vorausgewählt).
+  const [raumWahl, setRaumWahl] = useState<Set<number>>(new Set());
+
+  // Aktuelle Runde: ein Vorgang je Raum. Länge 1 = einzelnes Zimmer / Fortsetzen.
+  const [runde, setRunde] = useState<UnterkunftVorgang[]>([]);
+  const [rundeIdx, setRundeIdx] = useState(0);
+  const [rundeAktiv, setRundeAktiv] = useState(false); // >1 Raum, geteilter Kopf
 
   const [vorgang, setVorgang] = useState<UnterkunftVorgang | null>(null);
   const [positionen, setPositionen] = useState<UnterkunftVorgangPosition[]>([]);
@@ -60,8 +80,13 @@ export default function UnterkunftKontrollePage() {
   const laden = useCallback(async () => {
     setLoading(true);
     const supabase = getSupabaseClient();
-    const [g, z, v, lv] = await Promise.all([
+    const [g, w, z, v, lv, pn] = await Promise.all([
       supabase.from("unterkunft_gebaeude").select("*").eq("aktiv", true).order("name"),
+      supabase
+        .from("unterkunft_wohneinheit")
+        .select("*")
+        .eq("aktiv", true)
+        .order("reihenfolge"),
       supabase.from("unterkunft_zimmer").select("*").eq("aktiv", true).order("nummer"),
       supabase
         .from("unterkunft_checkliste_vorlage")
@@ -74,11 +99,21 @@ export default function UnterkunftKontrollePage() {
         .eq("typ", "zwischenkontrolle")
         .order("durchgefuehrt_am", { ascending: false })
         .limit(25),
+      supabase.from("profile_namen").select("*"),
     ]);
     setGebaeude((g.data as UnterkunftGebaeude[]) ?? []);
+    setWohneinheiten((w.data as UnterkunftWohneinheit[]) ?? []);
     setZimmer((z.data as UnterkunftZimmer[]) ?? []);
     setVorlage((v.data as UnterkunftChecklisteVorlage[]) ?? []);
     setLetzte((lv.data as UnterkunftVorgang[]) ?? []);
+    setNamen(
+      Object.fromEntries(
+        ((pn.data as { id: string; full_name: string }[]) ?? []).map((p) => [
+          p.id,
+          p.full_name,
+        ])
+      )
+    );
     setLoading(false);
   }, []);
 
@@ -92,7 +127,13 @@ export default function UnterkunftKontrollePage() {
     const param = new URLSearchParams(window.location.search).get("zimmer");
     if (!param) return;
     const z = zimmer.find((x) => String(x.id) === param);
-    if (z) setSel({ gebaeude_id: String(z.gebaeude_id), zimmer_id: String(z.id) });
+    if (z)
+      setSel((s) => ({
+        ...s,
+        modus: "zimmer",
+        gebaeude_id: String(z.gebaeude_id),
+        zimmer_id: String(z.id),
+      }));
   }, [zimmer]);
 
   useEffect(() => {
@@ -108,58 +149,48 @@ export default function UnterkunftKontrollePage() {
   const zimmerDesGebaeudes = zimmer.filter(
     (z) => String(z.gebaeude_id) === sel.gebaeude_id
   );
+  const wohneinheitenDesGebaeudes = wohneinheiten.filter(
+    (w) => String(w.gebaeude_id) === sel.gebaeude_id
+  );
+  const raeumeDerEinheit = zimmer.filter(
+    (z) => String(z.wohneinheit_id) === sel.wohneinheit_id
+  );
+
+  // Räume der gewählten Wohneinheit alle vorauswählen.
+  useEffect(() => {
+    if (sel.modus !== "wohneinheit" || !sel.wohneinheit_id) {
+      setRaumWahl(new Set());
+      return;
+    }
+    setRaumWahl(
+      new Set(
+        zimmer
+          .filter((z) => String(z.wohneinheit_id) === sel.wohneinheit_id)
+          .map((z) => z.id)
+      )
+    );
+  }, [sel.modus, sel.wohneinheit_id, zimmer]);
 
   const zimmerName = useMemo(() => {
     if (!vorgang) return "";
     const z = zimmer.find((x) => x.id === vorgang.zimmer_id);
     const g = z ? gebaeude.find((x) => x.id === z.gebaeude_id) : undefined;
-    return z ? `${g?.name ?? "?"} · Zimmer ${z.nummer}` : `Zimmer ${vorgang.zimmer_id}`;
+    return z ? `${g?.name ?? "?"} · ${z.nummer}` : `Zimmer ${vorgang.zimmer_id}`;
   }, [vorgang, zimmer, gebaeude]);
+
+  const durchgefuehrtVon =
+    (vorgang?.durchgefuehrt_von && namen[vorgang.durchgefuehrt_von]) ||
+    profile?.full_name ||
+    "—";
 
   function setPos(id: number, patch: Partial<PosEntwurf>) {
     setPosEntwurf((s) => ({ ...s, [id]: { ...s[id], ...patch } }));
     setDirty(true);
   }
 
-  async function starten() {
-    setFehler(null);
-    if (!sel.zimmer_id) {
-      setFehler("Bitte ein Zimmer wählen.");
-      return;
-    }
-    if (vorlage.length === 0) {
-      setFehler("Keine Checklisten-Bereiche angelegt – zuerst unter Stammdaten pflegen.");
-      return;
-    }
-    const supabase = getSupabaseClient();
-    const id = crypto.randomUUID();
-    const { data: vg, error } = await supabase
-      .from("unterkunft_vorgang")
-      .insert({
-        id,
-        zimmer_id: Number(sel.zimmer_id),
-        typ: "zwischenkontrolle",
-        durchgefuehrt_von: profile?.id ?? null,
-      })
-      .select("*")
-      .single();
-    if (error) {
-      setFehler(error.message);
-      return;
-    }
-    const { error: posError } = await supabase.from("unterkunft_vorgang_position").insert(
-      vorlage.map((v) => ({ vorgang_id: id, bereich: v.bereich, zustand: "io" as const }))
-    );
-    if (posError) {
-      setFehler(posError.message);
-      return;
-    }
-    await oeffnen(vg as UnterkunftVorgang);
-  }
-
-  async function oeffnen(vg: UnterkunftVorgang) {
-    setFehler(null);
-    setHinweis(null);
+  // Positionen eines Vorgangs laden. ladeKopf nur im Einzel-/Fortsetzen-Fall -
+  // in einer Mehr-Raum-Runde bleibt der Kopf über alle Räume gleich.
+  async function ladePositionen(vg: UnterkunftVorgang, ladeKopf: boolean) {
     const { data: pos } = await getSupabaseClient()
       .from("unterkunft_vorgang_position")
       .select("*")
@@ -173,13 +204,92 @@ export default function UnterkunftKontrollePage() {
         liste.map((p) => [p.id, { zustand: p.zustand, bemerkung: p.bemerkung ?? "" }])
       )
     );
-    setKopf({
-      gesamtzustand: vg.gesamtzustand ?? "",
-      notiz: vg.notiz ?? "",
-      unterschrift_name: vg.unterschrift_name ?? "",
-      zustand_bestaetigt: vg.zustand_bestaetigt,
-    });
+    if (ladeKopf) {
+      setKopf({
+        gesamtzustand: vg.gesamtzustand ?? "",
+        notiz: vg.notiz ?? "",
+        unterschrift_name:
+          vg.unterschrift_name ??
+          (vg.abgeschlossen ? "" : profile?.full_name ?? ""),
+        zustand_bestaetigt: vg.zustand_bestaetigt,
+      });
+    }
     setDirty(false);
+  }
+
+  async function starten() {
+    setFehler(null);
+    if (vorlage.length === 0) {
+      setFehler("Keine Checklisten-Bereiche angelegt – zuerst unter Stammdaten pflegen.");
+      return;
+    }
+    const zimmerIds =
+      sel.modus === "zimmer"
+        ? sel.zimmer_id
+          ? [Number(sel.zimmer_id)]
+          : []
+        : [...raumWahl];
+    if (zimmerIds.length === 0) {
+      setFehler(
+        sel.modus === "zimmer"
+          ? "Bitte ein Zimmer wählen."
+          : "Bitte eine Wohneinheit und mindestens einen Raum wählen."
+      );
+      return;
+    }
+    const supabase = getSupabaseClient();
+    const vorgaenge: UnterkunftVorgang[] = [];
+    for (const zid of zimmerIds) {
+      const id = crypto.randomUUID();
+      const { data: vg, error } = await supabase
+        .from("unterkunft_vorgang")
+        .insert({
+          id,
+          zimmer_id: zid,
+          typ: "zwischenkontrolle",
+          durchgefuehrt_von: profile?.id ?? null,
+        })
+        .select("*")
+        .single();
+      if (error) {
+        setFehler(error.message);
+        return;
+      }
+      const { error: posError } = await supabase
+        .from("unterkunft_vorgang_position")
+        .insert(
+          vorlage.map((v) => ({
+            vorgang_id: id,
+            bereich: v.bereich,
+            zustand: "io" as const,
+          }))
+        );
+      if (posError) {
+        setFehler(posError.message);
+        return;
+      }
+      vorgaenge.push(vg as UnterkunftVorgang);
+    }
+    setRunde(vorgaenge);
+    setRundeIdx(0);
+    setRundeAktiv(vorgaenge.length > 1);
+    setKopf({
+      gesamtzustand: "",
+      notiz: "",
+      unterschrift_name: profile?.full_name ?? "",
+      zustand_bestaetigt: false,
+    });
+    setHinweis(null);
+    await ladePositionen(vorgaenge[0], false);
+  }
+
+  async function fortsetzen(vg: UnterkunftVorgang) {
+    setFehler(null);
+    setHinweis(null);
+    setRunde([vg]);
+    setRundeIdx(0);
+    setRundeAktiv(false);
+    await ladePositionen(vg, true);
   }
 
   async function speichernAlle(): Promise<boolean> {
@@ -210,17 +320,11 @@ export default function UnterkunftKontrollePage() {
         .eq("id", vorgang.id);
       if (kopfError) throw new Error(kopfError.message);
 
-      const { data: frisch } = await supabase
-        .from("unterkunft_vorgang")
-        .select("*")
-        .eq("id", vorgang.id)
-        .single();
       const { data: pos } = await supabase
         .from("unterkunft_vorgang_position")
         .select("*")
         .eq("vorgang_id", vorgang.id)
         .order("id");
-      if (frisch) setVorgang(frisch as UnterkunftVorgang);
       setPositionen((pos as UnterkunftVorgangPosition[]) ?? positionen);
       setDirty(false);
       return true;
@@ -236,67 +340,135 @@ export default function UnterkunftKontrollePage() {
     }
   }
 
-  async function abschliessen() {
-    if (!vorgang) return;
-    const ok = await speichernAlle();
-    if (!ok) return;
+  // Einen Vorgang der Runde abschließen: Mängel übernehmen (VOR dem
+  // Schreibschutz), Kopf der Runde mitschreiben, abgeschlossen setzen.
+  async function vorgangAbschliessen(vg: UnterkunftVorgang): Promise<boolean> {
     const supabase = getSupabaseClient();
-
-    // Mängel VOR dem Abschließen übernehmen, damit die Bereichs-Fotos noch an
-    // den neuen Mangel gehängt werden können (danach ist der Vorgang gesperrt).
-    const maengelPos = positionen.filter(
-      (p) => posEntwurf[p.id]?.zustand === "mangel"
-    );
-    if (
-      maengelPos.length > 0 &&
-      window.confirm(
-        `${maengelPos.length} Position(en) mit „Mangel“ – als offene Mängel für dieses Zimmer anlegen?`
-      )
-    ) {
-      for (const p of maengelPos) {
-        const { data: mg, error: mErr } = await supabase
-          .from("unterkunft_mangel")
-          .insert({
-            zimmer_id: vorgang.zimmer_id,
-            quelle_vorgang_id: vorgang.id,
-            beschreibung: `${p.bereich}: ${
-              posEntwurf[p.id]?.bemerkung?.trim() || "Mangel bei Zwischenkontrolle"
-            }`,
-            schwere: "mittel" as const,
-          })
-          .select("id")
-          .single();
-        if (mErr) {
-          setFehler(`Mangel „${p.bereich}“ nicht angelegt: ${mErr.message}`);
-          continue;
-        }
-        await supabase
-          .from("unterkunft_foto")
-          .update({ mangel_id: (mg as { id: number }).id })
-          .eq("vorgang_id", vorgang.id)
-          .eq("bereich", p.bereich)
-          .is("mangel_id", null);
-      }
+    // Ist es der gerade offene Raum: erst dessen Eingaben persistieren.
+    if (vorgang?.id === vg.id) {
+      const ok = await speichernAlle();
+      if (!ok) return false;
     }
-
+    const { data: pos } = await supabase
+      .from("unterkunft_vorgang_position")
+      .select("*")
+      .eq("vorgang_id", vg.id);
+    const maengelPos = ((pos as UnterkunftVorgangPosition[]) ?? []).filter(
+      (p) => p.zustand === "mangel"
+    );
+    for (const p of maengelPos) {
+      const { data: mg, error: mErr } = await supabase
+        .from("unterkunft_mangel")
+        .insert({
+          zimmer_id: vg.zimmer_id,
+          quelle_vorgang_id: vg.id,
+          beschreibung: `${p.bereich}: ${
+            p.bemerkung?.trim() || "Mangel bei Zwischenkontrolle"
+          }`,
+          schwere: "mittel" as const,
+        })
+        .select("id")
+        .single();
+      if (mErr) {
+        setFehler(`Mangel „${p.bereich}“ nicht angelegt: ${mErr.message}`);
+        continue;
+      }
+      await supabase
+        .from("unterkunft_foto")
+        .update({ mangel_id: (mg as { id: number }).id })
+        .eq("vorgang_id", vg.id)
+        .eq("bereich", p.bereich)
+        .is("mangel_id", null);
+    }
     const { error } = await supabase
       .from("unterkunft_vorgang")
-      .update({ abgeschlossen: true, abgeschlossen_am: new Date().toISOString() })
-      .eq("id", vorgang.id);
+      .update({
+        gesamtzustand: kopf.gesamtzustand || null,
+        notiz: kopf.notiz.trim() || null,
+        unterschrift_name: kopf.unterschrift_name.trim() || null,
+        zustand_bestaetigt: kopf.zustand_bestaetigt,
+        abgeschlossen: true,
+        abgeschlossen_am: new Date().toISOString(),
+        updated_by: profile?.id ?? null,
+      })
+      .eq("id", vg.id);
     if (error) {
       setFehler(error.message);
-      return;
+      return false;
     }
+    setRunde((prev) =>
+      prev.map((v) => (v.id === vg.id ? { ...v, abgeschlossen: true } : v))
+    );
+    return true;
+  }
 
-    setHinweis("Zwischenkontrolle abgeschlossen.");
-    setDirty(false);
+  function fertig() {
+    setHinweis(
+      runde.length > 1
+        ? `${runde.length} Räume kontrolliert.`
+        : "Zwischenkontrolle abgeschlossen."
+    );
+    setRunde([]);
+    setRundeIdx(0);
+    setRundeAktiv(false);
     setVorgang(null);
     setPositionen([]);
-    await laden();
+    setDirty(false);
+    laden();
+  }
+
+  async function zuRaum(idx: number) {
+    if (idx === rundeIdx || idx < 0 || idx >= runde.length) return;
+    if (vorgang && !vorgang.abgeschlossen) {
+      const ok = await speichernAlle();
+      if (!ok) return;
+    }
+    setRundeIdx(idx);
+    await ladePositionen(runde[idx], !rundeAktiv);
+  }
+
+  async function raumAbschliessen() {
+    if (!vorgang) return;
+    if (!kopf.unterschrift_name.trim()) {
+      setFehler("Bitte „Kontrolliert von“ ausfüllen.");
+      return;
+    }
+    const ok = await vorgangAbschliessen(vorgang);
+    if (!ok) return;
+    if (rundeIdx < runde.length - 1) {
+      const next = rundeIdx + 1;
+      setRundeIdx(next);
+      await ladePositionen(runde[next], false);
+    } else {
+      fertig();
+    }
+  }
+
+  async function alleAbschliessen() {
+    if (!kopf.unterschrift_name.trim()) {
+      setFehler("Bitte „Kontrolliert von“ ausfüllen.");
+      return;
+    }
+    setSpeichern(true);
+    for (const vg of runde) {
+      if (vg.abgeschlossen) continue;
+      const ok = await vorgangAbschliessen(vg);
+      if (!ok) {
+        setSpeichern(false);
+        return;
+      }
+    }
+    setSpeichern(false);
+    fertig();
   }
 
   function abbrechen() {
     if (dirty && !window.confirm("Nicht gespeicherte Eingaben verwerfen?")) return;
+    // Angefangene Vorgänge bleiben als „offen“ im Verlauf und lassen sich
+    // später fortsetzen.
+    setRunde([]);
+    setRundeIdx(0);
+    setRundeAktiv(false);
     setVorgang(null);
     setPositionen([]);
     setDirty(false);
@@ -317,6 +489,7 @@ export default function UnterkunftKontrollePage() {
   }
 
   const abgeschlossen = vorgang?.abgeschlossen ?? false;
+  const raumStatus = runde.map((v) => v.abgeschlossen);
 
   return (
     <div className="space-y-6">
@@ -333,9 +506,9 @@ export default function UnterkunftKontrollePage() {
         </p>
       )}
 
-      {!vorgang && (
+      {runde.length === 0 && (
         <>
-          <section className="space-y-2 rounded border border-neutral-200 p-3">
+          <section className="space-y-3 rounded border border-neutral-200 p-3">
             <h1 className="text-lg font-semibold text-emerald-900">
               Zwischenkontrolle starten
             </h1>
@@ -346,7 +519,12 @@ export default function UnterkunftKontrollePage() {
                   className="ml-2"
                   value={sel.gebaeude_id}
                   onChange={(e) =>
-                    setSel({ gebaeude_id: e.target.value, zimmer_id: "" })
+                    setSel((s) => ({
+                      ...s,
+                      gebaeude_id: e.target.value,
+                      zimmer_id: "",
+                      wohneinheit_id: "",
+                    }))
                   }
                 >
                   <option value="">–</option>
@@ -358,27 +536,108 @@ export default function UnterkunftKontrollePage() {
                 </select>
               </label>
               <label>
-                Zimmer
+                Umfang
                 <select
                   className="ml-2"
-                  value={sel.zimmer_id}
-                  disabled={!sel.gebaeude_id}
+                  value={sel.modus}
                   onChange={(e) =>
-                    setSel((s) => ({ ...s, zimmer_id: e.target.value }))
+                    setSel((s) => ({
+                      ...s,
+                      modus: e.target.value as "zimmer" | "wohneinheit",
+                      zimmer_id: "",
+                      wohneinheit_id: "",
+                    }))
                   }
                 >
-                  <option value="">–</option>
-                  {zimmerDesGebaeudes.map((z) => (
-                    <option key={z.id} value={z.id}>
-                      {z.nummer}
-                    </option>
-                  ))}
+                  <option value="zimmer">Einzelnes Zimmer</option>
+                  <option value="wohneinheit">Ganze Wohneinheit</option>
                 </select>
               </label>
+
+              {sel.modus === "zimmer" ? (
+                <label>
+                  Zimmer
+                  <select
+                    className="ml-2"
+                    value={sel.zimmer_id}
+                    disabled={!sel.gebaeude_id}
+                    onChange={(e) =>
+                      setSel((s) => ({ ...s, zimmer_id: e.target.value }))
+                    }
+                  >
+                    <option value="">–</option>
+                    {zimmerDesGebaeudes.map((z) => (
+                      <option key={z.id} value={z.id}>
+                        {z.nummer}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              ) : (
+                <label>
+                  Wohneinheit
+                  <select
+                    className="ml-2"
+                    value={sel.wohneinheit_id}
+                    disabled={!sel.gebaeude_id}
+                    onChange={(e) =>
+                      setSel((s) => ({ ...s, wohneinheit_id: e.target.value }))
+                    }
+                  >
+                    <option value="">–</option>
+                    {wohneinheitenDesGebaeudes.map((w) => (
+                      <option key={w.id} value={w.id}>
+                        {w.name}
+                        {w.etage_label ? ` · ${w.etage_label}` : ""}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              )}
+
               <button className="btn" onClick={starten}>
                 Kontrolle starten
               </button>
             </div>
+
+            {sel.modus === "wohneinheit" && sel.wohneinheit_id && (
+              <div className="rounded border border-neutral-200 bg-neutral-50 p-2">
+                <div className="text-sm font-medium">
+                  Räume ({raumWahl.size} von {raeumeDerEinheit.length})
+                </div>
+                <div className="mt-1 flex flex-wrap gap-x-4 gap-y-1">
+                  {raeumeDerEinheit.map((z) => (
+                    <label
+                      key={z.id}
+                      className="flex cursor-pointer items-center gap-1.5 text-sm"
+                    >
+                      <input
+                        type="checkbox"
+                        checked={raumWahl.has(z.id)}
+                        onChange={() =>
+                          setRaumWahl((s) => {
+                            const n = new Set(s);
+                            if (n.has(z.id)) n.delete(z.id);
+                            else n.add(z.id);
+                            return n;
+                          })
+                        }
+                      />
+                      {z.nummer}
+                    </label>
+                  ))}
+                  {raeumeDerEinheit.length === 0 && (
+                    <span className="text-sm text-neutral-400">
+                      keine Räume in dieser Wohneinheit
+                    </span>
+                  )}
+                </div>
+                <p className="mt-1 text-xs text-neutral-500">
+                  Pro Raum wird ein eigener Kontroll-Vorgang angelegt; du wirst
+                  danach Raum für Raum durchgeführt.
+                </p>
+              </div>
+            )}
           </section>
 
           <section className="space-y-2">
@@ -421,7 +680,7 @@ export default function UnterkunftKontrollePage() {
                         {!v.storniert && (
                           <button
                             className="btn-secondary"
-                            onClick={() => oeffnen(v)}
+                            onClick={() => fortsetzen(v)}
                           >
                             {v.abgeschlossen ? "Ansehen" : "Fortsetzen"}
                           </button>
@@ -454,11 +713,59 @@ export default function UnterkunftKontrollePage() {
                 {formatDatumDE(vorgang.durchgefuehrt_am)}
                 {abgeschlossen && " · abgeschlossen (schreibgeschützt)"}
               </p>
+              <p className="text-sm text-neutral-500">
+                Durchgeführt von: {durchgefuehrtVon}
+              </p>
             </div>
             <button className="btn-secondary" onClick={abbrechen}>
               {abgeschlossen ? "Schließen" : "Zurück"}
             </button>
           </div>
+
+          {runde.length > 1 && (
+            <div className="flex flex-wrap items-center gap-2 rounded border border-emerald-200 bg-emerald-50 p-2 text-sm">
+              <span className="font-medium">
+                Raum {rundeIdx + 1} von {runde.length}
+              </span>
+              <div className="flex flex-wrap gap-1">
+                {runde.map((v, i) => {
+                  const z = zimmer.find((x) => x.id === v.zimmer_id);
+                  return (
+                    <button
+                      key={v.id}
+                      onClick={() => zuRaum(i)}
+                      className={`rounded border px-2 py-0.5 text-xs ${
+                        i === rundeIdx
+                          ? "border-emerald-700 bg-emerald-700 font-semibold text-white"
+                          : raumStatus[i]
+                            ? "border-emerald-300 bg-white text-emerald-700"
+                            : "border-neutral-300 bg-white text-neutral-600"
+                      }`}
+                    >
+                      {raumStatus[i] ? "✓ " : ""}
+                      {z?.nummer ?? v.zimmer_id}
+                    </button>
+                  );
+                })}
+              </div>
+              <div className="ml-auto flex gap-1">
+                <button
+                  className="btn-secondary"
+                  disabled={rundeIdx === 0}
+                  onClick={() => zuRaum(rundeIdx - 1)}
+                >
+                  ‹
+                </button>
+                <button
+                  className="btn-secondary"
+                  disabled={rundeIdx === runde.length - 1}
+                  onClick={() => zuRaum(rundeIdx + 1)}
+                >
+                  ›
+                </button>
+              </div>
+            </div>
+          )}
 
           <div className="space-y-4">
             {positionen.map((p) => {
@@ -508,6 +815,12 @@ export default function UnterkunftKontrollePage() {
           </div>
 
           <div className="space-y-3 rounded border border-neutral-200 p-3">
+            {runde.length > 1 && (
+              <p className="text-xs text-neutral-500">
+                Gesamtzustand, „Kontrolliert von“ und Notiz gelten für alle Räume
+                dieser Runde.
+              </p>
+            )}
             <div className="flex flex-wrap items-end gap-3 text-sm">
               <label>
                 Gesamtzustand
@@ -579,15 +892,46 @@ export default function UnterkunftKontrollePage() {
               >
                 {speichern ? "Speichert …" : "Zwischenspeichern"}
               </button>
-              <button className="btn" onClick={abschliessen} disabled={speichern}>
-                Abschließen
-              </button>
+              {runde.length > 1 ? (
+                <>
+                  <button
+                    className="btn"
+                    onClick={raumAbschliessen}
+                    disabled={speichern}
+                  >
+                    {rundeIdx < runde.length - 1
+                      ? "Raum abschließen & weiter"
+                      : "Letzten Raum abschließen"}
+                  </button>
+                  <button
+                    className="btn-secondary"
+                    onClick={alleAbschliessen}
+                    disabled={speichern}
+                  >
+                    Alle übrigen abschließen
+                  </button>
+                </>
+              ) : (
+                <button
+                  className="btn"
+                  onClick={raumAbschliessen}
+                  disabled={speichern}
+                >
+                  Abschließen
+                </button>
+              )}
               {dirty && (
                 <span className="self-center text-xs text-amber-700">
                   nicht gespeicherte Änderungen
                 </span>
               )}
             </div>
+          )}
+
+          {abgeschlossen && runde.length > 1 && rundeIdx < runde.length - 1 && (
+            <button className="btn" onClick={() => zuRaum(rundeIdx + 1)}>
+              Weiter zum nächsten Raum
+            </button>
           )}
         </div>
       )}
