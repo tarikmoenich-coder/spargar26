@@ -1554,6 +1554,35 @@ export interface UnterkunftMangel {
   updated_at: string;
 }
 
+// Belastung aus einer Reparatur (Migration 2026-09-14). status 'offen' =
+// Vorschlag; 'bestaetigt' = als Vorschuss (Strafe/Rechnung) gebucht und vom
+// Lohn abgezogen; 'abgelehnt' = verworfen.
+export type UnterkunftBelastungStatus = "offen" | "bestaetigt" | "abgelehnt";
+
+export const UNTERKUNFT_BELASTUNG_STATUS_LABELS: Record<
+  UnterkunftBelastungStatus,
+  string
+> = {
+  offen: "Vorschlag",
+  bestaetigt: "als Vorschuss gebucht",
+  abgelehnt: "abgelehnt",
+};
+
+export interface UnterkunftBelastung {
+  id: number;
+  mangel_id: number;
+  employee_id: string;
+  betrag: number;
+  status: UnterkunftBelastungStatus;
+  advance_id: number | null;
+  notiz: string | null;
+  erstellt_von: string | null;
+  erstellt_am: string;
+  bestaetigt_von: string | null;
+  bestaetigt_am: string | null;
+  updated_at: string;
+}
+
 export interface UnterkunftFoto {
   id: number;
   vorgang_id: string | null;

@@ -5229,6 +5229,46 @@ create table unterkunft_foto (
 create index idx_unterkunft_foto_vorgang on unterkunft_foto (vorgang_id);
 create index idx_unterkunft_foto_mangel on unterkunft_foto (mangel_id);
 
+-- Belastung aus einer Reparatur (Migration 2026-09-14): anteilige Kosten je
+-- verschuldendem Bewohner. 'offen' = Vorschlag; bei 'bestaetigt' auf der
+-- Vorschüsse-Seite entsteht ein Vorschuss (advances, art 'Strafe/Rechnung')
+-- und advance_id wird gesetzt - erst dann wird der Betrag vom Lohn abgezogen.
+create table unterkunft_belastung (
+  id bigint generated always as identity primary key,
+  mangel_id bigint not null references unterkunft_mangel (id) on delete cascade,
+  employee_id uuid not null references employees (id) on delete restrict,
+  betrag numeric(10, 2) not null check (betrag > 0),
+  status text not null default 'offen'
+    check (status in ('offen', 'bestaetigt', 'abgelehnt')),
+  advance_id bigint references advances (id) on delete set null,
+  notiz text,
+  erstellt_von uuid references profiles (id) default auth.uid(),
+  erstellt_am timestamptz not null default now(),
+  bestaetigt_von uuid references profiles (id),
+  bestaetigt_am timestamptz,
+  updated_at timestamptz not null default now(),
+  unique (mangel_id, employee_id)
+);
+create index idx_unterkunft_belastung_mangel on unterkunft_belastung (mangel_id);
+create index idx_unterkunft_belastung_status on unterkunft_belastung (status);
+create trigger trg_unterkunft_belastung_updated_at before update on unterkunft_belastung
+  for each row execute function set_updated_at();
+alter table unterkunft_belastung enable row level security;
+create policy "unterkunft_belastung_select" on unterkunft_belastung for select
+  using (
+    current_role_name() in (
+      'admin', 'hr', 'hausmeister', 'kasse', 'lohnabrechnung',
+      'pruefer', 'management'
+    )
+  );
+create policy "unterkunft_belastung_insert" on unterkunft_belastung for insert
+  with check (current_role_name() in ('admin', 'hr', 'hausmeister'));
+create policy "unterkunft_belastung_delete" on unterkunft_belastung for delete
+  using (current_role_name() in ('admin', 'hr', 'hausmeister'));
+create policy "unterkunft_belastung_update" on unterkunft_belastung for update
+  using (current_role_name() in ('admin', 'hr', 'kasse'))
+  with check (current_role_name() in ('admin', 'hr', 'kasse'));
+
 -- Append-only für abgeschlossene Vorgänge (Storno nur admin, ADR-011).
 create or replace function unterkunft_vorgang_schutz()
 returns trigger language plpgsql as $$

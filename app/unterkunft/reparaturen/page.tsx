@@ -14,9 +14,11 @@ import FotoAufnahme from "@/components/FotoAufnahme";
 import { formatDatumDE } from "@/lib/format";
 import { raumName } from "@/lib/unterkunft";
 import {
+  UNTERKUNFT_BELASTUNG_STATUS_LABELS,
   UNTERKUNFT_MANGEL_SCHWERE_LABELS,
   UNTERKUNFT_MANGEL_VERURSACHUNG_LABELS,
   UNTERKUNFT_REPARATUR_STATUS_LABELS,
+  type UnterkunftBelastung,
   type UnterkunftBelegungPerson,
   type UnterkunftGebaeude,
   type UnterkunftMangel,
@@ -51,6 +53,7 @@ export default function UnterkunftReparaturenPage() {
   const [reparaturen, setReparaturen] = useState<UnterkunftMangel[]>([]);
   const [belegungen, setBelegungen] = useState<UnterkunftBelegungPerson[]>([]);
   const [employees, setEmployees] = useState<EmployeeMini[]>([]);
+  const [belastungen, setBelastungen] = useState<UnterkunftBelastung[]>([]);
   const [loading, setLoading] = useState(true);
   const [fehler, setFehler] = useState<string | null>(null);
   // freie Mitarbeitersuche je Reparatur (mangel-id -> Suchtext)
@@ -73,7 +76,7 @@ export default function UnterkunftReparaturenPage() {
   const laden = useCallback(async () => {
     setLoading(true);
     const supabase = getSupabaseClient();
-    const [g, z, m, bp, e] = await Promise.all([
+    const [g, z, m, bp, e, bl] = await Promise.all([
       supabase.from("unterkunft_gebaeude").select("*").order("name"),
       supabase.from("unterkunft_zimmer").select("*").order("nummer"),
       supabase
@@ -89,12 +92,14 @@ export default function UnterkunftReparaturenPage() {
         .from("employees")
         .select("id, personal_nr, name, vorname")
         .order("name"),
+      supabase.from("unterkunft_belastung").select("*"),
     ]);
     setGebaeude((g.data as UnterkunftGebaeude[]) ?? []);
     setZimmer((z.data as UnterkunftZimmer[]) ?? []);
     setReparaturen((m.data as UnterkunftMangel[]) ?? []);
     setBelegungen((bp.data as UnterkunftBelegungPerson[]) ?? []);
     setEmployees((e.data as EmployeeMini[]) ?? []);
+    setBelastungen((bl.data as UnterkunftBelastung[]) ?? []);
     setLoading(false);
   }, []);
 
@@ -198,6 +203,78 @@ export default function UnterkunftReparaturenPage() {
       });
     return Object.entries(map).sort((a, b) => b[1] - a[1]);
   }, [reparaturen]);
+
+  const belastungProMangel = useMemo(() => {
+    const map: Record<number, UnterkunftBelastung[]> = {};
+    belastungen.forEach((b) => {
+      (map[b.mangel_id] ??= []).push(b);
+    });
+    return map;
+  }, [belastungen]);
+
+  // Belastungs-Vorschlag je Verursacher erzeugen. Kosten cent-genau
+  // gleichmäßig aufgeteilt (Rest auf die ersten Personen). Bereits gebuchte
+  // Personen (status 'bestaetigt') bleiben unangetastet.
+  async function belastungErstellen(m: UnterkunftMangel) {
+    setFehler(null);
+    const vids = m.verursacher_employee_ids ?? [];
+    if (vids.length === 0 || !m.kosten_geschaetzt || m.kosten_geschaetzt <= 0) {
+      setFehler("Bitte Verursacher wählen und geschätzte Kosten eintragen.");
+      return;
+    }
+    const sb = getSupabaseClient();
+    const { error: delErr } = await sb
+      .from("unterkunft_belastung")
+      .delete()
+      .eq("mangel_id", m.id)
+      .neq("status", "bestaetigt");
+    if (delErr) {
+      setFehler(delErr.message);
+      return;
+    }
+    const gebucht = new Set(
+      (belastungProMangel[m.id] ?? [])
+        .filter((b) => b.status === "bestaetigt")
+        .map((b) => b.employee_id)
+    );
+    const cent = Math.round(m.kosten_geschaetzt * 100);
+    const n = vids.length;
+    const basis = Math.floor(cent / n);
+    const rest = cent - basis * n;
+    const rows = vids
+      .map((id, i) => ({
+        mangel_id: m.id,
+        employee_id: id,
+        betrag: (basis + (i < rest ? 1 : 0)) / 100,
+      }))
+      .filter((r) => !gebucht.has(r.employee_id) && r.betrag > 0);
+    if (rows.length === 0) {
+      setFehler(
+        "Kein Betrag zu verteilen (bereits gebucht oder Kosten zu gering)."
+      );
+      return;
+    }
+    const { error } = await sb.from("unterkunft_belastung").insert(rows);
+    if (error) {
+      setFehler(error.message);
+      return;
+    }
+    await laden();
+  }
+
+  async function belastungVerwerfen(mangelId: number) {
+    setFehler(null);
+    const { error } = await getSupabaseClient()
+      .from("unterkunft_belastung")
+      .delete()
+      .eq("mangel_id", mangelId)
+      .eq("status", "offen");
+    if (error) {
+      setFehler(error.message);
+      return;
+    }
+    await laden();
+  }
 
   async function anlegen() {
     setFehler(null);
@@ -746,6 +823,95 @@ export default function UnterkunftReparaturenPage() {
                               </span>
                             )}
                           </label>
+
+                          {(() => {
+                            const bl = belastungProMangel[m.id] ?? [];
+                            return (
+                              <div className="border-t border-red-200 pt-2">
+                                {bl.length === 0 ? (
+                                  <div className="flex flex-wrap items-center gap-2">
+                                    <span className="text-neutral-500">
+                                      noch keine Belastung erstellt
+                                    </span>
+                                    {canEdit && (
+                                      <button
+                                        className="btn-secondary"
+                                        onClick={() => belastungErstellen(m)}
+                                      >
+                                        Belastung erstellen
+                                      </button>
+                                    )}
+                                  </div>
+                                ) : (
+                                  <div className="space-y-1">
+                                    <div className="font-medium text-red-900">
+                                      Belastung
+                                    </div>
+                                    <ul className="space-y-0.5">
+                                      {bl.map((b) => (
+                                        <li
+                                          key={b.id}
+                                          className="flex flex-wrap items-center gap-2"
+                                        >
+                                          <span>{personName(b.employee_id)}</span>
+                                          <span className="font-medium tabular-nums">
+                                            {b.betrag.toFixed(2)} €
+                                          </span>
+                                          <span
+                                            className={`rounded px-1.5 py-0.5 text-xs ${
+                                              b.status === "bestaetigt"
+                                                ? "bg-emerald-100 text-emerald-800"
+                                                : b.status === "abgelehnt"
+                                                  ? "bg-neutral-200 text-neutral-600"
+                                                  : "bg-amber-100 text-amber-800"
+                                            }`}
+                                          >
+                                            {
+                                              UNTERKUNFT_BELASTUNG_STATUS_LABELS[
+                                                b.status
+                                              ]
+                                            }
+                                          </span>
+                                        </li>
+                                      ))}
+                                    </ul>
+                                    {bl.some((b) => b.status === "offen") && (
+                                      <p className="text-xs text-neutral-500">
+                                        Bestätigung unter{" "}
+                                        <a
+                                          href="/vorschuesse"
+                                          className="text-emerald-700 underline"
+                                        >
+                                          Vorschüsse
+                                        </a>
+                                        {" "}– erst dann wird abgezogen.
+                                      </p>
+                                    )}
+                                    {canEdit && (
+                                      <div className="flex gap-2">
+                                        <button
+                                          className="btn-secondary"
+                                          onClick={() => belastungErstellen(m)}
+                                        >
+                                          neu erstellen
+                                        </button>
+                                        {bl.some((b) => b.status === "offen") && (
+                                          <button
+                                            className="text-xs text-red-600 hover:underline"
+                                            onClick={() =>
+                                              belastungVerwerfen(m.id)
+                                            }
+                                          >
+                                            Vorschlag verwerfen
+                                          </button>
+                                        )}
+                                      </div>
+                                    )}
+                                  </div>
+                                )}
+                              </div>
+                            );
+                          })()}
                         </div>
                       )}
 

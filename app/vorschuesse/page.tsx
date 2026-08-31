@@ -56,6 +56,22 @@ interface Beleg {
 
 const VORSCHUSS_BUCKET = "vorschuss-belege";
 
+interface BelastungOffen {
+  id: number;
+  betrag: number;
+  employee_id: string;
+  mangel_id: number;
+  employees: { vorname: string; name: string; personal_nr: string } | null;
+  unterkunft_mangel: {
+    beschreibung: string;
+    unterkunft_zimmer: {
+      nummer: string;
+      art: string;
+      unterkunft_gebaeude: { name: string } | null;
+    } | null;
+  } | null;
+}
+
 export default function VorschuessePage() {
   const { profile } = useProfile();
   const [advances, setAdvances] = useState<Advance[]>([]);
@@ -95,6 +111,11 @@ export default function VorschuessePage() {
 
   const [letzterBeleg, setLetzterBeleg] = useState<Beleg | null>(null);
   const [druckBeleg, setDruckBeleg] = useState<Beleg | null>(null);
+
+  // Offene Belastungs-Vorschläge aus dem Reparaturen-Board (Unterkunft-Modul).
+  // Erst nach Bestätigung hier entsteht ein Vorschuss (Strafe/Rechnung).
+  const [belastungOffen, setBelastungOffen] = useState<BelastungOffen[]>([]);
+  const [belastungLaeuft, setBelastungLaeuft] = useState<number | null>(null);
 
   // SEPA-Überweisungsdatei (Nutzer-Vorgabe 2026-08-25): Auftraggeber-Konto
   // kommt aus den Einstellungen (firmen_bankdaten), Zahlungsdatum ist frei
@@ -160,7 +181,21 @@ export default function VorschuessePage() {
     setGruppen((gr as Arbeitsgruppe[]) ?? []);
     setHerkuenfte((hk as Herkunft[]) ?? []);
     setFirmenBankdaten((bankdaten as FirmenBankdaten) ?? null);
+    await ladeBelastungen();
     setLoading(false);
+  }
+
+  async function ladeBelastungen() {
+    const { data } = await getSupabaseClient()
+      .from("unterkunft_belastung")
+      .select(
+        "id, betrag, employee_id, mangel_id, " +
+          "employees(vorname, name, personal_nr), " +
+          "unterkunft_mangel(beschreibung, unterkunft_zimmer(nummer, art, unterkunft_gebaeude(name)))"
+      )
+      .eq("status", "offen")
+      .order("erstellt_am", { ascending: true });
+    setBelastungOffen((data as unknown as BelastungOffen[]) ?? []);
   }
 
   useEffect(() => {
@@ -324,6 +359,102 @@ export default function VorschuessePage() {
     if (monatFilter !== "alle" && d.getMonth() + 1 !== monatFilter) return false;
     return true;
   });
+
+  // --- Belastungen aus Reparaturen ---------------------------------------
+  function belastungLabel(b: BelastungOffen) {
+    const z = b.unterkunft_mangel?.unterkunft_zimmer;
+    const geb = z?.unterkunft_gebaeude?.name ?? "?";
+    const raum =
+      z == null
+        ? "Zimmer ?"
+        : z.art === "zimmer"
+          ? `Zimmer ${z.nummer}`
+          : z.nummer;
+    return `${geb} · ${raum}: ${b.unterkunft_mangel?.beschreibung ?? "Reparatur"}`;
+  }
+
+  async function belastungBestaetigen(b: BelastungOffen) {
+    setBelastungLaeuft(b.id);
+    setError(null);
+    const supabase = getSupabaseClient();
+    const { data: belegnummer, error: belegError } = await supabase.rpc(
+      "naechste_belegnummer",
+      { prefix_monat: monatsSchluessel(new Date()) }
+    );
+    if (belegError) {
+      setError(belegError.message);
+      setBelastungLaeuft(null);
+      return;
+    }
+    const person = b.employees
+      ? `${b.employees.name}, ${b.employees.vorname}`
+      : "";
+    const { data: inserted, error: insErr } = await supabase
+      .from("advances")
+      .insert({
+        belegnummer,
+        betrag: b.betrag,
+        empfaenger_text: person,
+        begruendung: `Reparatur-Belastung – ${belastungLabel(
+          b
+        )} (Nachweis: Unterkunft-Modul)`,
+        zahlungsart: "N/A",
+        art: "Strafe/Rechnung",
+      })
+      .select()
+      .single();
+    if (insErr) {
+      setError(insErr.message);
+      setBelastungLaeuft(null);
+      return;
+    }
+    const { error: recErr } = await supabase
+      .from("advance_recipients")
+      .insert({
+        advance_id: inserted.id,
+        employee_id: b.employee_id,
+        anteil: b.betrag,
+      });
+    if (recErr) {
+      setError(recErr.message);
+      setBelastungLaeuft(null);
+      return;
+    }
+    const { error: updErr } = await supabase
+      .from("unterkunft_belastung")
+      .update({
+        status: "bestaetigt",
+        advance_id: inserted.id,
+        bestaetigt_von: profile?.id ?? null,
+        bestaetigt_am: new Date().toISOString(),
+      })
+      .eq("id", b.id);
+    if (updErr) {
+      setError(
+        `Vorschuss gebucht, aber Belastung nicht als bestätigt markiert: ${updErr.message}`
+      );
+    }
+    setBelastungLaeuft(null);
+    await load();
+  }
+
+  async function belastungAblehnen(b: BelastungOffen) {
+    if (!window.confirm("Diese Belastung ablehnen? Es entsteht kein Vorschuss."))
+      return;
+    setBelastungLaeuft(b.id);
+    setError(null);
+    const { error: e } = await getSupabaseClient()
+      .from("unterkunft_belastung")
+      .update({
+        status: "abgelehnt",
+        bestaetigt_von: profile?.id ?? null,
+        bestaetigt_am: new Date().toISOString(),
+      })
+      .eq("id", b.id);
+    if (e) setError(e.message);
+    setBelastungLaeuft(null);
+    await ladeBelastungen();
+  }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -674,6 +805,60 @@ export default function VorschuessePage() {
           Belegnummer und Historie bleiben nachvollziehbar.
         </p>
       </div>
+
+      {canSeeDetails && belastungOffen.length > 0 && (
+        <section className="rounded border border-amber-300 bg-amber-50 p-4 print:hidden">
+          <h2 className="font-semibold text-amber-900">
+            Belastungen aus Reparaturen – zur Bestätigung ({belastungOffen.length})
+          </h2>
+          <p className="mt-0.5 text-sm text-amber-800">
+            Anteilige Reparaturkosten (vom Bewohner verschuldet). Erst mit
+            „Bestätigen" entsteht ein Vorschuss (Strafe/Rechnung) und der Betrag
+            wird vom Lohn abgezogen.
+          </p>
+          <ul className="mt-2 divide-y divide-amber-200">
+            {belastungOffen.map((b) => (
+              <li
+                key={b.id}
+                className="flex flex-wrap items-center gap-x-3 gap-y-1 py-2 text-sm"
+              >
+                <span className="font-medium">
+                  {b.employees
+                    ? `${b.employees.vorname} ${b.employees.name}`
+                    : b.employee_id}
+                </span>
+                <span className="font-semibold tabular-nums text-red-700">
+                  {b.betrag.toFixed(2)} €
+                </span>
+                <span className="text-neutral-600">{belastungLabel(b)}</span>
+                {canWrite && (
+                  <span className="ml-auto flex gap-2">
+                    <button
+                      className="btn"
+                      disabled={belastungLaeuft === b.id}
+                      onClick={() => belastungBestaetigen(b)}
+                    >
+                      {belastungLaeuft === b.id ? "…" : "Bestätigen"}
+                    </button>
+                    <button
+                      className="btn-secondary"
+                      disabled={belastungLaeuft === b.id}
+                      onClick={() => belastungAblehnen(b)}
+                    >
+                      Ablehnen
+                    </button>
+                  </span>
+                )}
+              </li>
+            ))}
+          </ul>
+          {!canWrite && (
+            <p className="mt-2 text-xs text-amber-700">
+              Bestätigen kann nur admin / kasse.
+            </p>
+          )}
+        </section>
+      )}
 
       {canWrite && (
         <form
