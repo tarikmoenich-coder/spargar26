@@ -81,7 +81,13 @@ export default function UnterkunftUebergabePage() {
     notiz: "",
     unterschrift_name: "",
     zustand_bestaetigt: false,
+    // Schlüssel: bei Einzug herausgegeben, bei Auszug zurückgegeben.
+    schluessel_ausgegeben: 0,
+    schluessel_zurueck: 0,
   });
+  // Auszug: wie viele Schlüssel bei der letzten Einzugs-Übergabe dieses
+  // Zimmers herausgegeben wurden (null = keine Einzugs-Übergabe gefunden).
+  const [einzugSchluessel, setEinzugSchluessel] = useState<number | null>(null);
   const [dirty, setDirty] = useState(false);
   const [speichern, setSpeichern] = useState(false);
 
@@ -276,8 +282,37 @@ export default function UnterkunftUebergabePage() {
         vg.unterschrift_name ??
         (vg.abgeschlossen ? "" : profile?.full_name ?? ""),
       zustand_bestaetigt: vg.zustand_bestaetigt,
+      schluessel_ausgegeben: vg.schluessel_ausgegeben ?? 0,
+      schluessel_zurueck: vg.schluessel_zurueck ?? 0,
     });
     setDirty(false);
+
+    // Beim Auszug: herausgegebene Schlüssel aus der letzten abgeschlossenen
+    // Einzugs-Übergabe dieses Zimmers nachschlagen.
+    if (vg.typ === "auszug") {
+      const { data: ez } = await getSupabaseClient()
+        .from("unterkunft_vorgang")
+        .select("schluessel_ausgegeben")
+        .eq("zimmer_id", vg.zimmer_id)
+        .eq("typ", "einzug")
+        .eq("abgeschlossen", true)
+        .order("abgeschlossen_am", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      const n = (ez as { schluessel_ausgegeben: number | null } | null)
+        ?.schluessel_ausgegeben;
+      setEinzugSchluessel(typeof n === "number" ? n : null);
+      // Rückgabe-Feld sinnvoll vorbelegen, wenn noch nichts erfasst wurde.
+      if (
+        !vg.abgeschlossen &&
+        vg.schluessel_zurueck == null &&
+        typeof n === "number"
+      ) {
+        setKopf((s) => ({ ...s, schluessel_zurueck: n }));
+      }
+    } else {
+      setEinzugSchluessel(null);
+    }
   }
 
   async function speichernAlle(): Promise<boolean> {
@@ -305,6 +340,12 @@ export default function UnterkunftUebergabePage() {
           notiz: kopf.notiz.trim() || null,
           unterschrift_name: kopf.unterschrift_name.trim() || null,
           zustand_bestaetigt: kopf.zustand_bestaetigt,
+          ...(vorgang.typ === "einzug"
+            ? { schluessel_ausgegeben: kopf.schluessel_ausgegeben }
+            : {}),
+          ...(vorgang.typ === "auszug"
+            ? { schluessel_zurueck: kopf.schluessel_zurueck }
+            : {}),
           updated_by: profile?.id ?? null,
         })
         .eq("id", vorgang.id);
@@ -341,6 +382,17 @@ export default function UnterkunftUebergabePage() {
     setFehler(null);
     if (!kopf.unterschrift_name.trim() || !kopf.zustand_bestaetigt) {
       setFehler("Name der anwesenden Person und Haken „Zustand bestätigt“ sind Pflicht.");
+      return;
+    }
+    if (
+      vorgang.typ === "auszug" &&
+      einzugSchluessel != null &&
+      kopf.schluessel_zurueck !== einzugSchluessel &&
+      !window.confirm(
+        `Beim Einzug wurden ${einzugSchluessel} Schlüssel herausgegeben, ` +
+          `jetzt sind ${kopf.schluessel_zurueck} zurückgegeben. Trotzdem abschließen?`
+      )
+    ) {
       return;
     }
     const ok = await speichernAlle();
@@ -875,7 +927,73 @@ export default function UnterkunftUebergabePage() {
                 />
                 Zustand bestätigt
               </label>
+
+              {vorgang.typ === "einzug" && (
+                <label>
+                  Schlüssel herausgegeben
+                  <select
+                    className="ml-2"
+                    value={kopf.schluessel_ausgegeben}
+                    disabled={abgeschlossen}
+                    onChange={(e) => {
+                      setKopf((s) => ({
+                        ...s,
+                        schluessel_ausgegeben: Number(e.target.value),
+                      }));
+                      setDirty(true);
+                    }}
+                  >
+                    {Array.from({ length: 13 }, (_, i) => (
+                      <option key={i} value={i}>
+                        {i}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              )}
+
+              {vorgang.typ === "auszug" && (
+                <label>
+                  Schlüssel zurückgegeben
+                  {einzugSchluessel != null && (
+                    <span className="ml-1 text-xs text-neutral-500">
+                      (beim Einzug: {einzugSchluessel})
+                    </span>
+                  )}
+                  <select
+                    className="ml-2"
+                    value={kopf.schluessel_zurueck}
+                    disabled={abgeschlossen}
+                    onChange={(e) => {
+                      setKopf((s) => ({
+                        ...s,
+                        schluessel_zurueck: Number(e.target.value),
+                      }));
+                      setDirty(true);
+                    }}
+                  >
+                    {Array.from(
+                      { length: Math.max(13, (einzugSchluessel ?? 0) + 1) },
+                      (_, i) => (
+                        <option key={i} value={i}>
+                          {i}
+                        </option>
+                      )
+                    )}
+                  </select>
+                </label>
+              )}
             </div>
+
+            {vorgang.typ === "auszug" &&
+              einzugSchluessel != null &&
+              !abgeschlossen &&
+              kopf.schluessel_zurueck < einzugSchluessel && (
+                <p className="rounded bg-amber-50 px-2 py-1 text-xs text-amber-800">
+                  Es fehlen {einzugSchluessel - kopf.schluessel_zurueck} von{" "}
+                  {einzugSchluessel} Schlüsseln.
+                </p>
+              )}
             <label className="block text-sm">
               Notiz
               <textarea

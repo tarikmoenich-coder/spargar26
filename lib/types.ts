@@ -1432,6 +1432,10 @@ export interface UnterkunftVorgang {
   // v1: Name der anwesenden Person + Haken statt Unterschriften-Pad.
   unterschrift_name: string | null;
   zustand_bestaetigt: boolean;
+  // Schlüssel (Migration 2026-09-09): bei Einzug herausgegeben, bei Auszug
+  // zurückgegeben. null = nicht erfasst.
+  schluessel_ausgegeben: number | null;
+  schluessel_zurueck: number | null;
   abgeschlossen: boolean;
   abgeschlossen_am: string | null;
   storniert: boolean;

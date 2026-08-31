@@ -5113,6 +5113,10 @@ create table unterkunft_vorgang (
   notiz text,
   unterschrift_name text,
   zustand_bestaetigt boolean not null default false,
+  -- Schlüssel (Migration 2026-09-09): bei Einzug herausgegeben, bei Auszug
+  -- zurückgegeben. NULL = nicht erfasst.
+  schluessel_ausgegeben int,
+  schluessel_zurueck int,
   abgeschlossen boolean not null default false,
   abgeschlossen_am timestamptz,
   storniert boolean not null default false,
