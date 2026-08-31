@@ -253,9 +253,28 @@ export default function UnterkunftKontrollePage() {
       );
       return;
     }
+    // Pro Raumtyp die passenden Checklisten-Bereiche.
+    const bereicheFuer = (art: string) =>
+      vorlage
+        .filter((v) => v.art === art)
+        .sort((a, b) => a.reihenfolge - b.reihenfolge);
+    const ohneCheckliste = zimmerIds.filter(
+      (zid) =>
+        bereicheFuer(zimmer.find((z) => z.id === zid)?.art ?? "zimmer").length ===
+        0
+    );
+    if (ohneCheckliste.length > 0) {
+      setFehler(
+        `Für ${ohneCheckliste.length} gewählte(n) Raum/Räume gibt es keine ` +
+          `Checkliste für den Raumtyp – in den Stammdaten anlegen.`
+      );
+      return;
+    }
+
     const supabase = getSupabaseClient();
     const vorgaenge: UnterkunftVorgang[] = [];
     for (const zid of zimmerIds) {
+      const art = zimmer.find((z) => z.id === zid)?.art ?? "zimmer";
       const id = crypto.randomUUID();
       const { data: vg, error } = await supabase
         .from("unterkunft_vorgang")
@@ -274,7 +293,7 @@ export default function UnterkunftKontrollePage() {
       const { error: posError } = await supabase
         .from("unterkunft_vorgang_position")
         .insert(
-          vorlage.map((v) => ({
+          bereicheFuer(art).map((v) => ({
             vorgang_id: id,
             bereich: v.bereich,
             zustand: "io" as const,

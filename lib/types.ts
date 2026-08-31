@@ -1394,6 +1394,8 @@ export interface UnterkunftPersonOffen {
 
 export interface UnterkunftChecklisteVorlage {
   id: number;
+  // Raumtyp, für den dieser Bereich gilt (Migration 2026-09-11).
+  art: UnterkunftZimmerArt;
   bereich: string;
   reihenfolge: number;
   aktiv: boolean;

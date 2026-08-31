@@ -171,6 +171,17 @@ export default function UnterkunftUebergabePage() {
     (b) => String(b.zimmer_id) === sel.zimmer_id
   );
 
+  // Checklisten-Bereiche für einen Raumtyp (Migration 2026-09-11).
+  const checklisteFuer = useCallback(
+    (art: string) =>
+      vorlage
+        .filter((v) => v.art === art)
+        .sort((a, b) => a.reihenfolge - b.reihenfolge),
+    [vorlage]
+  );
+  const selArt =
+    zimmer.find((z) => z.id === Number(sel.zimmer_id))?.art ?? "zimmer";
+
   // Belegung des gewählten Zimmers heute (für die Kapazitäts-Anzeige).
   const zimmerKapazitaet = useMemo(() => {
     if (!sel.zimmer_id) return null;
@@ -220,8 +231,12 @@ export default function UnterkunftUebergabePage() {
       setFehler("Bitte ein Zimmer wählen.");
       return;
     }
-    if (vorlage.length === 0) {
-      setFehler("Keine Checklisten-Bereiche angelegt – zuerst unter Stammdaten pflegen.");
+    const art = zimmer.find((z) => z.id === Number(sel.zimmer_id))?.art ?? "zimmer";
+    const bereiche = checklisteFuer(art);
+    if (bereiche.length === 0) {
+      setFehler(
+        "Für diesen Raumtyp sind keine Checklisten-Bereiche angelegt – zuerst unter Stammdaten pflegen."
+      );
       return;
     }
     const supabase = getSupabaseClient();
@@ -242,7 +257,7 @@ export default function UnterkunftUebergabePage() {
       return;
     }
     const { error: posError } = await supabase.from("unterkunft_vorgang_position").insert(
-      vorlage.map((v) => ({
+      bereiche.map((v) => ({
         vorgang_id: id,
         bereich: v.bereich,
         zustand: "io" as const,
@@ -648,7 +663,9 @@ export default function UnterkunftUebergabePage() {
               </button>
             </div>
             <p className="text-xs text-neutral-500">
-              {vorlage.length} Checklisten-Bereiche werden angelegt.
+              {sel.zimmer_id
+                ? `${checklisteFuer(selArt).length} Checklisten-Bereiche werden angelegt.`
+                : "Checkliste richtet sich nach dem Raumtyp."}
             </p>
 
             {sel.typ === "einzug" && sel.zimmer_id && (

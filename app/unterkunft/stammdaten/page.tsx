@@ -54,6 +54,9 @@ export default function UnterkunftStammdatenPage() {
     reihenfolge: "",
   });
   const [neuerBereich, setNeuerBereich] = useState({ bereich: "", reihenfolge: "" });
+  // Welcher Raumtyp wird in den Checklisten-Bereichen gerade bearbeitet.
+  const [checklisteArt, setChecklisteArt] =
+    useState<UnterkunftZimmerArt>("zimmer");
 
   const laden = useCallback(async () => {
     setLoading(true);
@@ -429,11 +432,14 @@ export default function UnterkunftStammdatenPage() {
   // --- Checkliste ---
   async function bereichAnlegen() {
     if (!neuerBereich.bereich.trim()) return;
-    const maxReihenfolge = vorlage.reduce((m, v) => Math.max(m, v.reihenfolge), 0);
+    const maxReihenfolge = vorlage
+      .filter((v) => v.art === checklisteArt)
+      .reduce((m, v) => Math.max(m, v.reihenfolge), 0);
     const ok = await ausfuehren(() =>
       getSupabaseClient()
         .from("unterkunft_checkliste_vorlage")
         .insert({
+          art: checklisteArt,
           bereich: neuerBereich.bereich.trim(),
           reihenfolge: neuerBereich.reihenfolge
             ? Number(neuerBereich.reihenfolge)
@@ -834,27 +840,55 @@ export default function UnterkunftStammdatenPage() {
         </div>
       </section>
 
-      {/* Checklisten-Vorlage */}
+      {/* Checklisten-Vorlage je Raumtyp */}
       <section className="space-y-3">
         <h2 className="font-semibold text-neutral-800">Checklisten-Bereiche</h2>
         <p className="text-sm text-neutral-500">
-          Wird bei jeder Übergabe/Abnahme/Kontrolle abgefragt. Änderungen wirken nur
-          auf neue Vorgänge – bestehende Protokolle bleiben unverändert.
+          Wird beim Start einer Übergabe/Abnahme/Kontrolle abgefragt – je Raumtyp
+          eine eigene Liste. Änderungen wirken nur auf neue Vorgänge, bestehende
+          Protokolle bleiben unverändert.
         </p>
+        <div className="flex flex-wrap gap-1">
+          {(
+            Object.keys(RAUMTYP_LABEL) as UnterkunftZimmerArt[]
+          ).map((a) => {
+            const n = vorlage.filter((v) => v.art === a).length;
+            return (
+              <button
+                key={a}
+                onClick={() => setChecklisteArt(a)}
+                className={`rounded-full border px-3 py-1 text-sm ${
+                  a === checklisteArt
+                    ? "border-emerald-700 bg-emerald-700 font-semibold text-white"
+                    : "border-neutral-300 text-neutral-600 hover:border-emerald-400"
+                }`}
+              >
+                {RAUMTYP_LABEL[a]} ({n})
+              </button>
+            );
+          })}
+        </div>
         <ol className="list-decimal space-y-1 pl-6 text-sm">
-          {vorlage.map((v) => (
-            <li key={v.id} className="flex items-center gap-2">
-              <span>{v.bereich}</span>
-              {canEdit && (
-                <button
-                  className="text-xs text-red-600 hover:underline"
-                  onClick={() => bereichEntfernen(v)}
-                >
-                  entfernen
-                </button>
-              )}
+          {vorlage
+            .filter((v) => v.art === checklisteArt)
+            .map((v) => (
+              <li key={v.id} className="flex items-center gap-2">
+                <span>{v.bereich}</span>
+                {canEdit && (
+                  <button
+                    className="text-xs text-red-600 hover:underline"
+                    onClick={() => bereichEntfernen(v)}
+                  >
+                    entfernen
+                  </button>
+                )}
+              </li>
+            ))}
+          {vorlage.filter((v) => v.art === checklisteArt).length === 0 && (
+            <li className="list-none text-neutral-400">
+              noch keine Bereiche für {RAUMTYP_LABEL[checklisteArt]}
             </li>
-          ))}
+          )}
         </ol>
         {canEdit && (
           <div className="flex flex-wrap items-end gap-2">
@@ -880,7 +914,7 @@ export default function UnterkunftStammdatenPage() {
               />
             </label>
             <button className="btn-secondary" onClick={bereichAnlegen}>
-              Bereich hinzufügen
+              Zu „{RAUMTYP_LABEL[checklisteArt]}“ hinzufügen
             </button>
           </div>
         )}

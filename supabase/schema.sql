@@ -5078,29 +5078,58 @@ create index idx_unterkunft_zuordnung_zimmer on unterkunft_zuordnung (zimmer_id)
 create unique index uq_unterkunft_zuordnung_offen
   on unterkunft_zuordnung (employee_id) where status = 'schwebend';
 
+-- Checklisten-Vorlage je Raumtyp (art, Migration 2026-09-11). Beim Start
+-- einer Übergabe/Kontrolle werden nur die Bereiche des jeweiligen Raumtyps
+-- als Positionen angelegt - Gemeinschaftsräume brauchen weniger Punkte als
+-- ein Schlafzimmer.
 create table unterkunft_checkliste_vorlage (
   id bigint generated always as identity primary key,
+  art text not null default 'zimmer'
+    check (art in ('zimmer', 'kueche', 'bad', 'wc', 'flur', 'gemeinschaft')),
   bereich text not null,
   reihenfolge int not null default 0,
   aktiv boolean not null default true,
   gueltig_ab date not null default current_date,
   erstellt_von uuid references profiles (id) default auth.uid(),
   erstellt_am timestamptz not null default now(),
-  unique (bereich, gueltig_ab)
+  unique (art, bereich, gueltig_ab)
 );
 
-insert into unterkunft_checkliste_vorlage (bereich, reihenfolge, gueltig_ab) values
-  ('Wände / Decke',      10, date '2026-01-01'),
-  ('Boden',              20, date '2026-01-01'),
-  ('Fenster',            30, date '2026-01-01'),
-  ('Türen',              40, date '2026-01-01'),
-  ('Bad / WC',           50, date '2026-01-01'),
-  ('Küche',              60, date '2026-01-01'),
-  ('Möbel',              70, date '2026-01-01'),
-  ('Betten / Matratzen', 80, date '2026-01-01'),
-  ('Elektro / Licht',    90, date '2026-01-01'),
-  ('Sauberkeit',        100, date '2026-01-01'),
-  ('Schlüssel',         110, date '2026-01-01');
+insert into unterkunft_checkliste_vorlage (bereich, reihenfolge, gueltig_ab, art) values
+  -- Schlafzimmer (volle Liste)
+  ('Wände / Decke',      10, date '2026-01-01', 'zimmer'),
+  ('Boden',              20, date '2026-01-01', 'zimmer'),
+  ('Fenster',            30, date '2026-01-01', 'zimmer'),
+  ('Türen',              40, date '2026-01-01', 'zimmer'),
+  ('Bad / WC',           50, date '2026-01-01', 'zimmer'),
+  ('Küche',              60, date '2026-01-01', 'zimmer'),
+  ('Möbel',              70, date '2026-01-01', 'zimmer'),
+  ('Betten / Matratzen', 80, date '2026-01-01', 'zimmer'),
+  ('Elektro / Licht',    90, date '2026-01-01', 'zimmer'),
+  ('Sauberkeit',        100, date '2026-01-01', 'zimmer'),
+  ('Schlüssel',         110, date '2026-01-01', 'zimmer'),
+  -- Küche
+  ('Herd / Ofen',            10, date '2026-01-01', 'kueche'),
+  ('Küchenzeile / Spüle',    20, date '2026-01-01', 'kueche'),
+  ('Kühlschrank',            30, date '2026-01-01', 'kueche'),
+  ('Sauberkeit',             40, date '2026-01-01', 'kueche'),
+  -- Bad
+  ('Dusche / Wanne',         10, date '2026-01-01', 'bad'),
+  ('Waschbecken',            20, date '2026-01-01', 'bad'),
+  ('Fliesen / Silikon',      30, date '2026-01-01', 'bad'),
+  ('Sauberkeit',             40, date '2026-01-01', 'bad'),
+  -- WC
+  ('WC / Spülung',           10, date '2026-01-01', 'wc'),
+  ('Waschbecken',            20, date '2026-01-01', 'wc'),
+  ('Sauberkeit',             30, date '2026-01-01', 'wc'),
+  -- Flur
+  ('Boden / Wände',          10, date '2026-01-01', 'flur'),
+  ('Beleuchtung',            20, date '2026-01-01', 'flur'),
+  ('Sauberkeit',             30, date '2026-01-01', 'flur'),
+  -- Gemeinschaftsraum
+  ('Möbel / Ausstattung',    10, date '2026-01-01', 'gemeinschaft'),
+  ('Boden / Wände',          20, date '2026-01-01', 'gemeinschaft'),
+  ('Sauberkeit',             30, date '2026-01-01', 'gemeinschaft');
 
 create table unterkunft_vorgang (
   id uuid primary key default gen_random_uuid(),
