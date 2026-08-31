@@ -25,11 +25,18 @@ import {
   heuteIso,
   kontrollAmpel,
   type KontrollAmpel,
+  type KontrollSchwellen,
 } from "@/lib/unterkunft";
 import {
+  UNTERKUNFT_MANGEL_SCHWERE_LABELS,
+  UNTERKUNFT_MANGEL_STATUS_LABELS,
   UNTERKUNFT_VORGANG_TYP_LABELS,
   type UnterkunftBelegungAktuell,
   type UnterkunftGebaeude,
+  type UnterkunftKontrollIntervall,
+  type UnterkunftMangel,
+  type UnterkunftMangelSchwere,
+  type UnterkunftMangelStatus,
   type UnterkunftPersonOffen,
   type UnterkunftWohneinheitUebersicht,
   type UnterkunftZimmerArt,
@@ -122,11 +129,12 @@ interface ZimmerFarbInput {
 function zimmerFarbe(
   z: ZimmerFarbInput,
   ansicht: Ansicht = "belegung",
-  dominant: string | null = null
+  dominant: string | null = null,
+  schwellen: KontrollSchwellen | null = null
 ): { fill: string; stroke: string } {
   if (!z.aktiv) return ZIMMER_INAKTIV;
   if (ansicht === "kontrolle") {
-    return AMPEL_KACHEL[kontrollAmpel(z.letzte_kontrolle_am)];
+    return AMPEL_KACHEL[kontrollAmpel(z.letzte_kontrolle_am, schwellen)];
   }
   if (ansicht === "maengel") {
     return z.offene_maengel > 0 ? MAENGEL_KACHEL : MAENGEL_KEIN;
@@ -181,6 +189,8 @@ export default function UnterkunftGrundrissPage() {
     profile?.role === "admin" ||
     profile?.role === "hr" ||
     profile?.role === "hausmeister";
+  // Mängel anlegen/bearbeiten: admin/hr/hausmeister (RLS unterkunft_mangel).
+  const canEditMangel = canMove;
 
   const [gebaeude, setGebaeude] = useState<UnterkunftGebaeude[]>([]);
   const [einheiten, setEinheiten] = useState<UnterkunftWohneinheitUebersicht[]>([]);
@@ -188,6 +198,10 @@ export default function UnterkunftGrundrissPage() {
   const [belegungen, setBelegungen] = useState<UnterkunftBelegungAktuell[]>([]);
   const [zuordnungen, setZuordnungen] = useState<UnterkunftZuordnungOffen[]>([]);
   const [personenOffen, setPersonenOffen] = useState<UnterkunftPersonOffen[]>([]);
+  const [maengel, setMaengel] = useState<UnterkunftMangel[]>([]);
+  const [intervalle, setIntervalle] = useState<
+    Record<string, KontrollSchwellen>
+  >({});
   const [loading, setLoading] = useState(true);
   const [fehler, setFehler] = useState<string | null>(null);
 
@@ -209,11 +223,17 @@ export default function UnterkunftGrundrissPage() {
   });
   // Direkt belegen (nur admin), ohne Übergabe
   const [direkt, setDirekt] = useState<{ suche: string } | null>(null);
+  // Zimmer-Panel: offene Mängel aufgeklappt / Mangel-melden-Formular offen
+  const [maengelAuf, setMaengelAuf] = useState(false);
+  const [neuerMangel, setNeuerMangel] = useState<{
+    beschreibung: string;
+    schwere: UnterkunftMangelSchwere;
+  } | null>(null);
 
   const laden = useCallback(async () => {
     setLoading(true);
     const supabase = getSupabaseClient();
-    const [g, e, z, b, zu, po] = await Promise.all([
+    const [g, e, z, b, zu, po, m, ki] = await Promise.all([
       supabase.from("unterkunft_gebaeude").select("*").order("name"),
       supabase
         .from("unterkunft_wohneinheit_uebersicht")
@@ -223,6 +243,12 @@ export default function UnterkunftGrundrissPage() {
       supabase.from("unterkunft_belegung_aktuell").select("*"),
       supabase.from("unterkunft_zuordnung_offen").select("*"),
       supabase.from("unterkunft_person_offen").select("*").order("name"),
+      supabase
+        .from("unterkunft_mangel")
+        .select("*")
+        .neq("status", "behoben")
+        .order("gemeldet_am", { ascending: false }),
+      supabase.from("unterkunft_kontroll_intervall").select("*"),
     ]);
     setGebaeude((g.data as UnterkunftGebaeude[]) ?? []);
     setEinheiten((e.data as UnterkunftWohneinheitUebersicht[]) ?? []);
@@ -230,6 +256,15 @@ export default function UnterkunftGrundrissPage() {
     setBelegungen((b.data as UnterkunftBelegungAktuell[]) ?? []);
     setZuordnungen((zu.data as UnterkunftZuordnungOffen[]) ?? []);
     setPersonenOffen((po.data as UnterkunftPersonOffen[]) ?? []);
+    setMaengel((m.data as UnterkunftMangel[]) ?? []);
+    setIntervalle(
+      Object.fromEntries(
+        ((ki.data as UnterkunftKontrollIntervall[]) ?? []).map((r) => [
+          r.art,
+          { gruen: r.gruen_bis_tage, gelb: r.gelb_bis_tage },
+        ])
+      )
+    );
     setLoading(false);
   }, []);
 
@@ -249,6 +284,8 @@ export default function UnterkunftGrundrissPage() {
   useEffect(() => {
     setUmzug(null);
     setDirekt(null);
+    setMaengelAuf(false);
+    setNeuerMangel(null);
   }, [selId, einheitId]);
 
   const einheitenDesGebaeudes = useMemo(
@@ -304,6 +341,22 @@ export default function UnterkunftGrundrissPage() {
     });
     return map;
   }, [zuordnungen]);
+
+  // Offene Mängel je Zimmer (für die aufklappbare Liste im Zimmer-Panel).
+  const maengelProZimmer = useMemo(() => {
+    const map: Record<number, UnterkunftMangel[]> = {};
+    maengel.forEach((m) => {
+      (map[m.zimmer_id] ??= []).push(m);
+    });
+    return map;
+  }, [maengel]);
+
+  // Kontroll-Schwellen (grün/gelb-Tage) für einen Raumtyp, aus den Stammdaten.
+  const schwellenVon = useCallback(
+    (art: UnterkunftZimmerArt): KontrollSchwellen | null =>
+      intervalle[art] ?? null,
+    [intervalle]
+  );
 
   const zuordnungDerEinheit = useMemo(
     () => zuordnungen.filter((z) => z.wohneinheit_id === einheitId),
@@ -486,6 +539,57 @@ export default function UnterkunftGrundrissPage() {
         .eq("id", zuordnungId);
     }
     setDirekt(null);
+    await laden();
+  }
+
+  // Mangel direkt im Zimmer-Panel anlegen (admin/hr/hausmeister). Danach
+  // erscheint er in der aufklappbaren Liste, wo auch Fotos möglich sind.
+  async function mangelAnlegen(zimmerId: number) {
+    if (!neuerMangel || !neuerMangel.beschreibung.trim()) {
+      setFehler("Bitte eine Beschreibung eingeben.");
+      return;
+    }
+    setFehler(null);
+    const { error } = await getSupabaseClient()
+      .from("unterkunft_mangel")
+      .insert({
+        zimmer_id: zimmerId,
+        beschreibung: neuerMangel.beschreibung.trim(),
+        schwere: neuerMangel.schwere,
+      });
+    if (error) {
+      setFehler(error.message);
+      return;
+    }
+    setNeuerMangel(null);
+    setMaengelAuf(true);
+    await laden();
+  }
+
+  // Status eines offenen Mangels direkt aus dem Zimmer-Panel setzen.
+  async function mangelStatusSetzen(
+    m: UnterkunftMangel,
+    status: UnterkunftMangelStatus
+  ) {
+    setFehler(null);
+    const jetztBehoben = status === "behoben";
+    const { error } = await getSupabaseClient()
+      .from("unterkunft_mangel")
+      .update({
+        status,
+        updated_by: profile?.id ?? null,
+        ...(jetztBehoben
+          ? {
+              behoben_von: profile?.id ?? null,
+              behoben_am: new Date().toISOString(),
+            }
+          : {}),
+      })
+      .eq("id", m.id);
+    if (error) {
+      setFehler(error.message);
+      return;
+    }
     await laden();
   }
 
@@ -895,65 +999,124 @@ export default function UnterkunftGrundrissPage() {
       {/* Wohneinheit-Detail: Zimmer-Raster + offene Personen */}
       {einheit && (
         <div className="space-y-3 rounded border border-neutral-200 p-3">
-          <div className="flex flex-wrap items-end justify-between gap-3">
-            <div>
-              <h2 className="text-base font-semibold text-emerald-900">
-                {einheit.name}
-                {einheit.etage_label ? ` · ${einheit.etage_label}` : ""} — Zimmer
-              </h2>
-              {nachbarZimmer.length > 0 && (
-                <p className="text-xs text-neutral-400">
-                  Blasse, gestrichelte Kacheln = andere Wohneinheiten der Etage{" "}
-                  {einheit.etage_label} (nur zur Orientierung).
-                </p>
-              )}
-            </div>
-            <div className="flex flex-wrap items-center gap-3 text-sm">
-              <div className="flex overflow-hidden rounded border border-neutral-300">
-                {(Object.keys(ANSICHT_LABELS) as Ansicht[]).map((a) => (
-                  <button
-                    key={a}
-                    onClick={() => setAnsicht(a)}
-                    className={`px-2 py-1 text-xs ${
-                      a === ansicht
-                        ? "bg-emerald-700 font-semibold text-white"
-                        : "bg-white text-neutral-600 hover:bg-neutral-50"
-                    }`}
-                  >
-                    {ANSICHT_LABELS[a]}
-                  </button>
+          {/* Klebende Steuerleiste: Wohneinheit wechseln + Ansicht + Zoom,
+              bleibt beim Scrollen im (großen) Plan stehen. */}
+          <div className="sticky top-[calc(3.5rem+var(--subtabs-h,2.5rem))] z-30 -mx-3 -mt-3 mb-1 flex flex-wrap items-center gap-x-3 gap-y-2 border-b border-neutral-200 bg-white px-3 py-2 text-sm">
+            <div className="flex items-center gap-1">
+              <button
+                className="btn-secondary"
+                title="Vorige Wohneinheit"
+                disabled={
+                  gefilterteEinheiten.findIndex(
+                    (e) => e.wohneinheit_id === einheitId
+                  ) <= 0
+                }
+                onClick={() => {
+                  const i = gefilterteEinheiten.findIndex(
+                    (e) => e.wohneinheit_id === einheitId
+                  );
+                  if (i > 0) {
+                    setEinheitId(gefilterteEinheiten[i - 1].wohneinheit_id);
+                    setSelId(null);
+                  }
+                }}
+              >
+                ‹
+              </button>
+              <select
+                className="max-w-[12rem]"
+                value={einheitId ?? ""}
+                onChange={(e) => {
+                  setEinheitId(Number(e.target.value));
+                  setSelId(null);
+                }}
+              >
+                {gefilterteEinheiten.map((e) => (
+                  <option key={e.wohneinheit_id} value={e.wohneinheit_id}>
+                    {e.name}
+                    {e.etage_label ? ` · ${e.etage_label}` : ""}
+                  </option>
                 ))}
-              </div>
-              <div className="flex items-center gap-1">
-                <button
-                  className="btn-secondary"
-                  onClick={() => setZoom((z) => Math.max(0.5, z - 0.25))}
-                  title="Verkleinern"
-                >
-                  −
-                </button>
-                <span className="w-10 text-center tabular-nums">
-                  {Math.round(zoom * 100)}%
-                </span>
-                <button
-                  className="btn-secondary"
-                  onClick={() => setZoom((z) => Math.min(2, z + 0.25))}
-                  title="Vergrößern"
-                >
-                  +
-                </button>
-              </div>
-              {canEditPlan && (
-                <label className="flex items-center gap-1">
-                  <input
-                    type="checkbox"
-                    checked={bearbeiten}
-                    onChange={(e) => setBearbeiten(e.target.checked)}
-                  />
-                  Bearbeiten
-                </label>
-              )}
+              </select>
+              <button
+                className="btn-secondary"
+                title="Nächste Wohneinheit"
+                disabled={
+                  gefilterteEinheiten.findIndex(
+                    (e) => e.wohneinheit_id === einheitId
+                  ) >=
+                  gefilterteEinheiten.length - 1
+                }
+                onClick={() => {
+                  const i = gefilterteEinheiten.findIndex(
+                    (e) => e.wohneinheit_id === einheitId
+                  );
+                  if (i >= 0 && i < gefilterteEinheiten.length - 1) {
+                    setEinheitId(gefilterteEinheiten[i + 1].wohneinheit_id);
+                    setSelId(null);
+                  }
+                }}
+              >
+                ›
+              </button>
             </div>
+            <div className="flex overflow-hidden rounded border border-neutral-300">
+              {(Object.keys(ANSICHT_LABELS) as Ansicht[]).map((a) => (
+                <button
+                  key={a}
+                  onClick={() => setAnsicht(a)}
+                  className={`px-2 py-1 text-xs ${
+                    a === ansicht
+                      ? "bg-emerald-700 font-semibold text-white"
+                      : "bg-white text-neutral-600 hover:bg-neutral-50"
+                  }`}
+                >
+                  {ANSICHT_LABELS[a]}
+                </button>
+              ))}
+            </div>
+            <div className="flex items-center gap-1">
+              <button
+                className="btn-secondary"
+                onClick={() => setZoom((z) => Math.max(0.5, z - 0.25))}
+                title="Verkleinern"
+              >
+                −
+              </button>
+              <span className="w-10 text-center tabular-nums">
+                {Math.round(zoom * 100)}%
+              </span>
+              <button
+                className="btn-secondary"
+                onClick={() => setZoom((z) => Math.min(2, z + 0.25))}
+                title="Vergrößern"
+              >
+                +
+              </button>
+            </div>
+            {canEditPlan && (
+              <label className="flex items-center gap-1">
+                <input
+                  type="checkbox"
+                  checked={bearbeiten}
+                  onChange={(e) => setBearbeiten(e.target.checked)}
+                />
+                Bearbeiten
+              </label>
+            )}
+          </div>
+
+          <div>
+            <h2 className="text-base font-semibold text-emerald-900">
+              {einheit.name}
+              {einheit.etage_label ? ` · ${einheit.etage_label}` : ""} — Zimmer
+            </h2>
+            {nachbarZimmer.length > 0 && (
+              <p className="text-xs text-neutral-400">
+                Blasse, gestrichelte Kacheln = andere Wohneinheiten der Etage{" "}
+                {einheit.etage_label} (nur zur Orientierung).
+              </p>
+            )}
           </div>
 
           {zimmerDerEinheit.length === 0 ? (
@@ -1027,7 +1190,8 @@ export default function UnterkunftGrundrissPage() {
                           zimmerFarbe(
                             z,
                             ansicht,
-                            dominantProZimmer[z.zimmer_id] ?? null
+                            dominantProZimmer[z.zimmer_id] ?? null,
+                            schwellenVon(z.art)
                           ).fill
                         }
                         stroke="#cbd5e1"
@@ -1068,10 +1232,14 @@ export default function UnterkunftGrundrissPage() {
                     const { fill, stroke } = zimmerFarbe(
                       z,
                       ansicht,
-                      dominantProZimmer[z.zimmer_id] ?? null
+                      dominantProZimmer[z.zimmer_id] ?? null,
+                      schwellenVon(z.art)
                     );
                     const ausgewaehlt = z.zimmer_id === selId;
-                    const ampel = kontrollAmpel(z.letzte_kontrolle_am);
+                    const ampel = kontrollAmpel(
+                      z.letzte_kontrolle_am,
+                      schwellenVon(z.art)
+                    );
                     const schwebendHier =
                       (zuordnungProZimmer[z.zimmer_id] ?? []).length;
                     return (
@@ -1290,15 +1458,27 @@ export default function UnterkunftGrundrissPage() {
                             style={{
                               backgroundColor:
                                 KONTROLL_AMPEL_FARBE[
-                                  kontrollAmpel(sel.letzte_kontrolle_am)
+                                  kontrollAmpel(
+                                    sel.letzte_kontrolle_am,
+                                    schwellenVon(sel.art)
+                                  )
                                 ],
                             }}
                             title={
                               KONTROLL_AMPEL_LABELS[
-                                kontrollAmpel(sel.letzte_kontrolle_am)
+                                kontrollAmpel(
+                                  sel.letzte_kontrolle_am,
+                                  schwellenVon(sel.art)
+                                )
                               ]
                             }
                           />
+                          {schwellenVon(sel.art) && (
+                            <span className="block text-xs text-neutral-400">
+                              grün ≤ {schwellenVon(sel.art)!.gruen} T · gelb ≤{" "}
+                              {schwellenVon(sel.art)!.gelb} T
+                            </span>
+                          )}
                         </dd>
                       </div>
                       <div className="flex justify-between">
@@ -1310,10 +1490,74 @@ export default function UnterkunftGrundrissPage() {
                               : ""
                           }
                         >
-                          {sel.offene_maengel > 0 ? sel.offene_maengel : "—"}
+                          {sel.offene_maengel > 0 ? (
+                            <button
+                              className="underline decoration-dotted underline-offset-2"
+                              onClick={() => setMaengelAuf((v) => !v)}
+                            >
+                              {sel.offene_maengel} · {maengelAuf ? "ausblenden" : "Details anzeigen"}
+                            </button>
+                          ) : (
+                            "—"
+                          )}
                         </dd>
                       </div>
                     </dl>
+
+                    {maengelAuf && (
+                      <ul className="mt-2 space-y-2 rounded border border-red-100 bg-red-50/50 p-2 text-sm">
+                        {(maengelProZimmer[sel.zimmer_id] ?? []).length === 0 ? (
+                          <li className="text-neutral-400">
+                            keine offenen Mängel geladen.
+                          </li>
+                        ) : (
+                          (maengelProZimmer[sel.zimmer_id] ?? []).map((m) => (
+                            <li key={m.id} className="space-y-1">
+                              <div>{m.beschreibung}</div>
+                              <div className="flex flex-wrap items-center gap-2 text-xs text-neutral-500">
+                                <span className="rounded bg-white px-1.5 py-0.5">
+                                  {UNTERKUNFT_MANGEL_SCHWERE_LABELS[m.schwere]}
+                                </span>
+                                {canEditMangel ? (
+                                  <select
+                                    value={m.status}
+                                    onChange={(e) =>
+                                      mangelStatusSetzen(
+                                        m,
+                                        e.target.value as UnterkunftMangelStatus
+                                      )
+                                    }
+                                  >
+                                    {(
+                                      Object.keys(
+                                        UNTERKUNFT_MANGEL_STATUS_LABELS
+                                      ) as UnterkunftMangelStatus[]
+                                    ).map((k) => (
+                                      <option key={k} value={k}>
+                                        {UNTERKUNFT_MANGEL_STATUS_LABELS[k]}
+                                      </option>
+                                    ))}
+                                  </select>
+                                ) : (
+                                  <span>
+                                    {UNTERKUNFT_MANGEL_STATUS_LABELS[m.status]}
+                                  </span>
+                                )}
+                                <span>{formatDatumDE(m.gemeldet_am)}</span>
+                              </div>
+                            </li>
+                          ))
+                        )}
+                        <li>
+                          <Link
+                            href="/unterkunft/maengel"
+                            className="text-xs text-emerald-700 underline"
+                          >
+                            in der Mängelliste öffnen
+                          </Link>
+                        </li>
+                      </ul>
+                    )}
 
                     {sel.gesperrt && (
                       <p className="mt-2 rounded bg-slate-100 px-2 py-1 text-xs text-slate-700">
@@ -1581,9 +1825,25 @@ export default function UnterkunftGrundrissPage() {
                       >
                         Kontrolle
                       </Link>
-                      <Link className="btn-secondary" href="/unterkunft/maengel">
-                        Mängel
-                      </Link>
+                      {canEditMangel ? (
+                        <button
+                          className="btn-secondary"
+                          onClick={() =>
+                            setNeuerMangel((v) =>
+                              v ? null : { beschreibung: "", schwere: "mittel" }
+                            )
+                          }
+                        >
+                          Mangel melden
+                        </button>
+                      ) : (
+                        <Link
+                          className="btn-secondary"
+                          href="/unterkunft/maengel"
+                        >
+                          Mängel
+                        </Link>
+                      )}
                       {canManage && (
                         <button
                           className="btn-secondary"
@@ -1593,6 +1853,71 @@ export default function UnterkunftGrundrissPage() {
                         </button>
                       )}
                     </div>
+
+                    {neuerMangel && canEditMangel && (
+                      <div className="mt-3 space-y-2 rounded border border-red-200 bg-red-50 p-2 text-sm">
+                        <div className="font-medium text-red-900">
+                          Mangel für {sel.art === "zimmer" ? "Zimmer " : ""}
+                          {sel.nummer}
+                        </div>
+                        <textarea
+                          className="w-full rounded border border-neutral-300 px-2 py-1 text-sm"
+                          rows={2}
+                          placeholder="Beschreibung"
+                          value={neuerMangel.beschreibung}
+                          onChange={(e) =>
+                            setNeuerMangel((v) =>
+                              v ? { ...v, beschreibung: e.target.value } : v
+                            )
+                          }
+                        />
+                        <label className="flex items-center gap-2">
+                          Schwere
+                          <select
+                            value={neuerMangel.schwere}
+                            onChange={(e) =>
+                              setNeuerMangel((v) =>
+                                v
+                                  ? {
+                                      ...v,
+                                      schwere: e.target
+                                        .value as UnterkunftMangelSchwere,
+                                    }
+                                  : v
+                              )
+                            }
+                          >
+                            {(
+                              Object.keys(
+                                UNTERKUNFT_MANGEL_SCHWERE_LABELS
+                              ) as UnterkunftMangelSchwere[]
+                            ).map((k) => (
+                              <option key={k} value={k}>
+                                {UNTERKUNFT_MANGEL_SCHWERE_LABELS[k]}
+                              </option>
+                            ))}
+                          </select>
+                        </label>
+                        <div className="flex gap-2">
+                          <button
+                            className="btn"
+                            onClick={() => mangelAnlegen(sel.zimmer_id)}
+                          >
+                            Mangel anlegen
+                          </button>
+                          <button
+                            className="btn-secondary"
+                            onClick={() => setNeuerMangel(null)}
+                          >
+                            Abbrechen
+                          </button>
+                        </div>
+                        <p className="text-xs text-neutral-500">
+                          Fotos danach über „Details anzeigen“ bei den offenen
+                          Mängeln anhängen.
+                        </p>
+                      </div>
+                    )}
 
                     {bearbeiten && canEditPlan && sel.plan_x != null && (
                       <div className="mt-3 space-y-2 border-t border-neutral-100 pt-3 text-sm">
