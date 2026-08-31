@@ -54,6 +54,9 @@ export default function UnterkunftKontrollplanPage() {
   const [maengel, setMaengel] = useState<
     { zimmer_id: number; gemeldet_am: string }[]
   >([]);
+  const [vorgaenge, setVorgaenge] = useState<
+    { zimmer_id: number; gesamtzustand: string | null }[]
+  >([]);
   const [loading, setLoading] = useState(true);
   const [gebaeudeFilter, setGebaeudeFilter] = useState("");
   const [nurFaellig, setNurFaellig] = useState(false);
@@ -63,7 +66,7 @@ export default function UnterkunftKontrollplanPage() {
   const laden = useCallback(async () => {
     setLoading(true);
     const supabase = getSupabaseClient();
-    const [z, ki, m] = await Promise.all([
+    const [z, ki, m, v] = await Promise.all([
       supabase
         .from("unterkunft_zimmer_uebersicht")
         .select("*")
@@ -74,6 +77,12 @@ export default function UnterkunftKontrollplanPage() {
         .from("unterkunft_mangel")
         .select("zimmer_id, gemeldet_am")
         .neq("status", "behoben"),
+      supabase
+        .from("unterkunft_vorgang")
+        .select("zimmer_id, gesamtzustand")
+        .eq("abgeschlossen", true)
+        .eq("storniert", false)
+        .order("abgeschlossen_am", { ascending: false }),
     ]);
     setZimmer((z.data as UnterkunftZimmerUebersicht[]) ?? []);
     setIntervalle(
@@ -86,6 +95,9 @@ export default function UnterkunftKontrollplanPage() {
     );
     setMaengel(
       (m.data as { zimmer_id: number; gemeldet_am: string }[]) ?? []
+    );
+    setVorgaenge(
+      (v.data as { zimmer_id: number; gesamtzustand: string | null }[]) ?? []
     );
     setLoading(false);
   }, []);
@@ -102,19 +114,62 @@ export default function UnterkunftKontrollplanPage() {
     return map;
   }, [maengel]);
 
-  // { frist, ampel } je Raum – Zeitzyklus + offene Mängel.
+  // Belegte + geplante Personen je Wohneinheit (für Allgemeinräume).
+  const belegtProEinheit = useMemo(() => {
+    const m: Record<number, number> = {};
+    zimmer.forEach((z) => {
+      if (z.wohneinheit_id != null)
+        m[z.wohneinheit_id] =
+          (m[z.wohneinheit_id] ?? 0) + z.belegt + z.schwebend;
+    });
+    return m;
+  }, [zimmer]);
+
+  const inNutzungVon = useCallback(
+    (z: UnterkunftZimmerUebersicht): boolean => {
+      if (z.art === "zimmer") return z.belegt > 0 || z.schwebend > 0;
+      if (z.wohneinheit_id == null) return true;
+      return (belegtProEinheit[z.wohneinheit_id] ?? 0) > 0;
+    },
+    [belegtProEinheit]
+  );
+
+  // Aufeinanderfolgende Kontrollen mit Ergebnis "alles in Ordnung"
+  // (gesamtzustand = "gut"), von der jüngsten an gezählt.
+  const sauberStreakProZimmer = useMemo(() => {
+    const streak: Record<number, number> = {};
+    const gebrochen = new Set<number>();
+    for (const v of vorgaenge) {
+      if (gebrochen.has(v.zimmer_id)) continue;
+      if (v.gesamtzustand === "gut")
+        streak[v.zimmer_id] = (streak[v.zimmer_id] ?? 0) + 1;
+      else gebrochen.add(v.zimmer_id);
+    }
+    return streak;
+  }, [vorgaenge]);
+
+  // { frist, ampel } je Raum – Zeitzyklus, offene Mängel, Nutzung, Sauber-Serie.
   const infoVon = useCallback(
     (z: UnterkunftZimmerUebersicht) =>
       naechsteKontrolle({
         letzteKontrolleAm: z.letzte_kontrolle_am,
         schwellen: intervalle[z.art] ?? null,
         offeneMaengel: offeneMaengelProZimmer[z.zimmer_id] ?? [],
+        inNutzung: inNutzungVon(z),
+        sauberStreak: sauberStreakProZimmer[z.zimmer_id] ?? 0,
       }),
-    [intervalle, offeneMaengelProZimmer]
+    [intervalle, offeneMaengelProZimmer, inNutzungVon, sauberStreakProZimmer]
   );
   const ampelVon = useCallback(
     (z: UnterkunftZimmerUebersicht): KontrollAmpel => infoVon(z).ampel,
     [infoVon]
+  );
+  // Für Rollup/Filter irrelevant: leerer Raum ohne offenen Mangel.
+  const relevantVon = useCallback(
+    (z: UnterkunftZimmerUebersicht): boolean =>
+      inNutzungVon(z) ||
+      (offeneMaengelProZimmer[z.zimmer_id]?.length ?? 0) > 0,
+    [inNutzungVon, offeneMaengelProZimmer]
   );
 
   const gebaeudeListe = useMemo(
@@ -127,7 +182,8 @@ export default function UnterkunftKontrollplanPage() {
     const sichtbar = zimmer.filter((z) => {
       if (!z.aktiv && !zeigeInaktive) return false;
       if (gebaeudeFilter && z.gebaeude_name !== gebaeudeFilter) return false;
-      if (nurFaellig && ampelVon(z) === "gruen") return false;
+      if (nurFaellig && (ampelVon(z) === "gruen" || !relevantVon(z)))
+        return false;
       return true;
     });
     type Node = {
@@ -193,25 +249,30 @@ export default function UnterkunftKontrollplanPage() {
             : null;
         return { ...g, einheiten, ohne };
       });
-  }, [zimmer, gebaeudeFilter, nurFaellig, zeigeInaktive, ampelVon]);
+  }, [zimmer, gebaeudeFilter, nurFaellig, zeigeInaktive, ampelVon, relevantVon]);
 
-  // Rollup-Zähler für einen Knoten.
+  // Rollup-Zähler für einen Knoten. Leere Räume ohne Mangel zählen nicht mit.
   const rollup = useCallback(
     (raeume: UnterkunftZimmerUebersicht[]) => {
       let ueberfaellig = 0,
         baldFaellig = 0,
         ohneKontrolle = 0,
-        maengel = 0;
+        maengel = 0,
+        leer = 0;
       for (const r of raeume) {
+        maengel += r.offene_maengel;
+        if (!relevantVon(r)) {
+          leer++;
+          continue;
+        }
         const a = ampelVon(r);
         if (a === "rot") ueberfaellig++;
         else if (a === "gelb") baldFaellig++;
         else if (a === "keine") ohneKontrolle++;
-        maengel += r.offene_maengel;
       }
-      return { ueberfaellig, baldFaellig, ohneKontrolle, maengel };
+      return { ueberfaellig, baldFaellig, ohneKontrolle, maengel, leer };
     },
-    [ampelVon]
+    [ampelVon, relevantVon]
   );
 
   function toggle(key: string) {
@@ -247,8 +308,15 @@ export default function UnterkunftKontrollplanPage() {
       0
     ) {
       return (
-        <span className="rounded bg-emerald-50 px-1.5 py-0.5 text-xs text-emerald-700">
-          alles aktuell
+        <span className="flex flex-wrap gap-1 text-xs">
+          <span className="rounded bg-emerald-50 px-1.5 py-0.5 text-emerald-700">
+            alles aktuell
+          </span>
+          {r.leer > 0 && (
+            <span className="rounded bg-neutral-100 px-1.5 py-0.5 text-neutral-500">
+              {r.leer} leer
+            </span>
+          )}
         </span>
       );
     }
@@ -274,6 +342,11 @@ export default function UnterkunftKontrollplanPage() {
             {r.maengel} Mängel
           </span>
         )}
+        {r.leer > 0 && (
+          <span className="rounded bg-neutral-100 px-1.5 py-0.5 text-neutral-500">
+            {r.leer} leer
+          </span>
+        )}
       </span>
     );
   }
@@ -282,13 +355,18 @@ export default function UnterkunftKontrollplanPage() {
     const { ampel: a, frist } = infoVon(z);
     const tage = tageHer(z.letzte_kontrolle_am);
     const heute = new Date().toISOString().slice(0, 10);
-    const ueberfaellig = frist == null || frist <= heute;
+    const leer = !relevantVon(z); // nicht belegt UND kein offener Mangel
+    const ueberfaellig = !leer && (frist == null || frist <= heute);
     return (
       <div className="flex flex-wrap items-center gap-x-3 gap-y-1 border-t border-neutral-100 py-1.5 pl-6 text-sm first:border-t-0">
         <span
           className="inline-block h-2.5 w-2.5 shrink-0 rounded-full"
-          style={{ backgroundColor: KONTROLL_AMPEL_FARBE[a] }}
-          title={KONTROLL_AMPEL_LABELS[a]}
+          style={{
+            backgroundColor: leer ? "#e5e5e5" : KONTROLL_AMPEL_FARBE[a],
+          }}
+          title={
+            leer ? "Nicht belegt – keine Kontrolle fällig" : KONTROLL_AMPEL_LABELS[a]
+          }
         />
         <span className="min-w-[6rem] font-medium">
           {z.nummer}
@@ -327,11 +405,18 @@ export default function UnterkunftKontrollplanPage() {
         </span>
         <span
           className={`min-w-[13rem] ${
-            ueberfaellig ? "font-medium text-red-600" : "text-neutral-600"
+            leer
+              ? "text-neutral-400"
+              : ueberfaellig
+                ? "font-medium text-red-600"
+                : "text-neutral-600"
           }`}
         >
-          Kontrolle spätestens:{" "}
-          {frist == null ? "sofort" : formatDatumDE(frist)}
+          {leer
+            ? "nicht belegt – keine Kontrolle fällig"
+            : `Kontrolle spätestens: ${
+                frist == null ? "sofort" : formatDatumDE(frist)
+              }`}
         </span>
         {z.gesperrt && (
           <span className="rounded bg-slate-200 px-1.5 py-0.5 text-xs text-slate-700">
@@ -365,14 +450,16 @@ export default function UnterkunftKontrollplanPage() {
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <h1 className="text-lg font-semibold text-emerald-900">Kontrollplan</h1>
-          <p className="text-sm text-neutral-500">
+          <p className="max-w-3xl text-sm text-neutral-500">
             Gebäude → Wohneinheit → Raum · letzte Kontrolle, offene Mängel und
             spätester nächster Kontrolltermin. Zeitzyklus je Raumtyp aus den{" "}
             <Link href="/unterkunft/stammdaten" className="underline">
               Stammdaten
             </Link>
             . Offener Mangel: Kontrolle binnen 3 Tagen; bei einer Kontrolle
-            nicht behoben: binnen 1 Tag.
+            nicht behoben: binnen 1 Tag. 2× in Folge „alles in Ordnung“ →
+            14-Tage-Takt (bis wieder ein Mangel auftaucht). Leere Zimmer sind
+            nicht kontrollpflichtig.
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-3 text-sm">

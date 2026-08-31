@@ -129,6 +129,10 @@ export const KONTROLL_AMPEL_LABELS: Record<KontrollAmpel, string> = {
 export const MANGEL_KONTROLLE_FRIST_TAGE = 3;
 export const MANGEL_UNBEHOBEN_FRIST_TAGE = 1;
 
+// Nach 2 aufeinanderfolgenden Kontrollen "alles in Ordnung" (und solange kein
+// Mangel auftaucht) wird der Kontrolltakt auf diese Zahl Tage gestreckt.
+export const SAUBER_STREAK_INTERVALL_TAGE = 14;
+
 function nurDatum(iso: string): string {
   return iso.slice(0, 10);
 }
@@ -147,6 +151,11 @@ export function naechsteKontrolle(
     letzteKontrolleAm: string | null;
     schwellen: KontrollSchwellen | null;
     offeneMaengel: ReadonlyArray<{ gemeldet_am: string }>;
+    // false = Zimmer leer (niemand drin, keiner geplant) bzw. Allgemeinraum
+    // einer unbewohnten Wohneinheit → keine Kontrolle fällig. Default true.
+    inNutzung?: boolean;
+    // Anzahl der letzten Kontrollen in Folge mit Ergebnis "alles in Ordnung".
+    sauberStreak?: number;
   },
   jetzt: Date = new Date()
 ): { frist: string | null; ampel: KontrollAmpel } {
@@ -154,9 +163,21 @@ export function naechsteKontrolle(
   const letzte = input.letzteKontrolleAm
     ? nurDatum(input.letzteKontrolleAm)
     : null;
-  const gruen = input.schwellen?.gruen ?? KONTROLLE_WARNUNG_TAGE;
-  const gelb = input.schwellen?.gelb ?? KONTROLLE_FAELLIG_TAGE;
   const offen = input.offeneMaengel ?? [];
+  const inNutzung = input.inNutzung ?? true;
+
+  // (1) Nicht in Nutzung und mangelfrei → keine Kontrolle fällig.
+  if (!inNutzung && offen.length === 0) return { frist: null, ampel: "keine" };
+
+  let gruen = input.schwellen?.gruen ?? KONTROLLE_WARNUNG_TAGE;
+  let gelb = input.schwellen?.gelb ?? KONTROLLE_FAELLIG_TAGE;
+
+  // (2) 2× in Folge "alles in Ordnung" und aktuell mangelfrei → 14-Tage-Takt,
+  //     bis wieder ein Mangel auftaucht.
+  if ((input.sauberStreak ?? 0) >= 2 && offen.length === 0) {
+    gelb = SAUBER_STREAK_INTERVALL_TAGE;
+    gruen = Math.max(1, SAUBER_STREAK_INTERVALL_TAGE - 2);
+  }
 
   const zyklusFrist = letzte ? datumPlusTage(letzte, gelb) : null;
 
