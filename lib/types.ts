@@ -1249,6 +1249,40 @@ export interface UnterkunftKontrollIntervall {
   updated_at: string;
 }
 
+// Herkunfts-Zimmerplanung (Migration 2026-09-18).
+export interface UnterkunftHerkunftPlan {
+  saison_jahr: number;
+  herkunft: string;
+  soll_anzahl: number;
+  anreise_hinweis: string | null;
+  updated_by: string | null;
+  updated_at: string;
+}
+
+export interface UnterkunftHerkunftKontingent {
+  id: number;
+  saison_jahr: number;
+  herkunft: string;
+  wohneinheit_id: number;
+  reihenfolge: number;
+  notiz: string | null;
+  erfasst_von: string | null;
+  erfasst_am: string;
+  updated_by: string | null;
+  updated_at: string;
+}
+
+// Aus der Sicht unterkunft_herkunft_abgleich - Planzahl gegen echte Personen.
+export interface UnterkunftHerkunftAbgleich {
+  saison_jahr: number;
+  herkunft: string;
+  soll_anzahl: number;
+  anreise_hinweis: string | null;
+  erfasst: number;
+  verplant: number;
+  eingezogen: number;
+}
+
 export interface UnterkunftZimmer {
   id: number;
   gebaeude_id: number;
