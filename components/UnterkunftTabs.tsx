@@ -8,15 +8,23 @@ import { useProfile } from "@/lib/useProfile";
 // Unterkunft-Modul (Migration 2026-08-29): Zimmerplanung + Übergabe/Abnahme
 // + Zwischenkontrollen + Mängel. Gleiches Tab-Muster wie PraemienTabs
 // (siehe dort für die ResizeObserver-/--subtabs-h-Logik).
-// nurHausmeister: der Hausmeister macht nur Reparaturen - für ihn wird die
-// Navigation darauf reduziert (Vorgabe 2026-09-15). Kontrollen erledigt eine
-// höhere Rolle.
+// nurHausmeister: der Hausmeister macht Übergaben, Belegung/Umzug und
+// Reparaturen - nur die Zwischenkontrollen (Kontrollplan) macht eine höhere
+// Rolle (Vorgabe 2026-09-15).
 const tabs = [
   { href: "/unterkunft/kontrollplan", label: "Kontrollplan" },
-  { href: "/unterkunft", label: "Grundriss", exakt: true },
-  { href: "/unterkunft/belegungsplan", label: "Belegungsplan" },
-  { href: "/unterkunft/belegung", label: "Belegung" },
-  { href: "/unterkunft/uebergabe", label: "Übergabe / Abnahme" },
+  { href: "/unterkunft", label: "Grundriss", exakt: true, nurHausmeister: true },
+  {
+    href: "/unterkunft/belegungsplan",
+    label: "Belegungsplan",
+    nurHausmeister: true,
+  },
+  { href: "/unterkunft/belegung", label: "Belegung", nurHausmeister: true },
+  {
+    href: "/unterkunft/uebergabe",
+    label: "Übergabe / Abnahme",
+    nurHausmeister: true,
+  },
   { href: "/unterkunft/kontrolle", label: "Zwischenkontrolle" },
   { href: "/unterkunft/maengel", label: "Mängel" },
   { href: "/unterkunft/reparaturen", label: "Reparaturen", nurHausmeister: true },

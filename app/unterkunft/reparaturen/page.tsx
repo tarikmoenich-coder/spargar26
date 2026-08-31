@@ -121,16 +121,17 @@ export default function UnterkunftReparaturenPage() {
     }`;
   }
 
-  // Wohneinheit + Zimmer/Raum (für die einfache Hausmeister-Ansicht).
+  // Gebäude + Wohneinheit + Zimmer/Raum (für die einfache Hausmeister-Ansicht).
   function ortLabel(zimmerId: number): string {
     const z = zimmer.find((x) => x.id === zimmerId);
     if (!z) return `Zimmer ${zimmerId}`;
+    const geb = gebaeude.find((x) => x.id === z.gebaeude_id)?.name ?? "?";
     const we =
       z.wohneinheit_id != null
         ? wohneinheiten.find((x) => x.id === z.wohneinheit_id)?.name
         : null;
     const raum = z.art === "zimmer" ? `Zimmer ${z.nummer}` : raumName(z);
-    return we ? `${we} · ${raum}` : raum;
+    return [geb, we, raum].filter(Boolean).join(" · ");
   }
 
   // Bewohner des betroffenen Raums (bzw. der Wohneinheit bei Allgemeinräumen)
@@ -357,11 +358,10 @@ export default function UnterkunftReparaturenPage() {
         <UnterkunftTabs />
         <div>
           <h1 className="text-lg font-semibold text-emerald-900">
-            Zu erledigen ({offen.length})
+            Offene Reparaturen ({offen.length})
           </h1>
           <p className="text-sm text-neutral-500">
-            Offene Reparaturen. Nach der Erledigung „Erledigt" tippen – gern mit
-            Foto vom Ergebnis.
+            Nach der Erledigung „Erledigt" tippen – gern mit Foto vom Ergebnis.
           </p>
         </div>
 

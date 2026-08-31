@@ -11,7 +11,6 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { getSupabaseClient } from "@/lib/supabase/client";
 import { useProfile } from "@/lib/useProfile";
 import UnterkunftTabs from "@/components/UnterkunftTabs";
@@ -187,15 +186,12 @@ interface UmzugState {
 
 export default function UnterkunftGrundrissPage() {
   const { profile } = useProfile();
-  const router = useRouter();
-  // Der Hausmeister sieht nur die Reparaturen (Vorgabe 2026-09-15).
-  useEffect(() => {
-    if (profile?.role === "hausmeister") router.replace("/unterkunft/reparaturen");
-  }, [profile?.role, router]);
+  // Kacheln verschieben / Räume anlegen: nur admin.
   const canEditPlan = profile?.role === "admin";
   // Zimmer sperren: wie bei den übrigen Zimmer-Stammdaten (RLS: admin/hr).
   const canManage = profile?.role === "admin" || profile?.role === "hr";
-  // Umzug wickelt der Hausmeister vor Ort ab (RLS unterkunft_belegung).
+  // Belegen + Umzug: admin/hr/hausmeister (RLS unterkunft_belegung). Der
+  // Hausmeister macht die Zimmerübergaben und wickelt Umzüge vor Ort ab.
   const canMove =
     profile?.role === "admin" ||
     profile?.role === "hr" ||
@@ -1221,7 +1217,7 @@ export default function UnterkunftGrundrissPage() {
                 ›
               </button>
             </div>
-            {canEditPlan && (
+            {canMove && (
               <button
                 onClick={() => {
                   setBelegen((v) => !v);
@@ -2040,7 +2036,7 @@ export default function UnterkunftGrundrissPage() {
                           </div>
                         )}
 
-                        {canEditPlan && !umzug && (
+                        {canMove && !umzug && (
                           <div className="mt-3 rounded border border-emerald-200 bg-emerald-50/60 p-2 text-sm">
                             <div className="font-medium text-emerald-900">
                               Person hinzufügen
