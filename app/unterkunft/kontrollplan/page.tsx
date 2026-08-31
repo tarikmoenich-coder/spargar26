@@ -2,8 +2,9 @@
 
 // Unterkunft → Kontrollplan (2026-09). Baum Gebäude → Wohneinheit → Raum mit
 // Ampel für die letzte Kontrolle (Schwellen je Raumtyp aus den Stammdaten),
-// Tagen seit der letzten Kontrolle und offenen Mängeln. Nur lesend – von hier
-// springt man in die Zwischenkontrolle bzw. die Mängelliste.
+// Tagen seit der letzten Kontrolle, offenen Mängeln und dem spätesten
+// nächsten Kontrolltermin (offene Mängel ziehen ihn vor). Nur lesend – von
+// hier springt man in die Zwischenkontrolle bzw. die Mängelliste.
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
@@ -13,7 +14,7 @@ import { formatDatumDE } from "@/lib/format";
 import {
   KONTROLL_AMPEL_FARBE,
   KONTROLL_AMPEL_LABELS,
-  kontrollAmpel,
+  naechsteKontrolle,
   type KontrollAmpel,
   type KontrollSchwellen,
 } from "@/lib/unterkunft";
@@ -50,6 +51,9 @@ export default function UnterkunftKontrollplanPage() {
   const [intervalle, setIntervalle] = useState<Record<string, KontrollSchwellen>>(
     {}
   );
+  const [maengel, setMaengel] = useState<
+    { zimmer_id: number; gemeldet_am: string }[]
+  >([]);
   const [loading, setLoading] = useState(true);
   const [gebaeudeFilter, setGebaeudeFilter] = useState("");
   const [nurFaellig, setNurFaellig] = useState(false);
@@ -59,13 +63,17 @@ export default function UnterkunftKontrollplanPage() {
   const laden = useCallback(async () => {
     setLoading(true);
     const supabase = getSupabaseClient();
-    const [z, ki] = await Promise.all([
+    const [z, ki, m] = await Promise.all([
       supabase
         .from("unterkunft_zimmer_uebersicht")
         .select("*")
         .order("gebaeude_name")
         .order("nummer"),
       supabase.from("unterkunft_kontroll_intervall").select("*"),
+      supabase
+        .from("unterkunft_mangel")
+        .select("zimmer_id, gemeldet_am")
+        .neq("status", "behoben"),
     ]);
     setZimmer((z.data as UnterkunftZimmerUebersicht[]) ?? []);
     setIntervalle(
@@ -76,6 +84,9 @@ export default function UnterkunftKontrollplanPage() {
         ])
       )
     );
+    setMaengel(
+      (m.data as { zimmer_id: number; gemeldet_am: string }[]) ?? []
+    );
     setLoading(false);
   }, []);
 
@@ -83,10 +94,27 @@ export default function UnterkunftKontrollplanPage() {
     laden();
   }, [laden]);
 
+  const offeneMaengelProZimmer = useMemo(() => {
+    const map: Record<number, { gemeldet_am: string }[]> = {};
+    maengel.forEach((m) => {
+      (map[m.zimmer_id] ??= []).push({ gemeldet_am: m.gemeldet_am });
+    });
+    return map;
+  }, [maengel]);
+
+  // { frist, ampel } je Raum – Zeitzyklus + offene Mängel.
+  const infoVon = useCallback(
+    (z: UnterkunftZimmerUebersicht) =>
+      naechsteKontrolle({
+        letzteKontrolleAm: z.letzte_kontrolle_am,
+        schwellen: intervalle[z.art] ?? null,
+        offeneMaengel: offeneMaengelProZimmer[z.zimmer_id] ?? [],
+      }),
+    [intervalle, offeneMaengelProZimmer]
+  );
   const ampelVon = useCallback(
-    (z: UnterkunftZimmerUebersicht): KontrollAmpel =>
-      kontrollAmpel(z.letzte_kontrolle_am, intervalle[z.art] ?? null),
-    [intervalle]
+    (z: UnterkunftZimmerUebersicht): KontrollAmpel => infoVon(z).ampel,
+    [infoVon]
   );
 
   const gebaeudeListe = useMemo(
@@ -251,8 +279,10 @@ export default function UnterkunftKontrollplanPage() {
   }
 
   function RaumZeile({ z }: { z: UnterkunftZimmerUebersicht }) {
-    const a = ampelVon(z);
+    const { ampel: a, frist } = infoVon(z);
     const tage = tageHer(z.letzte_kontrolle_am);
+    const heute = new Date().toISOString().slice(0, 10);
+    const ueberfaellig = frist == null || frist <= heute;
     return (
       <div className="flex flex-wrap items-center gap-x-3 gap-y-1 border-t border-neutral-100 py-1.5 pl-6 text-sm first:border-t-0">
         <span
@@ -295,6 +325,14 @@ export default function UnterkunftKontrollplanPage() {
         >
           {z.offene_maengel > 0 ? `${z.offene_maengel} Mängel` : "keine Mängel"}
         </span>
+        <span
+          className={`min-w-[13rem] ${
+            ueberfaellig ? "font-medium text-red-600" : "text-neutral-600"
+          }`}
+        >
+          Kontrolle spätestens:{" "}
+          {frist == null ? "sofort" : formatDatumDE(frist)}
+        </span>
         {z.gesperrt && (
           <span className="rounded bg-slate-200 px-1.5 py-0.5 text-xs text-slate-700">
             🔒 gesperrt
@@ -328,12 +366,13 @@ export default function UnterkunftKontrollplanPage() {
         <div>
           <h1 className="text-lg font-semibold text-emerald-900">Kontrollplan</h1>
           <p className="text-sm text-neutral-500">
-            Gebäude → Wohneinheit → Raum · letzte Kontrolle &amp; offene Mängel.
-            Ampel-Schwellen je Raumtyp aus den{" "}
+            Gebäude → Wohneinheit → Raum · letzte Kontrolle, offene Mängel und
+            spätester nächster Kontrolltermin. Zeitzyklus je Raumtyp aus den{" "}
             <Link href="/unterkunft/stammdaten" className="underline">
               Stammdaten
             </Link>
-            .
+            . Offener Mangel: Kontrolle binnen 3 Tagen; bei einer Kontrolle
+            nicht behoben: binnen 1 Tag.
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-3 text-sm">

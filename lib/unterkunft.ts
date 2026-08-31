@@ -123,6 +123,79 @@ export const KONTROLL_AMPEL_LABELS: Record<KontrollAmpel, string> = {
   rot: "Kontrolle überfällig",
 };
 
+// Ein offener Mangel zieht den nächsten Kontrolltermin vor: neu gemeldet →
+// binnen MANGEL_KONTROLLE_FRIST_TAGE, bei einer Kontrolle nicht behoben →
+// binnen MANGEL_UNBEHOBEN_FRIST_TAGE (danach folgen Konsequenzen).
+export const MANGEL_KONTROLLE_FRIST_TAGE = 3;
+export const MANGEL_UNBEHOBEN_FRIST_TAGE = 1;
+
+function nurDatum(iso: string): string {
+  return iso.slice(0, 10);
+}
+
+function datumPlusTage(isoDatum: string, n: number): string {
+  const d = new Date(`${nurDatum(isoDatum)}T00:00:00`);
+  d.setDate(d.getDate() + n);
+  return d.toISOString().slice(0, 10);
+}
+
+// Nächster spätester Kontrolltermin + Ampel eines Raums. Berücksichtigt den
+// Zeitzyklus (Schwellen je Raumtyp) UND offene Mängel: bei offenem Mangel ist
+// die Ampel nie grün, und die Frist wird vorgezogen.
+export function naechsteKontrolle(
+  input: {
+    letzteKontrolleAm: string | null;
+    schwellen: KontrollSchwellen | null;
+    offeneMaengel: ReadonlyArray<{ gemeldet_am: string }>;
+  },
+  jetzt: Date = new Date()
+): { frist: string | null; ampel: KontrollAmpel } {
+  const heute = jetzt.toISOString().slice(0, 10);
+  const letzte = input.letzteKontrolleAm
+    ? nurDatum(input.letzteKontrolleAm)
+    : null;
+  const gruen = input.schwellen?.gruen ?? KONTROLLE_WARNUNG_TAGE;
+  const gelb = input.schwellen?.gelb ?? KONTROLLE_FAELLIG_TAGE;
+  const offen = input.offeneMaengel ?? [];
+
+  const zyklusFrist = letzte ? datumPlusTage(letzte, gelb) : null;
+
+  let mangelFrist: string | null = null;
+  if (offen.length > 0) {
+    const fruehesteMeldung = offen
+      .map((m) => nurDatum(m.gemeldet_am))
+      .sort()[0];
+    // Eine Kontrolle nach der Mangelmeldung, Mangel weiterhin offen ->
+    // "nicht behoben trotz Kontrolle".
+    const nichtBehoben = letzte != null && letzte > fruehesteMeldung;
+    mangelFrist = nichtBehoben
+      ? datumPlusTage(letzte as string, MANGEL_UNBEHOBEN_FRIST_TAGE)
+      : datumPlusTage(fruehesteMeldung, MANGEL_KONTROLLE_FRIST_TAGE);
+  }
+
+  const kandidaten = [zyklusFrist, mangelFrist].filter(
+    (x): x is string => x != null
+  );
+  const frist = kandidaten.length ? kandidaten.sort()[0] : null;
+
+  let ampel: KontrollAmpel;
+  if (!letzte && offen.length === 0) {
+    ampel = "keine";
+  } else if (frist != null && heute > frist) {
+    ampel = "rot";
+  } else if (offen.length > 0) {
+    ampel = mangelFrist != null && heute > mangelFrist ? "rot" : "gelb";
+  } else {
+    const tage = letzte
+      ? Math.floor(
+          (jetzt.getTime() - new Date(`${letzte}T00:00:00`).getTime()) / 86400000
+        )
+      : Infinity;
+    ampel = tage <= gruen ? "gruen" : tage <= gelb ? "gelb" : "rot";
+  }
+  return { frist, ampel };
+}
+
 // Farbwerte für die Ampel-Punkte im Grundriss (Tailwind-nah gehalten).
 export const KONTROLL_AMPEL_FARBE: Record<KontrollAmpel, string> = {
   keine: "#a3a3a3", // neutral-400
