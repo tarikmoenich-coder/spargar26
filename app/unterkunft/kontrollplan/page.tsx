@@ -56,6 +56,7 @@ export default function UnterkunftKontrollplanPage() {
   const [zeigeLeere, setZeigeLeere] = useState(false);
   const [zu, setZu] = useState<Set<string>>(new Set()); // eingeklappte Knoten
   const [heuteAuf, setHeuteAuf] = useState(true);
+  const [heuteZuGeb, setHeuteZuGeb] = useState<Set<string>>(new Set());
 
   const laden = useCallback(async () => {
     setLoading(true);
@@ -281,6 +282,26 @@ export default function UnterkunftKontrollplanPage() {
           a.z.nummer.localeCompare(b.z.nummer, "de", { numeric: true })
       );
   }, [zimmer, gebaeudeFilter, relevantVon, infoVon]);
+
+  // "Heute zu erledigen" nach Gebäude gruppiert.
+  const heuteProGebaeude = useMemo(() => {
+    const m = new Map<string, typeof heuteListe>();
+    for (const row of heuteListe) {
+      const k = row.z.gebaeude_name;
+      if (!m.has(k)) m.set(k, []);
+      m.get(k)!.push(row);
+    }
+    return [...m.entries()].sort((a, b) => a[0].localeCompare(b[0]));
+  }, [heuteListe]);
+
+  function toggleHeuteGeb(geb: string) {
+    setHeuteZuGeb((s) => {
+      const n = new Set(s);
+      if (n.has(geb)) n.delete(geb);
+      else n.add(geb);
+      return n;
+    });
+  }
 
   // Rollup-Zähler für einen Knoten. Leere Räume ohne Mangel zählen nicht mit.
   const rollup = useCallback(
@@ -584,70 +605,99 @@ export default function UnterkunftKontrollplanPage() {
           )}
         </button>
         {heuteAuf && (
-          <div className="px-2 pb-2">
+          <div className="space-y-2 px-2 pb-2">
             {heuteListe.length === 0 ? (
               <p className="px-1 py-1 text-sm text-emerald-800">
                 Heute ist keine Kontrolle fällig. 👍
               </p>
             ) : (
-              <ul className="divide-y divide-emerald-100">
-                {heuteListe.map(({ z, info }) => {
-                  const heute = new Date().toISOString().slice(0, 10);
-                  const grund =
-                    info.frist == null
-                      ? "noch nie kontrolliert"
-                      : info.frist < heute
-                        ? `überfällig seit ${formatDatumDE(info.frist)}`
-                        : "heute fällig";
-                  return (
-                    <li
-                      key={z.zimmer_id}
-                      className="flex flex-wrap items-center gap-x-3 gap-y-1 px-1 py-1.5 text-sm"
+              heuteProGebaeude.map(([geb, rows]) => {
+                const gZu = heuteZuGeb.has(geb);
+                return (
+                  <div
+                    key={geb}
+                    className="rounded border border-emerald-200 bg-white"
+                  >
+                    <button
+                      className="flex w-full items-center gap-2 px-2 py-1.5 text-left"
+                      onClick={() => toggleHeuteGeb(geb)}
                     >
-                      <span
-                        className="inline-block h-2.5 w-2.5 shrink-0 rounded-full"
-                        style={{ backgroundColor: KONTROLL_AMPEL_FARBE[info.ampel] }}
-                      />
-                      <span className="font-medium">
-                        {z.gebaeude_name}
-                        {z.wohneinheit_name ? ` · ${z.wohneinheit_name}` : ""} ·{" "}
-                        {raumName(z)}
+                      <span className="font-semibold text-emerald-900">
+                        {gZu ? "▸" : "▾"} {geb}
                       </span>
-                      <span
-                        className={
-                          info.frist != null && info.frist < heute
-                            ? "font-medium text-red-600"
-                            : "text-neutral-600"
-                        }
-                      >
-                        {grund}
+                      <span className="rounded-full bg-red-600 px-2 py-0.5 text-xs font-semibold text-white">
+                        {rows.length}
                       </span>
-                      {z.offene_maengel > 0 && (
-                        <span className="text-red-600">
-                          · {z.offene_maengel}{" "}
-                          {z.offene_maengel === 1 ? "Mangel" : "Mängel"}
-                        </span>
-                      )}
-                      <span className="ml-auto flex gap-2">
-                        <Link
-                          href={`/unterkunft/kontrolle?zimmer=${z.zimmer_id}`}
-                          className="rounded bg-emerald-700 px-2 py-0.5 text-xs font-medium text-white"
-                        >
-                          Kontrolle starten
-                        </Link>
-                        {z.offene_maengel > 0 && (
-                          <Link
-                            href={`/unterkunft/maengel?zimmer=${z.zimmer_id}`}
-                            className="text-xs text-emerald-700 underline"
-                          >
-                            Mängel
-                          </Link>
-                        )}
-                      </span>
-                    </li>
-                  );
-                })}
-              </ul>
+                    </button>
+                    {!gZu && (
+                      <ul className="divide-y divide-emerald-100 border-t border-emerald-100">
+                        {rows.map(({ z, info }) => {
+                          const heute = new Date()
+                            .toISOString()
+                            .slice(0, 10);
+                          const grund =
+                            info.frist == null
+                              ? "noch nie kontrolliert"
+                              : info.frist < heute
+                                ? `überfällig seit ${formatDatumDE(info.frist)}`
+                                : "heute fällig";
+                          return (
+                            <li
+                              key={z.zimmer_id}
+                              className="flex flex-wrap items-center gap-x-3 gap-y-1 px-2 py-1.5 text-sm"
+                            >
+                              <span
+                                className="inline-block h-2.5 w-2.5 shrink-0 rounded-full"
+                                style={{
+                                  backgroundColor:
+                                    KONTROLL_AMPEL_FARBE[info.ampel],
+                                }}
+                              />
+                              <span className="font-medium">
+                                {z.wohneinheit_name
+                                  ? `${z.wohneinheit_name} · `
+                                  : ""}
+                                {raumName(z)}
+                              </span>
+                              <span
+                                className={
+                                  info.frist != null && info.frist < heute
+                                    ? "font-medium text-red-600"
+                                    : "text-neutral-600"
+                                }
+                              >
+                                {grund}
+                              </span>
+                              {z.offene_maengel > 0 && (
+                                <span className="text-red-600">
+                                  · {z.offene_maengel}{" "}
+                                  {z.offene_maengel === 1 ? "Mangel" : "Mängel"}
+                                </span>
+                              )}
+                              <span className="ml-auto flex gap-2">
+                                <Link
+                                  href={`/unterkunft/kontrolle?zimmer=${z.zimmer_id}`}
+                                  className="rounded bg-emerald-700 px-2 py-0.5 text-xs font-medium text-white"
+                                >
+                                  Kontrolle starten
+                                </Link>
+                                {z.offene_maengel > 0 && (
+                                  <Link
+                                    href={`/unterkunft/maengel?zimmer=${z.zimmer_id}`}
+                                    className="text-xs text-emerald-700 underline"
+                                  >
+                                    Mängel
+                                  </Link>
+                                )}
+                              </span>
+                            </li>
+                          );
+                        })}
+                      </ul>
+                    )}
+                  </div>
+                );
+              })
             )}
           </div>
         )}

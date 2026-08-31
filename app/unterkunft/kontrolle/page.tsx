@@ -10,7 +10,7 @@
 // und die Seite führt Raum für Raum durch ("Raum 2 von 6"). Kontrolliert-von /
 // Gesamtzustand / Notiz gelten für die ganze Runde.
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { getSupabaseClient } from "@/lib/supabase/client";
 import { useProfile } from "@/lib/useProfile";
 import UnterkunftTabs from "@/components/UnterkunftTabs";
@@ -151,6 +151,25 @@ export default function UnterkunftKontrollePage() {
         }));
     }
   }, [zimmer, wohneinheiten]);
+
+  // Kommt der Aufruf über einen Deep-Link (Kontrollplan „Kontrolle starten",
+  // Grundriss), direkt den Vorgang anlegen und öffnen - kein zweiter Klick.
+  const autoStartRef = useRef(false);
+  useEffect(() => {
+    if (autoStartRef.current || vorgang || runde.length > 0) return;
+    if (vorlage.length === 0) return;
+    const q = new URLSearchParams(window.location.search);
+    if (!q.get("zimmer") && !q.get("wohneinheit")) return;
+    if (sel.modus === "zimmer" && !sel.zimmer_id) return;
+    if (
+      sel.modus === "wohneinheit" &&
+      (!sel.wohneinheit_id || raumWahl.size === 0)
+    )
+      return;
+    autoStartRef.current = true;
+    starten();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sel, vorlage, raumWahl, runde.length, vorgang]);
 
   useEffect(() => {
     if (!dirty) return;
