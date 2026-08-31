@@ -147,8 +147,22 @@ export default function FotoAufnahme({
             // stammen aus einer Übergabe/Kontrolle. Sie werden hier nur gezeigt
             // (löschen ginge nur im - abgeschlossenen - Vorgang).
             const geerbt = anMangel && foto.vorgang_id != null;
+            const zeitpunkt = foto.aufgenommen_am ?? foto.hochgeladen_am;
+            const stempel = zeitpunkt
+              ? new Date(zeitpunkt).toLocaleString("de-DE", {
+                  day: "2-digit",
+                  month: "2-digit",
+                  year: "numeric",
+                  hour: "2-digit",
+                  minute: "2-digit",
+                })
+              : null;
             return (
-              <div key={foto.id} className="relative">
+              <div
+                key={foto.id}
+                className="flex flex-col items-center gap-0.5"
+              >
+                <div className="relative">
                 {foto.signierteUrl ? (
                   // eslint-disable-next-line @next/next/no-img-element
                   <a href={foto.signierteUrl} target="_blank" rel="noreferrer">
@@ -179,6 +193,10 @@ export default function FotoAufnahme({
                     ×
                   </button>
                 )}
+                </div>
+                <span className="text-[10px] leading-tight text-neutral-500">
+                  {stempel ?? "—"}
+                </span>
               </div>
             );
           })}

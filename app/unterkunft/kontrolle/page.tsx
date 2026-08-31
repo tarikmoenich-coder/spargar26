@@ -11,6 +11,7 @@
 // Gesamtzustand / Notiz gelten für die ganze Runde.
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import { getSupabaseClient } from "@/lib/supabase/client";
 import { useProfile } from "@/lib/useProfile";
 import UnterkunftTabs from "@/components/UnterkunftTabs";
@@ -43,10 +44,12 @@ interface PosEntwurf {
 
 export default function UnterkunftKontrollePage() {
   const { profile } = useProfile();
-  const canEdit =
-    profile?.role === "admin" ||
-    profile?.role === "hr" ||
-    profile?.role === "hausmeister";
+  const router = useRouter();
+  useEffect(() => {
+    if (profile?.role === "hausmeister") router.replace("/unterkunft/reparaturen");
+  }, [profile?.role, router]);
+  // Zwischenkontrollen macht eine höhere Rolle - der Hausmeister nicht mehr.
+  const canEdit = profile?.role === "admin" || profile?.role === "hr";
 
   const [gebaeude, setGebaeude] = useState<UnterkunftGebaeude[]>([]);
   const [wohneinheiten, setWohneinheiten] = useState<UnterkunftWohneinheit[]>([]);

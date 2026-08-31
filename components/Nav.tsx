@@ -47,8 +47,8 @@ const items: NavItem[] = [
   {
     href: "/unterkunft",
     label: "Unterkunft",
-    // hausmeister sieht ausschliesslich dieses Modul + "Suche" (roles: "all").
-    // erntewirtschaft nur lesend (Durchsetzung serverseitig via RLS).
+    // hausmeister sieht ausschliesslich dieses Modul (nur Reparaturen, Vorgabe
+    // 2026-09-15). erntewirtschaft nur lesend (Durchsetzung via RLS).
     roles: ["admin", "hr", "erntewirtschaft", "hausmeister"],
   },
   {
@@ -60,7 +60,17 @@ const items: NavItem[] = [
   {
     href: "/suche",
     label: "Suche",
-    roles: "all",
+    // Alle ausser hausmeister (der sieht nur Reparaturen, Vorgabe 2026-09-15).
+    roles: [
+      "admin",
+      "hr",
+      "zeiterfassung",
+      "kasse",
+      "lohnabrechnung",
+      "pruefer",
+      "management",
+      "erntewirtschaft",
+    ],
   },
   {
     href: "/uebersicht",

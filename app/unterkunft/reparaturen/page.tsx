@@ -25,6 +25,7 @@ import {
   type UnterkunftMangelSchwere,
   type UnterkunftMangelStatus,
   type UnterkunftMangelVerursachung,
+  type UnterkunftWohneinheit,
   type UnterkunftZimmer,
 } from "@/lib/types";
 
@@ -47,8 +48,10 @@ export default function UnterkunftReparaturenPage() {
     profile?.role === "admin" ||
     profile?.role === "hr" ||
     profile?.role === "hausmeister";
+  const istHausmeister = profile?.role === "hausmeister";
 
   const [gebaeude, setGebaeude] = useState<UnterkunftGebaeude[]>([]);
+  const [wohneinheiten, setWohneinheiten] = useState<UnterkunftWohneinheit[]>([]);
   const [zimmer, setZimmer] = useState<UnterkunftZimmer[]>([]);
   const [reparaturen, setReparaturen] = useState<UnterkunftMangel[]>([]);
   const [belegungen, setBelegungen] = useState<UnterkunftBelegungPerson[]>([]);
@@ -76,8 +79,9 @@ export default function UnterkunftReparaturenPage() {
   const laden = useCallback(async () => {
     setLoading(true);
     const supabase = getSupabaseClient();
-    const [g, z, m, bp, e, bl] = await Promise.all([
+    const [g, w, z, m, bp, e, bl] = await Promise.all([
       supabase.from("unterkunft_gebaeude").select("*").order("name"),
+      supabase.from("unterkunft_wohneinheit").select("id, name").order("name"),
       supabase.from("unterkunft_zimmer").select("*").order("nummer"),
       supabase
         .from("unterkunft_mangel")
@@ -95,6 +99,7 @@ export default function UnterkunftReparaturenPage() {
       supabase.from("unterkunft_belastung").select("*"),
     ]);
     setGebaeude((g.data as UnterkunftGebaeude[]) ?? []);
+    setWohneinheiten((w.data as UnterkunftWohneinheit[]) ?? []);
     setZimmer((z.data as UnterkunftZimmer[]) ?? []);
     setReparaturen((m.data as UnterkunftMangel[]) ?? []);
     setBelegungen((bp.data as UnterkunftBelegungPerson[]) ?? []);
@@ -114,6 +119,18 @@ export default function UnterkunftReparaturenPage() {
     return `${g?.name ?? "?"} · ${
       z.art === "zimmer" ? `Zimmer ${z.nummer}` : raumName(z)
     }`;
+  }
+
+  // Wohneinheit + Zimmer/Raum (für die einfache Hausmeister-Ansicht).
+  function ortLabel(zimmerId: number): string {
+    const z = zimmer.find((x) => x.id === zimmerId);
+    if (!z) return `Zimmer ${zimmerId}`;
+    const we =
+      z.wohneinheit_id != null
+        ? wohneinheiten.find((x) => x.id === z.wohneinheit_id)?.name
+        : null;
+    const raum = z.art === "zimmer" ? `Zimmer ${z.nummer}` : raumName(z);
+    return we ? `${we} · ${raum}` : raum;
   }
 
   // Bewohner des betroffenen Raums (bzw. der Wohneinheit bei Allgemeinräumen)
@@ -329,6 +346,72 @@ export default function UnterkunftReparaturenPage() {
   }
 
   if (loading) return <p className="p-4 text-sm text-neutral-500">Lädt …</p>;
+
+  // --- Einfache Ansicht für den Hausmeister -----------------------------
+  if (istHausmeister) {
+    const offen = reparaturen
+      .filter((m) => m.status !== "behoben")
+      .sort((a, b) => a.gemeldet_am.localeCompare(b.gemeldet_am));
+    return (
+      <div className="space-y-4">
+        <UnterkunftTabs />
+        <div>
+          <h1 className="text-lg font-semibold text-emerald-900">
+            Zu erledigen ({offen.length})
+          </h1>
+          <p className="text-sm text-neutral-500">
+            Offene Reparaturen. Nach der Erledigung „Erledigt" tippen – gern mit
+            Foto vom Ergebnis.
+          </p>
+        </div>
+
+        {fehler && (
+          <p className="rounded border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+            {fehler}
+          </p>
+        )}
+
+        {offen.length === 0 ? (
+          <p className="rounded border border-emerald-200 bg-emerald-50 px-3 py-3 text-sm text-emerald-800">
+            Nichts zu erledigen. 👍
+          </p>
+        ) : (
+          <div className="space-y-3">
+            {offen.map((m) => (
+              <div
+                key={m.id}
+                className="rounded-lg border border-neutral-200 bg-white p-3 shadow-sm"
+              >
+                <div className="flex flex-wrap items-start justify-between gap-2">
+                  <div>
+                    <div className="font-semibold text-emerald-900">
+                      {ortLabel(m.zimmer_id)}
+                    </div>
+                    <div className="text-xs text-neutral-500">
+                      gemeldet am {formatDatumDE(m.gemeldet_am)} ·{" "}
+                      {UNTERKUNFT_MANGEL_SCHWERE_LABELS[m.schwere]}
+                    </div>
+                  </div>
+                  <button
+                    className="btn"
+                    onClick={() =>
+                      aktualisieren(m, { status: "behoben" })
+                    }
+                  >
+                    Erledigt
+                  </button>
+                </div>
+                <p className="mt-1 text-sm text-neutral-800">{m.beschreibung}</p>
+                <div className="mt-2">
+                  <FotoAufnahme zimmerId={m.zimmer_id} mangelId={m.id} />
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">

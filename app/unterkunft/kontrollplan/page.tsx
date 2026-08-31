@@ -8,7 +8,9 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { getSupabaseClient } from "@/lib/supabase/client";
+import { useProfile } from "@/lib/useProfile";
 import UnterkunftTabs from "@/components/UnterkunftTabs";
 import { formatDatumDE } from "@/lib/format";
 import {
@@ -39,6 +41,11 @@ function tageHer(iso: string | null): number | null {
 }
 
 export default function UnterkunftKontrollplanPage() {
+  const { profile } = useProfile();
+  const router = useRouter();
+  useEffect(() => {
+    if (profile?.role === "hausmeister") router.replace("/unterkunft/reparaturen");
+  }, [profile?.role, router]);
   const [zimmer, setZimmer] = useState<UnterkunftZimmerUebersicht[]>([]);
   const [intervalle, setIntervalle] = useState<Record<string, KontrollSchwellen>>(
     {}

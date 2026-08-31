@@ -48,10 +48,17 @@ export interface VerkleinertesBild {
 // Seite) und gibt es als JPEG-Blob samt Maßen zurück. Bilder, die schon
 // kleiner sind, werden nur neu als JPEG kodiert (vereinheitlicht den
 // Upload-Typ). Wirft, wenn die Datei kein dekodierbares Bild ist.
+// "DD.MM.YYYY HH:MM" für den ins Bild gebrannten Zeitstempel.
+function stempelText(d: Date): string {
+  const p = (n: number) => String(n).padStart(2, "0");
+  return `${p(d.getDate())}.${p(d.getMonth() + 1)}.${d.getFullYear()} ${p(
+    d.getHours()
+  )}:${p(d.getMinutes())}`;
+}
+
 export async function bildVerkleinern(datei: File): Promise<VerkleinertesBild> {
-  const aufgenommen_am = datei.lastModified
-    ? new Date(datei.lastModified).toISOString()
-    : null;
+  const aufnahme = datei.lastModified ? new Date(datei.lastModified) : new Date();
+  const aufgenommen_am = aufnahme.toISOString();
 
   const bitmap = await createImageBitmap(datei);
   const skala = Math.min(1, MAX_KANTE_PX / Math.max(bitmap.width, bitmap.height));
@@ -68,6 +75,19 @@ export async function bildVerkleinern(datei: File): Promise<VerkleinertesBild> {
   }
   ctx.drawImage(bitmap, 0, 0, breite, hoehe);
   bitmap.close();
+
+  // Zeitstempel fest ins Bild brennen (bleibt auch bei Export/Weitergabe
+  // erhalten). Basis ist die Aufnahmezeit der Datei, sonst jetzt.
+  const text = stempelText(aufnahme);
+  const fontPx = Math.max(12, Math.round(breite * 0.028));
+  ctx.font = `600 ${fontPx}px system-ui, sans-serif`;
+  ctx.textBaseline = "bottom";
+  const pad = Math.round(fontPx * 0.4);
+  const tw = ctx.measureText(text).width;
+  ctx.fillStyle = "rgba(0,0,0,0.55)";
+  ctx.fillRect(0, hoehe - fontPx - pad * 2, tw + pad * 2, fontPx + pad * 2);
+  ctx.fillStyle = "#ffffff";
+  ctx.fillText(text, pad, hoehe - pad);
 
   const blob = await new Promise<Blob | null>((resolve) =>
     canvas.toBlob(resolve, "image/jpeg", JPEG_QUALITAET)

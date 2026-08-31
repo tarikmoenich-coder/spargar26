@@ -188,9 +188,9 @@ interface UmzugState {
 export default function UnterkunftGrundrissPage() {
   const { profile } = useProfile();
   const router = useRouter();
-  // Der Hausmeister arbeitet nicht mit dem Grundriss (Vorgabe 2026-09-14).
+  // Der Hausmeister sieht nur die Reparaturen (Vorgabe 2026-09-15).
   useEffect(() => {
-    if (profile?.role === "hausmeister") router.replace("/unterkunft/kontrollplan");
+    if (profile?.role === "hausmeister") router.replace("/unterkunft/reparaturen");
   }, [profile?.role, router]);
   const canEditPlan = profile?.role === "admin";
   // Zimmer sperren: wie bei den übrigen Zimmer-Stammdaten (RLS: admin/hr).
