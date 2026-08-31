@@ -9,7 +9,7 @@
 //   3. Abschließen → Vorgang wird schreibgeschützt (Trigger); Positionen mit
 //      Zustand "Mangel" können als Mängel übernommen werden.
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { getSupabaseClient } from "@/lib/supabase/client";
 import { useProfile } from "@/lib/useProfile";
 import UnterkunftTabs from "@/components/UnterkunftTabs";
@@ -143,22 +143,41 @@ export default function UnterkunftUebergabePage() {
     laden();
   }, [laden]);
 
-  // Deep-Link aus dem Grundriss: ?zimmer=<id> wählt Gebäude + Zimmer vor
-  // (bewusst über window.location statt useSearchParams - spart die
-  // Suspense-Grenze für diese eine Client-Seite).
+  // Deep-Link aus den Immobilien: ?zimmer=<id> (+ optional ?typ=einzug|auszug,
+  // ?belegung=<id>) wählt Gebäude/Zimmer/Typ vor. Bei ?typ=auszug mit
+  // ?belegung wird der Vorgang direkt gestartet (Person ist ja schon gewählt).
+  const autoStartRef = useRef(false);
   useEffect(() => {
     if (zimmer.length === 0) return;
-    const param = new URLSearchParams(window.location.search).get("zimmer");
+    const q = new URLSearchParams(window.location.search);
+    const param = q.get("zimmer");
     if (!param) return;
     const z = zimmer.find((x) => String(x.id) === param);
-    if (z) {
-      setSel((s) => ({
-        ...s,
-        gebaeude_id: String(z.gebaeude_id),
-        zimmer_id: String(z.id),
-      }));
-    }
+    if (!z) return;
+    const typParam = q.get("typ");
+    const belegungParam = q.get("belegung");
+    setSel((s) => ({
+      ...s,
+      gebaeude_id: String(z.gebaeude_id),
+      zimmer_id: String(z.id),
+      typ:
+        typParam === "auszug" || typParam === "einzug"
+          ? (typParam as UnterkunftVorgangTyp)
+          : s.typ,
+      belegung_id: belegungParam ?? s.belegung_id,
+    }));
   }, [zimmer]);
+
+  // Auszug per Deep-Link direkt starten (Person = ?belegung ist schon gewählt).
+  useEffect(() => {
+    if (autoStartRef.current || vorgang || vorlage.length === 0) return;
+    if (sel.typ !== "auszug" || !sel.zimmer_id) return;
+    const q = new URLSearchParams(window.location.search);
+    if (q.get("typ") !== "auszug") return;
+    autoStartRef.current = true;
+    vorgangStarten();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sel.typ, sel.zimmer_id, vorlage, vorgang]);
 
   useEffect(() => {
     if (!dirty) return;

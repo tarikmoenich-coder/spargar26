@@ -11,6 +11,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { getSupabaseClient } from "@/lib/supabase/client";
 import { useProfile } from "@/lib/useProfile";
 import UnterkunftTabs from "@/components/UnterkunftTabs";
@@ -184,8 +185,48 @@ interface UmzugState {
   vonDatum: string;
 }
 
+// Kleine Symbole für die Zimmer-Aktionen: Person/Pfeil ins Haus (Einzug) bzw.
+// aus dem Haus heraus (Auszug).
+function IconEinzug() {
+  return (
+    <svg
+      width="18"
+      height="14"
+      viewBox="0 0 24 16"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.7"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <path d="M14 15V9h4v6M12 10l4-4 4 4" />
+      <path d="M2 8h8M7 4.5 10.5 8 7 11.5" />
+    </svg>
+  );
+}
+function IconAuszug() {
+  return (
+    <svg
+      width="18"
+      height="14"
+      viewBox="0 0 24 16"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.7"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <path d="M6 15V9h4v6M4 10l4-4 4 4" />
+      <path d="M14 8h8M18.5 4.5 22 8l-3.5 3.5" />
+    </svg>
+  );
+}
+
 export default function UnterkunftGrundrissPage() {
   const { profile } = useProfile();
+  const router = useRouter();
   // Kacheln verschieben / Räume anlegen: nur admin.
   const canEditPlan = profile?.role === "admin";
   // Zimmer sperren: wie bei den übrigen Zimmer-Stammdaten (RLS: admin/hr).
@@ -230,6 +271,9 @@ export default function UnterkunftGrundrissPage() {
   });
   // Direkt belegen (nur admin), ohne Übergabe
   const [direkt, setDirekt] = useState<{ suche: string } | null>(null);
+  // Zimmer-Panel: Einzug (Person hinzufügen) aufgeklappt / Auszug-Personenwahl.
+  const [einzugOffen, setEinzugOffen] = useState(false);
+  const [auszugWahlOffen, setAuszugWahlOffen] = useState(false);
   // Belegen-Modus: Person antippen → Zimmer antippen (2 Taps, kein Panel).
   const [belegen, setBelegen] = useState(false);
   const [handPerson, setHandPerson] = useState<UnterkunftPersonOffen | null>(null);
@@ -353,6 +397,8 @@ export default function UnterkunftGrundrissPage() {
     setDirekt(null);
     setMaengelAuf(false);
     setNeuerMangel(null);
+    setEinzugOffen(false);
+    setAuszugWahlOffen(false);
   }, [selId, einheitId]);
 
   // Beim Verlassen des Belegen-Modus die „Person in der Hand" loslassen.
@@ -938,7 +984,7 @@ export default function UnterkunftGrundrissPage() {
 
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <h1 className="text-lg font-semibold text-emerald-900">Grundriss</h1>
+          <h1 className="text-lg font-semibold text-emerald-900">Immobilien</h1>
           <p className="text-sm text-neutral-500">
             Wohneinheit wählen → Zimmer antippen. „Belegen": Person antippen,
             dann Zimmer antippen.
@@ -2036,14 +2082,13 @@ export default function UnterkunftGrundrissPage() {
                           </div>
                         )}
 
-                        {canMove && !umzug && (
-                          <div className="mt-3 rounded border border-emerald-200 bg-emerald-50/60 p-2 text-sm">
+                        {canMove && !umzug && einzugOffen && (
+                          <div className="mt-3 rounded border border-emerald-300 bg-emerald-50 p-2 text-sm">
                             <div className="font-medium text-emerald-900">
-                              Person hinzufügen
+                              Einzug – Person ins Zimmer
                             </div>
                             <p className="text-xs text-neutral-500">
-                              Bewohner sofort ins Zimmer setzen (ohne
-                              Übergabe-Protokoll).
+                              Bewohner ohne Bleibe wählen; wird sofort belegt.
                             </p>
                             <div className="mt-2 space-y-2">
                               {sel.frei <= 0 && (
@@ -2130,13 +2175,43 @@ export default function UnterkunftGrundrissPage() {
                     )}
 
                     <div className="mt-3 flex flex-wrap gap-2 border-t border-neutral-100 pt-3">
-                      {sel.art === "zimmer" && (
-                        <Link
-                          className="btn"
-                          href={`/unterkunft/uebergabe?zimmer=${sel.zimmer_id}`}
-                        >
-                          Übergabe starten
-                        </Link>
+                      {sel.art === "zimmer" && canMove && (
+                        <>
+                          <button
+                            className={`inline-flex items-center gap-1.5 rounded border px-3 py-1 font-medium ${
+                              einzugOffen
+                                ? "border-emerald-700 bg-emerald-700 text-white"
+                                : "border-emerald-600 text-emerald-700"
+                            }`}
+                            onClick={() => {
+                              setEinzugOffen((v) => !v);
+                              setAuszugWahlOffen(false);
+                            }}
+                          >
+                            <IconEinzug /> Einzug starten
+                          </button>
+                          <button
+                            className="inline-flex items-center gap-1.5 rounded border border-red-600 px-3 py-1 font-medium text-red-700"
+                            onClick={() => {
+                              const bew =
+                                belegungProZimmer[sel.zimmer_id] ?? [];
+                              setEinzugOffen(false);
+                              if (bew.length === 0) {
+                                setHinweis("Niemand in diesem Zimmer.");
+                                return;
+                              }
+                              if (bew.length === 1) {
+                                router.push(
+                                  `/unterkunft/uebergabe?zimmer=${sel.zimmer_id}&typ=auszug&belegung=${bew[0].id}`
+                                );
+                                return;
+                              }
+                              setAuszugWahlOffen((v) => !v);
+                            }}
+                          >
+                            <IconAuszug /> Auszug starten
+                          </button>
+                        </>
                       )}
                       <Link
                         className="btn-secondary"
@@ -2178,6 +2253,36 @@ export default function UnterkunftGrundrissPage() {
                         </button>
                       )}
                     </div>
+
+                    {auszugWahlOffen && (
+                      <div className="mt-2 rounded border border-red-300 bg-red-50 p-2 text-sm">
+                        <div className="font-medium text-red-900">
+                          Wer zieht aus?
+                        </div>
+                        <ul className="mt-1 space-y-1">
+                          {(belegungProZimmer[sel.zimmer_id] ?? []).map((b) => (
+                            <li key={b.id}>
+                              <button
+                                className="w-full rounded border border-red-200 bg-white px-2 py-1 text-left hover:border-red-400"
+                                onClick={() =>
+                                  router.push(
+                                    `/unterkunft/uebergabe?zimmer=${sel.zimmer_id}&typ=auszug&belegung=${b.id}`
+                                  )
+                                }
+                              >
+                                {b.vorname} {b.name}
+                                {b.herkunft ? (
+                                  <span className="text-neutral-400">
+                                    {" "}
+                                    · {b.herkunft}
+                                  </span>
+                                ) : null}
+                              </button>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
 
                     {neuerMangel && canEditMangel && (
                       <div className="mt-3 space-y-2 rounded border border-red-200 bg-red-50 p-2 text-sm">
