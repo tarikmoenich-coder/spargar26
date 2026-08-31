@@ -15,6 +15,7 @@ import {
   type Employee,
   type Herkunft,
   type PersonalKandidat,
+  type UnterkunftHerkunftKontingent,
   type VerpflegungsSatz,
 } from "@/lib/types";
 import PersonalTabs from "@/components/PersonalTabs";
@@ -246,6 +247,45 @@ export default function PersonalplanungPage() {
     setError(null);
     const supabase = getSupabaseClient();
     const fehlerListe: string[] = [];
+
+    // Herkunfts-Stammplätze laden: die reservierten Wohneinheiten je
+    // (Saison, Herkunft) und die aktuelle Belegung/Planung je Wohneinheit.
+    const jahre = [
+      ...new Set(
+        ausgewaehlt.map((id) => {
+          const k = kandidaten.find((x) => x.id === id);
+          return k?.geplante_ankunft
+            ? new Date(k.geplante_ankunft).getFullYear()
+            : new Date().getFullYear();
+        })
+      ),
+    ];
+    const [{ data: kontData }, { data: ueberData }] = await Promise.all([
+      supabase
+        .from("unterkunft_herkunft_kontingent")
+        .select("*")
+        .in("saison_jahr", jahre)
+        .order("reihenfolge"),
+      supabase
+        .from("unterkunft_wohneinheit_uebersicht")
+        .select("wohneinheit_id, betten, fest, geplant"),
+    ]);
+    const kontingentByHerkunft = new Map<string, UnterkunftHerkunftKontingent[]>();
+    ((kontData as UnterkunftHerkunftKontingent[]) ?? []).forEach((k) => {
+      const key = `${k.saison_jahr}|${k.herkunft}`;
+      if (!kontingentByHerkunft.has(key)) kontingentByHerkunft.set(key, []);
+      kontingentByHerkunft.get(key)!.push(k);
+    });
+    const weUeber = new Map<
+      number,
+      { betten: number; fest: number; geplant: number }
+    >(
+      ((ueberData as { wohneinheit_id: number; betten: number; fest: number; geplant: number }[]) ??
+        []).map((u) => [u.wohneinheit_id, u])
+    );
+    const platziertProWe = new Map<number, number>();
+    const ohnePlatz = new Map<string, number>();
+
     for (const id of ausgewaehlt) {
       const k = kandidaten.find((x) => x.id === id);
       if (!k || k.status !== "geplant") continue;
@@ -295,9 +335,59 @@ export default function PersonalplanungPage() {
         .from("personal_kandidaten")
         .update({ status: "anreiseliste", aktivierter_employee_id: employeeId })
         .eq("id", k.id);
+
+      // Person in das nächste freie reservierte Haus ihrer Herkunft setzen
+      // (geplante Zimmerzuordnung, Wohneinheits-Ebene). Zimmer regelt der
+      // Hausmeister bei der Ankunft.
+      if (employeeId && k.herkunft) {
+        const saisonJ = k.geplante_ankunft
+          ? new Date(k.geplante_ankunft).getFullYear()
+          : new Date().getFullYear();
+        const kont = kontingentByHerkunft.get(`${saisonJ}|${k.herkunft}`) ?? [];
+        let platziert = false;
+        for (const we of kont) {
+          const u = weUeber.get(we.wohneinheit_id);
+          const betten = u?.betten ?? 0;
+          const belegtJetzt =
+            (u ? u.fest + u.geplant : 0) +
+            (platziertProWe.get(we.wohneinheit_id) ?? 0);
+          if (belegtJetzt >= betten) continue;
+          const { error } = await supabase.from("unterkunft_zuordnung").insert({
+            employee_id: employeeId,
+            wohneinheit_id: we.wohneinheit_id,
+            geplant_ab:
+              k.geplante_ankunft ?? new Date().toISOString().slice(0, 10),
+          });
+          if (!error) {
+            platziertProWe.set(
+              we.wohneinheit_id,
+              (platziertProWe.get(we.wohneinheit_id) ?? 0) + 1
+            );
+            platziert = true;
+          } else if (error.code === "23505") {
+            platziert = true; // schon einer Wohneinheit zugeordnet
+          } else {
+            fehlerListe.push(`${k.name}: Zuordnung – ${error.message}`);
+            platziert = true;
+          }
+          break;
+        }
+        if (!platziert) {
+          ohnePlatz.set(k.herkunft, (ohnePlatz.get(k.herkunft) ?? 0) + 1);
+        }
+      }
     }
     setAktivierenLaufend(false);
     setAusgewaehlt([]);
+    if (ohnePlatz.size > 0) {
+      fehlerListe.push(
+        "Ohne reservierten Platz: " +
+          [...ohnePlatz.entries()]
+            .map(([h, n]) => `${n}× ${h}`)
+            .join(" · ") +
+          " – Kontingent in der Herkunfts-Planung erweitern."
+      );
+    }
     if (fehlerListe.length > 0) setError(fehlerListe.join(" · "));
     load();
   }

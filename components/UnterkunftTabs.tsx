@@ -18,6 +18,11 @@ const tabs = [
     label: "Belegungsplan",
     nurHausmeister: true,
   },
+  {
+    href: "/unterkunft/planung",
+    label: "Herkunfts-Planung",
+    nurHausmeister: true,
+  },
   { href: "/unterkunft/belegung", label: "Belegung" },
   { href: "/unterkunft/uebergabe", label: "Übergabe / Abnahme" },
   {
