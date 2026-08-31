@@ -133,7 +133,7 @@ export default function UnterkunftBelegungsplanPage() {
               <th>Wohneinheit</th>
               <th>Belegt / Plätze</th>
               <th>Frei</th>
-              <th>Schwebend</th>
+              <th>Geplant</th>
               <th>Bewohner heute</th>
             </tr>
           </thead>
@@ -157,8 +157,8 @@ export default function UnterkunftBelegungsplanPage() {
                   <td className={z.frei > 0 ? "font-medium text-emerald-700" : ""}>
                     {z.frei}
                   </td>
-                  <td className={z.schwebend > 0 ? "text-amber-700" : ""}>
-                    {z.schwebend > 0 ? z.schwebend : "—"}
+                  <td className={z.geplant > 0 ? "text-amber-700" : ""}>
+                    {z.geplant > 0 ? z.geplant : "—"}
                   </td>
                   <td>
                     {bew.length === 0

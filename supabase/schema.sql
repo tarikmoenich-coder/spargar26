@@ -5063,8 +5063,8 @@ create table unterkunft_zuordnung (
   wohneinheit_id bigint not null references unterkunft_wohneinheit (id) on delete restrict,
   zimmer_id bigint references unterkunft_zimmer (id) on delete set null,
   geplant_ab date not null default current_date,
-  status text not null default 'schwebend'
-    check (status in ('schwebend', 'erledigt', 'storniert')),
+  status text not null default 'geplant'
+    check (status in ('geplant', 'erledigt', 'storniert')),
   notiz text,
   belegung_id bigint references unterkunft_belegung (id) on delete set null,
   erfasst_von uuid references profiles (id) default auth.uid(),
@@ -5076,7 +5076,7 @@ create index idx_unterkunft_zuordnung_employee on unterkunft_zuordnung (employee
 create index idx_unterkunft_zuordnung_wohneinheit on unterkunft_zuordnung (wohneinheit_id);
 create index idx_unterkunft_zuordnung_zimmer on unterkunft_zuordnung (zimmer_id);
 create unique index uq_unterkunft_zuordnung_offen
-  on unterkunft_zuordnung (employee_id) where status = 'schwebend';
+  on unterkunft_zuordnung (employee_id) where status = 'geplant';
 
 -- Checklisten-Vorlage je Raumtyp (art, Migration 2026-09-11). Beim Start
 -- einer Übergabe/Kontrolle werden nur die Bereiche des jeweiligen Raumtyps
@@ -5352,7 +5352,7 @@ where b.von <= current_date and (b.bis is null or b.bis >= current_date);
 alter view unterkunft_belegung_aktuell set (security_invoker = true);
 grant select on unterkunft_belegung_aktuell to authenticated;
 
--- Zimmerübersicht (mit Wohneinheit + Anzahl schwebender Zuordnungen).
+-- Zimmerübersicht (mit Wohneinheit + Anzahl geplanter Zuordnungen).
 create view unterkunft_zimmer_uebersicht as
 select
   z.id as zimmer_id, z.nummer, z.art, z.aktiv, z.notiz,
@@ -5364,7 +5364,7 @@ select
   z.bettenzahl as betten,
   coalesce(bl.belegt, 0)::int as belegt,
   greatest(z.bettenzahl - coalesce(bl.belegt, 0), 0)::int as frei,
-  coalesce(zu.schwebend, 0)::int as schwebend,
+  coalesce(zu.geplant, 0)::int as geplant,
   lk.letzte_kontrolle_am, lk.letzte_kontrolle_typ,
   coalesce(m.offene_maengel, 0)::int as offene_maengel
 from unterkunft_zimmer z
@@ -5391,15 +5391,15 @@ left join (
   group by zimmer_id
 ) m on m.zimmer_id = z.id
 left join (
-  select zimmer_id, count(*) as schwebend
+  select zimmer_id, count(*) as geplant
   from unterkunft_zuordnung
-  where status = 'schwebend' and zimmer_id is not null
+  where status = 'geplant' and zimmer_id is not null
   group by zimmer_id
 ) zu on zu.zimmer_id = z.id;
 alter view unterkunft_zimmer_uebersicht set (security_invoker = true);
 grant select on unterkunft_zimmer_uebersicht to authenticated;
 
--- Wohneinheit-Übersicht (Karten): Betten, fest belegt (heute), schwebend, frei.
+-- Wohneinheit-Übersicht (Karten): Betten, fest belegt (heute), geplant, frei.
 create view unterkunft_wohneinheit_uebersicht as
 select
   w.id as wohneinheit_id, w.name, w.etage_label, w.reihenfolge, w.aktiv,
@@ -5407,7 +5407,7 @@ select
   count(z.id)::int as zimmer,
   coalesce(sum(z.bettenzahl), 0)::int as betten,
   coalesce(sum(bl.belegt), 0)::int as fest,
-  coalesce(zu.schwebend, 0)::int as schwebend,
+  coalesce(zu.geplant, 0)::int as geplant,
   greatest(coalesce(sum(z.bettenzahl), 0) - coalesce(sum(bl.belegt), 0), 0)::int as frei
 from unterkunft_wohneinheit w
 join unterkunft_gebaeude g on g.id = w.gebaeude_id
@@ -5421,16 +5421,16 @@ left join lateral (
     and (b.bis is null or b.bis >= current_date)
 ) bl on true
 left join (
-  select wohneinheit_id, count(*) as schwebend
+  select wohneinheit_id, count(*) as geplant
   from unterkunft_zuordnung
-  where status = 'schwebend'
+  where status = 'geplant'
   group by wohneinheit_id
 ) zu on zu.wohneinheit_id = w.id
-group by w.id, w.name, w.etage_label, w.reihenfolge, w.aktiv, g.id, g.name, zu.schwebend;
+group by w.id, w.name, w.etage_label, w.reihenfolge, w.aktiv, g.id, g.name, zu.geplant;
 alter view unterkunft_wohneinheit_uebersicht set (security_invoker = true);
 grant select on unterkunft_wohneinheit_uebersicht to authenticated;
 
--- Schwebende Zuordnungen mit Person + Herkunft + geplantem Zimmer.
+-- Geplante Zuordnungen mit Person + Herkunft + geplantem Zimmer.
 create view unterkunft_zuordnung_offen as
 select
   zu.id, zu.employee_id, zu.wohneinheit_id, zu.zimmer_id, zu.geplant_ab, zu.notiz,
@@ -5442,12 +5442,12 @@ join employees e on e.id = zu.employee_id
 join unterkunft_wohneinheit w on w.id = zu.wohneinheit_id
 join unterkunft_gebaeude g on g.id = w.gebaeude_id
 left join unterkunft_zimmer z on z.id = zu.zimmer_id
-where zu.status = 'schwebend';
+where zu.status = 'geplant';
 alter view unterkunft_zuordnung_offen set (security_invoker = true);
 grant select on unterkunft_zuordnung_offen to authenticated;
 
 -- Personen ohne Bleibe: aktive Mitarbeiter ohne laufende Belegung UND ohne
--- schwebende Zuordnung (Ausgangsliste fuer "Belegung planen").
+-- geplante Zuordnung (Ausgangsliste fuer "Belegung planen").
 create view unterkunft_person_offen as
 select
   e.id as employee_id, e.personal_nr, e.name, e.vorname, e.herkunft,
@@ -5458,7 +5458,7 @@ left join personal_kandidaten k
 where e.aktiv
   and not exists (
     select 1 from unterkunft_zuordnung zu
-    where zu.employee_id = e.id and zu.status = 'schwebend'
+    where zu.employee_id = e.id and zu.status = 'geplant'
   )
   and not exists (
     select 1 from unterkunft_belegung b

@@ -144,14 +144,14 @@ export default function UnterkunftKontrollplanPage() {
     zimmer.forEach((z) => {
       if (z.wohneinheit_id != null)
         m[z.wohneinheit_id] =
-          (m[z.wohneinheit_id] ?? 0) + z.belegt + z.schwebend;
+          (m[z.wohneinheit_id] ?? 0) + z.belegt + z.geplant;
     });
     return m;
   }, [zimmer]);
 
   const inNutzungVon = useCallback(
     (z: UnterkunftZimmerUebersicht): boolean => {
-      if (z.art === "zimmer") return z.belegt > 0 || z.schwebend > 0;
+      if (z.art === "zimmer") return z.belegt > 0 || z.geplant > 0;
       if (z.wohneinheit_id == null) return true;
       return (belegtProEinheit[z.wohneinheit_id] ?? 0) > 0;
     },

@@ -1326,9 +1326,9 @@ export interface UnterkunftBelegungPerson {
   gebaeude_name: string;
 }
 
-export type UnterkunftZuordnungStatus = "schwebend" | "erledigt" | "storniert";
+export type UnterkunftZuordnungStatus = "geplant" | "erledigt" | "storniert";
 
-// Schwebende Belegungsplanung (Migration 2026-08-31): Person -> Wohneinheit
+// Belegungsplanung (Migration 2026-08-31, Status 'geplant'): Person -> Wohneinheit
 // (optional schon Zimmer), bevor die Übergabe läuft.
 export interface UnterkunftZuordnung {
   id: number;
@@ -1345,7 +1345,7 @@ export interface UnterkunftZuordnung {
   updated_at: string;
 }
 
-// Aus der Sicht unterkunft_zuordnung_offen - schwebende Zuordnungen mit
+// Aus der Sicht unterkunft_zuordnung_offen - geplante Zuordnungen mit
 // Person, Herkunft und geplantem Zimmer.
 export interface UnterkunftZuordnungOffen {
   id: number;
@@ -1377,7 +1377,7 @@ export interface UnterkunftWohneinheitUebersicht {
   zimmer: number;
   betten: number;
   fest: number;
-  schwebend: number;
+  geplant: number;
   frei: number;
 }
 
@@ -1642,7 +1642,7 @@ export interface UnterkunftZimmerUebersicht {
   betten: number;
   belegt: number;
   frei: number;
-  schwebend: number;
+  geplant: number;
   letzte_kontrolle_am: string | null;
   letzte_kontrolle_typ: UnterkunftVorgangTyp | null;
   offene_maengel: number;

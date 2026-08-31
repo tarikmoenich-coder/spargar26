@@ -72,9 +72,9 @@ export default function UnterkunftUebergabePage() {
     belegung_id: "",
   });
 
-  // Einzug: Personen (aus schwebenden Zuordnungen vorbelegt). Beim Abschließen
+  // Einzug: Personen (aus geplanten Zuordnungen vorbelegt). Beim Abschließen
   // wird je Person die zimmergenaue unterkunft_belegung angelegt und die
-  // schwebende Zuordnung geschlossen.
+  // geplante Zuordnung geschlossen.
   const [einzug, setEinzug] = useState<Set<string>>(new Set());
   const [personSuche, setPersonSuche] = useState("");
 
@@ -216,7 +216,7 @@ export default function UnterkunftUebergabePage() {
     return { plaetze: z?.bettenzahl ?? 0, belegt };
   }, [zimmer, belegungen, sel.zimmer_id]);
 
-  // Beim Wählen eines Zimmers für einen Einzug: schwebende Zuordnungen dieses
+  // Beim Wählen eines Zimmers für einen Einzug: geplante Zuordnungen dieses
   // Zimmers als Personen-Vorschlag übernehmen.
   useEffect(() => {
     if (sel.typ !== "einzug" || !sel.zimmer_id) {
@@ -517,7 +517,7 @@ export default function UnterkunftUebergabePage() {
       return;
     }
 
-    // Einzug: je Person die zimmergenaue Belegung anlegen und die schwebende
+    // Einzug: je Person die zimmergenaue Belegung anlegen und die geplante
     // Zuordnung schließen.
     if (vorgang.typ === "einzug") {
       for (const employeeId of einzug) {
@@ -542,7 +542,7 @@ export default function UnterkunftUebergabePage() {
             updated_by: profile?.id ?? null,
           })
           .eq("employee_id", employeeId)
-          .eq("status", "schwebend");
+          .eq("status", "geplant");
       }
     }
 
@@ -734,7 +734,7 @@ export default function UnterkunftUebergabePage() {
                 </div>
                 <p className="text-xs text-neutral-500">
                   Beim Abschließen wird je Person die Belegung angelegt und die
-                  schwebende Zuordnung geschlossen.
+                  geplante Zuordnung geschlossen.
                 </p>
                 {zimmerKapazitaet &&
                   zimmerKapazitaet.belegt + einzug.size >

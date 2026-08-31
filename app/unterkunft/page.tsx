@@ -2,8 +2,8 @@
 
 // Unterkunft → Grundriss (Migration 2026-08-30, Wohneinheiten 2026-08-31):
 // Einstiegsseite. Gebäude wählen → Etage-Umschalter → Wohneinheit-Karten
-// (Betten · fest · schwebend · frei · Herkunfts-Mix). Karte antippen →
-// Zimmer-Raster der Wohneinheit + Liste „noch offen" (schwebende Personen
+// (Betten · fest · geplant · frei · Herkunfts-Mix). Karte antippen →
+// Zimmer-Raster der Wohneinheit + Liste „noch offen" (geplante Personen
 // ohne Übergabe). Zimmer antippen → Panel mit Bewohnern/Kontrolle/Mängeln
 // und „Übergabe starten" (deep link mit ?zimmer=).
 //
@@ -495,20 +495,20 @@ export default function UnterkunftGrundrissPage() {
   const statsProEinheit = useMemo(() => {
     const m: Record<
       number,
-      { betten: number; fest: number; schwebend: number; frei: number; gesperrt: number }
+      { betten: number; fest: number; geplant: number; frei: number; gesperrt: number }
     > = {};
     zimmer.forEach((z) => {
       if (z.art !== "zimmer" || !z.aktiv || z.wohneinheit_id == null) return;
       const s = (m[z.wohneinheit_id] ??= {
         betten: 0,
         fest: 0,
-        schwebend: 0,
+        geplant: 0,
         frei: 0,
         gesperrt: 0,
       });
       s.betten += z.betten;
       s.fest += z.belegt;
-      s.schwebend += z.schwebend;
+      s.geplant += z.geplant;
       if (z.gesperrt) s.gesperrt += 1;
       else s.frei += z.frei;
     });
@@ -522,20 +522,20 @@ export default function UnterkunftGrundrissPage() {
     );
     let betten = 0,
       belegt = 0,
-      schwebend = 0,
+      geplant = 0,
       frei = 0,
       gesperrt = 0,
       ueber = 0;
     for (const r of rooms) {
       betten += r.betten;
       belegt += r.belegt;
-      schwebend += r.schwebend;
+      geplant += r.geplant;
       if (r.gesperrt) gesperrt += 1;
       else frei += r.frei;
-      const soll = r.belegt + r.schwebend;
+      const soll = r.belegt + r.geplant;
       if (soll > r.betten) ueber += soll - r.betten;
     }
-    return { rooms: rooms.length, betten, belegt, schwebend, frei, gesperrt, ueber };
+    return { rooms: rooms.length, betten, belegt, geplant, frei, gesperrt, ueber };
   }, [zimmer, gebaeudeId]);
 
   // Zimmer/Raum sperren oder entsperren (admin/hr).
@@ -628,7 +628,7 @@ export default function UnterkunftGrundrissPage() {
     await laden();
   }
 
-  // Direkt belegen (nur admin), ohne Übergabe. Optional eine schwebende
+  // Direkt belegen (nur admin), ohne Übergabe. Optional eine geplante
   // Zuordnung mitschließen.
   async function belegungDirekt(
     employeeId: string,
@@ -1050,8 +1050,8 @@ export default function UnterkunftGrundrissPage() {
             Betten belegt
           </span>
           <span className="rounded bg-amber-50 px-2 py-0.5 text-amber-800">
-            <span className="font-semibold tabular-nums">{gebStats.schwebend}</span>{" "}
-            schwebend
+            <span className="font-semibold tabular-nums">{gebStats.geplant}</span>{" "}
+            geplant
           </span>
           <span
             className={`rounded px-2 py-0.5 ${
@@ -1145,7 +1145,7 @@ export default function UnterkunftGrundrissPage() {
             const s = statsProEinheit[e.wohneinheit_id] ?? {
               betten: e.betten,
               fest: e.fest,
-              schwebend: e.schwebend,
+              geplant: e.geplant,
               frei: e.frei,
               gesperrt: 0,
             };
@@ -1173,7 +1173,7 @@ export default function UnterkunftGrundrissPage() {
                 <div className="mt-1 flex flex-wrap gap-x-3 gap-y-0.5 text-sm">
                   <span>{s.betten} Betten</span>
                   <span className="text-emerald-700">{s.fest} fest</span>
-                  <span className="text-amber-700">{s.schwebend} schwebend</span>
+                  <span className="text-amber-700">{s.geplant} geplant</span>
                   <span className={s.frei > 0 ? "text-emerald-700" : "text-neutral-400"}>
                     {s.frei} frei
                   </span>
@@ -1186,9 +1186,9 @@ export default function UnterkunftGrundrissPage() {
                     {herkunftMix(personen)}
                   </div>
                 )}
-                {e.schwebend > 0 && (
+                {e.geplant > 0 && (
                   <div className="mt-1 inline-block rounded bg-amber-100 px-1.5 py-0.5 text-xs text-amber-800">
-                    {e.schwebend} Übergabe(n) offen
+                    {e.geplant} geplant
                   </div>
                 )}
               </button>
@@ -1533,7 +1533,7 @@ export default function UnterkunftGrundrissPage() {
                       z.letzte_kontrolle_am,
                       schwellenVon(z.art)
                     );
-                    const schwebendHier =
+                    const geplantHier =
                       (zuordnungProZimmer[z.zimmer_id] ?? []).length;
                     // Belegen-Modus: mit „Person in der Hand" sind belegbare
                     // Zimmer hervorgehoben, alles andere gedimmt.
@@ -1624,7 +1624,7 @@ export default function UnterkunftGrundrissPage() {
                             fill="#64748b"
                           >
                             {z.belegt}/{z.betten}
-                            {schwebendHier > 0 ? ` +${schwebendHier}` : ""}
+                            {geplantHier > 0 ? ` +${geplantHier}` : ""}
                           </text>
                         ) : null}
                         <circle
@@ -1654,14 +1654,14 @@ export default function UnterkunftGrundrissPage() {
               </div>
 
               <div className="w-full shrink-0 space-y-4 lg:w-80">
-                {/* noch offen (schwebende Personen dieser Wohneinheit) */}
+                {/* noch offen (geplante Personen dieser Wohneinheit) */}
                 <div className="rounded border border-neutral-200 p-3">
                   <h3 className="text-sm font-semibold text-neutral-800">
                     Noch offen ({zuordnungDerEinheit.length})
                   </h3>
                   {zuordnungDerEinheit.length === 0 ? (
                     <p className="mt-1 text-sm text-neutral-400">
-                      keine schwebenden Zuordnungen.
+                      keine geplanten Zuordnungen.
                     </p>
                   ) : (
                     <ul className="mt-1 space-y-1 text-sm">
@@ -1973,7 +1973,7 @@ export default function UnterkunftGrundrissPage() {
                         {(zuordnungProZimmer[sel.zimmer_id] ?? []).length > 0 && (
                           <div className="mt-2">
                             <div className="text-xs font-medium text-neutral-500">
-                              Geplant (schwebend)
+                              Geplant
                             </div>
                             <ul className="mt-1 space-y-0.5 text-sm">
                               {(zuordnungProZimmer[sel.zimmer_id] ?? []).map(

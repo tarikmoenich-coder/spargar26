@@ -48,7 +48,7 @@ export default function UnterkunftBelegungPage() {
   const [fehler, setFehler] = useState<string | null>(null);
   const [nurLaufend, setNurLaufend] = useState(true);
 
-  // Planung (schwebend)
+  // Planung (geplant)
   const [suchtext, setSuchtext] = useState("");
   const [markiert, setMarkiert] = useState<Set<string>>(new Set());
   const [ziel, setZiel] = useState({
@@ -289,7 +289,7 @@ export default function UnterkunftBelegungPage() {
       <div>
         <h1 className="text-lg font-semibold text-emerald-900">Belegung planen</h1>
         <p className="text-sm text-neutral-500">
-          Personen schwebend einer Wohneinheit zuordnen – „fest“ wird daraus mit
+          Personen einer Wohneinheit zuordnen (Status „geplant“) – „fest“ wird daraus mit
           der Zimmerübergabe.
         </p>
       </div>
@@ -300,7 +300,7 @@ export default function UnterkunftBelegungPage() {
         </p>
       )}
 
-      {/* --- Schwebend zuordnen --- */}
+      {/* --- Geplant zuordnen --- */}
       <section className="grid gap-4 lg:grid-cols-2">
         <div className="rounded border border-neutral-200 p-3">
           <div className="flex items-center justify-between">
@@ -432,16 +432,16 @@ export default function UnterkunftBelegungPage() {
               />
             </label>
             <button className="btn" onClick={zuordnungAnlegen}>
-              Schwebend zuordnen
+              Geplant zuordnen
             </button>
           </div>
         </div>
       </section>
 
-      {/* --- Schwebende Zuordnungen --- */}
+      {/* --- Geplante Zuordnungen --- */}
       <section className="space-y-2">
         <h2 className="font-semibold text-neutral-800">
-          Schwebend ({zuordnungen.length})
+          Geplant ({zuordnungen.length})
         </h2>
         {zuordnungen.length === 0 ? (
           <p className="text-sm text-neutral-400">keine offenen Zuordnungen.</p>
