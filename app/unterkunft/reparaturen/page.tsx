@@ -32,6 +32,13 @@ const VERURSACHUNG_REIHENFOLGE: UnterkunftMangelVerursachung[] = [
   "unklar",
 ];
 
+interface EmployeeMini {
+  id: string;
+  personal_nr: string;
+  name: string;
+  vorname: string;
+}
+
 export default function UnterkunftReparaturenPage() {
   const { profile } = useProfile();
   const canEdit =
@@ -43,8 +50,11 @@ export default function UnterkunftReparaturenPage() {
   const [zimmer, setZimmer] = useState<UnterkunftZimmer[]>([]);
   const [reparaturen, setReparaturen] = useState<UnterkunftMangel[]>([]);
   const [belegungen, setBelegungen] = useState<UnterkunftBelegungPerson[]>([]);
+  const [employees, setEmployees] = useState<EmployeeMini[]>([]);
   const [loading, setLoading] = useState(true);
   const [fehler, setFehler] = useState<string | null>(null);
+  // freie Mitarbeitersuche je Reparatur (mangel-id -> Suchtext)
+  const [suche, setSuche] = useState<Record<number, string>>({});
 
   const [statusFilter, setStatusFilter] = useState<
     "offen_arbeit" | "alle" | UnterkunftMangelStatus
@@ -63,7 +73,7 @@ export default function UnterkunftReparaturenPage() {
   const laden = useCallback(async () => {
     setLoading(true);
     const supabase = getSupabaseClient();
-    const [g, z, m, bp] = await Promise.all([
+    const [g, z, m, bp, e] = await Promise.all([
       supabase.from("unterkunft_gebaeude").select("*").order("name"),
       supabase.from("unterkunft_zimmer").select("*").order("nummer"),
       supabase
@@ -75,11 +85,16 @@ export default function UnterkunftReparaturenPage() {
         .from("unterkunft_belegung_person")
         .select("*")
         .order("von", { ascending: false }),
+      supabase
+        .from("employees")
+        .select("id, personal_nr, name, vorname")
+        .order("name"),
     ]);
     setGebaeude((g.data as UnterkunftGebaeude[]) ?? []);
     setZimmer((z.data as UnterkunftZimmer[]) ?? []);
     setReparaturen((m.data as UnterkunftMangel[]) ?? []);
     setBelegungen((bp.data as UnterkunftBelegungPerson[]) ?? []);
+    setEmployees((e.data as EmployeeMini[]) ?? []);
     setLoading(false);
   }, []);
 
@@ -113,10 +128,16 @@ export default function UnterkunftReparaturenPage() {
     });
   }
 
-  function bewohnerName(employeeId: string | null): string {
-    if (!employeeId) return "—";
+  function personName(employeeId: string): string {
+    const e = employees.find((x) => x.id === employeeId);
+    if (e) return `${e.vorname} ${e.name}`;
     const b = belegungen.find((x) => x.employee_id === employeeId);
     return b ? `${b.vorname} ${b.name}` : employeeId;
+  }
+
+  // Verursacher einer Reparatur setzen/entfernen.
+  async function verursacherSetzen(m: UnterkunftMangel, ids: string[]) {
+    await aktualisieren(m, { verursacher_employee_ids: ids });
   }
 
   const zimmerDesGebaeudes = zimmer.filter(
@@ -159,6 +180,23 @@ export default function UnterkunftReparaturenPage() {
       beauftragt: offen.filter((m) => m.status === "in_arbeit").length,
       kostenBewohner,
     };
+  }, [reparaturen]);
+
+  // Belastung je Person: Summe der anteiligen Kosten (Kosten / Anzahl
+  // Verursacher) über alle offenen, vom Bewohner verschuldeten Reparaturen.
+  const belastungJePerson = useMemo(() => {
+    const map: Record<string, number> = {};
+    reparaturen
+      .filter((m) => m.status !== "behoben" && m.verursachung === "bewohner")
+      .forEach((m) => {
+        const ids = m.verursacher_employee_ids ?? [];
+        if (ids.length === 0 || m.kosten_geschaetzt == null) return;
+        const anteil = m.kosten_geschaetzt / ids.length;
+        ids.forEach((id) => {
+          map[id] = (map[id] ?? 0) + anteil;
+        });
+      });
+    return Object.entries(map).sort((a, b) => b[1] - a[1]);
   }, [reparaturen]);
 
   async function anlegen() {
@@ -395,10 +433,35 @@ export default function UnterkunftReparaturenPage() {
                 )}
               </h2>
 
+              {grp.verursachung === "bewohner" && belastungJePerson.length > 0 && (
+                <div className="rounded border border-red-200 bg-red-50 p-2 text-sm">
+                  <div className="font-medium text-red-900">
+                    Belastung je Person (offen, anteilig)
+                  </div>
+                  <ul className="mt-1 space-y-0.5">
+                    {belastungJePerson.map(([id, betrag]) => (
+                      <li key={id} className="flex justify-between gap-4">
+                        <span>{personName(id)}</span>
+                        <span className="font-medium tabular-nums">
+                          {betrag.toFixed(2)} €
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+
               <div className="space-y-2">
                 {grp.eintraege.map((m) => {
                   const auf = offenId === m.id;
                   const kandidaten = bewohnerFuer(m.zimmer_id);
+                  const zRaum = zimmer.find((x) => x.id === m.zimmer_id);
+                  const abZimmer = zRaum?.art === "zimmer";
+                  const vids = m.verursacher_employee_ids ?? [];
+                  const anteil =
+                    m.kosten_geschaetzt != null && vids.length > 0
+                      ? m.kosten_geschaetzt / vids.length
+                      : null;
                   return (
                     <div
                       key={m.id}
@@ -522,35 +585,145 @@ export default function UnterkunftReparaturenPage() {
                       </div>
 
                       {m.verursachung === "bewohner" && (
-                        <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-2 rounded bg-red-50 px-2 py-1.5 text-sm">
-                          <label className="flex items-center gap-1">
-                            Verursacher
-                            {canEdit ? (
-                              <select
-                                value={m.verursacher_employee_id ?? ""}
-                                onChange={(e) =>
-                                  aktualisieren(m, {
-                                    verursacher_employee_id:
-                                      e.target.value || null,
-                                  })
-                                }
-                              >
-                                <option value="">–</option>
-                                {kandidaten.map((b) => (
-                                  <option
-                                    key={b.employee_id}
-                                    value={b.employee_id}
-                                  >
-                                    {b.vorname} {b.name}
-                                  </option>
-                                ))}
-                              </select>
-                            ) : (
-                              bewohnerName(m.verursacher_employee_id)
+                        <div className="mt-2 space-y-2 rounded bg-red-50 px-2 py-2 text-sm">
+                          <div className="font-medium text-red-900">
+                            Verursacher &amp; Kostenteilung
+                          </div>
+
+                          <div className="flex flex-wrap gap-1.5">
+                            {vids.length === 0 && (
+                              <span className="text-neutral-500">
+                                noch niemand zugeordnet
+                              </span>
                             )}
-                          </label>
-                          <label className="flex items-center gap-1">
-                            geschätzte Kosten €
+                            {vids.map((id) => (
+                              <span
+                                key={id}
+                                className="inline-flex items-center gap-1 rounded border border-red-300 bg-white px-2 py-0.5"
+                              >
+                                {personName(id)}
+                                {anteil != null && (
+                                  <span className="text-red-700">
+                                    · {anteil.toFixed(2)} €
+                                  </span>
+                                )}
+                                {canEdit && (
+                                  <button
+                                    className="text-red-600"
+                                    title="entfernen"
+                                    onClick={() =>
+                                      verursacherSetzen(
+                                        m,
+                                        vids.filter((x) => x !== id)
+                                      )
+                                    }
+                                  >
+                                    ×
+                                  </button>
+                                )}
+                              </span>
+                            ))}
+                          </div>
+
+                          {canEdit && (
+                            <>
+                              <div>
+                                <div className="text-xs text-neutral-500">
+                                  Bewohner{" "}
+                                  {abZimmer
+                                    ? "des Zimmers"
+                                    : "der Wohneinheit"}
+                                </div>
+                                <div className="mt-1 flex flex-wrap gap-x-3 gap-y-1">
+                                  {kandidaten.length === 0 && (
+                                    <span className="text-xs text-neutral-400">
+                                      keine Bewohner erfasst
+                                    </span>
+                                  )}
+                                  {kandidaten.map((b) => {
+                                    const drin = vids.includes(b.employee_id);
+                                    return (
+                                      <label
+                                        key={b.employee_id}
+                                        className="flex items-center gap-1"
+                                      >
+                                        <input
+                                          type="checkbox"
+                                          checked={drin}
+                                          onChange={() =>
+                                            verursacherSetzen(
+                                              m,
+                                              drin
+                                                ? vids.filter(
+                                                    (x) => x !== b.employee_id
+                                                  )
+                                                : [...vids, b.employee_id]
+                                            )
+                                          }
+                                        />
+                                        {b.vorname} {b.name}
+                                      </label>
+                                    );
+                                  })}
+                                </div>
+                              </div>
+
+                              <div>
+                                <input
+                                  className="w-56 text-sm"
+                                  placeholder="weitere Person suchen (Name / Nr.)"
+                                  value={suche[m.id] ?? ""}
+                                  onChange={(e) =>
+                                    setSuche((s) => ({
+                                      ...s,
+                                      [m.id]: e.target.value,
+                                    }))
+                                  }
+                                />
+                                {(suche[m.id] ?? "").trim() && (
+                                  <div className="mt-1 flex flex-wrap gap-1">
+                                    {employees
+                                      .filter(
+                                        (emp) =>
+                                          !vids.includes(emp.id) &&
+                                          `${emp.vorname} ${emp.name} ${emp.personal_nr}`
+                                            .toLowerCase()
+                                            .includes(
+                                              (suche[m.id] ?? "")
+                                                .trim()
+                                                .toLowerCase()
+                                            )
+                                      )
+                                      .slice(0, 8)
+                                      .map((emp) => (
+                                        <button
+                                          key={emp.id}
+                                          className="rounded border border-neutral-300 px-2 py-0.5 text-xs hover:border-emerald-500"
+                                          onClick={() => {
+                                            verursacherSetzen(m, [
+                                              ...vids,
+                                              emp.id,
+                                            ]);
+                                            setSuche((s) => ({
+                                              ...s,
+                                              [m.id]: "",
+                                            }));
+                                          }}
+                                        >
+                                          + {emp.vorname} {emp.name}{" "}
+                                          <span className="text-neutral-400">
+                                            ({emp.personal_nr})
+                                          </span>
+                                        </button>
+                                      ))}
+                                  </div>
+                                )}
+                              </div>
+                            </>
+                          )}
+
+                          <label className="flex flex-wrap items-center gap-1">
+                            geschätzte Kosten gesamt €
                             <input
                               type="number"
                               step="0.01"
@@ -567,6 +740,11 @@ export default function UnterkunftReparaturenPage() {
                                   aktualisieren(m, { kosten_geschaetzt: v });
                               }}
                             />
+                            {anteil != null && (
+                              <span className="text-neutral-500">
+                                = {anteil.toFixed(2)} € je Person ({vids.length})
+                              </span>
+                            )}
                           </label>
                         </div>
                       )}

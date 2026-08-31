@@ -32,9 +32,13 @@ alter table unterkunft_mangel
   add constraint unterkunft_mangel_verursachung_check
   check (verursachung in ('verschleiss', 'bewohner', 'unklar'));
 
+-- Verursacher: mehrere Personen möglich (Gemeinschaftsraum-Schäden), auch
+-- Nicht-Bewohner. Kein FK auf Array-Elemente - Prüfung in der App. Die
+-- geschätzten Kosten werden gleichmäßig auf die Personen aufgeteilt.
 alter table unterkunft_mangel
-  add column if not exists verursacher_employee_id uuid
-    references employees (id) on delete set null;
+  drop column if exists verursacher_employee_id;
+alter table unterkunft_mangel
+  add column if not exists verursacher_employee_ids uuid[] not null default '{}';
 alter table unterkunft_mangel
   add column if not exists kosten_geschaetzt numeric(10, 2);
 alter table unterkunft_mangel

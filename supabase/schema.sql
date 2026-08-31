@@ -5194,7 +5194,9 @@ create table unterkunft_mangel (
   -- Kostenweitergabe; 'verschleiss' = normale Instandhaltung; 'unklar' = offen.
   verursachung text not null default 'unklar'
     check (verursachung in ('verschleiss', 'bewohner', 'unklar')),
-  verursacher_employee_id uuid references employees (id) on delete set null,
+  -- Verursacher (mehrere möglich, auch Nicht-Bewohner). Kosten werden zu
+  -- gleichen Teilen auf diese Personen aufgeteilt.
+  verursacher_employee_ids uuid[] not null default '{}',
   kosten_geschaetzt numeric(10, 2),
   -- Fälligkeit einer Reparatur (z. B. Handwerkertermin).
   faellig_am date,

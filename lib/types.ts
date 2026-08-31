@@ -1540,7 +1540,9 @@ export interface UnterkunftMangel {
   status: UnterkunftMangelStatus;
   kategorie: UnterkunftMangelKategorie;
   verursachung: UnterkunftMangelVerursachung;
-  verursacher_employee_id: string | null;
+  // Verursacher (mehrere, auch Nicht-Bewohner); Kosten werden gleichmäßig
+  // aufgeteilt.
+  verursacher_employee_ids: string[];
   kosten_geschaetzt: number | null;
   faellig_am: string | null;
   gemeldet_von: string | null;
