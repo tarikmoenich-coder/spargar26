@@ -1234,6 +1234,7 @@ export type UnterkunftZimmerArt =
   | "zimmer"
   | "kueche"
   | "bad"
+  | "wc"
   | "flur"
   | "gemeinschaft";
 

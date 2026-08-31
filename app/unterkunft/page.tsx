@@ -55,7 +55,8 @@ const RAUM_STYLE: Record<
   Exclude<UnterkunftZimmerArt, "zimmer">,
   { fill: string; stroke: string; label: string }
 > = {
-  bad: { fill: "#e0f2fe", stroke: "#0ea5e9", label: "Sanitär" },
+  bad: { fill: "#e0f2fe", stroke: "#0ea5e9", label: "Bad" },
+  wc: { fill: "#cffafe", stroke: "#06b6d4", label: "WC" },
   flur: { fill: "#ede9fe", stroke: "#8b5cf6", label: "Flur" },
   kueche: { fill: "#fef3c7", stroke: "#f59e0b", label: "Küche" },
   gemeinschaft: { fill: "#eef2ff", stroke: "#a5b4fc", label: "Gemeinschaft" },
@@ -111,7 +112,8 @@ function legendeFuer(
     { ...ZIMMER_FREI, label: "Zimmer (Betten frei)" },
     { ...ZIMMER_VOLL, label: "Zimmer (voll)" },
     { ...ZIMMER_GESPERRT, label: "gesperrt" },
-    { ...RAUM_STYLE.bad, label: "Sanitär" },
+    { ...RAUM_STYLE.bad, label: "Bad" },
+    { ...RAUM_STYLE.wc, label: "WC" },
     { ...RAUM_STYLE.flur, label: "Flur" },
     { ...RAUM_STYLE.kueche, label: "Küche" },
     { fill: "#fff", stroke: "#dc2626", label: "offene Mängel" },
@@ -1391,7 +1393,8 @@ export default function UnterkunftGrundrissPage() {
                         {(
                           [
                             { label: "Küche", art: "kueche" },
-                            { label: "Bad/WC", art: "bad" },
+                            { label: "Bad", art: "bad" },
+                            { label: "WC", art: "wc" },
                             { label: "Flur", art: "flur" },
                           ] as const
                         ).map(({ label, art }) => {
@@ -1514,7 +1517,15 @@ export default function UnterkunftGrundrissPage() {
                         ) : (
                           (maengelProZimmer[sel.zimmer_id] ?? []).map((m) => (
                             <li key={m.id} className="space-y-1">
-                              <div>{m.beschreibung}</div>
+                              <div className="flex items-start justify-between gap-2">
+                                <span>{m.beschreibung}</span>
+                                <Link
+                                  href={`/unterkunft/maengel?mangel=${m.id}`}
+                                  className="shrink-0 text-xs text-emerald-700 underline"
+                                >
+                                  öffnen
+                                </Link>
+                              </div>
                               <div className="flex flex-wrap items-center gap-2 text-xs text-neutral-500">
                                 <span className="rounded bg-white px-1.5 py-0.5">
                                   {UNTERKUNFT_MANGEL_SCHWERE_LABELS[m.schwere]}
@@ -1551,10 +1562,10 @@ export default function UnterkunftGrundrissPage() {
                         )}
                         <li>
                           <Link
-                            href="/unterkunft/maengel"
+                            href={`/unterkunft/maengel?zimmer=${sel.zimmer_id}`}
                             className="text-xs text-emerald-700 underline"
                           >
-                            in der Mängelliste öffnen
+                            alle in der Mängelliste öffnen
                           </Link>
                         </li>
                       </ul>
@@ -1840,7 +1851,7 @@ export default function UnterkunftGrundrissPage() {
                       ) : (
                         <Link
                           className="btn-secondary"
-                          href="/unterkunft/maengel"
+                          href={`/unterkunft/maengel?zimmer=${sel.zimmer_id}`}
                         >
                           Mängel
                         </Link>

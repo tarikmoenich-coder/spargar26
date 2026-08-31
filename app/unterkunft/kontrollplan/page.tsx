@@ -44,7 +44,7 @@ export default function UnterkunftKontrollplanPage() {
     {}
   );
   const [maengel, setMaengel] = useState<
-    { zimmer_id: number; gemeldet_am: string }[]
+    { id: number; zimmer_id: number; gemeldet_am: string }[]
   >([]);
   const [vorgaenge, setVorgaenge] = useState<
     { zimmer_id: number; gesamtzustand: string | null }[]
@@ -67,7 +67,7 @@ export default function UnterkunftKontrollplanPage() {
       supabase.from("unterkunft_kontroll_intervall").select("*"),
       supabase
         .from("unterkunft_mangel")
-        .select("zimmer_id, gemeldet_am")
+        .select("id, zimmer_id, gemeldet_am")
         .neq("status", "behoben"),
       supabase
         .from("unterkunft_vorgang")
@@ -86,7 +86,7 @@ export default function UnterkunftKontrollplanPage() {
       )
     );
     setMaengel(
-      (m.data as { zimmer_id: number; gemeldet_am: string }[]) ?? []
+      (m.data as { id: number; zimmer_id: number; gemeldet_am: string }[]) ?? []
     );
     setVorgaenge(
       (v.data as { zimmer_id: number; gesamtzustand: string | null }[]) ?? []
@@ -99,9 +99,9 @@ export default function UnterkunftKontrollplanPage() {
   }, [laden]);
 
   const offeneMaengelProZimmer = useMemo(() => {
-    const map: Record<number, { gemeldet_am: string }[]> = {};
+    const map: Record<number, { id: number; gemeldet_am: string }[]> = {};
     maengel.forEach((m) => {
-      (map[m.zimmer_id] ??= []).push({ gemeldet_am: m.gemeldet_am });
+      (map[m.zimmer_id] ??= []).push({ id: m.id, gemeldet_am: m.gemeldet_am });
     });
     return map;
   }, [maengel]);
@@ -381,15 +381,23 @@ export default function UnterkunftKontrollplanPage() {
             <span className="text-neutral-500">noch keine Kontrolle</span>
           )}
         </span>
-        <span
-          className={
-            z.offene_maengel > 0
-              ? "font-medium text-red-600"
-              : "text-neutral-400"
-          }
-        >
-          {z.offene_maengel > 0 ? `${z.offene_maengel} Mängel` : "keine Mängel"}
-        </span>
+        {(() => {
+          const mgl = offeneMaengelProZimmer[z.zimmer_id] ?? [];
+          if (mgl.length === 0)
+            return <span className="text-neutral-400">keine Mängel</span>;
+          const href =
+            mgl.length === 1
+              ? `/unterkunft/maengel?mangel=${mgl[0].id}`
+              : `/unterkunft/maengel?zimmer=${z.zimmer_id}`;
+          return (
+            <Link
+              href={href}
+              className="font-medium text-red-600 underline decoration-dotted underline-offset-2"
+            >
+              {mgl.length} {mgl.length === 1 ? "Mangel" : "Mängel"} öffnen
+            </Link>
+          );
+        })()}
         <span
           className={`min-w-[13rem] ${
             leer
@@ -417,12 +425,14 @@ export default function UnterkunftKontrollplanPage() {
           >
             Kontrolle
           </Link>
-          <Link
-            href="/unterkunft/maengel"
-            className="text-xs text-emerald-700 underline"
-          >
-            Mängel
-          </Link>
+          {z.offene_maengel > 0 && (
+            <Link
+              href={`/unterkunft/maengel?zimmer=${z.zimmer_id}`}
+              className="text-xs text-emerald-700 underline"
+            >
+              Mängel
+            </Link>
+          )}
         </span>
       </div>
     );

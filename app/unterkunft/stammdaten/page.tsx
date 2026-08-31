@@ -21,7 +21,8 @@ import type {
 const RAUMTYP_LABEL: Record<UnterkunftZimmerArt, string> = {
   zimmer: "Schlafzimmer",
   kueche: "Küche",
-  bad: "Bad / WC",
+  bad: "Bad",
+  wc: "WC",
   flur: "Flur",
   gemeinschaft: "Gemeinschaftsraum",
 };

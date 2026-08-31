@@ -4979,11 +4979,12 @@ create table unterkunft_zimmer (
   id bigint generated always as identity primary key,
   gebaeude_id bigint not null references unterkunft_gebaeude (id) on delete restrict,
   nummer text not null,
-  -- Raumtyp (Migration 2026-09-01, erweitert 2026-09-02). 'zimmer' =
-  -- Schlafzimmer (Betten/Belegung/Übergabe). 'kueche'/'bad'/'flur'/
-  -- 'gemeinschaft' = nur Grundriss-Kachel + Kontrollen/Mängel, keine Betten.
+  -- Raumtyp (Migration 2026-09-01, erweitert 2026-09-02 + 2026-09-10).
+  -- 'zimmer' = Schlafzimmer (Betten/Belegung/Übergabe). Die übrigen sind nur
+  -- Grundriss-Kachel + Kontrollen/Mängel, keine Betten: 'kueche', 'bad', 'wc',
+  -- 'flur', 'gemeinschaft'.
   art text not null default 'zimmer'
-    check (art in ('zimmer', 'kueche', 'bad', 'flur', 'gemeinschaft')),
+    check (art in ('zimmer', 'kueche', 'bad', 'wc', 'flur', 'gemeinschaft')),
   -- Freitext-Etage aus v1; seit Migration 2026-08-30 nicht mehr gepflegt.
   -- Bleibt für Altdaten stehen.
   etage text,
@@ -5020,7 +5021,7 @@ create index idx_unterkunft_zimmer_wohneinheit on unterkunft_zimmer (wohneinheit
 -- gelb_bis_tage = ≤ Y Tage → gelb, darüber → rot. Pflege in den Stammdaten.
 create table unterkunft_kontroll_intervall (
   art text primary key
-    check (art in ('zimmer', 'kueche', 'bad', 'flur', 'gemeinschaft')),
+    check (art in ('zimmer', 'kueche', 'bad', 'wc', 'flur', 'gemeinschaft')),
   gruen_bis_tage int not null,
   gelb_bis_tage int not null,
   updated_by uuid references profiles (id),
@@ -5031,6 +5032,7 @@ insert into unterkunft_kontroll_intervall (art, gruen_bis_tage, gelb_bis_tage) v
   ('zimmer', 7, 21),
   ('kueche', 7, 21),
   ('bad', 7, 21),
+  ('wc', 7, 21),
   ('flur', 7, 21),
   ('gemeinschaft', 7, 21);
 

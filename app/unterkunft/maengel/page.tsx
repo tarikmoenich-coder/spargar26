@@ -40,6 +40,11 @@ export default function UnterkunftMaengelPage() {
   );
   const [gebaeudeFilter, setGebaeudeFilter] = useState("");
   const [offenId, setOffenId] = useState<number | null>(null);
+  // Deep-Link aus Grundriss / Kontrollplan: ?mangel=<id> zeigt genau diesen
+  // Mangel, ?zimmer=<id> alle Mängel dieses Raums.
+  const [fokus, setFokus] = useState<{ zimmerId?: number; mangelId?: number } | null>(
+    null
+  );
 
   const [neu, setNeu] = useState({
     gebaeude_id: "",
@@ -73,6 +78,29 @@ export default function UnterkunftMaengelPage() {
   useEffect(() => {
     laden();
   }, [laden]);
+
+  useEffect(() => {
+    const q = new URLSearchParams(window.location.search);
+    const mangel = q.get("mangel");
+    const zimmerP = q.get("zimmer");
+    if (mangel) setFokus({ mangelId: Number(mangel) });
+    else if (zimmerP) setFokus({ zimmerId: Number(zimmerP) });
+  }, []);
+
+  // Fokussierten Mangel automatisch aufklappen (bzw. den einzigen des Raums).
+  useEffect(() => {
+    if (fokus?.mangelId) {
+      setOffenId(fokus.mangelId);
+    } else if (fokus?.zimmerId) {
+      const treffer = maengel.filter((m) => m.zimmer_id === fokus.zimmerId);
+      if (treffer.length === 1) setOffenId(treffer[0].id);
+    }
+  }, [fokus, maengel]);
+
+  function fokusAufheben() {
+    setFokus(null);
+    window.history.replaceState(null, "", "/unterkunft/maengel");
+  }
 
   function zimmerLabel(zimmerId: number): string {
     const z = zimmer.find((x) => x.id === zimmerId);
@@ -123,7 +151,10 @@ export default function UnterkunftMaengelPage() {
   );
 
   const gefiltert = useMemo(() => {
+    // Fokus (Deep-Link) hat Vorrang und ignoriert Status-/Gebäudefilter.
+    if (fokus?.mangelId) return maengel.filter((m) => m.id === fokus.mangelId);
     return maengel.filter((m) => {
+      if (fokus?.zimmerId && m.zimmer_id !== fokus.zimmerId) return false;
       if (statusFilter === "offen_arbeit" && m.status === "behoben") return false;
       if (
         statusFilter !== "offen_arbeit" &&
@@ -137,7 +168,7 @@ export default function UnterkunftMaengelPage() {
       }
       return true;
     });
-  }, [maengel, statusFilter, gebaeudeFilter, zimmer]);
+  }, [maengel, statusFilter, gebaeudeFilter, zimmer, fokus]);
 
   async function anlegen() {
     setFehler(null);
@@ -232,6 +263,21 @@ export default function UnterkunftMaengelPage() {
       {fehler && (
         <p className="rounded border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
           {fehler}
+        </p>
+      )}
+
+      {fokus && (
+        <p className="flex flex-wrap items-center gap-2 rounded border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-900">
+          Angezeigt:{" "}
+          {fokus.mangelId
+            ? "ein einzelner Mangel"
+            : `nur ${zimmerLabel(fokus.zimmerId as number)}`}
+          <button
+            className="rounded border border-emerald-300 bg-white px-2 py-0.5 text-xs"
+            onClick={fokusAufheben}
+          >
+            alle Mängel anzeigen
+          </button>
         </p>
       )}
 

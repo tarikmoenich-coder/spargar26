@@ -12,7 +12,8 @@ import type { UnterkunftZimmerArt } from "./types";
 export const RAUM_ART_LABEL: Record<UnterkunftZimmerArt, string> = {
   zimmer: "Zimmer",
   kueche: "Küche",
-  bad: "Bad/WC",
+  bad: "Bad",
+  wc: "WC",
   flur: "Flur",
   gemeinschaft: "Gemeinschaftsraum",
 };
