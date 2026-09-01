@@ -4,6 +4,17 @@
 
 body {
   @apply bg-neutral-50 text-neutral-900;
+  /* Kein waagerechtes Verschieben der ganzen Seite, wenn mal ein Element
+     (breite Tabelle, Reiter-Leiste, Grundriss) über die Viewport-Breite
+     hinausragt - v.a. am Telefon (Nutzer-Vorgabe 2026-09-01). `clip` statt
+     `hidden`, damit die klebenden Kopf-/Reiterleisten (position: sticky)
+     weiter funktionieren. */
+  overflow-x: clip;
+}
+@supports not (overflow: clip) {
+  body {
+    overflow-x: hidden;
+  }
 }
 
 table {
