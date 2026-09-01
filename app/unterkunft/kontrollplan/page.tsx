@@ -91,7 +91,14 @@ export default function UnterkunftKontrollplanPage() {
         .eq("storniert", false)
         .order("abgeschlossen_am", { ascending: false }),
     ]);
-    setZimmer((z.data as UnterkunftZimmerUebersicht[]) ?? []);
+    // Flure sind nicht kontrollpflichtig (Nutzer-Vorgabe 2026-09-01) - sie
+    // dienen nur zum Hinterlegen von Mängeln/Reparaturen. Komplett aus dem
+    // Kontrollplan (Baum, "Heute zu erledigen", Zähler) heraushalten.
+    setZimmer(
+      ((z.data as UnterkunftZimmerUebersicht[]) ?? []).filter(
+        (r) => r.art !== "flur"
+      )
+    );
     setIntervalle(
       Object.fromEntries(
         ((ki.data as UnterkunftKontrollIntervall[]) ?? []).map((r) => [
@@ -293,6 +300,10 @@ export default function UnterkunftKontrollplanPage() {
   // früher liegt (bzw. noch nie kontrolliert). Gesperrte Räume + reine
   // Reparatur-Räume bleiben aussen vor. Respektiert den Gebäude-Filter,
   // ignoriert die übrigen Anzeige-Schalter.
+  //
+  // Nur Zimmer stehen als Zeile in der Liste (Nutzer-Vorgabe 2026-09-01) -
+  // Bad/WC/Küche/Flur werden über "Ganze Wohneinheit kontrollieren"
+  // miterledigt; Flure sind ganz aus dem Kontrollplan (setZimmer-Filter).
   const heuteListe = useMemo(() => {
     const heute = new Date().toISOString().slice(0, 10);
     const kontrollpflichtig = (z: UnterkunftZimmerUebersicht) =>
@@ -303,6 +314,7 @@ export default function UnterkunftKontrollplanPage() {
     return zimmer
       .filter(
         (z) =>
+          z.art === "zimmer" &&
           z.aktiv &&
           !z.gesperrt &&
           kontrollpflichtig(z) &&
@@ -866,7 +878,7 @@ export default function UnterkunftKontrollplanPage() {
                               ) : null}
                             </span>
                             <span className="text-xs text-neutral-400">
-                              ({w.raeume.length})
+                              ({w.raeume.filter((z) => z.art === "zimmer").length})
                             </span>
                             <span className="ml-auto flex items-center gap-2">
                               <RollupBadges r={rollup(w.raeume)} />
@@ -881,9 +893,25 @@ export default function UnterkunftKontrollplanPage() {
                           </button>
                           {!wZu && (
                             <div className="px-2 pb-1">
-                              {w.raeume.map((z) => (
-                                <RaumZeile key={z.zimmer_id} z={z} />
-                              ))}
+                              {w.raeume
+                                .filter((z) => z.art === "zimmer")
+                                .map((z) => (
+                                  <RaumZeile key={z.zimmer_id} z={z} />
+                                ))}
+                              {(() => {
+                                const gem = w.raeume.filter(
+                                  (z) =>
+                                    z.art !== "zimmer" &&
+                                    ampelVon(z) !== "gruen" &&
+                                    relevantVon(z)
+                                );
+                                return gem.length > 0 ? (
+                                  <p className="px-1 py-1 text-xs text-amber-700">
+                                    + {gem.map((z) => raumName(z)).join(", ")}{" "}
+                                    fällig – mit „kontrollieren" miterledigen.
+                                  </p>
+                                ) : null;
+                              })()}
                             </div>
                           )}
                         </div>
@@ -900,7 +928,12 @@ export default function UnterkunftKontrollplanPage() {
                             {zu.has(g.ohne.key) ? "▸" : "▾"} {g.ohne.name}
                           </span>
                           <span className="text-xs text-neutral-400">
-                            ({g.ohne.raeume.length})
+                            (
+                            {
+                              g.ohne.raeume.filter((z) => z.art === "zimmer")
+                                .length
+                            }
+                            )
                           </span>
                           <span className="ml-auto">
                             <RollupBadges r={rollup(g.ohne.raeume)} />
@@ -908,9 +941,11 @@ export default function UnterkunftKontrollplanPage() {
                         </button>
                         {!zu.has(g.ohne.key) && (
                           <div className="px-2 pb-1">
-                            {g.ohne.raeume.map((z) => (
-                              <RaumZeile key={z.zimmer_id} z={z} />
-                            ))}
+                            {g.ohne.raeume
+                              .filter((z) => z.art === "zimmer")
+                              .map((z) => (
+                                <RaumZeile key={z.zimmer_id} z={z} />
+                              ))}
                           </div>
                         )}
                       </div>

@@ -139,6 +139,8 @@ function zimmerFarbe(
   schwellen: KontrollSchwellen | null = null
 ): { fill: string; stroke: string } {
   if (!z.aktiv) return ZIMMER_INAKTIV;
+  // Flure sind nicht kontrollpflichtig (Nutzer-Vorgabe 2026-09-01).
+  if (ansicht === "kontrolle" && z.art === "flur") return RAUM_STYLE.flur;
   if (ansicht === "kontrolle") {
     return AMPEL_KACHEL[kontrollAmpel(z.letzte_kontrolle_am, schwellen)];
   }
@@ -1632,10 +1634,14 @@ export default function UnterkunftGrundrissPage() {
                     });
                   })
                   .map((z) => {
-                    const ampel = kontrollAmpel(
-                      z.letzte_kontrolle_am,
-                      schwellenVon(z.art)
-                    );
+                    // Flure sind nicht kontrollpflichtig (Vorgabe 2026-09-01).
+                    const ampel =
+                      z.art === "flur"
+                        ? "keine"
+                        : kontrollAmpel(
+                            z.letzte_kontrolle_am,
+                            schwellenVon(z.art)
+                          );
                     const geplantListe = zuordnungProZimmer[z.zimmer_id] ?? [];
                     const bewohnerHier = belegungProZimmer[z.zimmer_id] ?? [];
                     const belegbar =
@@ -1825,10 +1831,13 @@ export default function UnterkunftGrundrissPage() {
                       schwellenVon(z.art)
                     );
                     const ausgewaehlt = z.zimmer_id === selId;
-                    const ampel = kontrollAmpel(
-                      z.letzte_kontrolle_am,
-                      schwellenVon(z.art)
-                    );
+                    const ampel =
+                      z.art === "flur"
+                        ? "keine"
+                        : kontrollAmpel(
+                            z.letzte_kontrolle_am,
+                            schwellenVon(z.art)
+                          );
                     const geplantHier =
                       (zuordnungProZimmer[z.zimmer_id] ?? []).length;
                     // Belegen-Modus: mit „Person in der Hand" sind belegbare
@@ -2098,6 +2107,7 @@ export default function UnterkunftGrundrissPage() {
                           </dd>
                         </div>
                       )}
+                      {sel.art !== "flur" && (
                       <div className="flex justify-between">
                         <dt className="text-neutral-500">Letzte Kontrolle</dt>
                         <dd className="text-right">
@@ -2139,6 +2149,7 @@ export default function UnterkunftGrundrissPage() {
                           )}
                         </dd>
                       </div>
+                      )}
                       <div className="flex justify-between">
                         <dt className="text-neutral-500">Offene Mängel</dt>
                         <dd
@@ -2527,12 +2538,14 @@ export default function UnterkunftGrundrissPage() {
                           </button>
                         </>
                       )}
-                      <Link
-                        className="btn-secondary"
-                        href={`/unterkunft/kontrolle?zimmer=${sel.zimmer_id}`}
-                      >
-                        Kontrolle
-                      </Link>
+                      {sel.art !== "flur" && (
+                        <Link
+                          className="btn-secondary"
+                          href={`/unterkunft/kontrolle?zimmer=${sel.zimmer_id}`}
+                        >
+                          Kontrolle
+                        </Link>
+                      )}
                       {canEditMangel ? (
                         <button
                           className="btn-secondary"

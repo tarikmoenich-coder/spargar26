@@ -196,8 +196,12 @@ export default function UnterkunftKontrollePage() {
   const wohneinheitenDesGebaeudes = wohneinheiten.filter(
     (w) => String(w.gebaeude_id) === sel.gebaeude_id
   );
+  // Flure sind nicht kontrollpflichtig (Nutzer-Vorgabe 2026-09-01) - sie
+  // dienen nur noch zum Hinterlegen von Mängeln/Reparaturen und tauchen
+  // daher in der Wohneinheit-Kontrolle nicht auf.
   const raeumeDerEinheit = zimmer.filter(
-    (z) => String(z.wohneinheit_id) === sel.wohneinheit_id
+    (z) =>
+      String(z.wohneinheit_id) === sel.wohneinheit_id && z.art !== "flur"
   );
 
   // Räume der gewählten Wohneinheit alle vorauswählen.
@@ -209,7 +213,11 @@ export default function UnterkunftKontrollePage() {
     setRaumWahl(
       new Set(
         zimmer
-          .filter((z) => String(z.wohneinheit_id) === sel.wohneinheit_id)
+          .filter(
+            (z) =>
+              String(z.wohneinheit_id) === sel.wohneinheit_id &&
+              z.art !== "flur"
+          )
           .map((z) => z.id)
       )
     );
