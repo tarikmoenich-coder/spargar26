@@ -333,6 +333,29 @@ export default function UnterkunftKontrollplanPage() {
     return [...m.entries()].sort((a, b) => a[0].localeCompare(b[0]));
   }, [heuteListe]);
 
+  // Innerhalb eines Gebäudes zusätzlich nach Wohneinheit gruppieren - für die
+  // Kopfzeile "Ganze Wohneinheit kontrollieren" (Nutzer-Vorgabe 2026-09-01).
+  const heuteNachEinheit = useCallback((rows: typeof heuteListe) => {
+    const m = new Map<
+      string,
+      { id: number | null; name: string; rows: typeof heuteListe }
+    >();
+    for (const row of rows) {
+      const wid = row.z.wohneinheit_id;
+      const key = wid == null ? "none" : `w:${wid}`;
+      if (!m.has(key))
+        m.set(key, {
+          id: wid ?? null,
+          name: row.z.wohneinheit_name ?? "Ohne Wohneinheit",
+          rows: [],
+        });
+      m.get(key)!.rows.push(row);
+    }
+    return [...m.values()].sort((a, b) =>
+      a.name.localeCompare(b.name, "de", { numeric: true })
+    );
+  }, []);
+
   function toggleHeuteGeb(geb: string) {
     setHeuteZuGeb((s) => {
       const n = new Set(s);
@@ -669,70 +692,94 @@ export default function UnterkunftKontrollplanPage() {
                       </span>
                     </button>
                     {!gZu && (
-                      <ul className="divide-y divide-emerald-100 border-t border-emerald-100">
-                        {rows.map(({ z, info }) => {
-                          const heute = new Date()
-                            .toISOString()
-                            .slice(0, 10);
-                          const grund =
-                            info.frist == null
-                              ? "noch nie kontrolliert"
-                              : info.frist < heute
-                                ? `überfällig seit ${formatDatumDE(info.frist)}`
-                                : "heute fällig";
-                          return (
-                            <li
-                              key={z.zimmer_id}
-                              className="flex flex-wrap items-center gap-x-3 gap-y-1 px-2 py-1.5 text-sm"
-                            >
-                              <span
-                                className="inline-block h-2.5 w-2.5 shrink-0 rounded-full"
-                                style={{
-                                  backgroundColor:
-                                    KONTROLL_AMPEL_FARBE[info.ampel],
-                                }}
-                              />
-                              <span className="font-medium">
-                                {z.wohneinheit_name
-                                  ? `${z.wohneinheit_name} · `
-                                  : ""}
-                                {raumName(z)}
+                      <div className="space-y-2 border-t border-emerald-100 p-2">
+                        {heuteNachEinheit(rows).map((we) => (
+                          <div
+                            key={we.id ?? "none"}
+                            className="overflow-hidden rounded border border-emerald-100"
+                          >
+                            <div className="flex flex-wrap items-center gap-2 bg-emerald-50/60 px-2 py-1.5 text-sm">
+                              <span className="font-medium text-neutral-800">
+                                {we.name}
                               </span>
-                              <span
-                                className={
-                                  info.frist != null && info.frist < heute
-                                    ? "font-medium text-red-600"
-                                    : "text-neutral-600"
-                                }
-                              >
-                                {grund}
+                              <span className="rounded-full bg-red-600 px-1.5 py-0.5 text-xs font-semibold text-white">
+                                {we.rows.length}
                               </span>
-                              {z.offene_maengel > 0 && (
-                                <span className="text-red-600">
-                                  · {z.offene_maengel}{" "}
-                                  {z.offene_maengel === 1 ? "Mangel" : "Mängel"}
-                                </span>
-                              )}
-                              <span className="ml-auto flex gap-2">
+                              {we.id != null && (
                                 <Link
-                                  href={`/unterkunft/kontrolle?zimmer=${z.zimmer_id}`}
-                                  className="rounded bg-emerald-700 px-2 py-0.5 text-xs font-medium text-white"
+                                  href={`/unterkunft/kontrolle?wohneinheit=${we.id}`}
+                                  className="ml-auto rounded bg-emerald-700 px-2 py-0.5 text-xs font-medium text-white"
                                 >
-                                  Kontrolle starten
+                                  Ganze Wohneinheit kontrollieren
                                 </Link>
-                                {z.offene_maengel > 0 && (
-                                  <Link
-                                    href={`/unterkunft/maengel?zimmer=${z.zimmer_id}`}
-                                    className="text-xs text-emerald-700 underline"
+                              )}
+                            </div>
+                            <ul className="divide-y divide-emerald-100 border-t border-emerald-100">
+                              {we.rows.map(({ z, info }) => {
+                                const heute = new Date()
+                                  .toISOString()
+                                  .slice(0, 10);
+                                const grund =
+                                  info.frist == null
+                                    ? "noch nie kontrolliert"
+                                    : info.frist < heute
+                                      ? `überfällig seit ${formatDatumDE(info.frist)}`
+                                      : "heute fällig";
+                                return (
+                                  <li
+                                    key={z.zimmer_id}
+                                    className="flex flex-wrap items-center gap-x-3 gap-y-1 px-2 py-1.5 text-sm"
                                   >
-                                    Mängel
-                                  </Link>
-                                )}
-                              </span>
-                            </li>
-                          );
-                        })}
-                      </ul>
+                                    <span
+                                      className="inline-block h-2.5 w-2.5 shrink-0 rounded-full"
+                                      style={{
+                                        backgroundColor:
+                                          KONTROLL_AMPEL_FARBE[info.ampel],
+                                      }}
+                                    />
+                                    <span className="font-medium">
+                                      {raumName(z)}
+                                    </span>
+                                    <span
+                                      className={
+                                        info.frist != null && info.frist < heute
+                                          ? "font-medium text-red-600"
+                                          : "text-neutral-600"
+                                      }
+                                    >
+                                      {grund}
+                                    </span>
+                                    {z.offene_maengel > 0 && (
+                                      <span className="text-red-600">
+                                        · {z.offene_maengel}{" "}
+                                        {z.offene_maengel === 1
+                                          ? "Mangel"
+                                          : "Mängel"}
+                                      </span>
+                                    )}
+                                    <span className="ml-auto flex gap-2">
+                                      <Link
+                                        href={`/unterkunft/kontrolle?zimmer=${z.zimmer_id}`}
+                                        className="rounded bg-emerald-700 px-2 py-0.5 text-xs font-medium text-white"
+                                      >
+                                        Kontrolle starten
+                                      </Link>
+                                      {z.offene_maengel > 0 && (
+                                        <Link
+                                          href={`/unterkunft/maengel?zimmer=${z.zimmer_id}`}
+                                          className="text-xs text-emerald-700 underline"
+                                        >
+                                          Mängel
+                                        </Link>
+                                      )}
+                                    </span>
+                                  </li>
+                                );
+                              })}
+                            </ul>
+                          </div>
+                        ))}
+                      </div>
                     )}
                   </div>
                 );
