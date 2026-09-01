@@ -1637,16 +1637,7 @@ export default function UnterkunftGrundrissPage() {
                       schwellenVon(z.art)
                     );
                     const geplantListe = zuordnungProZimmer[z.zimmer_id] ?? [];
-                    const geplantHier = geplantListe.length;
                     const bewohnerHier = belegungProZimmer[z.zimmer_id] ?? [];
-                    const mitHerkunft = (p: {
-                      vorname: string;
-                      name: string;
-                      herkunft: string | null;
-                    }) =>
-                      `${p.vorname} ${p.name}${
-                        p.herkunft ? ` · ${p.herkunft}` : ""
-                      }`;
                     const belegbar =
                       belegen &&
                       handPerson != null &&
@@ -1659,49 +1650,77 @@ export default function UnterkunftGrundrissPage() {
                       <button
                         key={z.zimmer_id}
                         onClick={() => onZimmerWaehlen(z)}
-                        className={`flex items-center gap-3 rounded-lg border p-3 text-left ${
+                        className={`flex items-start gap-3 rounded-lg border p-3 text-left ${
                           z.zimmer_id === selId
                             ? "border-emerald-600 bg-emerald-50"
                             : "border-neutral-200 bg-white"
                         } ${gedimmt ? "opacity-40" : ""}`}
                       >
                         <span
-                          className="inline-block h-3 w-3 shrink-0 rounded-full"
+                          className="mt-1 inline-block h-3 w-3 shrink-0 rounded-full"
                           style={{ backgroundColor: KONTROLL_AMPEL_FARBE[ampel] }}
                           title={KONTROLL_AMPEL_LABELS[ampel]}
                         />
                         <span className="min-w-0 flex-1">
-                          <span className="block font-medium text-neutral-900">
-                            {z.art === "zimmer"
-                              ? `Zimmer ${z.nummer}`
-                              : raumName(z)}
-                            {z.gesperrt ? " · 🔒" : ""}
-                            {!z.aktiv ? " · inaktiv" : ""}
+                          <span className="flex items-baseline justify-between gap-2">
+                            <span className="font-medium text-neutral-900">
+                              {z.art === "zimmer"
+                                ? `Zimmer ${z.nummer}`
+                                : raumName(z)}
+                              {z.gesperrt ? " · 🔒" : ""}
+                              {!z.aktiv ? " · inaktiv" : ""}
+                            </span>
+                            {z.art === "zimmer" && (
+                              <span
+                                className={`shrink-0 text-sm font-semibold tabular-nums ${
+                                  z.frei > 0
+                                    ? "text-emerald-600"
+                                    : "text-neutral-400"
+                                }`}
+                                title="freie Betten / Betten gesamt"
+                              >
+                                {z.frei}/{z.betten}
+                              </span>
+                            )}
                           </span>
-                          {z.art === "zimmer" && (
-                            <span className="block text-xs text-neutral-500">
-                              {z.belegt}/{z.betten} belegt
-                              {geplantHier > 0 ? ` · +${geplantHier} geplant` : ""}
-                              {z.frei > 0 ? ` · ${z.frei} frei` : ""}
+                          {bewohnerHier.map((b) => (
+                            <span
+                              key={b.id}
+                              className="mt-0.5 block text-xs text-neutral-700"
+                            >
+                              {b.vorname} {b.name}
+                              {b.herkunft ? (
+                                <span className="text-neutral-400">
+                                  {" "}
+                                  · {b.herkunft}
+                                </span>
+                              ) : null}
                             </span>
-                          )}
-                          {bewohnerHier.length > 0 && (
-                            <span className="mt-0.5 block text-xs text-neutral-700">
-                              {bewohnerHier.map(mitHerkunft).join(", ")}
+                          ))}
+                          {geplantListe.map((g) => (
+                            <span
+                              key={g.id}
+                              className="mt-0.5 block text-xs text-amber-700"
+                            >
+                              {g.vorname} {g.name}
+                              {g.herkunft ? (
+                                <span className="text-amber-500">
+                                  {" "}
+                                  · {g.herkunft}
+                                </span>
+                              ) : null}
+                              {" · geplant"}
                             </span>
-                          )}
-                          {geplantListe.length > 0 && (
-                            <span className="block text-xs text-amber-700">
-                              geplant: {geplantListe.map(mitHerkunft).join(", ")}
-                            </span>
-                          )}
+                          ))}
                         </span>
                         {z.offene_maengel > 0 && (
-                          <span className="shrink-0 rounded bg-red-100 px-1.5 py-0.5 text-xs font-semibold text-red-700">
+                          <span className="shrink-0 self-center rounded bg-red-100 px-1.5 py-0.5 text-xs font-semibold text-red-700">
                             {z.offene_maengel} Mangel
                           </span>
                         )}
-                        <span className="shrink-0 text-neutral-300">›</span>
+                        <span className="shrink-0 self-center text-neutral-300">
+                          ›
+                        </span>
                       </button>
                     );
                   })}
