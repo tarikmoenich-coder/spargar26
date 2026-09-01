@@ -5,24 +5,12 @@ import { usePathname } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { getSupabaseClient } from "@/lib/supabase/client";
 import { useProfile } from "@/lib/useProfile";
-import type { UserRole } from "@/lib/types";
 
-interface Tab {
-  href: string;
-  label: string;
-  exakt?: boolean;
-  // Der Hausmeister arbeitet über die Immobilien-Ansicht + Reparaturen
-  // (+ Auszüge, solange welche offen sind); keine Zwischenkontrollen/
-  // Stammdaten (Vorgabe 2026-09-15).
-  nurHausmeister?: boolean;
-  // Reiter erscheint nur, wenn die Liste Einträge hat.
-  nurWennOffen?: boolean;
-  // Enger als nurHausmeister: nur diese Rollen sehen den Reiter überhaupt
-  // (Nutzer-Vorgabe 2026-09-01, Plan-Druck).
-  nurRollen?: UserRole[];
-}
-
-const tabs: Tab[] = [
+// Unterkunft-Modul. nurHausmeister: der Hausmeister arbeitet über die
+// Immobilien-Ansicht + Reparaturen (+ Auszüge, solange welche offen sind);
+// keine Zwischenkontrollen/Stammdaten (Vorgabe 2026-09-15).
+// nurWennOffen: Reiter erscheint nur, wenn die Liste Einträge hat.
+const tabs = [
   { href: "/unterkunft/kontrollplan", label: "Kontrollplan" },
   { href: "/unterkunft", label: "Immobilien", exakt: true, nurHausmeister: true },
   {
@@ -47,11 +35,6 @@ const tabs: Tab[] = [
   { href: "/unterkunft/maengel", label: "Mängel" },
   { href: "/unterkunft/reparaturen", label: "Reparaturen", nurHausmeister: true },
   { href: "/unterkunft/stammdaten", label: "Stammdaten" },
-  {
-    href: "/unterkunft/plan-druck",
-    label: "Plan-Druck",
-    nurRollen: ["admin", "hr"],
-  },
 ];
 
 export default function UnterkunftTabs() {
@@ -69,7 +52,6 @@ export default function UnterkunftTabs() {
 
   const sichtbar = tabs.filter((t) => {
     if (t.nurWennOffen && auszugCount === 0) return false;
-    if (t.nurRollen) return !!profile && t.nurRollen.includes(profile.role);
     if (profile?.role === "hausmeister") return !!t.nurHausmeister;
     return true;
   });
