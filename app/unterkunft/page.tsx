@@ -295,6 +295,18 @@ export default function UnterkunftGrundrissPage() {
   const [belegen, setBelegen] = useState(false);
   const [handPerson, setHandPerson] = useState<UnterkunftPersonOffen | null>(null);
   const [belegenSuche, setBelegenSuche] = useState("");
+  // Gruppen-Einzug (Nutzer-Vorgabe 2026-09-01): mehrere Personen des ganzen
+  // Gebäudes markieren → ein Zimmer antippen → alle dort einziehen. Für den
+  // Massen-Anreisetag. Personenpool = geplante Zuordnungen des Gebäudes bzw.
+  // Leute ohne Bleibe.
+  const [gruppenEinzug, setGruppenEinzug] = useState(false);
+  const [einzugWahl, setEinzugWahl] = useState<Set<string>>(new Set());
+  const [einzugQuelle, setEinzugQuelle] = useState<
+    "geplant" | "offen" | "alle"
+  >("geplant");
+  const [einzugSuche, setEinzugSuche] = useState("");
+  const [einzugZiel, setEinzugZiel] =
+    useState<UnterkunftZimmerUebersicht | null>(null);
   const [hinweis, setHinweis] = useState<string | null>(null);
   // Karten-Übersicht der Wohneinheiten ein-/ausklappen; Plan-Werkzeuge (Zoom/
   // Bearbeiten) im aufklappbaren Menü statt dauerhaft in der Leiste.
@@ -422,12 +434,22 @@ export default function UnterkunftGrundrissPage() {
     setNeuerMangel(null);
     setEinzugOffen(false);
     setAuszugWahlOffen(false);
+    setEinzugZiel(null);
   }, [selId, einheitId]);
 
   // Beim Verlassen des Belegen-Modus die „Person in der Hand" loslassen.
   useEffect(() => {
     if (!belegen) setHandPerson(null);
   }, [belegen]);
+
+  // Gruppen-Einzug verlassen → Auswahl leeren.
+  useEffect(() => {
+    if (!gruppenEinzug) {
+      setEinzugWahl(new Set());
+      setEinzugZiel(null);
+      setEinzugSuche("");
+    }
+  }, [gruppenEinzug]);
 
   // Nach Wahl/Wechsel einer Wohneinheit den Detailbereich an den oberen
   // Rand holen (scroll-margin-top hält Nav + Reiterleiste frei).
@@ -487,6 +509,61 @@ export default function UnterkunftGrundrissPage() {
     einheitId != null
       ? einheiten.find((e) => e.wohneinheit_id === einheitId) ?? null
       : null;
+
+  // Gruppen-Einzug: Personenpool des ganzen Gebäudes.
+  const gebaeudeWEs = useMemo(
+    () =>
+      new Set(
+        einheiten
+          .filter((e) => e.gebaeude_id === gebaeudeId)
+          .map((e) => e.wohneinheit_id)
+      ),
+    [einheiten, gebaeudeId]
+  );
+  const geplanteImGebaeude = useMemo(
+    () =>
+      zuordnungen.filter(
+        (z) => z.wohneinheit_id != null && gebaeudeWEs.has(z.wohneinheit_id)
+      ),
+    [zuordnungen, gebaeudeWEs]
+  );
+  const einzugPool = useMemo(() => {
+    type P = {
+      employee_id: string;
+      vorname: string;
+      name: string;
+      herkunft: string | null;
+      hint: string;
+      zuordnungId?: number;
+    };
+    const map = new Map<string, P>();
+    if (einzugQuelle !== "offen")
+      for (const z of geplanteImGebaeude)
+        map.set(z.employee_id, {
+          employee_id: z.employee_id,
+          vorname: z.vorname,
+          name: z.name,
+          herkunft: z.herkunft,
+          hint: z.wohneinheit_name,
+          zuordnungId: z.id,
+        });
+    if (einzugQuelle !== "geplant")
+      for (const p of personenOffen)
+        if (!map.has(p.employee_id))
+          map.set(p.employee_id, {
+            employee_id: p.employee_id,
+            vorname: p.vorname,
+            name: p.name,
+            herkunft: p.herkunft,
+            hint: "ohne Bleibe",
+          });
+    const q = einzugSuche.trim().toLowerCase();
+    return [...map.values()]
+      .filter(
+        (p) => !q || `${p.vorname} ${p.name}`.toLowerCase().includes(q)
+      )
+      .sort((a, b) => a.name.localeCompare(b.name, "de"));
+  }, [einzugQuelle, geplanteImGebaeude, personenOffen, einzugSuche]);
 
   // Inaktive Zimmer werden im Grundriss nur im Bearbeiten-Modus gezeigt
   // (sonst nicht mehr im Weg).
@@ -781,6 +858,53 @@ export default function UnterkunftGrundrissPage() {
     await laden();
   }
 
+  // Gruppen-Einzug: alle markierten Personen in ein Zimmer einziehen. Kommt
+  // eine Person aus einer geplanten Zuordnung, wird die auf „erledigt"
+  // gesetzt.
+  async function einzugBestaetigen(z: UnterkunftZimmerUebersicht) {
+    const ids = [...einzugWahl];
+    if (ids.length === 0 || z.art !== "zimmer") return;
+    setFehler(null);
+    const sb = getSupabaseClient();
+    const zuordnungVon = new Map(
+      geplanteImGebaeude.map((g) => [g.employee_id, g.id])
+    );
+    const { data, error } = await sb
+      .from("unterkunft_belegung")
+      .insert(
+        ids.map((eid) => ({
+          zimmer_id: z.zimmer_id,
+          employee_id: eid,
+          von: heuteIso(),
+        }))
+      )
+      .select("id, employee_id");
+    if (error) {
+      setFehler(error.message);
+      return;
+    }
+    for (const r of (data as { id: number; employee_id: string }[]) ?? []) {
+      const zid = zuordnungVon.get(r.employee_id);
+      if (zid != null)
+        await sb
+          .from("unterkunft_zuordnung")
+          .update({
+            status: "erledigt",
+            belegung_id: r.id,
+            updated_by: profile?.id ?? null,
+          })
+          .eq("id", zid);
+    }
+    setHinweis(
+      `${ids.length} Person(en) → Zimmer ${z.nummer}${
+        z.frei < ids.length ? " (Überbuchung!)" : ""
+      }`
+    );
+    setEinzugWahl(new Set());
+    setEinzugZiel(null);
+    await laden();
+  }
+
   // Mangel direkt im Zimmer-Panel anlegen (admin/hr/hausmeister). Danach
   // erscheint er in der aufklappbaren Liste, wo auch Fotos möglich sind.
   async function mangelAnlegen(zimmerId: number) {
@@ -1019,6 +1143,18 @@ export default function UnterkunftGrundrissPage() {
   // Plan-Container, wo ein kurzer Tipp sonst als Scroll verschluckt wird und
   // man die Kachel „lange drücken" musste - Nutzer-Vorgabe 2026-09-01).
   function onZimmerWaehlen(z: UnterkunftZimmerUebersicht) {
+    if (gruppenEinzug) {
+      if (z.art !== "zimmer" || !z.aktiv || z.gesperrt) {
+        setHinweis("Bitte ein aktives, nicht gesperrtes Zimmer wählen.");
+        return;
+      }
+      if (einzugWahl.size === 0) {
+        setHinweis("Erst Personen markieren, dann das Zimmer.");
+        return;
+      }
+      setEinzugZiel(z);
+      return;
+    }
     if (belegen) {
       if (handPerson) belegenAufZimmer(z);
       else setHinweis("Erst eine Person antippen, dann das Zimmer.");
@@ -1438,6 +1574,7 @@ export default function UnterkunftGrundrissPage() {
                   setBelegen((v) => !v);
                   setSelId(null);
                   setBearbeiten(false);
+                  setGruppenEinzug(false);
                 }}
                 className={`rounded px-3 py-1 font-medium ${
                   belegen
@@ -1446,6 +1583,23 @@ export default function UnterkunftGrundrissPage() {
                 }`}
               >
                 {belegen ? "Belegen: an" : "Belegen"}
+              </button>
+            )}
+            {canMove && (
+              <button
+                onClick={() => {
+                  setGruppenEinzug((v) => !v);
+                  setSelId(null);
+                  setBearbeiten(false);
+                  setBelegen(false);
+                }}
+                className={`rounded px-3 py-1 font-medium ${
+                  gruppenEinzug
+                    ? "bg-emerald-700 text-white"
+                    : "border border-emerald-600 text-emerald-700"
+                }`}
+              >
+                {gruppenEinzug ? "Gruppen-Einzug: an" : "Gruppen-Einzug"}
               </button>
             )}
             {/* Grundriss-Farbmodi + Zoom/Bearbeiten: für Hausmeister aus
@@ -1584,6 +1738,120 @@ export default function UnterkunftGrundrissPage() {
                   </span>
                 )}
               </div>
+            </div>
+          )}
+
+          {/* Gruppen-Einzug: mehrere Personen markieren → Zimmer antippen */}
+          {gruppenEinzug && (
+            <div className="rounded border border-emerald-300 bg-emerald-50 p-2 text-sm">
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="font-medium text-emerald-900">
+                  {einzugWahl.size > 0
+                    ? `${einzugWahl.size} markiert – jetzt das Zimmer antippen`
+                    : "Personen markieren, dann das Zimmer antippen."}
+                </span>
+                {einzugWahl.size > 0 && (
+                  <button
+                    className="text-xs text-emerald-700 underline"
+                    onClick={() => setEinzugWahl(new Set())}
+                  >
+                    Auswahl leeren
+                  </button>
+                )}
+                <span className="ml-auto flex overflow-hidden rounded border border-emerald-300">
+                  {(
+                    [
+                      ["geplant", "Geplant"],
+                      ["offen", "Ohne Bleibe"],
+                      ["alle", "Alle"],
+                    ] as const
+                  ).map(([w, label]) => (
+                    <button
+                      key={w}
+                      onClick={() => setEinzugQuelle(w)}
+                      className={`px-2 py-0.5 text-xs ${
+                        einzugQuelle === w
+                          ? "bg-emerald-700 font-semibold text-white"
+                          : "bg-white text-emerald-800"
+                      }`}
+                    >
+                      {label}
+                    </button>
+                  ))}
+                </span>
+              </div>
+              <input
+                className="mt-2 w-full text-sm"
+                placeholder="Person suchen (Name)"
+                value={einzugSuche}
+                onChange={(e) => setEinzugSuche(e.target.value)}
+              />
+              <div className="mt-2 flex max-h-48 flex-wrap gap-1.5 overflow-y-auto">
+                {einzugPool.length === 0 && (
+                  <span className="text-neutral-500">
+                    {einzugQuelle === "geplant"
+                      ? "keine geplanten Personen für dieses Gebäude."
+                      : "niemand gefunden."}
+                  </span>
+                )}
+                {einzugPool.slice(0, 80).map((p) => {
+                  const drin = einzugWahl.has(p.employee_id);
+                  return (
+                    <button
+                      key={p.employee_id}
+                      onClick={() =>
+                        setEinzugWahl((s) => {
+                          const n = new Set(s);
+                          n.has(p.employee_id)
+                            ? n.delete(p.employee_id)
+                            : n.add(p.employee_id);
+                          return n;
+                        })
+                      }
+                      className={`rounded-full border px-2.5 py-1 ${
+                        drin
+                          ? "border-emerald-700 bg-emerald-700 font-semibold text-white"
+                          : "border-emerald-300 bg-white text-emerald-800"
+                      }`}
+                    >
+                      {p.vorname} {p.name}
+                      <span
+                        className={
+                          drin ? "text-emerald-100" : "text-neutral-400"
+                        }
+                      >
+                        {" "}
+                        · {p.hint}
+                        {p.herkunft ? ` · ${p.herkunft}` : ""}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+
+              {einzugZiel && (
+                <div className="mt-2 flex flex-wrap items-center gap-2 rounded border border-emerald-400 bg-white p-2">
+                  <span className="font-medium text-emerald-900">
+                    {einzugWahl.size} Person(en) → Zimmer {einzugZiel.nummer}
+                    {einzugZiel.frei < einzugWahl.size
+                      ? ` (nur ${einzugZiel.frei} frei – Überbuchung)`
+                      : ""}
+                    ?
+                  </span>
+                  <button
+                    className="btn"
+                    onClick={() => einzugBestaetigen(einzugZiel)}
+                  >
+                    Einzug bestätigen
+                  </button>
+                  <button
+                    className="btn-secondary"
+                    onClick={() => setEinzugZiel(null)}
+                  >
+                    Abbrechen
+                  </button>
+                </div>
+              )}
             </div>
           )}
 
