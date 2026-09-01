@@ -7,6 +7,7 @@ import { useProfile } from "@/lib/useProfile";
 import {
   ABRECHNUNGSART_LABELS,
   type AnreiselisteOffenArbeitend,
+  type ArbeitstageSerie,
   type EmployeeUrlaubstage,
   type Period,
   type SeasonSummaryRow,
@@ -202,6 +203,7 @@ export default function ManagementPage() {
     anreiseliste: false,
     sv: true,
     stunden: false,
+    serie: false,
     abweichungen: false,
     urlaub: false,
   });
@@ -254,6 +256,13 @@ export default function ManagementPage() {
   const [offenUeberstundenId, setOffenUeberstundenId] = useState<
     string | null
   >(null);
+
+  // Arbeitstage am Stück ohne freien Tag (Nutzer-Vorgabe 2026-09-01) - View
+  // arbeitstage_serie_uebersicht, aktueller Stand (rollierende 400 Tage),
+  // NICHT nach dem Jahr-Wähler gefiltert: HR will den Ist-Zustand sehen und
+  // sofort eingreifen können.
+  const [arbeitsserie, setArbeitsserie] = useState<ArbeitstageSerie[]>([]);
+  const [loadingArbeitsserie, setLoadingArbeitsserie] = useState(true);
 
   const [urlaubUeberzogen, setUrlaubUeberzogen] = useState<
     EmployeeUrlaubstage[]
@@ -442,6 +451,19 @@ export default function ManagementPage() {
   }, [jahr]);
 
   useEffect(() => {
+    async function loadArbeitsserie() {
+      setLoadingArbeitsserie(true);
+      const supabase = getSupabaseClient();
+      const { data, error } = await supabase
+        .from("arbeitstage_serie_uebersicht")
+        .select("*");
+      if (!error) setArbeitsserie((data as ArbeitstageSerie[]) ?? []);
+      setLoadingArbeitsserie(false);
+    }
+    loadArbeitsserie();
+  }, []);
+
+  useEffect(() => {
     async function loadUrlaub() {
       setLoadingUrlaub(true);
       const supabase = getSupabaseClient();
@@ -511,6 +533,22 @@ export default function ManagementPage() {
     // Grenze korrigierter Tag korrekt aus der Liste verschwindet.
     await loadUeberstunden();
   }
+
+  // Nur die Serien mit akutem Handlungsbedarf: läuft aktuell noch, oder die
+  // Ersatzausgleich-Frist nach 14 Tagen ist offen bzw. verstrichen ohne die
+  // 2 nötigen freien Tage. Abgeschlossene 7-13-Tage-Serien ohne
+  // Ausgleichspflicht bleiben außen vor.
+  const arbeitsserieAktuell = arbeitsserie.filter(
+    (s) =>
+      s.laeuft_noch ||
+      s.ersatzausgleich === "offen" ||
+      s.ersatzausgleich === "fehlt"
+  );
+  const serieRot = arbeitsserieAktuell.filter((s) => s.ampel === "rot").length;
+  const serieGelb = arbeitsserieAktuell.filter((s) => s.ampel === "gelb").length;
+  const serieErsatzFehlt = arbeitsserieAktuell.filter(
+    (s) => s.ersatzausgleich === "fehlt"
+  ).length;
 
   return (
     <div className="flex flex-col gap-4">
@@ -1081,6 +1119,114 @@ export default function ManagementPage() {
                     </Fragment>
                   );
                 })}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </Gruppe>
+
+      <Gruppe
+        titel="Arbeitstage am Stück"
+        offen={gruppenOffen.serie}
+        onToggle={() => toggleGruppe("serie")}
+        kennzahl={
+          loadingArbeitsserie ? (
+            "…"
+          ) : (
+            <>
+              <span className="font-medium text-red-600">{serieRot}</span> rot ·{" "}
+              <span className="font-medium text-amber-600">{serieGelb}</span>{" "}
+              gelb
+              {serieErsatzFehlt > 0 && (
+                <>
+                  {" · "}
+                  <span className="font-medium text-red-600">
+                    {serieErsatzFehlt}× Ersatzausgleich fehlt
+                  </span>
+                </>
+              )}
+            </>
+          )
+        }
+      >
+        <p className="mb-2 text-sm text-neutral-500">
+          Aufeinanderfolgende Arbeitstage ohne freien Tag (Pause = 0 Std.,
+          „U" oder kein Eintrag; „F"/Fahrer zählt als Arbeitstag). Ab 7 Tagen
+          gelb, ab 14 Tagen rot. Nach 14 Tagen am Stück verlangt das
+          Arbeitszeitgesetz 2 freie Tage in der Folgewoche (Ersatzausgleich) -
+          wird hier mitgeprüft. Aktueller Stand, unabhängig vom gewählten
+          Jahr.
+        </p>
+        {loadingArbeitsserie ? (
+          <p className="text-neutral-500">Lädt…</p>
+        ) : arbeitsserieAktuell.length === 0 ? (
+          <p className="text-neutral-500">
+            Kein Handlungsbedarf - niemand arbeitet aktuell 7 Tage oder länger
+            am Stück.
+          </p>
+        ) : (
+          <div className="overflow-x-auto">
+            <table>
+              <thead>
+                <tr>
+                  <th>Pers.-Nr.</th>
+                  <th>Name</th>
+                  <th>Tage am Stück</th>
+                  <th>Zeitraum</th>
+                  <th>Status</th>
+                  <th>Ersatzausgleich</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody>
+                {arbeitsserieAktuell.map((s) => (
+                  <tr key={`${s.employee_id}-${s.serie_bis}`}>
+                    <td>{s.personal_nr}</td>
+                    <td>
+                      {s.name}, {s.vorname}
+                    </td>
+                    <td
+                      className={
+                        s.ampel === "rot"
+                          ? "font-medium text-red-600"
+                          : "font-medium text-amber-600"
+                      }
+                    >
+                      {s.serie_tage}
+                    </td>
+                    <td className="whitespace-nowrap">
+                      {formatDatumDE(s.serie_von)} – {formatDatumDE(s.serie_bis)}
+                    </td>
+                    <td className="text-sm">
+                      {s.laeuft_noch ? "läuft noch" : "beendet"}
+                    </td>
+                    <td className="text-sm">
+                      {s.ersatzausgleich === null ? (
+                        "—"
+                      ) : s.ersatzausgleich === "erfuellt" ? (
+                        "erfüllt"
+                      ) : s.ersatzausgleich === "offen" ? (
+                        `offen (${s.ersatz_freie_tage ?? 0}/2 freie Tage${
+                          s.ersatz_fenster_bis
+                            ? `, bis ${formatDatumDE(s.ersatz_fenster_bis)}`
+                            : ""
+                        })`
+                      ) : (
+                        <span className="font-medium text-red-600">
+                          fehlt ({s.ersatz_freie_tage ?? 0}/2 freie Tage)
+                        </span>
+                      )}
+                    </td>
+                    <td>
+                      <Link
+                        href={`/erfassung?datum=${s.serie_bis}&employee=${s.employee_id}`}
+                        className="btn-secondary text-xs"
+                      >
+                        In Erfassung
+                      </Link>
+                    </td>
+                  </tr>
+                ))}
               </tbody>
             </table>
           </div>

@@ -48,7 +48,7 @@ function addDays(iso: string, delta: number): string {
   return ergebnis.toISOString().slice(0, 10);
 }
 
-// Kurzform "Mo 04.08." für die Spaltenköpfe der vorherigen Tage.
+// Kurzform "Mo 04.08." für die Spaltenköpfe der Wochentage.
 function kurzDatum(iso: string): string {
   const [, m, t] = iso.split("-");
   const wochentag = new Date(`${iso}T00:00:00Z`).toLocaleDateString("de-DE", {
@@ -56,6 +56,37 @@ function kurzDatum(iso: string): string {
     timeZone: "UTC",
   });
   return `${wochentag} ${t}.${m}.`;
+}
+
+// Montag (ISO-Wochenstart) der Woche, in der `iso` liegt. Reine
+// Kalenderarithmetik über UTC, gleiche Robustheit wie addDays().
+function montagDerWoche(iso: string): string {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(iso)) return iso;
+  const [j, m, t] = iso.split("-").map(Number);
+  const wochentag = new Date(Date.UTC(j, m - 1, t)).getUTCDay(); // 0=So..6=Sa
+  return addDays(iso, wochentag === 0 ? -6 : 1 - wochentag);
+}
+
+// Die 7 Kalendertage (Mo..So) der Woche um `iso`.
+function wochenTageVon(iso: string): string[] {
+  const mo = montagDerWoche(iso);
+  return [0, 1, 2, 3, 4, 5, 6].map((d) => addDays(mo, d));
+}
+
+// ISO-Kalenderwoche (1..53) - für die Beschriftung "KW 36".
+function isoKw(iso: string): number {
+  const [j, m, t] = iso.split("-").map(Number);
+  const d = new Date(Date.UTC(j, m - 1, t));
+  // Donnerstag derselben Woche bestimmt das KW-Jahr (ISO 8601).
+  d.setUTCDate(d.getUTCDate() + 4 - (d.getUTCDay() || 7));
+  const jahresanfang = new Date(Date.UTC(d.getUTCFullYear(), 0, 1));
+  return Math.ceil(((d.getTime() - jahresanfang.getTime()) / 86400000 + 1) / 7);
+}
+
+// "04.08." - kompaktes Tagesdatum für die KW-Kopfzeile.
+function tagMonat(iso: string): string {
+  const [, m, t] = iso.split("-");
+  return `${t}.${m}.`;
 }
 
 interface Gruppierung {
@@ -97,6 +128,10 @@ function ErfassungInner() {
   const t = uebersetzung(profile?.sprache);
   const canGruppeAendern =
     profile?.role === "admin" || profile?.role === "hr";
+  // Nutzer-Vorgabe 2026-09-01: die Rolle "zeiterfassung" (Anzeige-Name
+  // "Stundenerfassung") soll die Spalte "Markierung" gar nicht mehr sehen -
+  // U (Urlaub/Feiertag) und F (Fahrer) pflegt künftig nur noch admin/hr.
+  const zeigeMarkierung = profile?.role !== "zeiterfassung";
   // Muss exakt zu work_entries_write/-update in schema.sql passen (RLS).
   // Ohne diese clientseitige Sperre sahen Rollen ohne Schreibrecht (z.B.
   // "management") ganz normal editierbar wirkende Felder, deren Eingabe
@@ -131,14 +166,11 @@ function ErfassungInner() {
   // gefilterten Personen.
   const [search, setSearch] = useState("");
   const [entries, setEntries] = useState<Record<string, WorkEntry>>({});
-  // Nur zur Kontrolle/Übersicht: Stunden der 3 vorherigen Tage, nicht
-  // bearbeitbar - Bearbeitung bleibt auf das oben gewählte Datum beschränkt.
-  const [vorherigeEntries, setVorherigeEntries] = useState<
-    Record<string, Record<string, WorkEntry>>
-  >({});
-  // Ebenso, aber für die 2 kommenden Tage (z.B. um schon vorab erfasste
-  // Urlaubstage zu sehen) - Nutzer-Vorgabe 2026-08-08.
-  const [kommendeEntries, setKommendeEntries] = useState<
+  // Nutzer-Vorgabe 2026-09-01: die Erfassung zeigt immer eine ganze
+  // Kalenderwoche (Mo..So). Bearbeitbar bleibt nur der oben gewählte Tag
+  // (`datum`) - die übrigen 6 Tage der Woche stehen hier nur zur Kontrolle,
+  // je Tag ein employeeId->WorkEntry-Eintrag.
+  const [kontextEntries, setKontextEntries] = useState<
     Record<string, Record<string, WorkEntry>>
   >({});
   const [loading, setLoading] = useState(true);
@@ -189,19 +221,17 @@ function ErfassungInner() {
     datumRef.current = datum;
   }, [datum]);
 
-  const vorherigeDaten = [
-    addDays(datum, -3),
-    addDays(datum, -2),
-    addDays(datum, -1),
-  ];
-  const kommendeDaten = [addDays(datum, 1), addDays(datum, 2)];
+  // Die ganze Woche um den gewählten Tag; `kontextTage` = alle außer dem
+  // bearbeitbaren Tag (nur zur Anzeige).
+  const wochenTage = wochenTageVon(datum);
+  const kontextTage = wochenTage.filter((d) => d !== datum);
 
   const loadAll = useCallback(async (forDate: string) => {
     setLoading(true);
     const supabase = getSupabaseClient();
-    const vorherige = [addDays(forDate, -3), addDays(forDate, -2), addDays(forDate, -1)];
-    const kommende = [addDays(forDate, 1), addDays(forDate, 2)];
-    const [{ data: emp }, { data: we }, { data: gr }, { data: weVorher }, { data: weKommend }] =
+    const alleTage = wochenTageVon(forDate);
+    const kontext = alleTage.filter((d) => d !== forDate);
+    const [{ data: emp }, { data: we }, { data: gr }, { data: weKontext }] =
       await Promise.all([
         supabase
           .from("employees")
@@ -210,8 +240,7 @@ function ErfassungInner() {
           .order("name"),
         supabase.from("work_entries").select("*").eq("datum", forDate),
         supabase.from("arbeitsgruppen").select("*").order("reihenfolge"),
-        supabase.from("work_entries").select("*").in("datum", vorherige),
-        supabase.from("work_entries").select("*").in("datum", kommende),
+        supabase.from("work_entries").select("*").in("datum", kontext),
       ]);
     setEmployees((emp as Employee[]) ?? []);
     setGruppen((gr as Arbeitsgruppe[]) ?? []);
@@ -220,18 +249,12 @@ function ErfassungInner() {
       map[row.employee_id] = row;
     });
     setEntries(map);
-    const vorherigeMap: Record<string, Record<string, WorkEntry>> = {};
-    ((weVorher as WorkEntry[]) ?? []).forEach((row) => {
-      if (!vorherigeMap[row.datum]) vorherigeMap[row.datum] = {};
-      vorherigeMap[row.datum][row.employee_id] = row;
+    const kontextMap: Record<string, Record<string, WorkEntry>> = {};
+    ((weKontext as WorkEntry[]) ?? []).forEach((row) => {
+      if (!kontextMap[row.datum]) kontextMap[row.datum] = {};
+      kontextMap[row.datum][row.employee_id] = row;
     });
-    setVorherigeEntries(vorherigeMap);
-    const kommendeMap: Record<string, Record<string, WorkEntry>> = {};
-    ((weKommend as WorkEntry[]) ?? []).forEach((row) => {
-      if (!kommendeMap[row.datum]) kommendeMap[row.datum] = {};
-      kommendeMap[row.datum][row.employee_id] = row;
-    });
-    setKommendeEntries(kommendeMap);
+    setKontextEntries(kontextMap);
     setLoading(false);
   }, []);
 
@@ -604,6 +627,24 @@ function ErfassungInner() {
     0
   );
 
+  // Summe über die ganze sichtbare Kalenderwoche (bearbeitbarer Tag +
+  // Kontext-Tage).
+  const wochenStunden =
+    gesamtStunden +
+    kontextTage.reduce(
+      (sum, d) =>
+        sum +
+        Object.values(kontextEntries[d] ?? {}).reduce(
+          (s, e) => s + (e.stunden ?? 0),
+          0
+        ),
+      0
+    );
+
+  const kwLabel = `KW ${isoKw(datum)} · ${tagMonat(wochenTage[0])}–${tagMonat(
+    wochenTage[6]
+  )}`;
+
   function gruppenStunden(g: Gruppierung) {
     return g.employees.reduce(
       (sum, emp) => sum + (entries[emp.id]?.stunden ?? 0),
@@ -629,6 +670,27 @@ function ErfassungInner() {
             onChange={(e) => setSearch(e.target.value)}
             className="w-64"
           />
+          <span className="inline-flex items-center gap-1 text-sm">
+            <button
+              type="button"
+              className="btn-secondary px-2 text-xs"
+              onClick={() => datumWechseln(addDays(datum, -7))}
+              title="Eine Kalenderwoche zurück"
+            >
+              ‹‹
+            </button>
+            <span className="min-w-[11rem] text-center font-medium text-neutral-700">
+              {kwLabel}
+            </span>
+            <button
+              type="button"
+              className="btn-secondary px-2 text-xs"
+              onClick={() => datumWechseln(addDays(datum, 7))}
+              title="Eine Kalenderwoche vor"
+            >
+              ››
+            </button>
+          </span>
           <label className="text-sm">
             {t("gemeinsam.datum")}{" "}
             <span className="inline-flex items-center gap-1">
@@ -656,7 +718,8 @@ function ErfassungInner() {
             </span>
           </label>
           <span className="text-sm text-neutral-500">
-            {t("erfassung.tagessumme", { wert: gesamtStunden.toFixed(2) })}
+            {t("erfassung.tagessumme", { wert: gesamtStunden.toFixed(2) })} ·
+            Woche {wochenStunden.toFixed(2)}
           </span>
         </div>
 
@@ -748,26 +811,30 @@ function ErfassungInner() {
                   <th>{t("erfassung.name")}</th>
                   <th>{t("erfassung.herkunft")}</th>
                   <th>{t("erfassung.fuehrerschein")}</th>
-                  {vorherigeDaten.map((d) => (
-                    <th
-                      key={d}
-                      className="font-normal text-neutral-400"
-                      title={t("erfassung.nurkontrolle")}
-                    >
-                      {kurzDatum(d)}
-                    </th>
-                  ))}
-                  <th>{t("erfassung.stunden")}</th>
-                  {kommendeDaten.map((d) => (
-                    <th
-                      key={d}
-                      className="font-normal text-neutral-400"
-                      title={t("erfassung.nurkontrolle")}
-                    >
-                      {kurzDatum(d)}
-                    </th>
-                  ))}
-                  <th>{t("gemeinsam.markierung")}</th>
+                  {wochenTage.map((d) => {
+                    const istBearbeitbar = d === datum;
+                    return (
+                      <th
+                        key={d}
+                        className={
+                          istBearbeitbar
+                            ? "font-semibold text-emerald-800"
+                            : "cursor-pointer font-normal text-neutral-400 hover:text-emerald-700"
+                        }
+                        title={
+                          istBearbeitbar
+                            ? t("erfassung.stunden")
+                            : `${t("erfassung.nurkontrolle")} – zum Bearbeiten anklicken`
+                        }
+                        onClick={
+                          istBearbeitbar ? undefined : () => datumWechseln(d)
+                        }
+                      >
+                        {kurzDatum(d)}
+                      </th>
+                    );
+                  })}
+                  {zeigeMarkierung && <th>{t("gemeinsam.markierung")}</th>}
                   <th>{t("gemeinsam.notiz")}</th>
                   <th title="Immer sichtbar, unabhängig vom gewählten Tag - siehe Erklärung beim Aufklappen">
                     Stundenkonto
@@ -813,53 +880,56 @@ function ErfassungInner() {
                           "—"
                         )}
                       </td>
-                      {vorherigeDaten.map((d) => {
-                        const alt = vorherigeEntries[d]?.[emp.id];
+                      {wochenTage.map((d) => {
+                        if (d === datum) {
+                          return (
+                            <td key={d}>
+                              <input
+                                type="number"
+                                min={0}
+                                max={24}
+                                step={0.25}
+                                className="w-20"
+                                defaultValue={entry?.stunden ?? ""}
+                                key={`${emp.id}-${entry?.version ?? 0}`}
+                                data-stunden-feld="true"
+                                data-employee-id={emp.id}
+                                onBlur={(e) => saveHours(emp.id, e.target.value)}
+                                onKeyDown={handleStundenKeyDown}
+                                disabled={gesperrt || !canEditStunden}
+                                title={t("erfassung.stundenfeldtitel")}
+                              />
+                            </td>
+                          );
+                        }
+                        const kalt = kontextEntries[d]?.[emp.id];
                         return (
-                          <td key={d} className="text-neutral-400">
-                            {alt?.stunden ?? alt?.markierung ?? "—"}
+                          <td
+                            key={d}
+                            className="cursor-pointer text-neutral-400 hover:text-emerald-700"
+                            onClick={() => datumWechseln(d)}
+                            title="Zum Bearbeiten anklicken"
+                          >
+                            {kalt?.stunden ?? kalt?.markierung ?? "—"}
                           </td>
                         );
                       })}
-                      <td>
-                        <input
-                          type="number"
-                          min={0}
-                          max={24}
-                          step={0.25}
-                          className="w-20"
-                          defaultValue={entry?.stunden ?? ""}
-                          key={`${emp.id}-${entry?.version ?? 0}`}
-                          data-stunden-feld="true"
-                          data-employee-id={emp.id}
-                          onBlur={(e) => saveHours(emp.id, e.target.value)}
-                          onKeyDown={handleStundenKeyDown}
-                          disabled={gesperrt || !canEditStunden}
-                          title={t("erfassung.stundenfeldtitel")}
-                        />
-                      </td>
-                      {kommendeDaten.map((d) => {
-                        const kommend = kommendeEntries[d]?.[emp.id];
-                        return (
-                          <td key={d} className="text-neutral-400">
-                            {kommend?.stunden ?? kommend?.markierung ?? "—"}
-                          </td>
-                        );
-                      })}
-                      <td>
-                        <select
-                          defaultValue={entry?.markierung ?? ""}
-                          key={`m-${emp.id}-${entry?.version ?? 0}`}
-                          onChange={(e) =>
-                            saveMarkierung(emp.id, e.target.value)
-                          }
-                          disabled={gesperrt || !canEditStunden}
-                        >
-                          <option value="">—</option>
-                          <option value="U">{t("erfassung.markierungurlaub")}</option>
-                          <option value="F">{t("erfassung.markierungfahrer")}</option>
-                        </select>
-                      </td>
+                      {zeigeMarkierung && (
+                        <td>
+                          <select
+                            defaultValue={entry?.markierung ?? ""}
+                            key={`m-${emp.id}-${entry?.version ?? 0}`}
+                            onChange={(e) =>
+                              saveMarkierung(emp.id, e.target.value)
+                            }
+                            disabled={gesperrt || !canEditStunden}
+                          >
+                            <option value="">—</option>
+                            <option value="U">{t("erfassung.markierungurlaub")}</option>
+                            <option value="F">{t("erfassung.markierungfahrer")}</option>
+                          </select>
+                        </td>
+                      )}
                       <td>
                         <input
                           type="text"
@@ -897,10 +967,8 @@ function ErfassungInner() {
                         <td
                           colSpan={
                             5 +
-                            vorherigeDaten.length +
-                            1 +
-                            kommendeDaten.length +
-                            2 +
+                            wochenTage.length +
+                            (zeigeMarkierung ? 2 : 1) +
                             (canGruppeAendern ? 1 : 0)
                           }
                           className="bg-neutral-50"

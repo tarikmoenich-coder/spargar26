@@ -927,6 +927,8 @@ create table work_entries (
 
 create index idx_work_entries_datum on work_entries (datum);
 create index idx_work_entries_employee on work_entries (employee_id);
+-- Serien-/Bereichsabfragen je Person (arbeitstage_serie_uebersicht)
+create index idx_work_entries_emp_datum on work_entries (employee_id, datum);
 
 -- ---------------------------------------------------------------------------
 -- 4. Perioden-Sperre (aus 5.2: "Freigabe/Sperre abgeschlossener Monate")
@@ -4339,6 +4341,84 @@ where w.erster_eintrag is not null;
 -- Ergebnis, silenced nur den Supabase-Security-Advisor-Hinweis.
 alter view employee_urlaubstage set (security_invoker = true);
 grant select on employee_urlaubstage to authenticated;
+
+-- ---------------------------------------------------------------------------
+-- 12e2b. View: Arbeitstage am Stück (ArbZG-Wochenruhe-Kontrolle,
+--        Nutzer-Vorgabe 2026-09-01). Siehe
+--        supabase/migration_2026-09-19_arbeitstage_serie.sql für die
+--        vollständige Herleitung der Regeln.
+--
+--        Arbeitstag = work_entries mit stunden > 0 UND markierung <> 'U'.
+--        Serie      = maximale Kette aufeinanderfolgender Kalendertage.
+--        Ampel      = >=14 'rot', >=7 'gelb'.
+--        Ersatzausgleich (nur ab 14 Tagen): >= 2 freie Tage in den 7
+--        Kalendertagen nach serie_bis -> 'erfuellt' | 'offen' | 'fehlt'.
+-- ---------------------------------------------------------------------------
+create or replace view arbeitstage_serie_uebersicht as
+with tage as (
+  select employee_id, datum
+  from work_entries
+  where stunden > 0
+    and coalesce(markierung, '') <> 'U'
+    and datum >= current_date - 400
+  group by employee_id, datum
+),
+inseln as (
+  select
+    employee_id,
+    min(datum) as serie_von,
+    max(datum) as serie_bis,
+    count(*)   as serie_tage
+  from (
+    select
+      employee_id,
+      datum,
+      datum - (row_number() over (partition by employee_id order by datum))::int
+        as grp
+    from tage
+  ) s
+  group by employee_id, grp
+)
+select
+  i.employee_id,
+  e.personal_nr,
+  e.name,
+  e.vorname,
+  e.aktiv,
+  i.serie_von,
+  i.serie_bis,
+  i.serie_tage,
+  (i.serie_bis >= current_date - 1) as laeuft_noch,
+  case
+    when i.serie_tage >= 14 then 'rot'
+    when i.serie_tage >= 7  then 'gelb'
+    else 'gruen'
+  end as ampel,
+  case when i.serie_tage >= 14 then (i.serie_bis + 7) end as ersatz_fenster_bis,
+  case when i.serie_tage >= 14 then ea.freie_tage end     as ersatz_freie_tage,
+  case
+    when i.serie_tage < 14                    then null
+    when ea.freie_tage >= 2                   then 'erfuellt'
+    when i.serie_bis + 7 >= current_date      then 'offen'
+    else 'fehlt'
+  end as ersatzausgleich
+from inseln i
+join employees e on e.id = i.employee_id
+left join lateral (
+  select
+    greatest(0, least(i.serie_bis + 7, current_date) - i.serie_bis)::int
+      - count(t.datum)::int as freie_tage
+  from tage t
+  where t.employee_id = i.employee_id
+    and t.datum >  i.serie_bis
+    and t.datum <= least(i.serie_bis + 7, current_date)
+) ea on true
+where i.serie_tage >= 7
+  and e.aktiv
+order by i.serie_tage desc, i.serie_bis desc;
+
+alter view arbeitstage_serie_uebersicht set (security_invoker = true);
+grant select on arbeitstage_serie_uebersicht to authenticated;
 
 -- ---------------------------------------------------------------------------
 -- 12e3. View: Personen, die bereits ARBEITEN, obwohl ihr Anreiselisten-

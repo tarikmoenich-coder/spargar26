@@ -317,6 +317,26 @@ export interface EmployeeUrlaubstage {
   zu_wenig_genommen: boolean;
 }
 
+// arbeitstage_serie_uebersicht - eine Zeile je zusammenhängender Arbeits-
+// serie (>= 7 Tage) einer aktiven Person; siehe
+// supabase/migration_2026-09-19_arbeitstage_serie.sql.
+export interface ArbeitstageSerie {
+  employee_id: string;
+  personal_nr: string;
+  name: string;
+  vorname: string;
+  aktiv: boolean;
+  serie_von: string;
+  serie_bis: string;
+  serie_tage: number;
+  laeuft_noch: boolean;
+  ampel: "gruen" | "gelb" | "rot";
+  // nur ab serie_tage >= 14 gesetzt:
+  ersatz_fenster_bis: string | null;
+  ersatz_freie_tage: number | null;
+  ersatzausgleich: "erfuellt" | "offen" | "fehlt" | null;
+}
+
 // Ein Frageblock 8 - Zeile ("Bisherige Beschäftigungen im laufenden
 // Kalenderjahr") - rein dokumentierend, siehe schema.sql.
 export interface SvFragebogenVorbeschaeftigung {
