@@ -239,6 +239,10 @@ export default function UnterkunftGrundrissPage() {
     profile?.role === "hausmeister";
   // Mängel anlegen/bearbeiten: admin/hr/hausmeister (RLS unterkunft_mangel).
   const canEditMangel = canMove;
+  // Hausmeister: schlanke Ansicht - Zimmer-Liste als Standard (auch am
+  // Desktop), keine Grundriss-Farbmodi, kein Zoom-/Bearbeiten-Menü
+  // (Nutzer-Vorgabe 2026-09-01).
+  const istHausmeister = profile?.role === "hausmeister";
 
   const [gebaeude, setGebaeude] = useState<UnterkunftGebaeude[]>([]);
   const [einheiten, setEinheiten] = useState<UnterkunftWohneinheitUebersicht[]>([]);
@@ -550,28 +554,64 @@ export default function UnterkunftGrundrissPage() {
     return m;
   }, [zimmer]);
 
-  // Kapazitäts-Kopfzeile für das gewählte Gebäude.
-  const gebStats = useMemo(() => {
-    const rooms = zimmer.filter(
-      (z) => z.gebaeude_id === gebaeudeId && z.art === "zimmer" && z.aktiv
-    );
-    let betten = 0,
-      belegt = 0,
-      geplant = 0,
-      frei = 0,
-      gesperrt = 0,
-      ueber = 0;
-    for (const r of rooms) {
-      betten += r.betten;
-      belegt += r.belegt;
-      geplant += r.geplant;
-      if (r.gesperrt) gesperrt += 1;
-      else frei += r.frei;
-      const soll = r.belegt + r.geplant;
-      if (soll > r.betten) ueber += soll - r.betten;
-    }
-    return { rooms: rooms.length, betten, belegt, geplant, frei, gesperrt, ueber };
-  }, [zimmer, gebaeudeId]);
+  // Kennzahlen je Gebäude (für die Gebäude-Karten) - analog statsProEinheit.
+  const statsProGebaeude = useMemo(() => {
+    const m: Record<
+      number,
+      {
+        betten: number;
+        fest: number;
+        geplant: number;
+        frei: number;
+        gesperrt: number;
+        ueber: number;
+      }
+    > = {};
+    zimmer.forEach((z) => {
+      if (z.art !== "zimmer" || !z.aktiv || z.gebaeude_id == null) return;
+      const s = (m[z.gebaeude_id] ??= {
+        betten: 0,
+        fest: 0,
+        geplant: 0,
+        frei: 0,
+        gesperrt: 0,
+        ueber: 0,
+      });
+      s.betten += z.betten;
+      s.fest += z.belegt;
+      s.geplant += z.geplant;
+      if (z.gesperrt) s.gesperrt += 1;
+      else s.frei += z.frei;
+      const soll = z.belegt + z.geplant;
+      if (soll > z.betten) s.ueber += soll - z.betten;
+    });
+    return m;
+  }, [zimmer]);
+
+  // Wohneinheit-ID → Gebäude-ID, für die Herkunfts-Zusammenfassung je Haus.
+  const gebaeudeVonEinheit = useMemo(() => {
+    const m: Record<number, number> = {};
+    einheiten.forEach((e) => {
+      m[e.wohneinheit_id] = e.gebaeude_id;
+    });
+    return m;
+  }, [einheiten]);
+
+  // Bewohner + geplante Personen je Gebäude (für den Herkunfts-Mix im Chip).
+  const personenProGebaeude = useMemo(() => {
+    const m: Record<number, { herkunft: string | null }[]> = {};
+    const zu = (
+      wohneinheitId: number | null,
+      p: { herkunft: string | null }
+    ) => {
+      if (wohneinheitId == null) return;
+      const gid = gebaeudeVonEinheit[wohneinheitId];
+      if (gid != null) (m[gid] ??= []).push(p);
+    };
+    belegungen.forEach((b) => zu(b.wohneinheit_id, b));
+    zuordnungen.forEach((z) => zu(z.wohneinheit_id, z));
+    return m;
+  }, [belegungen, zuordnungen, gebaeudeVonEinheit]);
 
   // Zimmer/Raum sperren oder entsperren (admin/hr).
   async function sperreSetzen(z: UnterkunftZimmerUebersicht, sperren: boolean) {
@@ -1050,88 +1090,105 @@ export default function UnterkunftGrundrissPage() {
         </div>
       </div>
 
-      {gebaeude.length > 0 &&
-        (gebaeude.length <= 8 ? (
-          <div className="flex flex-wrap gap-1">
-            {gebaeude.map((g) => (
+      {/* Gebäude-Auswahl als Karten (Betten/fest/geplant/frei + Herkunfts-Mix,
+          wie die Wohneinheiten). Bei offener Wohneinheit zu einer
+          Brotkrumen-Zeile eingeklappt (Nutzer-Vorgabe 2026-09-01). */}
+      {einheit && !uebersichtAuf ? (
+        <button
+          onClick={() => setUebersichtAuf(true)}
+          className="flex flex-wrap items-center gap-1.5 text-sm text-neutral-600"
+        >
+          <span className="font-medium text-emerald-800">
+            {gebaeude.find((g) => g.id === gebaeudeId)?.name ?? "Gebäude"}
+          </span>
+          {einheit.etage_label && (
+            <>
+              <span className="text-neutral-300">›</span>
+              <span>{einheit.etage_label}</span>
+            </>
+          )}
+          <span className="text-neutral-300">›</span>
+          <span className="font-medium text-emerald-800">{einheit.name}</span>
+          <span className="ml-1 rounded border border-neutral-300 px-1.5 py-0.5 text-xs text-emerald-700">
+            ändern
+          </span>
+        </button>
+      ) : (
+        gebaeude.length > 0 && (
+          <div className="space-y-3">
+            {einheit && (
               <button
-                key={g.id}
-                onClick={() => {
-                  setGebaeudeId(g.id);
-                  setEinheitId(null);
-                  setSelId(null);
-                  setEtageFilter("");
-                  setUebersichtAuf(true);
-                }}
-                className={`rounded-full border px-3 py-1 text-sm ${
-                  g.id === gebaeudeId
-                    ? "border-emerald-700 bg-emerald-700 font-semibold text-white"
-                    : "border-neutral-300 text-neutral-600 hover:border-emerald-400"
-                }`}
+                onClick={() => setUebersichtAuf(false)}
+                className="text-sm text-emerald-700 underline"
               >
-                {g.name}
-                {!g.aktiv ? " (inaktiv)" : ""}
+                ▾ Auswahl einklappen
               </button>
-            ))}
+            )}
+            <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+              {gebaeude.map((g) => {
+                const st = statsProGebaeude[g.id] ?? {
+                  betten: 0,
+                  fest: 0,
+                  geplant: 0,
+                  frei: 0,
+                  gesperrt: 0,
+                  ueber: 0,
+                };
+                const personen = personenProGebaeude[g.id] ?? [];
+                const aktiv = g.id === gebaeudeId;
+                return (
+                  <button
+                    key={g.id}
+                    onClick={() => {
+                      setGebaeudeId(g.id);
+                      setEinheitId(null);
+                      setSelId(null);
+                      setEtageFilter("");
+                      setUebersichtAuf(true);
+                    }}
+                    className={`rounded border p-3 text-left ${
+                      aktiv
+                        ? "border-emerald-700 ring-1 ring-emerald-700"
+                        : "border-neutral-200 hover:border-emerald-400"
+                    }`}
+                  >
+                    <div className="flex items-baseline justify-between gap-2">
+                      <span className="font-semibold text-emerald-900">
+                        {g.name}
+                        {!g.aktiv ? " (inaktiv)" : ""}
+                      </span>
+                      {st.ueber > 0 && (
+                        <span className="shrink-0 rounded bg-red-100 px-1.5 py-0.5 text-xs font-medium text-red-700">
+                          +{st.ueber} über
+                        </span>
+                      )}
+                    </div>
+                    <div className="mt-1 flex flex-wrap gap-x-3 gap-y-0.5 text-sm tabular-nums">
+                      <span>{st.betten} Betten</span>
+                      <span className="text-emerald-700">{st.fest} fest</span>
+                      <span className="text-amber-700">{st.geplant} geplant</span>
+                      <span
+                        className={
+                          st.frei > 0 ? "text-emerald-700" : "text-neutral-400"
+                        }
+                      >
+                        {st.frei} frei
+                      </span>
+                      {st.gesperrt > 0 && (
+                        <span className="text-slate-600">🔒 {st.gesperrt}</span>
+                      )}
+                    </div>
+                    {personen.length > 0 && (
+                      <div className="mt-1 text-xs text-neutral-500">
+                        {herkunftMix(personen)}
+                      </div>
+                    )}
+                  </button>
+                );
+              })}
+            </div>
           </div>
-        ) : (
-          <label className="text-sm">
-            Gebäude
-            <select
-              className="ml-2"
-              value={gebaeudeId ?? ""}
-              onChange={(e) => {
-                setGebaeudeId(Number(e.target.value));
-                setEinheitId(null);
-                setSelId(null);
-                setEtageFilter("");
-                setUebersichtAuf(true);
-              }}
-            >
-              {gebaeude.map((g) => (
-                <option key={g.id} value={g.id}>
-                  {g.name}
-                  {!g.aktiv ? " (inaktiv)" : ""}
-                </option>
-              ))}
-            </select>
-          </label>
-        ))}
-
-      {/* Kapazitäts-Kopfzeile fürs ganze Gebäude */}
-      {gebaeudeId != null && gebStats.rooms > 0 && (
-        <div className="flex flex-wrap items-center gap-1.5 text-sm">
-          <span className="rounded bg-neutral-100 px-2 py-0.5">
-            <span className="font-semibold tabular-nums">
-              {gebStats.belegt}/{gebStats.betten}
-            </span>{" "}
-            Betten belegt
-          </span>
-          <span className="rounded bg-amber-50 px-2 py-0.5 text-amber-800">
-            <span className="font-semibold tabular-nums">{gebStats.geplant}</span>{" "}
-            geplant
-          </span>
-          <span
-            className={`rounded px-2 py-0.5 ${
-              gebStats.frei > 0
-                ? "bg-emerald-50 text-emerald-800"
-                : "bg-neutral-100 text-neutral-500"
-            }`}
-          >
-            <span className="font-semibold tabular-nums">{gebStats.frei}</span> frei
-          </span>
-          {gebStats.gesperrt > 0 && (
-            <span className="rounded bg-slate-200 px-2 py-0.5 text-slate-700">
-              <span className="font-semibold tabular-nums">{gebStats.gesperrt}</span>{" "}
-              gesperrt
-            </span>
-          )}
-          {gebStats.ueber > 0 && (
-            <span className="rounded bg-red-100 px-2 py-0.5 font-medium text-red-700">
-              Überbuchung: {gebStats.ueber}
-            </span>
-          )}
-        </div>
+        )
       )}
 
       {fehler && (
@@ -1152,7 +1209,7 @@ export default function UnterkunftGrundrissPage() {
       )}
 
       {/* Etage-Umschalter */}
-      {etagen.length > 0 && (
+      {(!einheit || uebersichtAuf) && etagen.length > 0 && (
         <div className="flex flex-wrap gap-1">
           {["", ...etagen].map((et) => (
             <button
@@ -1184,15 +1241,6 @@ export default function UnterkunftGrundrissPage() {
         </p>
       ) : (
         <>
-          {einheit && (
-            <button
-              className="text-sm text-emerald-700 underline"
-              onClick={() => setUebersichtAuf((v) => !v)}
-            >
-              {uebersichtAuf ? "▾" : "▸"} Wohneinheiten-Übersicht (
-              {gefilterteEinheiten.length})
-            </button>
-          )}
           {(!einheit || uebersichtAuf) && (
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
           {gefilterteEinheiten.map((e) => {
@@ -1321,8 +1369,13 @@ export default function UnterkunftGrundrissPage() {
                 ›
               </button>
             </div>
-            {/* Nur Telefon/kleines Tablet: Liste ↔ Grundriss */}
-            <div className="flex overflow-hidden rounded border border-neutral-300 lg:hidden">
+            {/* Liste ↔ Grundriss. Telefon: immer; Hausmeister: auch am
+                Desktop (er arbeitet mit der Liste). Sonst nur schmale Schirme. */}
+            <div
+              className={`flex overflow-hidden rounded border border-neutral-300 ${
+                istHausmeister ? "" : "lg:hidden"
+              }`}
+            >
               {(["liste", "plan"] as const).map((m) => (
                 <button
                   key={m}
@@ -1353,64 +1406,70 @@ export default function UnterkunftGrundrissPage() {
                 {belegen ? "Belegen: an" : "Belegen"}
               </button>
             )}
-            <div className="flex overflow-hidden rounded border border-neutral-300">
-              {(Object.keys(ANSICHT_LABELS) as Ansicht[]).map((a) => (
-                <button
-                  key={a}
-                  onClick={() => setAnsicht(a)}
-                  className={`px-2 py-1 text-xs ${
-                    a === ansicht
-                      ? "bg-emerald-700 font-semibold text-white"
-                      : "bg-white text-neutral-600 hover:bg-neutral-50"
-                  }`}
-                >
-                  {ANSICHT_LABELS[a]}
-                </button>
-              ))}
-            </div>
-            <details
-              className="relative"
-              open={werkzeugeAuf}
-              onToggle={(e) =>
-                setWerkzeugeAuf((e.target as HTMLDetailsElement).open)
-              }
-            >
-              <summary className="btn-secondary cursor-pointer list-none">
-                ⚙ Ansicht
-              </summary>
-              <div className="absolute right-0 z-10 mt-1 flex flex-col gap-2 rounded border border-neutral-200 bg-white p-2 shadow-lg">
-                <div className="flex items-center gap-1">
-                  <button
-                    className="btn-secondary"
-                    onClick={() => setZoom((z) => Math.max(0.5, z - 0.25))}
-                  >
-                    −
-                  </button>
-                  <span className="w-10 text-center tabular-nums">
-                    {Math.round(zoom * 100)}%
-                  </span>
-                  <button
-                    className="btn-secondary"
-                    onClick={() => setZoom((z) => Math.min(2, z + 0.25))}
-                  >
-                    +
-                  </button>
+            {/* Grundriss-Farbmodi + Zoom/Bearbeiten: für Hausmeister aus
+                (Nutzer-Vorgabe 2026-09-01). */}
+            {!istHausmeister && (
+              <>
+                <div className="flex overflow-hidden rounded border border-neutral-300">
+                  {(Object.keys(ANSICHT_LABELS) as Ansicht[]).map((a) => (
+                    <button
+                      key={a}
+                      onClick={() => setAnsicht(a)}
+                      className={`px-2 py-1 text-xs ${
+                        a === ansicht
+                          ? "bg-emerald-700 font-semibold text-white"
+                          : "bg-white text-neutral-600 hover:bg-neutral-50"
+                      }`}
+                    >
+                      {ANSICHT_LABELS[a]}
+                    </button>
+                  ))}
                 </div>
-                {canEditPlan && (
-                  <label className="flex items-center gap-1 whitespace-nowrap">
-                    <input
-                      type="checkbox"
-                      checked={bearbeiten}
-                      onChange={(e) => {
-                        setBearbeiten(e.target.checked);
-                        if (e.target.checked) setBelegen(false);
-                      }}
-                    />
-                    Kacheln bearbeiten
-                  </label>
-                )}
-              </div>
-            </details>
+                <details
+                  className="relative"
+                  open={werkzeugeAuf}
+                  onToggle={(e) =>
+                    setWerkzeugeAuf((e.target as HTMLDetailsElement).open)
+                  }
+                >
+                  <summary className="btn-secondary cursor-pointer list-none">
+                    ⚙ Ansicht
+                  </summary>
+                  <div className="absolute right-0 z-10 mt-1 flex flex-col gap-2 rounded border border-neutral-200 bg-white p-2 shadow-lg">
+                    <div className="flex items-center gap-1">
+                      <button
+                        className="btn-secondary"
+                        onClick={() => setZoom((z) => Math.max(0.5, z - 0.25))}
+                      >
+                        −
+                      </button>
+                      <span className="w-10 text-center tabular-nums">
+                        {Math.round(zoom * 100)}%
+                      </span>
+                      <button
+                        className="btn-secondary"
+                        onClick={() => setZoom((z) => Math.min(2, z + 0.25))}
+                      >
+                        +
+                      </button>
+                    </div>
+                    {canEditPlan && (
+                      <label className="flex items-center gap-1 whitespace-nowrap">
+                        <input
+                          type="checkbox"
+                          checked={bearbeiten}
+                          onChange={(e) => {
+                            setBearbeiten(e.target.checked);
+                            if (e.target.checked) setBelegen(false);
+                          }}
+                        />
+                        Kacheln bearbeiten
+                      </label>
+                    )}
+                  </div>
+                </details>
+              </>
+            )}
           </div>
 
           <div>
@@ -1502,7 +1561,9 @@ export default function UnterkunftGrundrissPage() {
               <div
                 className={`${
                   mobilAnsicht === "plan" ? "flex" : "hidden"
-                } flex-wrap gap-x-4 gap-y-1 text-xs text-neutral-500 lg:flex`}
+                } flex-wrap gap-x-4 gap-y-1 text-xs text-neutral-500 ${
+                  istHausmeister ? "" : "lg:flex"
+                }`}
               >
                 {legendeFuer(ansicht).map((e) => (
                   <span key={e.label} className="inline-flex items-center gap-1">
@@ -1515,11 +1576,12 @@ export default function UnterkunftGrundrissPage() {
                 ))}
               </div>
 
-              {/* Telefon: Zimmer-Liste statt Grundriss (Standard unter lg) */}
+              {/* Zimmer-Liste (Standard unter lg; für Hausmeister auch am
+                  Desktop) */}
               <div
                 className={`${
                   mobilAnsicht === "liste" ? "flex" : "hidden"
-                } flex-col gap-1.5 lg:hidden`}
+                } flex-col gap-1.5 ${istHausmeister ? "" : "lg:hidden"}`}
               >
                 {[...zimmerDerEinheit]
                   .sort((a, b) => {
@@ -1593,7 +1655,11 @@ export default function UnterkunftGrundrissPage() {
                 tabIndex={0}
                 onKeyDown={onWrapKeyDown}
                 className={`max-w-full flex-1 overflow-auto rounded border border-neutral-200 bg-white p-2 outline-none ${
-                  mobilAnsicht === "plan" ? "" : "hidden lg:block"
+                  mobilAnsicht === "plan"
+                    ? ""
+                    : istHausmeister
+                      ? "hidden"
+                      : "hidden lg:block"
                 }`}
               >
                 <svg
@@ -2629,7 +2695,9 @@ export default function UnterkunftGrundrissPage() {
                   <div className="hidden rounded border border-dashed border-neutral-200 p-3 text-sm text-neutral-400 lg:block">
                     {belegen
                       ? "Belegen-Modus: Person antippen, dann ein Zimmer."
-                      : "Zimmer im Plan antippen für Details."}
+                      : istHausmeister
+                        ? "Zimmer in der Liste antippen für Details."
+                        : "Zimmer im Plan antippen für Details."}
                   </div>
                 )}
               </div>
