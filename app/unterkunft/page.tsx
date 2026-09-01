@@ -273,6 +273,9 @@ export default function UnterkunftGrundrissPage() {
   // schmalen Schirmen auf Breite eingepasst wird (statt nativ zu überlaufen).
   const planRef = useRef<HTMLDivElement>(null);
   const [planBreite, setPlanBreite] = useState(0);
+  // Nach der Auswahl einer Wohneinheit den Detailbereich in den Blick
+  // holen, statt den Nutzer wieder herunterscrollen zu lassen.
+  const einheitDetailRef = useRef<HTMLDivElement>(null);
 
   // Umzug (Zimmerwechsel einer Person)
   const [umzug, setUmzug] = useState<UmzugState | null>(null);
@@ -294,6 +297,11 @@ export default function UnterkunftGrundrissPage() {
   // Karten-Übersicht der Wohneinheiten ein-/ausklappen; Plan-Werkzeuge (Zoom/
   // Bearbeiten) im aufklappbaren Menü statt dauerhaft in der Leiste.
   const [uebersichtAuf, setUebersichtAuf] = useState(true);
+  // Gebäude-Kartenraster ein-/ausklappen: nach der Wahl eines Gebäudes klappt
+  // es zu einer Zeile zusammen, damit man nicht am ganzen Raster
+  // vorbeiscrollen muss, um eine Wohneinheit zu wählen (Nutzer-Vorgabe
+  // 2026-09-01).
+  const [gebWahlAuf, setGebWahlAuf] = useState(true);
   const [werkzeugeAuf, setWerkzeugeAuf] = useState(false);
   // Zimmer-Panel: offene Mängel aufgeklappt / Mangel-melden-Formular offen
   const [maengelAuf, setMaengelAuf] = useState(false);
@@ -387,6 +395,7 @@ export default function UnterkunftGrundrissPage() {
       if (e && e.gebaeude_id === gebaeudeId) {
         setEinheitId(id);
         setUebersichtAuf(false);
+        setGebWahlAuf(false);
       }
     } catch {
       /* egal */
@@ -417,6 +426,16 @@ export default function UnterkunftGrundrissPage() {
   useEffect(() => {
     if (!belegen) setHandPerson(null);
   }, [belegen]);
+
+  // Nach Wahl/Wechsel einer Wohneinheit den Detailbereich an den oberen
+  // Rand holen (scroll-margin-top hält Nav + Reiterleiste frei).
+  useEffect(() => {
+    if (einheitId == null) return;
+    einheitDetailRef.current?.scrollIntoView({
+      behavior: "smooth",
+      block: "start",
+    });
+  }, [einheitId]);
 
   // Breite des Plan-Containers verfolgen (für „auf Breite einpassen").
   useEffect(() => {
@@ -1124,7 +1143,20 @@ export default function UnterkunftGrundrissPage() {
                 ▾ Auswahl einklappen
               </button>
             )}
-            <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+            {gebaeudeId != null && !gebWahlAuf ? (
+              <button
+                onClick={() => setGebWahlAuf(true)}
+                className="flex flex-wrap items-center gap-1.5 text-sm text-neutral-600"
+              >
+                <span className="font-medium text-emerald-800">
+                  {gebaeude.find((g) => g.id === gebaeudeId)?.name ?? "Gebäude"}
+                </span>
+                <span className="ml-1 rounded border border-neutral-300 px-1.5 py-0.5 text-xs text-emerald-700">
+                  Gebäude wechseln
+                </span>
+              </button>
+            ) : (
+              <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
               {gebaeude.map((g) => {
                 const st = statsProGebaeude[g.id] ?? {
                   betten: 0,
@@ -1141,6 +1173,7 @@ export default function UnterkunftGrundrissPage() {
                     key={g.id}
                     onClick={() => {
                       setGebaeudeId(g.id);
+                      setGebWahlAuf(false);
                       setEinheitId(null);
                       setSelId(null);
                       setEtageFilter("");
@@ -1186,7 +1219,8 @@ export default function UnterkunftGrundrissPage() {
                   </button>
                 );
               })}
-            </div>
+              </div>
+            )}
           </div>
         )
       )}
@@ -1307,7 +1341,13 @@ export default function UnterkunftGrundrissPage() {
 
       {/* Wohneinheit-Detail: Zimmer-Raster + offene Personen */}
       {einheit && (
-        <div className="space-y-3 rounded border border-neutral-200 p-3">
+        <div
+          ref={einheitDetailRef}
+          className="space-y-3 rounded border border-neutral-200 p-3"
+          style={{
+            scrollMarginTop: "calc(3.5rem + var(--subtabs-h, 2.5rem) + 0.5rem)",
+          }}
+        >
           {/* Klebende Steuerleiste: Wohneinheit wechseln + Ansicht + Zoom,
               bleibt beim Scrollen im (großen) Plan stehen. */}
           <div className="sticky top-[calc(3.5rem+var(--subtabs-h,2.5rem))] z-30 -mx-3 -mt-3 mb-1 flex flex-wrap items-center gap-x-3 gap-y-2 border-b border-neutral-200 bg-white px-3 py-2 text-sm">
