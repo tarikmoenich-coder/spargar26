@@ -1636,9 +1636,17 @@ export default function UnterkunftGrundrissPage() {
                       z.letzte_kontrolle_am,
                       schwellenVon(z.art)
                     );
-                    const geplantHier = (
-                      zuordnungProZimmer[z.zimmer_id] ?? []
-                    ).length;
+                    const geplantListe = zuordnungProZimmer[z.zimmer_id] ?? [];
+                    const geplantHier = geplantListe.length;
+                    const bewohnerHier = belegungProZimmer[z.zimmer_id] ?? [];
+                    const mitHerkunft = (p: {
+                      vorname: string;
+                      name: string;
+                      herkunft: string | null;
+                    }) =>
+                      `${p.vorname} ${p.name}${
+                        p.herkunft ? ` · ${p.herkunft}` : ""
+                      }`;
                     const belegbar =
                       belegen &&
                       handPerson != null &&
@@ -1675,6 +1683,16 @@ export default function UnterkunftGrundrissPage() {
                               {z.belegt}/{z.betten} belegt
                               {geplantHier > 0 ? ` · +${geplantHier} geplant` : ""}
                               {z.frei > 0 ? ` · ${z.frei} frei` : ""}
+                            </span>
+                          )}
+                          {bewohnerHier.length > 0 && (
+                            <span className="mt-0.5 block text-xs text-neutral-700">
+                              {bewohnerHier.map(mitHerkunft).join(", ")}
+                            </span>
+                          )}
+                          {geplantListe.length > 0 && (
+                            <span className="block text-xs text-amber-700">
+                              geplant: {geplantListe.map(mitHerkunft).join(", ")}
                             </span>
                           )}
                         </span>
