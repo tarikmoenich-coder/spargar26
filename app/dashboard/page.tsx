@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import type { LucideIcon } from "lucide-react";
 import { getSupabaseClient } from "@/lib/supabase/client";
 import { useProfile } from "@/lib/useProfile";
 import { formatZahlDE } from "@/lib/format";
@@ -32,26 +33,43 @@ function Kachel({
   wert,
   unterzeile,
   ton = "neutral",
+  icon: Icon,
 }: {
   href: string;
   titel: string;
   wert: string;
   unterzeile?: string;
   ton?: "neutral" | "warn" | "ok";
+  icon?: LucideIcon;
 }) {
   const farbe =
     ton === "warn"
-      ? "text-red-600"
+      ? "text-beere-600"
       : ton === "ok"
       ? "text-emerald-700"
       : "text-neutral-800";
+  const badge =
+    ton === "warn"
+      ? "bg-beere-50 text-beere-600"
+      : ton === "ok"
+      ? "bg-emerald-50 text-emerald-700"
+      : "bg-neutral-100 text-neutral-500";
   return (
     <Link
       href={href}
-      className="block rounded border border-neutral-200 bg-white p-4 transition hover:border-emerald-300 hover:shadow-sm"
+      className="block rounded-lg border border-linie bg-white p-4 shadow-card transition hover:border-emerald-300 hover:shadow-md"
     >
-      <p className="text-sm text-neutral-500">{titel}</p>
-      <p className={`text-2xl font-semibold ${farbe}`}>{wert}</p>
+      <div className="flex items-start justify-between gap-2">
+        <p className="text-sm text-neutral-500">{titel}</p>
+        {Icon && (
+          <span
+            className={`grid h-7 w-7 shrink-0 place-items-center rounded-md ${badge}`}
+          >
+            <Icon className="h-4 w-4" />
+          </span>
+        )}
+      </div>
+      <p className={`mt-1 text-2xl font-semibold ${farbe}`}>{wert}</p>
       {unterzeile && (
         <p className="mt-1 text-xs text-neutral-500">{unterzeile}</p>
       )}

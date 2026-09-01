@@ -3,7 +3,7 @@
 @tailwind utilities;
 
 body {
-  @apply bg-neutral-50 text-neutral-900;
+  @apply bg-sand font-sans text-neutral-900;
   /* Kein waagerechtes Verschieben der ganzen Seite, wenn mal ein Element
      (breite Tabelle, Reiter-Leiste, Grundriss) über die Viewport-Breite
      hinausragt - v.a. am Telefon (Nutzer-Vorgabe 2026-09-01). `clip` statt
@@ -22,15 +22,18 @@ table {
 }
 
 th, td {
-  @apply border border-neutral-200 px-2 py-1 text-left;
+  @apply border border-linie px-2 py-1 text-left;
 }
 
 th {
-  @apply bg-neutral-100 font-medium;
+  @apply bg-emerald-50/70 font-medium text-neutral-700;
 }
 
-input, select {
-  @apply rounded border border-neutral-300 px-2 py-1 text-sm;
+input, select, textarea {
+  @apply rounded border border-linie bg-white px-2 py-1 text-sm;
+}
+input:focus, select:focus, textarea:focus {
+  @apply border-emerald-500 outline-none ring-2 ring-emerald-500/25;
 }
 
 /* Keine Hoch-/Runter-Pfeile an Zahlenfeldern (z.B. Stunden, Beträge,
@@ -47,15 +50,47 @@ input[type="number"]::-webkit-inner-spin-button {
 }
 
 .btn {
-  @apply rounded bg-emerald-700 px-3 py-1.5 text-sm text-white hover:bg-emerald-800 disabled:opacity-50;
+  @apply inline-flex items-center justify-center gap-1.5 rounded-md bg-emerald-700 px-3 py-1.5 text-sm font-medium text-white shadow-sm transition hover:bg-emerald-800 hover:shadow disabled:opacity-50 disabled:shadow-none;
 }
 
 .btn-secondary {
-  @apply rounded border border-neutral-300 px-3 py-1.5 text-sm hover:bg-neutral-100;
+  @apply inline-flex items-center justify-center gap-1.5 rounded-md border border-linie bg-white px-3 py-1.5 text-sm transition hover:border-emerald-300 hover:bg-emerald-50 disabled:opacity-50;
 }
 
 .btn-danger {
-  @apply rounded bg-red-600 px-3 py-1.5 text-sm text-white hover:bg-red-700 disabled:opacity-50;
+  @apply inline-flex items-center justify-center gap-1.5 rounded-md bg-beere-600 px-3 py-1.5 text-sm font-medium text-white shadow-sm transition hover:bg-beere-700 disabled:opacity-50 disabled:shadow-none;
+}
+
+/* Karte/Panel - warme Trennlinie + zarter Schatten statt flachem Grau-Rand.
+   Ersetzt nach und nach das verstreute "rounded border border-neutral-200 p-3/p-4". */
+.card {
+  @apply rounded-lg border border-linie bg-white p-4 shadow-card;
+}
+
+/* Einheitliche Status-Chips (Ampel/Zustände). */
+.badge {
+  @apply inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium;
+}
+.badge-ok {
+  @apply bg-emerald-100 text-emerald-800;
+}
+.badge-warn {
+  @apply bg-amber-100 text-amber-800;
+}
+.badge-info {
+  @apply bg-sky-100 text-sky-800;
+}
+.badge-danger {
+  @apply bg-beere-100 text-beere-800;
+}
+.badge-neutral {
+  @apply bg-neutral-100 text-neutral-600;
+}
+
+/* Opt-in Zebra-Streifen für datenreiche Listen (nicht global, um bestehende
+   Zeilen-Hintergründe/Markierungen nicht zu stören). */
+.zebra tbody tr:nth-child(odd) {
+  background-color: #fbfaf6;
 }
 
 /* Gruppenstundenzettel (Papierformular): mehr Platz pro Zeile und größere

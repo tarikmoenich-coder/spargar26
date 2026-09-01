@@ -3,6 +3,25 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
+import {
+  Award,
+  BarChart3,
+  Building2,
+  Clock,
+  Gauge,
+  History,
+  LayoutDashboard,
+  LogOut,
+  Menu,
+  Notebook,
+  Search,
+  Settings,
+  Sprout,
+  Users,
+  Wallet,
+  X,
+  type LucideIcon,
+} from "lucide-react";
 import { getSupabaseClient } from "@/lib/supabase/client";
 import { useProfile } from "@/lib/useProfile";
 import { SPRACHEN, type Sprache } from "@/lib/i18n";
@@ -11,6 +30,7 @@ import type { UserRole } from "@/lib/types";
 interface NavItem {
   href: string;
   label: string;
+  icon: LucideIcon;
   roles: UserRole[] | "all";
   // Weitere Pfade, die diesen Menüpunkt ebenfalls als aktiv markieren sollen
   // (z.B. Unterseiten wie Personalnummern/Import unter "Personal").
@@ -21,6 +41,7 @@ const items: NavItem[] = [
   {
     href: "/dashboard",
     label: "Start",
+    icon: LayoutDashboard,
     roles: [
       "admin",
       "hr",
@@ -34,6 +55,7 @@ const items: NavItem[] = [
   {
     href: "/mitarbeiter",
     label: "Personal",
+    icon: Users,
     roles: ["admin", "hr"],
     auchAktivBei: [
       "/personalnummern",
@@ -47,6 +69,7 @@ const items: NavItem[] = [
   {
     href: "/unterkunft",
     label: "Unterkunft",
+    icon: Building2,
     // hausmeister sieht ausschliesslich dieses Modul (nur Reparaturen, Vorgabe
     // 2026-09-15). erntewirtschaft nur lesend (Durchsetzung via RLS).
     roles: ["admin", "hr", "erntewirtschaft", "hausmeister"],
@@ -54,12 +77,14 @@ const items: NavItem[] = [
   {
     href: "/erfassung",
     label: "Stundenerfassung",
+    icon: Clock,
     roles: ["admin", "hr", "zeiterfassung"],
     auchAktivBei: ["/erfassung-import", "/arbeitskleidung", "/lager"],
   },
   {
     href: "/suche",
     label: "Suche",
+    icon: Search,
     // Alle ausser hausmeister (der sieht nur Reparaturen, Vorgabe 2026-09-15).
     roles: [
       "admin",
@@ -75,12 +100,14 @@ const items: NavItem[] = [
   {
     href: "/uebersicht",
     label: "Lohn",
+    icon: Wallet,
     roles: ["admin", "hr", "kasse", "lohnabrechnung", "pruefer", "management"],
     auchAktivBei: ["/vorschuesse", "/auszahlungen"],
   },
   {
     href: "/praemien/zuckermais",
     label: "Prämien",
+    icon: Award,
     roles: [
       "admin",
       "hr",
@@ -94,6 +121,7 @@ const items: NavItem[] = [
   {
     href: "/anbau/erdbeeren",
     label: "Anbau",
+    icon: Sprout,
     // Nutzer-Vorgabe 2026-08-11: nur admin und erntewirtschaft - die
     // Anbauplanung ist deren Arbeitsbereich.
     roles: ["admin", "erntewirtschaft"],
@@ -102,28 +130,33 @@ const items: NavItem[] = [
   {
     href: "/statistik/zuckermais",
     label: "Statistik",
+    icon: BarChart3,
     roles: ["admin", "hr", "lohnabrechnung", "management", "erntewirtschaft"],
     auchAktivBei: ["/statistik"],
   },
   {
     href: "/kasse",
     label: "Kassenbuch",
+    icon: Notebook,
     roles: ["admin", "kasse", "pruefer", "management"],
     auchAktivBei: ["/kasse-pruefung"],
   },
   {
     href: "/management",
     label: "Controlling",
+    icon: Gauge,
     roles: ["admin", "hr", "management"],
   },
   {
     href: "/aenderungsprotokoll",
     label: "Protokoll",
+    icon: History,
     roles: ["admin"],
   },
   {
     href: "/einstellungen",
     label: "Einstellungen",
+    icon: Settings,
     roles: ["admin"],
   },
 ];
@@ -222,25 +255,32 @@ export default function Nav() {
 
   return (
     <>
-      <nav className="sticky top-0 z-50 h-14 border-b border-neutral-200 bg-white print:hidden">
+      <nav className="sticky top-0 z-50 h-14 border-b border-linie bg-white print:hidden">
         <div className="mx-auto flex h-full max-w-[1800px] items-center gap-4 px-4">
-          <span className="shrink-0 font-semibold text-emerald-800">Spargar</span>
+          <span className="flex shrink-0 items-center gap-1.5 font-bold text-emerald-700">
+            <Sprout className="h-5 w-5" />
+            Spargar
+          </span>
 
           {/* Ab lg: alle Links inline */}
-          <div className="hidden flex-1 items-center gap-4 overflow-x-auto lg:flex [scrollbar-width:thin]">
-            {sichtbareItems.map((item) => (
-              <Link
-                key={item.href}
-                href={item.href}
-                className={`whitespace-nowrap text-sm ${
-                  istAktiv(item)
-                    ? "font-semibold text-emerald-800"
-                    : "text-neutral-600 hover:text-emerald-800"
-                }`}
-              >
-                {item.label}
-              </Link>
-            ))}
+          <div className="hidden flex-1 items-center gap-3 overflow-x-auto lg:flex [scrollbar-width:thin]">
+            {sichtbareItems.map((item) => {
+              const Icon = item.icon;
+              return (
+                <Link
+                  key={item.href}
+                  href={item.href}
+                  className={`inline-flex items-center gap-1.5 whitespace-nowrap text-sm ${
+                    istAktiv(item)
+                      ? "font-semibold text-emerald-800"
+                      : "text-neutral-600 hover:text-emerald-800"
+                  }`}
+                >
+                  <Icon className="h-4 w-4 shrink-0" />
+                  {item.label}
+                </Link>
+              );
+            })}
           </div>
           <div className="hidden shrink-0 items-center gap-3 text-sm text-neutral-600 lg:flex">
             {profile && (
@@ -253,25 +293,31 @@ export default function Nav() {
               </>
             )}
             <button className="btn-secondary" onClick={logout}>
+              <LogOut className="h-4 w-4" />
               Abmelden
             </button>
           </div>
 
           {/* Unter lg: aktueller Bereich + Menü-Knopf */}
           <div className="flex flex-1 items-center justify-end gap-3 lg:hidden">
-            {aktuellerBereich && (
-              <span className="truncate text-sm font-semibold text-emerald-800">
-                {aktuellerBereich.label}
-              </span>
-            )}
+            {aktuellerBereich &&
+              (() => {
+                const BereichIcon = aktuellerBereich.icon;
+                return (
+                  <span className="inline-flex items-center gap-1.5 truncate text-sm font-semibold text-emerald-800">
+                    <BereichIcon className="h-4 w-4 shrink-0" />
+                    {aktuellerBereich.label}
+                  </span>
+                );
+              })()}
             <button
               type="button"
               aria-label="Menü"
               aria-expanded={menuOffen}
-              className="shrink-0 rounded border border-neutral-300 px-2 py-1 text-lg leading-none text-neutral-700"
+              className="shrink-0 rounded-md border border-linie p-1.5 text-neutral-700"
               onClick={() => setMenuOffen((v) => !v)}
             >
-              ☰
+              <Menu className="h-5 w-5" />
             </button>
           </div>
         </div>
@@ -285,33 +331,40 @@ export default function Nav() {
           />
           <div className="absolute right-0 top-0 flex h-full w-72 max-w-[85vw] flex-col overflow-y-auto bg-white p-4 shadow-xl">
             <div className="mb-3 flex items-center justify-between">
-              <span className="font-semibold text-emerald-800">Menü</span>
+              <span className="flex items-center gap-1.5 font-bold text-emerald-700">
+                <Sprout className="h-5 w-5" />
+                Spargar
+              </span>
               <button
                 type="button"
                 aria-label="Menü schließen"
                 className="text-neutral-500"
                 onClick={() => setMenuOffen(false)}
               >
-                ✕
+                <X className="h-5 w-5" />
               </button>
             </div>
             <div className="flex flex-col gap-1">
-              {sichtbareItems.map((item) => (
-                <Link
-                  key={item.href}
-                  href={item.href}
-                  className={`rounded px-2 py-2 text-sm ${
-                    istAktiv(item)
-                      ? "bg-emerald-50 font-semibold text-emerald-800"
-                      : "text-neutral-700 hover:bg-neutral-50"
-                  }`}
-                >
-                  {item.label}
-                </Link>
-              ))}
+              {sichtbareItems.map((item) => {
+                const Icon = item.icon;
+                return (
+                  <Link
+                    key={item.href}
+                    href={item.href}
+                    className={`flex items-center gap-2.5 rounded-md px-2 py-2 text-sm ${
+                      istAktiv(item)
+                        ? "bg-emerald-50 font-semibold text-emerald-800"
+                        : "text-neutral-700 hover:bg-emerald-50"
+                    }`}
+                  >
+                    <Icon className="h-4 w-4 shrink-0" />
+                    {item.label}
+                  </Link>
+                );
+              })}
             </div>
             {profile && (
-              <div className="mt-4 border-t border-neutral-200 pt-4 text-sm text-neutral-600">
+              <div className="mt-4 border-t border-linie pt-4 text-sm text-neutral-600">
                 <div className="mb-3">
                   {profile.full_name} ·{" "}
                   <span className="italic">{profile.role}</span>
@@ -320,10 +373,8 @@ export default function Nav() {
                   Sprache
                   {sprachWahl}
                 </label>
-                <button
-                  className="btn-secondary w-full"
-                  onClick={logout}
-                >
+                <button className="btn-secondary w-full" onClick={logout}>
+                  <LogOut className="h-4 w-4" />
                   Abmelden
                 </button>
               </div>

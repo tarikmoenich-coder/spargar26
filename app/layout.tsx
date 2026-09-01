@@ -1,7 +1,16 @@
 import type { Metadata, Viewport } from "next";
+import { Inter } from "next/font/google";
 import "./globals.css";
 import Nav from "@/components/Nav";
 import InaktivitaetsAbmeldung from "@/components/InaktivitaetsAbmeldung";
+
+// UI-Schrift, beim Build lokal gebündelt (kein externer Request zur
+// Laufzeit). Nimmt der Oberfläche das "Behörden-Grau"-Gefühl.
+const inter = Inter({
+  subsets: ["latin"],
+  display: "swap",
+  variable: "--font-inter",
+});
 
 export const metadata: Metadata = {
   title: "Spargar - Mömmel Agrar",
@@ -24,7 +33,7 @@ export const metadata: Metadata = {
 };
 
 export const viewport: Viewport = {
-  themeColor: "#047857",
+  themeColor: "#2b711e",
   width: "device-width",
   initialScale: 1,
 };
@@ -35,7 +44,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="de">
+    <html lang="de" className={inter.variable}>
       <body>
         <InaktivitaetsAbmeldung />
         <Nav />
