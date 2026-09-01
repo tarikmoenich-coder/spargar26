@@ -32,8 +32,19 @@ export default function UnterkunftMaengelPage() {
     profile?.role === "hausmeister";
 
   const [gebaeude, setGebaeude] = useState<UnterkunftGebaeude[]>([]);
+  const [wohneinheiten, setWohneinheiten] = useState<
+    { id: number; name: string }[]
+  >([]);
   const [zimmer, setZimmer] = useState<UnterkunftZimmer[]>([]);
   const [maengel, setMaengel] = useState<UnterkunftMangel[]>([]);
+  // Eingeklappte Gruppen (Haus / Wohneinheit) in der Liste.
+  const [zuKollaps, setZuKollaps] = useState<Set<string>>(new Set());
+  const toggleKollaps = (k: string) =>
+    setZuKollaps((s) => {
+      const n = new Set(s);
+      n.has(k) ? n.delete(k) : n.add(k);
+      return n;
+    });
   const [belegungen, setBelegungen] = useState<UnterkunftBelegungPerson[]>([]);
   const [loading, setLoading] = useState(true);
   const [fehler, setFehler] = useState<string | null>(null);
@@ -62,8 +73,9 @@ export default function UnterkunftMaengelPage() {
   const laden = useCallback(async () => {
     setLoading(true);
     const supabase = getSupabaseClient();
-    const [g, z, m, bp] = await Promise.all([
+    const [g, w, z, m, bp] = await Promise.all([
       supabase.from("unterkunft_gebaeude").select("*").order("name"),
+      supabase.from("unterkunft_wohneinheit").select("id, name").order("name"),
       supabase.from("unterkunft_zimmer").select("*").order("nummer"),
       supabase
         .from("unterkunft_mangel")
@@ -75,6 +87,7 @@ export default function UnterkunftMaengelPage() {
         .order("von", { ascending: false }),
     ]);
     setGebaeude((g.data as UnterkunftGebaeude[]) ?? []);
+    setWohneinheiten((w.data as { id: number; name: string }[]) ?? []);
     setZimmer((z.data as UnterkunftZimmer[]) ?? []);
     setMaengel((m.data as UnterkunftMangel[]) ?? []);
     setBelegungen((bp.data as UnterkunftBelegungPerson[]) ?? []);
@@ -177,6 +190,68 @@ export default function UnterkunftMaengelPage() {
       return true;
     });
   }, [maengel, statusFilter, gebaeudeFilter, kategorieFilter, zimmer, fokus]);
+
+  // Aufklappbare Gruppierung Haus → Wohneinheit (Nutzer-Vorgabe 2026-09-01).
+  const gruppiert = useMemo(() => {
+    const zById = new Map(zimmer.map((z) => [z.id, z]));
+    const gName = new Map(gebaeude.map((g) => [g.id, g.name]));
+    const wName = new Map(wohneinheiten.map((w) => [w.id, w.name]));
+    const gm = new Map<
+      number,
+      {
+        gebId: number;
+        gebName: string;
+        total: number;
+        offen: number;
+        einheiten: Map<
+          string,
+          { key: string; weName: string; maengel: UnterkunftMangel[] }
+        >;
+      }
+    >();
+    for (const m of gefiltert) {
+      const z = zById.get(m.zimmer_id);
+      const gebId = z?.gebaeude_id ?? -1;
+      let g = gm.get(gebId);
+      if (!g) {
+        g = {
+          gebId,
+          gebName: gName.get(gebId) ?? "Ohne Gebäude",
+          total: 0,
+          offen: 0,
+          einheiten: new Map(),
+        };
+        gm.set(gebId, g);
+      }
+      g.total++;
+      if (m.status !== "behoben") g.offen++;
+      const weId = z?.wohneinheit_id ?? null;
+      const key = weId == null ? `w:none:${gebId}` : `w:${weId}`;
+      let w = g.einheiten.get(key);
+      if (!w) {
+        w = {
+          key,
+          weName:
+            weId == null
+              ? "Ohne Wohneinheit"
+              : (wName.get(weId) ?? `Wohneinheit ${weId}`),
+          maengel: [],
+        };
+        g.einheiten.set(key, w);
+      }
+      w.maengel.push(m);
+    }
+    return [...gm.values()]
+      .sort((a, b) =>
+        a.gebName.localeCompare(b.gebName, "de", { numeric: true })
+      )
+      .map((g) => ({
+        ...g,
+        einheiten: [...g.einheiten.values()].sort((a, b) =>
+          a.weName.localeCompare(b.weName, "de", { numeric: true })
+        ),
+      }));
+  }, [gefiltert, zimmer, gebaeude, wohneinheiten]);
 
   async function anlegen() {
     setFehler(null);
@@ -430,7 +505,8 @@ export default function UnterkunftMaengelPage() {
           </tr>
         </thead>
         <tbody>
-          {gefiltert.map((m) => {
+          {(() => {
+            const renderMangel = (m: UnterkunftMangel) => {
             const offen = offenId === m.id;
             return (
               <Fragment key={m.id}>
@@ -618,7 +694,58 @@ export default function UnterkunftMaengelPage() {
                 )}
               </Fragment>
             );
-          })}
+            };
+            if (fokus) return gefiltert.map(renderMangel);
+            return gruppiert.map((g) => {
+              const gZu = zuKollaps.has(`g:${g.gebId}`);
+              return (
+                <Fragment key={`g${g.gebId}`}>
+                  <tr>
+                    <td colSpan={7} className="p-0">
+                      <button
+                        className="flex w-full items-center gap-2 bg-neutral-100 px-2 py-1.5 text-left font-semibold text-emerald-900"
+                        onClick={() => toggleKollaps(`g:${g.gebId}`)}
+                      >
+                        <span>{gZu ? "▸" : "▾"}</span>
+                        {g.gebName}
+                        <span className="rounded-full bg-neutral-300 px-2 py-0.5 text-xs font-normal">
+                          {g.total}
+                        </span>
+                        {g.offen > 0 && (
+                          <span className="rounded-full bg-red-600 px-2 py-0.5 text-xs font-semibold text-white">
+                            {g.offen} offen
+                          </span>
+                        )}
+                      </button>
+                    </td>
+                  </tr>
+                  {!gZu &&
+                    g.einheiten.map((w) => {
+                      const wZu = zuKollaps.has(w.key);
+                      return (
+                        <Fragment key={w.key}>
+                          <tr>
+                            <td colSpan={7} className="p-0">
+                              <button
+                                className="flex w-full items-center gap-2 bg-neutral-50 px-2 py-1 pl-6 text-left text-sm font-medium text-neutral-700"
+                                onClick={() => toggleKollaps(w.key)}
+                              >
+                                <span>{wZu ? "▸" : "▾"}</span>
+                                {w.weName}
+                                <span className="rounded-full bg-neutral-200 px-1.5 py-0.5 text-xs font-normal">
+                                  {w.maengel.length}
+                                </span>
+                              </button>
+                            </td>
+                          </tr>
+                          {!wZu && w.maengel.map(renderMangel)}
+                        </Fragment>
+                      );
+                    })}
+                </Fragment>
+              );
+            });
+          })()}
           {gefiltert.length === 0 && (
             <tr>
               <td colSpan={7} className="text-sm text-neutral-400">

@@ -67,6 +67,14 @@ export default function UnterkunftReparaturenPage() {
   >("offen_arbeit");
   const [gebaeudeFilter, setGebaeudeFilter] = useState("");
   const [offenId, setOffenId] = useState<number | null>(null);
+  // Eingeklappte Gruppen (Haus / Wohneinheit).
+  const [zuKollaps, setZuKollaps] = useState<Set<string>>(new Set());
+  const toggleKollaps = (k: string) =>
+    setZuKollaps((s) => {
+      const n = new Set(s);
+      n.has(k) ? n.delete(k) : n.add(k);
+      return n;
+    });
 
   const [neu, setNeu] = useState({
     gebaeude_id: "",
@@ -184,15 +192,6 @@ export default function UnterkunftReparaturenPage() {
     });
   }, [reparaturen, statusFilter, gebaeudeFilter, zimmer]);
 
-  const gruppen = useMemo(
-    () =>
-      VERURSACHUNG_REIHENFOLGE.map((v) => ({
-        verursachung: v,
-        eintraege: gefiltert.filter((m) => m.verursachung === v),
-      })).filter((grp) => grp.eintraege.length > 0),
-    [gefiltert]
-  );
-
   const kennzahlen = useMemo(() => {
     const offen = reparaturen.filter((m) => m.status !== "behoben");
     const kostenBewohner = offen
@@ -229,6 +228,68 @@ export default function UnterkunftReparaturenPage() {
     });
     return map;
   }, [belastungen]);
+
+  // Aufklappbare Gruppierung Haus → Wohneinheit (Nutzer-Vorgabe 2026-09-01).
+  const baumVon = (list: UnterkunftMangel[]) => {
+    const zById = new Map(zimmer.map((z) => [z.id, z]));
+    const gName = new Map(gebaeude.map((g) => [g.id, g.name]));
+    const wNm = new Map(wohneinheiten.map((w) => [w.id, w.name]));
+    const gm = new Map<
+      number,
+      {
+        gebId: number;
+        gebName: string;
+        total: number;
+        offen: number;
+        einheiten: Map<
+          string,
+          { key: string; weName: string; eintraege: UnterkunftMangel[] }
+        >;
+      }
+    >();
+    for (const m of list) {
+      const z = zById.get(m.zimmer_id);
+      const gebId = z?.gebaeude_id ?? -1;
+      let g = gm.get(gebId);
+      if (!g) {
+        g = {
+          gebId,
+          gebName: gName.get(gebId) ?? "Ohne Gebäude",
+          total: 0,
+          offen: 0,
+          einheiten: new Map(),
+        };
+        gm.set(gebId, g);
+      }
+      g.total++;
+      if (m.status !== "behoben") g.offen++;
+      const weId = z?.wohneinheit_id ?? null;
+      const key = weId == null ? `w:none:${gebId}` : `w:${weId}`;
+      let w = g.einheiten.get(key);
+      if (!w) {
+        w = {
+          key,
+          weName:
+            weId == null
+              ? "Ohne Wohneinheit"
+              : (wNm.get(weId) ?? `Wohneinheit ${weId}`),
+          eintraege: [],
+        };
+        g.einheiten.set(key, w);
+      }
+      w.eintraege.push(m);
+    }
+    return [...gm.values()]
+      .sort((a, b) =>
+        a.gebName.localeCompare(b.gebName, "de", { numeric: true })
+      )
+      .map((g) => ({
+        ...g,
+        einheiten: [...g.einheiten.values()].sort((a, b) =>
+          a.weName.localeCompare(b.weName, "de", { numeric: true })
+        ),
+      }));
+  };
 
   // Belastungs-Vorschlag je Verursacher erzeugen. Kosten cent-genau
   // gleichmäßig aufgeteilt (Rest auf die ersten Personen). Bereits gebuchte
@@ -377,36 +438,102 @@ export default function UnterkunftReparaturenPage() {
           </p>
         ) : (
           <div className="space-y-3">
-            {offen.map((m) => (
-              <div
-                key={m.id}
-                className="rounded-lg border border-neutral-200 bg-white p-3 shadow-sm"
-              >
-                <div className="flex flex-wrap items-start justify-between gap-2">
-                  <div>
-                    <div className="font-semibold text-emerald-900">
-                      {ortLabel(m.zimmer_id)}
-                    </div>
-                    <div className="text-xs text-neutral-500">
-                      gemeldet am {formatDatumDE(m.gemeldet_am)} ·{" "}
-                      {UNTERKUNFT_MANGEL_SCHWERE_LABELS[m.schwere]}
-                    </div>
-                  </div>
+            {baumVon(offen).map((g) => {
+              const gZu = zuKollaps.has(`g:${g.gebId}`);
+              return (
+                <div
+                  key={g.gebId}
+                  className="overflow-hidden rounded-lg border border-neutral-200 bg-white"
+                >
                   <button
-                    className="btn"
-                    onClick={() =>
-                      aktualisieren(m, { status: "behoben" })
-                    }
+                    className="flex w-full items-center gap-2 px-3 py-2 text-left font-semibold text-emerald-900"
+                    onClick={() => toggleKollaps(`g:${g.gebId}`)}
                   >
-                    Erledigt
+                    <span>{gZu ? "▸" : "▾"}</span>
+                    {g.gebName}
+                    <span className="rounded-full bg-red-600 px-2 py-0.5 text-xs font-normal text-white">
+                      {g.offen}
+                    </span>
                   </button>
+                  {!gZu && (
+                    <div className="space-y-3 border-t border-neutral-100 p-3">
+                      {g.einheiten.map((w) => {
+                        const wZu = zuKollaps.has(w.key);
+                        return (
+                          <div key={w.key}>
+                            <button
+                              className="flex w-full items-center gap-2 py-1 text-left text-sm font-medium text-neutral-700"
+                              onClick={() => toggleKollaps(w.key)}
+                            >
+                              <span>{wZu ? "▸" : "▾"}</span>
+                              {w.weName}
+                              <span className="rounded-full bg-neutral-200 px-1.5 py-0.5 text-xs font-normal">
+                                {w.eintraege.length}
+                              </span>
+                            </button>
+                            {!wZu && (
+                              <div className="mt-1 space-y-3">
+                                {w.eintraege.map((m) => {
+                                  const zr = zimmer.find(
+                                    (x) => x.id === m.zimmer_id
+                                  );
+                                  return (
+                                    <div
+                                      key={m.id}
+                                      className="rounded-lg border border-neutral-200 bg-white p-3 shadow-sm"
+                                    >
+                                      <div className="flex flex-wrap items-start justify-between gap-2">
+                                        <div>
+                                          <div className="font-semibold text-emerald-900">
+                                            {zr
+                                              ? zr.art === "zimmer"
+                                                ? `Zimmer ${zr.nummer}`
+                                                : raumName(zr)
+                                              : ortLabel(m.zimmer_id)}
+                                          </div>
+                                          <div className="text-xs text-neutral-500">
+                                            gemeldet am{" "}
+                                            {formatDatumDE(m.gemeldet_am)} ·{" "}
+                                            {
+                                              UNTERKUNFT_MANGEL_SCHWERE_LABELS[
+                                                m.schwere
+                                              ]
+                                            }
+                                          </div>
+                                        </div>
+                                        <button
+                                          className="btn"
+                                          onClick={() =>
+                                            aktualisieren(m, {
+                                              status: "behoben",
+                                            })
+                                          }
+                                        >
+                                          Erledigt
+                                        </button>
+                                      </div>
+                                      <p className="mt-1 text-sm text-neutral-800">
+                                        {m.beschreibung}
+                                      </p>
+                                      <div className="mt-2">
+                                        <FotoAufnahme
+                                          zimmerId={m.zimmer_id}
+                                          mangelId={m.id}
+                                        />
+                                      </div>
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
                 </div>
-                <p className="mt-1 text-sm text-neutral-800">{m.beschreibung}</p>
-                <div className="mt-2">
-                  <FotoAufnahme zimmerId={m.zimmer_id} mangelId={m.id} />
-                </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         )}
       </div>
@@ -575,54 +702,18 @@ export default function UnterkunftReparaturenPage() {
       {gefiltert.length === 0 ? (
         <p className="text-sm text-neutral-500">Keine Reparaturen im Filter.</p>
       ) : (
-        gruppen.map((grp) => {
-          const kosten = grp.eintraege
-            .filter((m) => m.status !== "behoben")
-            .reduce((s, m) => s + (m.kosten_geschaetzt ?? 0), 0);
-          return (
-            <section key={grp.verursachung} className="space-y-2">
-              <h2 className="flex flex-wrap items-center gap-2 font-semibold text-neutral-800">
-                {UNTERKUNFT_MANGEL_VERURSACHUNG_LABELS[grp.verursachung]}
-                <span className="rounded-full bg-neutral-200 px-2 py-0.5 text-xs">
-                  {grp.eintraege.length}
-                </span>
-                {grp.verursachung === "bewohner" && kosten > 0 && (
-                  <span className="rounded bg-red-100 px-2 py-0.5 text-xs font-medium text-red-700">
-                    {kosten.toFixed(2)} € offen
-                  </span>
-                )}
-              </h2>
-
-              {grp.verursachung === "bewohner" && belastungJePerson.length > 0 && (
-                <div className="rounded border border-red-200 bg-red-50 p-2 text-sm">
-                  <div className="font-medium text-red-900">
-                    Belastung je Person (offen, anteilig)
-                  </div>
-                  <ul className="mt-1 space-y-0.5">
-                    {belastungJePerson.map(([id, betrag]) => (
-                      <li key={id} className="flex justify-between gap-4">
-                        <span>{personName(id)}</span>
-                        <span className="font-medium tabular-nums">
-                          {betrag.toFixed(2)} €
-                        </span>
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              )}
-
-              <div className="space-y-2">
-                {grp.eintraege.map((m) => {
-                  const auf = offenId === m.id;
-                  const kandidaten = bewohnerFuer(m.zimmer_id);
-                  const zRaum = zimmer.find((x) => x.id === m.zimmer_id);
-                  const abZimmer = zRaum?.art === "zimmer";
-                  const vids = m.verursacher_employee_ids ?? [];
-                  const anteil =
-                    m.kosten_geschaetzt != null && vids.length > 0
-                      ? m.kosten_geschaetzt / vids.length
-                      : null;
-                  return (
+        (() => {
+          const renderReparatur = (m: UnterkunftMangel) => {
+            const auf = offenId === m.id;
+            const kandidaten = bewohnerFuer(m.zimmer_id);
+            const zRaum = zimmer.find((x) => x.id === m.zimmer_id);
+            const abZimmer = zRaum?.art === "zimmer";
+            const vids = m.verursacher_employee_ids ?? [];
+            const anteil =
+              m.kosten_geschaetzt != null && vids.length > 0
+                ? m.kosten_geschaetzt / vids.length
+                : null;
+            return (
                     <div
                       key={m.id}
                       className="rounded border border-neutral-200 p-3"
@@ -1033,12 +1124,90 @@ export default function UnterkunftReparaturenPage() {
                         </div>
                       )}
                     </div>
-                  );
-                })}
-              </div>
-            </section>
+            );
+          };
+
+          const kostenOffen = gefiltert
+            .filter(
+              (m) => m.status !== "behoben" && m.verursachung === "bewohner"
+            )
+            .reduce((s, m) => s + (m.kosten_geschaetzt ?? 0), 0);
+
+          return (
+            <>
+              {belastungJePerson.length > 0 && (
+                <div className="rounded border border-red-200 bg-red-50 p-2 text-sm">
+                  <div className="font-medium text-red-900">
+                    Belastung je Person (offen, anteilig)
+                    {kostenOffen > 0 && ` · ${kostenOffen.toFixed(2)} € gesamt`}
+                  </div>
+                  <ul className="mt-1 space-y-0.5">
+                    {belastungJePerson.map(([id, betrag]) => (
+                      <li key={id} className="flex justify-between gap-4">
+                        <span>{personName(id)}</span>
+                        <span className="font-medium tabular-nums">
+                          {betrag.toFixed(2)} €
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+
+              {baumVon(gefiltert).map((g) => {
+                const gZu = zuKollaps.has(`g:${g.gebId}`);
+                return (
+                  <section
+                    key={g.gebId}
+                    className="overflow-hidden rounded border border-neutral-200"
+                  >
+                    <button
+                      className="flex w-full items-center gap-2 bg-neutral-50 px-3 py-2 text-left font-semibold text-emerald-900"
+                      onClick={() => toggleKollaps(`g:${g.gebId}`)}
+                    >
+                      <span>{gZu ? "▸" : "▾"}</span>
+                      {g.gebName}
+                      <span className="rounded-full bg-neutral-200 px-2 py-0.5 text-xs font-normal">
+                        {g.total}
+                      </span>
+                      {g.offen > 0 && (
+                        <span className="rounded-full bg-red-600 px-2 py-0.5 text-xs font-normal text-white">
+                          {g.offen} offen
+                        </span>
+                      )}
+                    </button>
+                    {!gZu && (
+                      <div className="space-y-3 border-t border-neutral-100 p-3">
+                        {g.einheiten.map((w) => {
+                          const wZu = zuKollaps.has(w.key);
+                          return (
+                            <div key={w.key}>
+                              <button
+                                className="flex w-full items-center gap-2 py-1 text-left text-sm font-medium text-neutral-700"
+                                onClick={() => toggleKollaps(w.key)}
+                              >
+                                <span>{wZu ? "▸" : "▾"}</span>
+                                {w.weName}
+                                <span className="rounded-full bg-neutral-200 px-1.5 py-0.5 text-xs font-normal">
+                                  {w.eintraege.length}
+                                </span>
+                              </button>
+                              {!wZu && (
+                                <div className="mt-1 space-y-2">
+                                  {w.eintraege.map(renderReparatur)}
+                                </div>
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </section>
+                );
+              })}
+            </>
           );
-        })
+        })()
       )}
     </div>
   );
