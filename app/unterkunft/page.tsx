@@ -261,6 +261,14 @@ export default function UnterkunftGrundrissPage() {
   const [ansicht, setAnsicht] = useState<Ansicht>("belegung");
   const [zoom, setZoom] = useState(1);
   const [drag, setDrag] = useState<DragState | null>(null);
+  // Unter `lg` ist standardmäßig die Zimmer-Liste sichtbar statt des
+  // SVG-Grundrisses - der ist auf dem Telefon nur mit Dauerzoomen bedienbar
+  // (Nutzer-Vorgabe 2026-09-01). Umschaltbar über die Steuerleiste.
+  const [mobilAnsicht, setMobilAnsicht] = useState<"liste" | "plan">("liste");
+  // Tatsächliche Breite des Plan-Containers, damit der SVG-Grundriss auf
+  // schmalen Schirmen auf Breite eingepasst wird (statt nativ zu überlaufen).
+  const planRef = useRef<HTMLDivElement>(null);
+  const [planBreite, setPlanBreite] = useState(0);
 
   // Umzug (Zimmerwechsel einer Person)
   const [umzug, setUmzug] = useState<UmzugState | null>(null);
@@ -405,6 +413,33 @@ export default function UnterkunftGrundrissPage() {
   useEffect(() => {
     if (!belegen) setHandPerson(null);
   }, [belegen]);
+
+  // Breite des Plan-Containers verfolgen (für „auf Breite einpassen").
+  useEffect(() => {
+    const el = planRef.current;
+    if (!el) return;
+    const ro = new ResizeObserver(() => {
+      const w = el.clientWidth;
+      setPlanBreite((prev) => (prev === w ? prev : w));
+    });
+    ro.observe(el);
+    setPlanBreite(el.clientWidth);
+    return () => ro.disconnect();
+  }, [einheitId, mobilAnsicht]);
+
+  // Solange auf dem Telefon das Detail-Sheet offen ist, den Seiten-Scroll
+  // sperren - sonst scrollt man „durch weiße Bereiche" hinter dem Sheet
+  // (Nutzer-Vorgabe 2026-09-01).
+  useEffect(() => {
+    if (selId == null) return;
+    if (typeof window === "undefined") return;
+    if (!window.matchMedia("(max-width: 1023px)").matches) return;
+    const vorher = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = vorher;
+    };
+  }, [selId]);
 
   const einheitenDesGebaeudes = useMemo(
     () => einheiten.filter((e) => e.gebaeude_id === gebaeudeId && e.aktiv),
@@ -763,14 +798,29 @@ export default function UnterkunftGrundrissPage() {
   }, [einheit, einheiten, zimmer]);
 
   const rasterZimmer = [...platziert, ...nachbarZimmer];
-  const cols = Math.max(
-    MIN_COLS,
-    ...rasterZimmer.map((z) => (z.plan_x ?? 0) + z.plan_w + 1)
-  );
-  const rows = Math.max(
-    MIN_ROWS,
-    ...rasterZimmer.map((z) => (z.plan_y ?? 0) + z.plan_h + 1)
-  );
+  // Nur im Bearbeiten-Modus das großzügige Mindestraster (Platz zum Ziehen).
+  // Sonst das Raster eng an den Inhalt legen + eine Zelle Rand - sonst
+  // rendert eine 3-Zimmer-Wohneinheit ein fast leeres 14×10-Feld
+  // (Nutzer-Vorgabe 2026-09-01: „weiße Bereiche 3× so groß wie der Inhalt").
+  const inhaltCols = rasterZimmer.length
+    ? Math.max(...rasterZimmer.map((z) => (z.plan_x ?? 0) + z.plan_w + 1))
+    : 0;
+  const inhaltRows = rasterZimmer.length
+    ? Math.max(...rasterZimmer.map((z) => (z.plan_y ?? 0) + z.plan_h + 1))
+    : 0;
+  const cols = bearbeiten
+    ? Math.max(MIN_COLS, inhaltCols)
+    : Math.max(6, inhaltCols + 1);
+  const rows = bearbeiten
+    ? Math.max(MIN_ROWS, inhaltRows)
+    : Math.max(4, inhaltRows + 1);
+
+  // SVG auf Container-Breite einpassen, wenn er sonst überliefe (schmaler
+  // Schirm). Auf breiten Schirmen unverändert native Größe.
+  const planInhaltPx = cols * Z;
+  const planPasstEin = planBreite > 0 && planBreite < planInhaltPx;
+  const planW = (planPasstEin ? planBreite : planInhaltPx) * zoom;
+  const planH = planW * (rows / cols);
 
   const sel =
     selId != null ? zimmer.find((z) => z.zimmer_id === selId) ?? null : null;
@@ -904,17 +954,25 @@ export default function UnterkunftGrundrissPage() {
     await laden();
   }
 
-  function onZimmerPointerDown(
-    e: React.PointerEvent,
-    z: UnterkunftZimmerUebersicht
-  ) {
+  // Auswahl per echtem Klick (zuverlässiger als pointerdown im scrollenden
+  // Plan-Container, wo ein kurzer Tipp sonst als Scroll verschluckt wird und
+  // man die Kachel „lange drücken" musste - Nutzer-Vorgabe 2026-09-01).
+  function onZimmerWaehlen(z: UnterkunftZimmerUebersicht) {
     if (belegen) {
       if (handPerson) belegenAufZimmer(z);
       else setHinweis("Erst eine Person antippen, dann das Zimmer.");
       return;
     }
     setSelId(z.zimmer_id);
-    if (!bearbeiten || !canEditPlan || e.button !== 0) return;
+  }
+
+  // Nur im Bearbeiten-Modus verdrahtet (Kacheln ziehen).
+  function onZimmerPointerDown(
+    e: React.PointerEvent,
+    z: UnterkunftZimmerUebersicht
+  ) {
+    setSelId(z.zimmer_id);
+    if (!canEditPlan || e.button !== 0) return;
     if (z.plan_x == null || z.plan_y == null) return;
     (e.currentTarget as Element).setPointerCapture(e.pointerId);
     setDrag({
@@ -1263,6 +1321,22 @@ export default function UnterkunftGrundrissPage() {
                 ›
               </button>
             </div>
+            {/* Nur Telefon/kleines Tablet: Liste ↔ Grundriss */}
+            <div className="flex overflow-hidden rounded border border-neutral-300 lg:hidden">
+              {(["liste", "plan"] as const).map((m) => (
+                <button
+                  key={m}
+                  onClick={() => setMobilAnsicht(m)}
+                  className={`px-2 py-1 text-xs ${
+                    m === mobilAnsicht
+                      ? "bg-emerald-700 font-semibold text-white"
+                      : "bg-white text-neutral-600"
+                  }`}
+                >
+                  {m === "liste" ? "Liste" : "Grundriss"}
+                </button>
+              ))}
+            </div>
             {canMove && (
               <button
                 onClick={() => {
@@ -1425,7 +1499,11 @@ export default function UnterkunftGrundrissPage() {
             </p>
           ) : (
             <>
-              <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-neutral-500">
+              <div
+                className={`${
+                  mobilAnsicht === "plan" ? "flex" : "hidden"
+                } flex-wrap gap-x-4 gap-y-1 text-xs text-neutral-500 lg:flex`}
+              >
                 {legendeFuer(ansicht).map((e) => (
                   <span key={e.label} className="inline-flex items-center gap-1">
                     <span
@@ -1437,15 +1515,90 @@ export default function UnterkunftGrundrissPage() {
                 ))}
               </div>
 
+              {/* Telefon: Zimmer-Liste statt Grundriss (Standard unter lg) */}
+              <div
+                className={`${
+                  mobilAnsicht === "liste" ? "flex" : "hidden"
+                } flex-col gap-1.5 lg:hidden`}
+              >
+                {[...zimmerDerEinheit]
+                  .sort((a, b) => {
+                    if ((a.art === "zimmer") !== (b.art === "zimmer"))
+                      return a.art === "zimmer" ? -1 : 1;
+                    return (a.nummer ?? "").localeCompare(b.nummer ?? "", "de", {
+                      numeric: true,
+                    });
+                  })
+                  .map((z) => {
+                    const ampel = kontrollAmpel(
+                      z.letzte_kontrolle_am,
+                      schwellenVon(z.art)
+                    );
+                    const geplantHier = (
+                      zuordnungProZimmer[z.zimmer_id] ?? []
+                    ).length;
+                    const belegbar =
+                      belegen &&
+                      handPerson != null &&
+                      z.art === "zimmer" &&
+                      z.aktiv &&
+                      !z.gesperrt;
+                    const gedimmt =
+                      belegen && handPerson != null && !belegbar;
+                    return (
+                      <button
+                        key={z.zimmer_id}
+                        onClick={() => onZimmerWaehlen(z)}
+                        className={`flex items-center gap-3 rounded-lg border p-3 text-left ${
+                          z.zimmer_id === selId
+                            ? "border-emerald-600 bg-emerald-50"
+                            : "border-neutral-200 bg-white"
+                        } ${gedimmt ? "opacity-40" : ""}`}
+                      >
+                        <span
+                          className="inline-block h-3 w-3 shrink-0 rounded-full"
+                          style={{ backgroundColor: KONTROLL_AMPEL_FARBE[ampel] }}
+                          title={KONTROLL_AMPEL_LABELS[ampel]}
+                        />
+                        <span className="min-w-0 flex-1">
+                          <span className="block font-medium text-neutral-900">
+                            {z.art === "zimmer"
+                              ? `Zimmer ${z.nummer}`
+                              : raumName(z)}
+                            {z.gesperrt ? " · 🔒" : ""}
+                            {!z.aktiv ? " · inaktiv" : ""}
+                          </span>
+                          {z.art === "zimmer" && (
+                            <span className="block text-xs text-neutral-500">
+                              {z.belegt}/{z.betten} belegt
+                              {geplantHier > 0 ? ` · +${geplantHier} geplant` : ""}
+                              {z.frei > 0 ? ` · ${z.frei} frei` : ""}
+                            </span>
+                          )}
+                        </span>
+                        {z.offene_maengel > 0 && (
+                          <span className="shrink-0 rounded bg-red-100 px-1.5 py-0.5 text-xs font-semibold text-red-700">
+                            {z.offene_maengel} Mangel
+                          </span>
+                        )}
+                        <span className="shrink-0 text-neutral-300">›</span>
+                      </button>
+                    );
+                  })}
+              </div>
+
               <div className="flex flex-col gap-4 lg:flex-row">
               <div
+                ref={planRef}
                 tabIndex={0}
                 onKeyDown={onWrapKeyDown}
-                className="max-w-full flex-1 overflow-auto rounded border border-neutral-200 bg-white p-2 outline-none"
+                className={`max-w-full flex-1 overflow-auto rounded border border-neutral-200 bg-white p-2 outline-none ${
+                  mobilAnsicht === "plan" ? "" : "hidden lg:block"
+                }`}
               >
                 <svg
-                  width={cols * Z * zoom}
-                  height={rows * Z * zoom}
+                  width={planW}
+                  height={planH}
                   viewBox={`0 0 ${cols * Z} ${rows * Z}`}
                   className="block"
                   style={{ touchAction: bearbeiten ? "none" : "auto" }}
@@ -1549,9 +1702,26 @@ export default function UnterkunftGrundrissPage() {
                       <g
                         key={z.zimmer_id}
                         transform={`translate(${px} ${py})`}
-                        onPointerDown={(e) => onZimmerPointerDown(e, z)}
-                        onPointerMove={(e) => onZimmerPointerMove(e, z)}
-                        onPointerUp={(e) => onZimmerPointerUp(e, z)}
+                        onClick={
+                          bearbeiten && canEditPlan
+                            ? undefined
+                            : () => onZimmerWaehlen(z)
+                        }
+                        onPointerDown={
+                          bearbeiten && canEditPlan
+                            ? (e) => onZimmerPointerDown(e, z)
+                            : undefined
+                        }
+                        onPointerMove={
+                          bearbeiten && canEditPlan
+                            ? (e) => onZimmerPointerMove(e, z)
+                            : undefined
+                        }
+                        onPointerUp={
+                          bearbeiten && canEditPlan
+                            ? (e) => onZimmerPointerUp(e, z)
+                            : undefined
+                        }
                         opacity={gedimmt ? 0.35 : 1}
                         style={{
                           cursor: bearbeiten && canEditPlan ? "move" : "pointer",
@@ -1750,8 +1920,9 @@ export default function UnterkunftGrundrissPage() {
                   />
                 )}
                 {sel && sel.wohneinheit_id === einheitId ? (
-                  <div className="fixed inset-x-0 bottom-0 z-40 max-h-[82vh] overflow-y-auto rounded-t-2xl border border-neutral-300 bg-white p-3 shadow-2xl lg:static lg:z-auto lg:max-h-none lg:rounded lg:border-neutral-200 lg:shadow-none">
-                    <div className="mb-1 flex items-center justify-between">
+                  <div className="fixed inset-x-0 bottom-0 z-40 max-h-[85dvh] overflow-y-auto overscroll-contain rounded-t-2xl border border-neutral-300 bg-white p-3 shadow-2xl lg:static lg:z-auto lg:max-h-none lg:overflow-visible lg:rounded lg:border-neutral-200 lg:shadow-none">
+                    <div className="mx-auto mb-2 h-1 w-10 rounded-full bg-neutral-300 lg:hidden" />
+                    <div className="sticky top-0 z-10 -mx-3 -mt-3 mb-1 flex items-center justify-between border-b border-neutral-100 bg-white px-3 py-2 lg:static lg:mx-0 lg:mt-0 lg:border-0 lg:p-0">
                       <h3 className="text-base font-semibold text-emerald-900">
                         {sel.art === "zimmer"
                           ? `Zimmer ${sel.nummer}`
