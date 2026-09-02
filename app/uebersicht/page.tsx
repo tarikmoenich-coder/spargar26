@@ -104,6 +104,13 @@ export default function UebersichtPage() {
   const [monatFilter, setMonatFilter] = useState(0);
   const [monatsRows, setMonatsRows] = useState<SeasonSummaryMonatRow[]>([]);
   const [loadingMonat, setLoadingMonat] = useState(false);
+  // Druck der Monats-Filter-Liste für die Buchhaltung: erst der Dialog
+  // (bereits ausgezahlte Personen mitdrucken?), dann steht in druckMonat die
+  // getroffene Wahl - ein Effekt löst danach window.print() aus.
+  const [druckDialogOffen, setDruckDialogOffen] = useState(false);
+  const [druckMonat, setDruckMonat] = useState<{
+    mitAusgezahlten: boolean;
+  } | null>(null);
   const [alleAktiven, setAlleAktiven] = useState<
     {
       id: string;
@@ -231,6 +238,23 @@ export default function UebersichtPage() {
     ladeMonat();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [jahr, monatFilter]);
+
+  // Sobald eine Druck-Wahl feststeht: kurz warten (Druckansicht rendern
+  // lassen), drucken, danach zurücksetzen. Gleiches Muster wie auf
+  // "Auszahlungen".
+  useEffect(() => {
+    if (!druckMonat) return;
+    const id = setTimeout(() => window.print(), 50);
+    return () => clearTimeout(id);
+  }, [druckMonat]);
+
+  useEffect(() => {
+    function handleAfterPrint() {
+      setDruckMonat(null);
+    }
+    window.addEventListener("afterprint", handleAfterPrint);
+    return () => window.removeEventListener("afterprint", handleAfterPrint);
+  }, []);
 
   async function monatAbschliessen() {
     if (!profile) return;
@@ -606,6 +630,29 @@ export default function UebersichtPage() {
       passtZurSuche(m)
   );
 
+  // Bereits ausgezahlte (abgerechnete) Personen - aus der Saison-Sicht, die
+  // unabhängig vom Monatsfilter geladen ist. Für den Druck-Dialog "Ausge-
+  // zahlte Personen mitdrucken?".
+  const abgerechnetIds = new Set(
+    rows.filter((r) => r.abgerechnet_am).map((r) => r.employee_id)
+  );
+
+  // Spaltensummen der Monats-Filter-Ansicht (Std., Tage, Basis-Brutto,
+  // Verpflegung, Unterkunft).
+  function monatsSumme(list: SeasonSummaryMonatRow[]) {
+    return list.reduce(
+      (acc, r) => ({
+        stunden: acc.stunden + Number(r.gesamt_stunden || 0),
+        tage: acc.tage + Number(r.anwesenheitstage || 0),
+        basis: acc.basis + Number(r.basis_brutto || 0),
+        verpflegung: acc.verpflegung + Number(r.abzug_verpflegung || 0),
+        wohnen: acc.wohnen + Number(r.abzug_wohnen || 0),
+      }),
+      { stunden: 0, tage: 0, basis: 0, verpflegung: 0, wohnen: 0 }
+    );
+  }
+  const summeMonatSichtbar = monatsSumme(gefilterteMonatsRows);
+
   return (
     <div className="flex flex-col gap-4">
       <LohnTabs />
@@ -635,7 +682,7 @@ export default function UebersichtPage() {
         </p>
       </div>
 
-      <div className="sticky top-[calc(3.5rem+var(--subtabs-h,2.5rem))] z-30 flex flex-wrap items-center gap-3 bg-neutral-50 py-2 print:hidden">
+      <div className="sticky top-[calc(3.5rem+var(--subtabs-h,2.5rem))] z-30 flex flex-wrap items-center gap-3 bg-sand py-2 print:hidden">
         <input
           placeholder="Suche nach Name oder Personalnummer…"
           value={search}
@@ -1095,7 +1142,7 @@ export default function UebersichtPage() {
             className={`flex flex-wrap items-center gap-3 rounded border p-3 ${
               periode?.gesperrt
                 ? "border-amber-300 bg-amber-50"
-                : "border-neutral-200 bg-white"
+                : "border-linie bg-white"
             }`}
           >
             {periode?.gesperrt ? (
@@ -1173,6 +1220,40 @@ export default function UebersichtPage() {
           {loadingMonat ? (
             <p className="text-neutral-500">Lädt…</p>
           ) : (
+            <>
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div className="flex flex-wrap items-center gap-x-5 gap-y-1 rounded-lg border border-linie bg-white px-4 py-2 text-sm shadow-card">
+                <span className="font-medium text-emerald-900">
+                  Summe · {gefilterteMonatsRows.length} Pers.
+                </span>
+                <span>
+                  Std. <strong>{fmt(summeMonatSichtbar.stunden)}</strong>
+                </span>
+                <span>
+                  Tage <strong>{summeMonatSichtbar.tage}</strong>
+                </span>
+                <span>
+                  Basis-Brutto{" "}
+                  <strong>{fmt(summeMonatSichtbar.basis)} €</strong>
+                </span>
+                <span>
+                  Verpflegung{" "}
+                  <strong>{fmt(summeMonatSichtbar.verpflegung)} €</strong>
+                </span>
+                <span>
+                  Unterkunft{" "}
+                  <strong>{fmt(summeMonatSichtbar.wohnen)} €</strong>
+                </span>
+              </div>
+              <button
+                type="button"
+                className="btn-secondary"
+                disabled={gefilterteMonatsRows.length === 0}
+                onClick={() => setDruckDialogOffen(true)}
+              >
+                Liste drucken
+              </button>
+            </div>
             <div className="overflow-x-auto">
               <table>
                 <thead>
@@ -1260,11 +1341,163 @@ export default function UebersichtPage() {
                       </tr>
                     )}
                 </tbody>
+                {gefilterteMonatsRows.length > 0 && (
+                  <tfoot>
+                    <tr className="font-semibold">
+                      <td colSpan={3} className="text-right">
+                        Summe ({gefilterteMonatsRows.length})
+                      </td>
+                      <td>{fmt(summeMonatSichtbar.stunden)}</td>
+                      <td>{summeMonatSichtbar.tage}</td>
+                      <td className={FARBE_BRUTTO_TD}>
+                        {fmt(summeMonatSichtbar.basis)}
+                      </td>
+                      <td>{fmt(summeMonatSichtbar.verpflegung)}</td>
+                      <td>{fmt(summeMonatSichtbar.wohnen)}</td>
+                      <td></td>
+                    </tr>
+                  </tfoot>
+                )}
               </table>
             </div>
+            </>
           )}
         </div>
       )}
+
+      {/* Druck-Dialog: Buchhaltung entscheidet, ob bereits ausgezahlte
+          (abgerechnete) Personen mit auf die Liste sollen. */}
+      {druckDialogOffen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 print:hidden">
+          <div className="w-full max-w-sm rounded-lg border border-linie bg-white p-4 shadow-card">
+            <h2 className="text-base font-semibold text-emerald-900">
+              Monatsliste drucken
+            </h2>
+            <p className="mt-1 text-sm text-neutral-600">
+              {MONATSNAMEN[monatFilter - 1]} {jahr} – sollen bereits
+              ausgezahlte (abgerechnete) Personen mitgedruckt werden?
+            </p>
+            <div className="mt-4 flex flex-wrap justify-end gap-2">
+              <button
+                type="button"
+                className="btn-secondary"
+                onClick={() => setDruckDialogOffen(false)}
+              >
+                Abbrechen
+              </button>
+              <button
+                type="button"
+                className="btn-secondary"
+                onClick={() => {
+                  setDruckDialogOffen(false);
+                  setDruckMonat({ mitAusgezahlten: false });
+                }}
+              >
+                Nein, ohne
+              </button>
+              <button
+                type="button"
+                className="btn"
+                onClick={() => {
+                  setDruckDialogOffen(false);
+                  setDruckMonat({ mitAusgezahlten: true });
+                }}
+              >
+                Ja, mitdrucken
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Druckansicht der Monats-Filter-Liste - nur beim Drucken sichtbar,
+          genau die Spalten der Bildschirm-Tabelle plus Spaltensummen. */}
+      {monatFilter !== 0 &&
+        druckMonat &&
+        (() => {
+          const zeilen = gefilterteMonatsRows.filter(
+            (r) =>
+              druckMonat.mitAusgezahlten || !abgerechnetIds.has(r.employee_id)
+          );
+          const s = monatsSumme(zeilen);
+          return (
+            <div className="hidden print:block">
+              <h2 className="text-xl font-semibold">
+                Lohnübersicht {MONATSNAMEN[monatFilter - 1]} {jahr}
+              </h2>
+              <p className="mt-1 text-base">
+                Datum: {formatDatumDE(new Date().toISOString())} · Personen:{" "}
+                {zeilen.length}
+                {gruppeFilter
+                  ? ` · Gruppe: ${
+                      gruppeFilter === OHNE_GRUPPE_KEY
+                        ? "ohne Gruppe"
+                        : `${gruppeFilter} – ${
+                            gruppenByNr.get(gruppeFilter)?.bezeichnung ??
+                            gruppeFilter
+                          }`
+                    }`
+                  : ""}
+                {" · "}
+                {druckMonat.mitAusgezahlten
+                  ? "inkl. bereits ausgezahlter Personen"
+                  : "ohne bereits ausgezahlte Personen"}
+              </p>
+              <table className="mt-4 print-form-table print-dense-table print-persnr-schmal">
+                <thead>
+                  <tr>
+                    <th>Pers.-Nr.</th>
+                    <th>Name</th>
+                    <th>Gruppe</th>
+                    <th>Std.</th>
+                    <th>Tage</th>
+                    <th>Basis-Brutto €</th>
+                    <th>Verpflegung €</th>
+                    <th>Unterkunft €</th>
+                    <th>Letzter Eintrag</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {zeilen.map((r) => (
+                    <tr key={r.employee_id}>
+                      <td>{r.personal_nr}</td>
+                      <td>
+                        {r.name}, {r.vorname}
+                      </td>
+                      <td>
+                        {r.gruppe_nr
+                          ? `${r.gruppe_nr} – ${
+                              gruppenByNr.get(r.gruppe_nr)?.bezeichnung ??
+                              r.gruppe_nr
+                            }`
+                          : "—"}
+                      </td>
+                      <td>{fmt(r.gesamt_stunden)}</td>
+                      <td>{r.anwesenheitstage}</td>
+                      <td>{fmt(r.basis_brutto)}</td>
+                      <td>{fmt(r.abzug_verpflegung)}</td>
+                      <td>{fmt(r.abzug_wohnen)}</td>
+                      <td>{formatDatumDE(r.letzter_eintrag)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+                <tfoot>
+                  <tr>
+                    <td colSpan={3} className="text-right font-semibold">
+                      Summe ({zeilen.length})
+                    </td>
+                    <td className="font-semibold">{fmt(s.stunden)}</td>
+                    <td className="font-semibold">{s.tage}</td>
+                    <td className="font-semibold">{fmt(s.basis)}</td>
+                    <td className="font-semibold">{fmt(s.verpflegung)}</td>
+                    <td className="font-semibold">{fmt(s.wohnen)}</td>
+                    <td></td>
+                  </tr>
+                </tfoot>
+              </table>
+            </div>
+          );
+        })()}
 
     </div>
   );
