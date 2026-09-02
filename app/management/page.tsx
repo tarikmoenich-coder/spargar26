@@ -263,6 +263,9 @@ export default function ManagementPage() {
   // sofort eingreifen können.
   const [arbeitsserie, setArbeitsserie] = useState<ArbeitstageSerie[]>([]);
   const [loadingArbeitsserie, setLoadingArbeitsserie] = useState(true);
+  const [arbeitsserieFehler, setArbeitsserieFehler] = useState<string | null>(
+    null
+  );
 
   const [urlaubUeberzogen, setUrlaubUeberzogen] = useState<
     EmployeeUrlaubstage[]
@@ -457,7 +460,12 @@ export default function ManagementPage() {
       const { data, error } = await supabase
         .from("arbeitstage_serie_uebersicht")
         .select("*");
-      if (!error) setArbeitsserie((data as ArbeitstageSerie[]) ?? []);
+      if (error) {
+        setArbeitsserieFehler(error.message);
+      } else {
+        setArbeitsserieFehler(null);
+        setArbeitsserie((data as ArbeitstageSerie[]) ?? []);
+      }
       setLoadingArbeitsserie(false);
     }
     loadArbeitsserie();
@@ -534,15 +542,23 @@ export default function ManagementPage() {
     await loadUeberstunden();
   }
 
-  // Nur die Serien mit akutem Handlungsbedarf: läuft aktuell noch, oder die
-  // Ersatzausgleich-Frist nach 14 Tagen ist offen bzw. verstrichen ohne die
-  // 2 nötigen freien Tage. Abgeschlossene 7-13-Tage-Serien ohne
-  // Ausgleichspflicht bleiben außen vor.
+  // Relevante Serien: läuft aktuell noch, Ersatzausgleich-Frist offen/
+  // verstrichen - ODER eine kürzlich (letzte 120 Tage) beendete Serie von
+  // 7+ Tagen. Auch eine schon beendete 10-Tage-Serie ist ein ArbZG-Thema
+  // (die wöchentliche Ruhezeit wurde verpasst) und muss sichtbar sein;
+  // frühere Serien überschwemmten sonst aber den Block. Die View selbst
+  // liefert ohnehin nur serie_tage >= 7 aktiver Mitarbeiter.
+  const serieCutoff = (() => {
+    const d = new Date();
+    d.setDate(d.getDate() - 120);
+    return d.toISOString().slice(0, 10);
+  })();
   const arbeitsserieAktuell = arbeitsserie.filter(
     (s) =>
       s.laeuft_noch ||
       s.ersatzausgleich === "offen" ||
-      s.ersatzausgleich === "fehlt"
+      s.ersatzausgleich === "fehlt" ||
+      s.serie_bis >= serieCutoff
   );
   const serieRot = arbeitsserieAktuell.filter((s) => s.ampel === "rot").length;
   const serieGelb = arbeitsserieAktuell.filter((s) => s.ampel === "gelb").length;
@@ -1159,10 +1175,16 @@ export default function ManagementPage() {
         </p>
         {loadingArbeitsserie ? (
           <p className="text-neutral-500">Lädt…</p>
+        ) : arbeitsserieFehler ? (
+          <p className="text-sm text-red-600">
+            Auswertung nicht verfügbar ({arbeitsserieFehler}). Vermutlich fehlt
+            die Migration 2026-09-19 (arbeitstage_serie_uebersicht) in der
+            Datenbank.
+          </p>
         ) : arbeitsserieAktuell.length === 0 ? (
           <p className="text-neutral-500">
-            Kein Handlungsbedarf - niemand arbeitet aktuell 7 Tage oder länger
-            am Stück.
+            Kein Handlungsbedarf - keine Serie von 7 oder mehr Arbeitstagen am
+            Stück in den letzten Wochen.
           </p>
         ) : (
           <div className="overflow-x-auto">
