@@ -114,7 +114,7 @@ export default function UebersichtPage() {
   // Sortierung der Monats-Filter-Liste (wirkt auf Bildschirm UND Druck, damit
   // die Buchhaltung vor dem Druck die gewünschte Reihenfolge sieht).
   const [monatSort, setMonatSort] = useState<
-    "name" | "personal_nr" | "gruppe"
+    "name" | "personal_nr" | "gruppe" | "herkunft"
   >("name");
   const [alleAktiven, setAlleAktiven] = useState<
     {
@@ -123,6 +123,7 @@ export default function UebersichtPage() {
       name: string;
       vorname: string;
       gruppe_nr: string | null;
+      herkunft: string | null;
     }[]
   >([]);
   const [periode, setPeriode] = useState<Period | null>(null);
@@ -199,7 +200,7 @@ export default function UebersichtPage() {
       const supabase = getSupabaseClient();
       const { data } = await supabase
         .from("employees")
-        .select("id, personal_nr, name, vorname, gruppe_nr")
+        .select("id, personal_nr, name, vorname, gruppe_nr, herkunft")
         .eq("aktiv", true)
         .order("name");
       setAlleAktiven(data ?? []);
@@ -635,6 +636,7 @@ export default function UebersichtPage() {
       name: string;
       vorname: string;
       gruppe_nr: string | null;
+      herkunft?: string | null;
     }
   >(list: T[]): T[] {
     const nachName = (a: T, b: T) =>
@@ -652,6 +654,15 @@ export default function UebersichtPage() {
           if (!ga) return 1;
           if (!gb) return -1;
           return ga.localeCompare(gb, "de", { numeric: true });
+        }
+      }
+      if (monatSort === "herkunft") {
+        const ha = a.herkunft ?? "";
+        const hb = b.herkunft ?? "";
+        if (ha !== hb) {
+          if (!ha) return 1;
+          if (!hb) return -1;
+          return ha.localeCompare(hb, "de");
         }
       }
       return nachName(a, b);
@@ -1292,13 +1303,18 @@ export default function UebersichtPage() {
                     value={monatSort}
                     onChange={(e) =>
                       setMonatSort(
-                        e.target.value as "name" | "personal_nr" | "gruppe"
+                        e.target.value as
+                          | "name"
+                          | "personal_nr"
+                          | "gruppe"
+                          | "herkunft"
                       )
                     }
                   >
                     <option value="name">Name</option>
                     <option value="personal_nr">Personalnummer</option>
                     <option value="gruppe">Gruppe</option>
+                    <option value="herkunft">Herkunft</option>
                   </select>
                 </label>
                 <button
@@ -1318,6 +1334,7 @@ export default function UebersichtPage() {
                     <th>Pers.-Nr.</th>
                     <th>Name</th>
                     <th>Gruppe</th>
+                    <th>Herkunft</th>
                     <th>Std.</th>
                     <th>Tage</th>
                     <th className={FARBE_BRUTTO_TH}>Basis-Brutto €</th>
@@ -1345,6 +1362,9 @@ export default function UebersichtPage() {
                                 r.gruppe_nr
                               }`
                             : "—"}
+                        </td>
+                        <td className="text-sm text-neutral-500">
+                          {r.herkunft ?? "—"}
                         </td>
                         <td>{fmt(r.gesamt_stunden)}</td>
                         <td>{r.anwesenheitstage}</td>
@@ -1379,6 +1399,9 @@ export default function UebersichtPage() {
                             }`
                           : "—"}
                       </td>
+                      <td className="text-sm text-neutral-500">
+                        {m.herkunft ?? "—"}
+                      </td>
                       <td>—</td>
                       <td>—</td>
                       <td>—</td>
@@ -1392,7 +1415,7 @@ export default function UebersichtPage() {
                   {gefilterteMonatsRows.length === 0 &&
                     fehlendeImMonat.length === 0 && (
                       <tr>
-                        <td colSpan={9} className="text-neutral-500">
+                        <td colSpan={10} className="text-neutral-500">
                           Keine Daten für diesen Monat.
                         </td>
                       </tr>
@@ -1401,7 +1424,7 @@ export default function UebersichtPage() {
                 {gefilterteMonatsRows.length > 0 && (
                   <tfoot>
                     <tr className="font-semibold">
-                      <td colSpan={3} className="text-right">
+                      <td colSpan={4} className="text-right">
                         Summe ({gefilterteMonatsRows.length})
                       </td>
                       <td>{fmt(summeMonatSichtbar.stunden)}</td>
@@ -1504,7 +1527,9 @@ export default function UebersichtPage() {
                   ? "Personalnummer"
                   : monatSort === "gruppe"
                     ? "Gruppe"
-                    : "Name"}
+                    : monatSort === "herkunft"
+                      ? "Herkunft"
+                      : "Name"}
               </p>
               <table className="mt-4 print-form-table print-dense-table print-persnr-schmal">
                 <thead>
