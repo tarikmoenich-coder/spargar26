@@ -5834,6 +5834,125 @@ create policy "unterkunft_foto_write" on unterkunft_foto for all
   using (current_role_name() in ('admin', 'hr', 'hausmeister'))
   with check (current_role_name() in ('admin', 'hr', 'hausmeister'));
 
+-- ---------------------------------------------------------------------------
+-- 20. Modul "Fahrzeuge" (GPS-Flotte, Migration 2026-09-25). Fahrzeug-
+--     Stammdaten + Tracker-Zuordnung + Positions-Zeitreihe. Positionen füllt
+--     ein Node-Poller auf dem Hetzner-Server (neben Traccar) mit dem
+--     Service-Key - fahrzeug_position hat deshalb KEINE Insert-Policy. App
+--     liest nur. Deckungsgleich mit migration_2026-09-25_fahrzeuge.sql.
+-- ---------------------------------------------------------------------------
+create table fahrzeug (
+  id bigint generated always as identity primary key,
+  kennzeichen text,
+  bezeichnung text not null,
+  typ text,
+  fahrer_employee_id uuid references employees (id) on delete set null,
+  km_stand integer,
+  km_stand_am date,
+  hu_faellig date,
+  vin text,
+  baujahr integer,
+  notiz text,
+  aktiv boolean not null default true,
+  erstellt_von uuid references profiles (id) default auth.uid(),
+  erstellt_am timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+create trigger trg_fahrzeug_updated_at before update on fahrzeug
+  for each row execute function set_updated_at();
+
+create table fahrzeug_tracker (
+  traccar_unique_id text primary key,
+  fahrzeug_id bigint references fahrzeug (id) on delete set null,
+  traccar_device_id bigint,
+  geraetetyp text,
+  bezeichnung text,
+  status text,
+  zuletzt_gesehen timestamptz,
+  erstellt_am timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+create unique index idx_fahrzeug_tracker_fahrzeug
+  on fahrzeug_tracker (fahrzeug_id) where fahrzeug_id is not null;
+create trigger trg_fahrzeug_tracker_updated_at before update on fahrzeug_tracker
+  for each row execute function set_updated_at();
+
+create table fahrzeug_position (
+  id bigint generated always as identity primary key,
+  traccar_unique_id text not null,
+  fahrzeug_id bigint,
+  zeitpunkt timestamptz not null,
+  server_zeit timestamptz not null,
+  lat double precision not null,
+  lng double precision not null,
+  gueltig boolean not null default true,
+  speed_kmh real,
+  kurs real,
+  hoehe real,
+  zuendung boolean,
+  bewegung boolean,
+  batterie_prozent real,
+  gesamt_km real,
+  attribute jsonb,
+  unique (traccar_unique_id, zeitpunkt)
+);
+create index idx_fahrzeug_position_fahrzeug
+  on fahrzeug_position (fahrzeug_id, zeitpunkt desc);
+create index idx_fahrzeug_position_tracker
+  on fahrzeug_position (traccar_unique_id, zeitpunkt desc);
+
+create table fahrzeug_poller_state (
+  id int primary key default 1 check (id = 1),
+  letzte_bereinigung timestamptz
+);
+insert into fahrzeug_poller_state (id) values (1) on conflict (id) do nothing;
+
+create view fahrzeug_uebersicht as
+select
+  f.id, f.kennzeichen, f.bezeichnung, f.typ, f.fahrer_employee_id,
+  f.km_stand, f.km_stand_am, f.hu_faellig, f.vin, f.baujahr, f.notiz, f.aktiv,
+  e.name as fahrer_name, e.vorname as fahrer_vorname,
+  e.personal_nr as fahrer_personal_nr,
+  t.traccar_unique_id, t.geraetetyp, t.status as tracker_status,
+  t.zuletzt_gesehen as tracker_zuletzt_gesehen,
+  p.zeitpunkt as pos_zeitpunkt, p.lat, p.lng, p.speed_kmh, p.kurs,
+  p.zuendung, p.bewegung, p.batterie_prozent, p.gesamt_km
+from fahrzeug f
+left join employees e on e.id = f.fahrer_employee_id
+left join fahrzeug_tracker t on t.fahrzeug_id = f.id
+left join lateral (
+  select * from fahrzeug_position pp
+  where pp.fahrzeug_id = f.id
+  order by pp.zeitpunkt desc limit 1
+) p on true;
+alter view fahrzeug_uebersicht set (security_invoker = true);
+grant select on fahrzeug_uebersicht to authenticated;
+
+alter table fahrzeug enable row level security;
+alter table fahrzeug_tracker enable row level security;
+alter table fahrzeug_position enable row level security;
+alter table fahrzeug_poller_state enable row level security;
+
+create policy "fahrzeug_select" on fahrzeug for select
+  using (current_role_name() in ('admin', 'hr', 'management'));
+create policy "fahrzeug_write" on fahrzeug for all
+  using (current_role_name() in ('admin', 'hr'))
+  with check (current_role_name() in ('admin', 'hr'));
+create policy "fahrzeug_tracker_select" on fahrzeug_tracker for select
+  using (current_role_name() in ('admin', 'hr', 'management'));
+create policy "fahrzeug_tracker_write" on fahrzeug_tracker for all
+  using (current_role_name() in ('admin', 'hr'))
+  with check (current_role_name() in ('admin', 'hr'));
+create policy "fahrzeug_position_select" on fahrzeug_position for select
+  using (current_role_name() in ('admin', 'hr', 'management'));
+create policy "fahrzeug_poller_state_select" on fahrzeug_poller_state for select
+  using (current_role_name() in ('admin', 'hr', 'management'));
+
+grant select, insert, update, delete on fahrzeug to authenticated;
+grant select, insert, update, delete on fahrzeug_tracker to authenticated;
+grant select on fahrzeug_position to authenticated;
+grant select on fahrzeug_poller_state to authenticated;
+
 insert into storage.buckets (id, name, public)
 values ('unterkunft-fotos', 'unterkunft-fotos', false)
 on conflict (id) do nothing;

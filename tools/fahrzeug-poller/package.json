@@ -1,0 +1,13 @@
+{
+  "name": "fahrzeug-poller",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Holt Traccar-Positionen und schreibt sie nach Supabase (läuft auf dem Hetzner-Server neben Traccar).",
+  "scripts": {
+    "start": "node index.mjs"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.45.4"
+  }
+}

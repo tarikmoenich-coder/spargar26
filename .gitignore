@@ -1,6 +1,8 @@
 node_modules/
 .next/
 .env.local
+.env
+tools/fahrzeug-poller/.env
 # tsc-Inkrementell-Cache, entsteht lokal bei jedem "npx tsc --noEmit"
 tsconfig.tsbuildinfo
 

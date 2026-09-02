@@ -1720,3 +1720,93 @@ export interface UnterkunftZimmerUebersicht {
   letzte_kontrolle_typ: UnterkunftVorgangTyp | null;
   offene_maengel: number;
 }
+
+// ---------------------------------------------------------------------------
+// Modul "Fahrzeuge" (GPS-Flotte, Migration 2026-09-25). Positionen füllt ein
+// Node-Poller auf dem Hetzner-Server; die App liest nur.
+// ---------------------------------------------------------------------------
+
+// Raw-Tabelle fahrzeug.
+export interface Fahrzeug {
+  id: number;
+  kennzeichen: string | null;
+  bezeichnung: string;
+  typ: string | null;
+  fahrer_employee_id: string | null;
+  km_stand: number | null;
+  km_stand_am: string | null;
+  hu_faellig: string | null;
+  vin: string | null;
+  baujahr: number | null;
+  notiz: string | null;
+  aktiv: boolean;
+  erstellt_von: string | null;
+  erstellt_am: string;
+  updated_at: string;
+}
+
+// Raw-Tabelle fahrzeug_tracker (Traccar-Gerät <-> Fahrzeug).
+export interface FahrzeugTracker {
+  traccar_unique_id: string;
+  fahrzeug_id: number | null;
+  traccar_device_id: number | null;
+  geraetetyp: string | null;
+  bezeichnung: string | null;
+  status: string | null;
+  zuletzt_gesehen: string | null;
+  erstellt_am: string;
+  updated_at: string;
+}
+
+// Raw-Tabelle fahrzeug_position (Zeitreihe, append-only).
+export interface FahrzeugPosition {
+  id: number;
+  traccar_unique_id: string;
+  fahrzeug_id: number | null;
+  zeitpunkt: string;
+  server_zeit: string;
+  lat: number;
+  lng: number;
+  gueltig: boolean;
+  speed_kmh: number | null;
+  kurs: number | null;
+  hoehe: number | null;
+  zuendung: boolean | null;
+  bewegung: boolean | null;
+  batterie_prozent: number | null;
+  gesamt_km: number | null;
+  attribute: Record<string, unknown> | null;
+}
+
+// Aus der Sicht fahrzeug_uebersicht - ein Fahrzeug je Zeile + Fahrer +
+// zugeordneter Tracker + letzte bekannte Position.
+export interface FahrzeugUebersicht {
+  id: number;
+  kennzeichen: string | null;
+  bezeichnung: string;
+  typ: string | null;
+  fahrer_employee_id: string | null;
+  km_stand: number | null;
+  km_stand_am: string | null;
+  hu_faellig: string | null;
+  vin: string | null;
+  baujahr: number | null;
+  notiz: string | null;
+  aktiv: boolean;
+  fahrer_name: string | null;
+  fahrer_vorname: string | null;
+  fahrer_personal_nr: string | null;
+  traccar_unique_id: string | null;
+  geraetetyp: string | null;
+  tracker_status: string | null;
+  tracker_zuletzt_gesehen: string | null;
+  pos_zeitpunkt: string | null;
+  lat: number | null;
+  lng: number | null;
+  speed_kmh: number | null;
+  kurs: number | null;
+  zuendung: boolean | null;
+  bewegung: boolean | null;
+  batterie_prozent: number | null;
+  gesamt_km: number | null;
+}

@@ -17,6 +17,7 @@ import {
   Search,
   Settings,
   Sprout,
+  Truck,
   Users,
   Wallet,
   X,
@@ -73,6 +74,13 @@ const items: NavItem[] = [
     // hausmeister sieht ausschliesslich dieses Modul (nur Reparaturen, Vorgabe
     // 2026-09-15). erntewirtschaft nur lesend (Durchsetzung via RLS).
     roles: ["admin", "hr", "erntewirtschaft", "hausmeister"],
+  },
+  {
+    href: "/fahrzeuge",
+    label: "Fahrzeuge",
+    icon: Truck,
+    // GPS-Flotte (Traccar). Stufe 1: admin/hr pflegen, management liest.
+    roles: ["admin", "hr", "management"],
   },
   {
     href: "/erfassung",
