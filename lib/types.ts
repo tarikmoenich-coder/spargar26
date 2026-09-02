@@ -331,10 +331,17 @@ export interface ArbeitstageSerie {
   serie_tage: number;
   laeuft_noch: boolean;
   ampel: "gruen" | "gelb" | "rot";
-  // nur ab serie_tage >= 14 gesetzt:
+  // nur im heilbaren Bereich (serie_tage 14..20) gesetzt:
   ersatz_fenster_bis: string | null;
   ersatz_freie_tage: number | null;
-  ersatzausgleich: "erfuellt" | "offen" | "fehlt" | null;
+  // "kein_ausgleich" = ab 21 Tagen am Stück, kein legaler Ersatzausgleich
+  // mehr möglich (nicht heilbarer Verstoß).
+  ersatzausgleich:
+    | "erfuellt"
+    | "offen"
+    | "fehlt"
+    | "kein_ausgleich"
+    | null;
 }
 
 // Ein Frageblock 8 - Zeile ("Bisherige Beschäftigungen im laufenden

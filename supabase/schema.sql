@@ -4396,10 +4396,15 @@ select
     when i.serie_tage >= 7  then 'gelb'
     else 'gruen'
   end as ampel,
-  case when i.serie_tage >= 14 then (i.serie_bis + 7) end as ersatz_fenster_bis,
-  case when i.serie_tage >= 14 then ea.freie_tage end     as ersatz_freie_tage,
+  -- Ausgleichsfenster/-zähler nur im heilbaren Bereich (14..20 Tage);
+  -- ab 21 Tagen am Stück gibt es keinen legalen Ersatzausgleich mehr.
+  case when i.serie_tage between 14 and 20 then (i.serie_bis + 7) end
+    as ersatz_fenster_bis,
+  case when i.serie_tage between 14 and 20 then ea.freie_tage end
+    as ersatz_freie_tage,
   case
     when i.serie_tage < 14                    then null
+    when i.serie_tage >= 21                   then 'kein_ausgleich'
     when ea.freie_tage >= 2                   then 'erfuellt'
     when i.serie_bis + 7 >= current_date      then 'offen'
     else 'fehlt'

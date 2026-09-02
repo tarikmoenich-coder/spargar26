@@ -558,12 +558,16 @@ export default function ManagementPage() {
       s.laeuft_noch ||
       s.ersatzausgleich === "offen" ||
       s.ersatzausgleich === "fehlt" ||
+      s.ersatzausgleich === "kein_ausgleich" ||
       s.serie_bis >= serieCutoff
   );
   const serieRot = arbeitsserieAktuell.filter((s) => s.ampel === "rot").length;
   const serieGelb = arbeitsserieAktuell.filter((s) => s.ampel === "gelb").length;
+  // "fehlt" (Frist verstrichen ohne 2 freie Tage) UND "kein_ausgleich"
+  // (>= 21 Tage, gar nicht mehr heilbar) sind beide ein offener Verstoß.
   const serieErsatzFehlt = arbeitsserieAktuell.filter(
-    (s) => s.ersatzausgleich === "fehlt"
+    (s) =>
+      s.ersatzausgleich === "fehlt" || s.ersatzausgleich === "kein_ausgleich"
   ).length;
 
   return (
@@ -1170,8 +1174,9 @@ export default function ManagementPage() {
           „U" oder kein Eintrag; „F"/Fahrer zählt als Arbeitstag). Ab 7 Tagen
           gelb, ab 14 Tagen rot. Nach 14 Tagen am Stück verlangt das
           Arbeitszeitgesetz 2 freie Tage in der Folgewoche (Ersatzausgleich) -
-          wird hier mitgeprüft. Aktueller Stand, unabhängig vom gewählten
-          Jahr.
+          wird hier mitgeprüft. Ab 21 Tagen am Stück gibt es keinen legalen
+          Ersatzausgleich mehr (nicht heilbarer Verstoß). Aktueller Stand,
+          unabhängig vom gewählten Jahr.
         </p>
         {loadingArbeitsserie ? (
           <p className="text-neutral-500">Lädt…</p>
@@ -1225,6 +1230,10 @@ export default function ManagementPage() {
                     <td className="text-sm">
                       {s.ersatzausgleich === null ? (
                         "—"
+                      ) : s.ersatzausgleich === "kein_ausgleich" ? (
+                        <span className="font-medium text-red-600">
+                          kein legaler Ausgleich möglich
+                        </span>
                       ) : s.ersatzausgleich === "erfuellt" ? (
                         "erfüllt"
                       ) : s.ersatzausgleich === "offen" ? (
