@@ -4286,13 +4286,14 @@ grant select on employee_sv_pruefung to authenticated;
 -- ---------------------------------------------------------------------------
 -- 12e2. View: Urlaubstage-Anspruch/-Kontrolle je Mitarbeiter/Saisonjahr
 --       (Nutzer-Vorgabe 2026-08-09): Anspruch = 2 Urlaubstage je vollem
---       Kalendermonat der Beschäftigung (1. bis letzter Tag mit
---       irgendeinem Eintrag - Stunden ODER Markierung, nicht nur
---       Arbeitstage). "Voller Kalendermonat" heißt: die Beschäftigung
---       deckt Monatsanfang UND Monatsende dieses Monats ab - ein Monat, in
---       dem erst am 2. begonnen oder vor dem Monatsletzten geendet wurde,
---       zählt NICHT (Beispiel Nutzer: 02.05.-29.07. ergibt nur 2 Tage,
---       da nur Juni ein voller Monat ist). "U"-markierte Tage sind die
+--       Kalendermonat der Beschäftigung. "Voller Kalendermonat" heißt: der
+--       Monat hat mindestens einen Eintrag (Stunden ODER Markierung) UND ist
+--       kein angebrochener Rand-Monat - ein Monat, in dem erst nach dem 1.
+--       begonnen oder vor dem Monatsletzten geendet wurde, zählt NICHT
+--       (Beispiel Nutzer: 02.05.-29.07. ergibt nur 2 Tage, da nur Juni voll
+--       ist). Monate GANZ OHNE Eintrag in der Mitte (Person war weg und kam
+--       zurück) zählen ebenfalls nicht mit (Fix 2026-09-23: vorher wurde die
+--       reine Spanne erster..letzter Eintrag genommen). "U"-markierte Tage sind die
 --       tatsächlich genommenen Urlaubstage - "ueberzogen" markiert, wenn
 --       mehr U-Tage erfasst wurden als der Anspruch hergibt.
 --       resturlaub_tage/zu_wenig_genommen (2026-08-20, Nutzer-Vorgabe:
@@ -4324,32 +4325,28 @@ join lateral (
     extract(year from we.datum)::int as saison_jahr,
     min(we.datum) filter (where we.stunden is not null or we.markierung is not null) as erster_eintrag,
     max(we.datum) filter (where we.stunden is not null or we.markierung is not null) as letzter_eintrag,
-    count(*) filter (where we.markierung = 'U') as u_tage
+    count(*) filter (where we.markierung = 'U') as u_tage,
+    -- Monate mit mindestens einem Eintrag - Lücken-Monate sind hier gar
+    -- nicht enthalten (Fix 2026-09-23, siehe Kommentar oben).
+    count(distinct date_trunc('month', we.datum))
+      filter (where we.stunden is not null or we.markierung is not null)
+      as monate_mit_eintrag
   from work_entries we
   where we.employee_id = e.id
   group by extract(year from we.datum)
 ) w on true
 join lateral (
-  select
-    (
-      extract(year from end_adj) - extract(year from start_adj)
-    ) * 12
-    + (extract(month from end_adj) - extract(month from start_adj))
-    + 1 as anzahl
-  from (
-    select
-      case
-        when extract(day from w.erster_eintrag) = 1
-          then date_trunc('month', w.erster_eintrag)
-        else date_trunc('month', w.erster_eintrag) + interval '1 month'
-      end as start_adj,
-      case
-        when w.letzter_eintrag
-          = (date_trunc('month', w.letzter_eintrag) + interval '1 month' - interval '1 day')::date
-          then date_trunc('month', w.letzter_eintrag)
-        else date_trunc('month', w.letzter_eintrag) - interval '1 month'
-      end as end_adj
-  ) x
+  select greatest(
+    0,
+    w.monate_mit_eintrag
+      - (case when extract(day from w.erster_eintrag) <> 1 then 1 else 0 end)
+      - (case
+           when w.letzter_eintrag <>
+             (date_trunc('month', w.letzter_eintrag)
+               + interval '1 month' - interval '1 day')::date
+           then 1 else 0
+         end)
+  )::int as anzahl
 ) monate on true
 where w.erster_eintrag is not null;
 
