@@ -344,6 +344,16 @@ export interface ArbeitstageSerie {
     | null;
 }
 
+// arbeitstage_bearbeitung_lock - Beratungssperre für das Controlling-
+// Wochenraster ("Arbeitstage am Stück" -> Bearbeiten). Siehe
+// supabase/migration_2026-09-22_arbeitstage_bearbeitung_lock.sql.
+export interface ArbeitstageBearbeitungLock {
+  employee_id: string;
+  gesperrt_von: string;
+  gesperrt_am: string;
+  zuletzt_gesehen: string;
+}
+
 // Ein Frageblock 8 - Zeile ("Bisherige Beschäftigungen im laufenden
 // Kalenderjahr") - rein dokumentierend, siehe schema.sql.
 export interface SvFragebogenVorbeschaeftigung {

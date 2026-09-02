@@ -952,6 +952,21 @@ create table periods (
 );
 
 -- ---------------------------------------------------------------------------
+-- 4b. Beratungssperre für das Controlling-Wochenraster ("Arbeitstage am
+--     Stück" -> Bearbeiten). Das Raster arbeitet mit einem Entwurf und
+--     schreibt erst bei "Alles speichern" - solange eine Person ausgeklappt
+--     ist, darf sie kein zweiter Nutzer im selben Tool bearbeiten. Heartbeat
+--     (zuletzt_gesehen) + 3-Minuten-Ablauf für verwaiste Sperren.
+--     Siehe migration_2026-09-22_arbeitstage_bearbeitung_lock.sql.
+-- ---------------------------------------------------------------------------
+create table arbeitstage_bearbeitung_lock (
+  employee_id     uuid primary key references employees (id) on delete cascade,
+  gesperrt_von    uuid not null references profiles (id) default auth.uid(),
+  gesperrt_am     timestamptz not null default now(),
+  zuletzt_gesehen timestamptz not null default now()
+);
+
+-- ---------------------------------------------------------------------------
 -- 4a. Auszahlungsbelege: eine Belegnummer je "Jetzt Abrechnen"-Aktion,
 --     unabhängig davon wie viele Personen dabei gleichzeitig abgerechnet
 --     wurden (analog zu Vorschüssen/Kassenbuch).
@@ -4771,6 +4786,56 @@ create policy "periods_select" on periods for select using (auth.uid() is not nu
 create policy "periods_write" on periods for all
   using (current_role_name() in ('admin', 'hr'))
   with check (current_role_name() in ('admin', 'hr'));
+
+-- arbeitstage_bearbeitung_lock: alle angemeldeten Rollen dürfen die Sperre
+-- sehen (um "wird bearbeitet von …" anzuzeigen), schreiben/löschen nur
+-- admin/hr (die einzigen, die im Controlling Stunden bearbeiten).
+alter table arbeitstage_bearbeitung_lock enable row level security;
+create policy "arbeitstage_lock_select" on arbeitstage_bearbeitung_lock
+  for select using (auth.uid() is not null);
+create policy "arbeitstage_lock_write" on arbeitstage_bearbeitung_lock
+  for all
+  using (current_role_name() in ('admin', 'hr'))
+  with check (current_role_name() in ('admin', 'hr'));
+
+-- Atomar erwerben: räumt verwaiste Sperren (> 3 Min ohne Heartbeat) und
+-- meldet, ob die Sperre jetzt uns gehört - sonst wer sie hält. security
+-- definer, damit der Insert nicht an der eigenen RLS-Policy scheitert und
+-- profiles.full_name des Halters gelesen werden kann.
+create or replace function arbeitstage_lock_erwerben(p_employee_id uuid)
+returns table (ok boolean, halter text, seit timestamptz)
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_row arbeitstage_bearbeitung_lock%rowtype;
+begin
+  delete from arbeitstage_bearbeitung_lock
+   where zuletzt_gesehen < now() - interval '3 minutes';
+
+  select * into v_row
+    from arbeitstage_bearbeitung_lock
+   where employee_id = p_employee_id
+   for update;
+
+  if found and v_row.gesperrt_von <> auth.uid() then
+    return query
+      select false,
+             (select full_name from profiles where id = v_row.gesperrt_von),
+             v_row.gesperrt_am;
+    return;
+  end if;
+
+  insert into arbeitstage_bearbeitung_lock (employee_id, gesperrt_von)
+  values (p_employee_id, auth.uid())
+  on conflict (employee_id) do update set zuletzt_gesehen = now();
+
+  return query select true, null::text, now();
+end;
+$$;
+
+grant execute on function arbeitstage_lock_erwerben(uuid) to authenticated;
 
 -- Finanzielle/Compliance-Tabellen: admin, kasse, lohnabrechnung, pruefer
 create policy "season_bonuses_rw" on season_bonuses for all
