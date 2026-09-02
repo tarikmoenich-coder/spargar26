@@ -248,7 +248,7 @@ export default function UnterkunftPlanungPage() {
           <p className="text-sm text-neutral-500">Noch nichts geplant.</p>
         ) : (
           [...proHerkunft.entries()].map(([h, ks]) => (
-            <div key={h} className="rounded border border-neutral-200 p-3">
+            <div key={h} className="rounded border border-linie p-3">
               <div className="font-semibold text-emerald-900">{h}</div>
               <ol className="mt-1 list-decimal pl-5 text-sm">
                 {ks
@@ -331,7 +331,7 @@ export default function UnterkunftPlanungPage() {
               !ks.some((k) => k.wohneinheit_id === w.id)
           );
           return (
-            <div key={h} className="rounded border border-neutral-200 p-3">
+            <div key={h} className="rounded border border-linie p-3">
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <span className="text-base font-semibold text-emerald-900">
                   {h}

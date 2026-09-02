@@ -41,7 +41,7 @@ export default function PersonalTabs() {
   return (
     <div
       ref={ref}
-      className="sticky top-14 z-40 -mt-6 flex gap-4 border-b border-neutral-200 bg-neutral-50 print:hidden"
+      className="sticky top-14 z-40 -mt-6 flex gap-4 border-b border-linie bg-sand print:hidden"
     >
       {tabs.map((tab) => (
         <Link

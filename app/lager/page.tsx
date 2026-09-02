@@ -281,7 +281,7 @@ export default function LagerPage() {
       {loading ? (
         <p className="text-neutral-500">Lädt…</p>
       ) : (
-        <div className="overflow-x-auto rounded border border-neutral-200 bg-white p-4">
+        <div className="overflow-x-auto rounded border border-linie bg-white p-4">
           <table>
             <thead>
               <tr>

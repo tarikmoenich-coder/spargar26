@@ -355,7 +355,7 @@ export default function KassenbuchJournalPage() {
       {canWrite && (
         <form
           onSubmit={addDeposit}
-          className="flex flex-wrap gap-3 rounded border border-neutral-200 bg-white p-4"
+          className="flex flex-wrap gap-3 rounded border border-linie bg-white p-4"
         >
           <input
             type="number"

@@ -223,7 +223,7 @@ export default function PersonalDokumentePage() {
         </p>
       </div>
 
-      <div className="sticky top-[calc(3.5rem+var(--subtabs-h,2.5rem))] z-30 bg-neutral-50 py-2">
+      <div className="sticky top-[calc(3.5rem+var(--subtabs-h,2.5rem))] z-30 bg-sand py-2">
         <input
           placeholder="Suche nach Name oder Personalnummer…"
           value={search}
@@ -302,7 +302,7 @@ export default function PersonalDokumentePage() {
                     </tr>
                     {offenId === emp.id && (
                       <tr>
-                        <td colSpan={spaltenAnzahl} className="bg-neutral-50">
+                        <td colSpan={spaltenAnzahl} className="bg-sand">
                           <div className="flex flex-col gap-3 py-2">
                             <p className="text-xs text-neutral-500">
                               Neues Dokument für {emp.name}, {emp.vorname}{" "}
@@ -325,7 +325,7 @@ export default function PersonalDokumentePage() {
                                 ))}
                               </select>
                               {kategorie === FUEHRERSCHEIN_KATEGORIE && (
-                                <div className="flex items-center gap-2 rounded border border-neutral-200 px-2 py-1">
+                                <div className="flex items-center gap-2 rounded border border-linie px-2 py-1">
                                   <span className="text-xs text-neutral-500">
                                     Klassen:
                                   </span>

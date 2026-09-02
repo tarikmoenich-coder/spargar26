@@ -131,7 +131,7 @@ export default function AnbauFelderPage() {
       </div>
 
       {canEdit && (
-        <div className="rounded border border-neutral-200 bg-white p-3">
+        <div className="rounded border border-linie bg-white p-3">
           <h2 className="mb-2 text-sm font-semibold text-emerald-800">
             Neues Feld anlegen
           </h2>

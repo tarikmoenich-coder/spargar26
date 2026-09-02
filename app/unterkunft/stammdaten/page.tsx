@@ -544,8 +544,8 @@ export default function UnterkunftStammdatenPage() {
               wohneinheiten.find((e) => e.id === id)?.name ?? "—";
             const offen = offenesGebaeude === g.id;
             return (
-              <div key={g.id} className="rounded border border-neutral-200">
-                <div className="flex items-center justify-between gap-2 bg-neutral-50 px-3 py-2">
+              <div key={g.id} className="rounded border border-linie">
+                <div className="flex items-center justify-between gap-2 bg-sand px-3 py-2">
                   <button
                     className="text-left text-sm font-medium"
                     onClick={() => setOffenesGebaeude(offen ? null : g.id)}
@@ -580,7 +580,7 @@ export default function UnterkunftStammdatenPage() {
                 {offen && (
                   <div className="space-y-3 px-3 py-3">
                     {/* Wohneinheiten des Gebäudes */}
-                    <div className="rounded border border-neutral-200 bg-neutral-50 p-2">
+                    <div className="rounded border border-linie bg-sand p-2">
                       <div className="text-sm font-medium">Wohneinheiten</div>
                       <p className="text-xs text-neutral-500">
                         Eine Wohneinheit = mehrere Zimmer mit gemeinsam Bad/Küche.

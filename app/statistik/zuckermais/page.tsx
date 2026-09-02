@@ -308,7 +308,7 @@ export default function StatistikZuckermaisPage() {
         </p>
       </div>
 
-      <label className="sticky top-[calc(3.5rem+var(--subtabs-h,2.5rem))] z-30 block bg-neutral-50 py-2 text-sm">
+      <label className="sticky top-[calc(3.5rem+var(--subtabs-h,2.5rem))] z-30 block bg-sand py-2 text-sm">
         Saison-Jahr{" "}
         <input
           type="number"
@@ -395,7 +395,7 @@ export default function StatistikZuckermaisPage() {
       )}
 
       {kannPersonenauswertungSehen && (
-        <div className="mt-4 flex flex-col gap-3 border-t border-neutral-200 pt-6">
+        <div className="mt-4 flex flex-col gap-3 border-t border-linie pt-6">
           <div>
             <h2 className="text-base font-semibold text-emerald-800">
               Personenauswertung

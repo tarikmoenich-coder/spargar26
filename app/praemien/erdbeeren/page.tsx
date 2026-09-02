@@ -364,7 +364,7 @@ export default function PraemienErdbeerenPage() {
           verwalten" eine anlegen, bevor Prämien erfasst werden können.
         </p>
       ) : (
-        <div className="sticky top-[calc(3.5rem+var(--subtabs-h,2.5rem))] z-30 flex flex-wrap items-center gap-3 bg-neutral-50 py-2 print:hidden">
+        <div className="sticky top-[calc(3.5rem+var(--subtabs-h,2.5rem))] z-30 flex flex-wrap items-center gap-3 bg-sand py-2 print:hidden">
           <label className="text-sm">
             Datum{" "}
             <input
@@ -422,7 +422,7 @@ export default function PraemienErdbeerenPage() {
 
       {/* Sätze-Verwaltung für die aktuell gewählte Parzelle (nur admin). */}
       {isAdmin && parzelleId !== null && (
-        <div className="rounded border border-neutral-200 bg-white p-3 print:hidden">
+        <div className="rounded border border-linie bg-white p-3 print:hidden">
           <h2 className="text-sm font-semibold text-emerald-800">
             Sätze verwalten für {aktuelleParzelle?.name} (Norm/Bonus, ändert
             sich je Parzelle und Saisonverlauf)

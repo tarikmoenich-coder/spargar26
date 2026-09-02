@@ -141,7 +141,7 @@ export default function AenderungsprotokollPage() {
         </p>
       </div>
 
-      <div className="sticky top-14 z-30 flex flex-wrap items-center gap-3 bg-neutral-50 py-2 text-sm">
+      <div className="sticky top-14 z-30 flex flex-wrap items-center gap-3 bg-sand py-2 text-sm">
         <input
           placeholder="Person (Name oder Personalnummer)…"
           value={personSuche}
@@ -266,7 +266,7 @@ export default function AenderungsprotokollPage() {
                     </tr>
                     {offen && (
                       <tr>
-                        <td colSpan={7} className="bg-neutral-50">
+                        <td colSpan={7} className="bg-sand">
                           <table>
                             <thead>
                               <tr>

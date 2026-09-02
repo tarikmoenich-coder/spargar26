@@ -563,7 +563,7 @@ export default function ManagementPage() {
         </p>
       </div>
 
-      <label className="sticky top-14 z-30 block bg-neutral-50 py-2 text-sm">
+      <label className="sticky top-14 z-30 block bg-sand py-2 text-sm">
         Saison-Jahr{" "}
         <input
           type="number"
@@ -1039,7 +1039,7 @@ export default function ManagementPage() {
                       </tr>
                       {offen && (
                         <tr>
-                          <td colSpan={5} className="bg-neutral-50">
+                          <td colSpan={5} className="bg-sand">
                             <div className="flex flex-col gap-3 p-2">
                               {!canEditStunden && (
                                 <p className="text-xs text-amber-700">
@@ -1104,7 +1104,7 @@ export default function ManagementPage() {
                               </table>
 
                               {(canStundenkontoBuchen || canStundenkontoAuszahlen) && (
-                                <div className="rounded border border-neutral-200 bg-white">
+                                <div className="rounded border border-linie bg-white">
                                   <StundenkontoBereich
                                     employeeId={u.employee_id}
                                     saisonJahr={jahr}

@@ -170,7 +170,7 @@ export default function SozialversicherungPage() {
         </p>
       </div>
 
-      <div className="sticky top-14 z-30 flex flex-wrap items-center gap-4 bg-neutral-50 py-2 text-sm">
+      <div className="sticky top-14 z-30 flex flex-wrap items-center gap-4 bg-sand py-2 text-sm">
         <input
           placeholder="Suche nach Name oder Personalnummer…"
           value={search}

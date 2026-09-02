@@ -215,7 +215,7 @@ export default function StundenkontoBereich({
       )}
 
       {canBuchen && (
-        <div className="flex flex-wrap items-end gap-2 rounded border border-neutral-200 bg-white p-2">
+        <div className="flex flex-wrap items-end gap-2 rounded border border-linie bg-white p-2">
           <label className="flex flex-col text-xs">
             Datum
             <input

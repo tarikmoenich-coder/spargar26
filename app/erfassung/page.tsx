@@ -662,7 +662,7 @@ function ErfassungInner() {
         <p className="text-sm text-neutral-500">{t("erfassung.untertitel")}</p>
       </div>
 
-      <div className="sticky top-[calc(3.5rem+var(--subtabs-h,2.5rem))] z-30 flex flex-col gap-2 bg-neutral-50 py-2 print:hidden">
+      <div className="sticky top-[calc(3.5rem+var(--subtabs-h,2.5rem))] z-30 flex flex-col gap-2 bg-sand py-2 print:hidden">
         <div className="flex flex-wrap items-center gap-3">
           <input
             placeholder="Suche nach Name oder Personalnummer…"
@@ -971,7 +971,7 @@ function ErfassungInner() {
                             (zeigeMarkierung ? 2 : 1) +
                             (canGruppeAendern ? 1 : 0)
                           }
-                          className="bg-neutral-50"
+                          className="bg-sand"
                         >
                           <StundenkontoBereich
                             employeeId={emp.id}

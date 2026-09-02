@@ -632,7 +632,7 @@ export default function UnterkunftUebergabePage() {
 
       {!vorgang && (
         <>
-          <section className="space-y-2 rounded border border-neutral-200 p-3">
+          <section className="space-y-2 rounded border border-linie p-3">
             <h1 className="text-lg font-semibold text-emerald-900">
               Übergabe / Abnahme starten
             </h1>
@@ -905,7 +905,7 @@ export default function UnterkunftUebergabePage() {
                 verursachung: "unklar" as const,
               };
               return (
-                <div key={p.id} className="rounded border border-neutral-200 p-3">
+                <div key={p.id} className="rounded border border-linie p-3">
                   <div className="flex flex-wrap items-center gap-3">
                     <span className="min-w-[9rem] font-medium">{p.bereich}</span>
                     <select
@@ -1000,7 +1000,7 @@ export default function UnterkunftUebergabePage() {
             })}
           </div>
 
-          <div className="space-y-3 rounded border border-neutral-200 p-3">
+          <div className="space-y-3 rounded border border-linie p-3">
             <div className="flex flex-wrap items-end gap-3 text-sm">
               <label>
                 Gesamtzustand

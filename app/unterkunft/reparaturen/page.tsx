@@ -443,7 +443,7 @@ export default function UnterkunftReparaturenPage() {
               return (
                 <div
                   key={g.gebId}
-                  className="overflow-hidden rounded-lg border border-neutral-200 bg-white"
+                  className="overflow-hidden rounded-lg border border-linie bg-white"
                 >
                   <button
                     className="flex w-full items-center gap-2 px-3 py-2 text-left font-semibold text-emerald-900"
@@ -480,7 +480,7 @@ export default function UnterkunftReparaturenPage() {
                                   return (
                                     <div
                                       key={m.id}
-                                      className="rounded-lg border border-neutral-200 bg-white p-3 shadow-sm"
+                                      className="rounded-lg border border-linie bg-white p-3 shadow-sm"
                                     >
                                       <div className="flex flex-wrap items-start justify-between gap-2">
                                         <div>
@@ -597,7 +597,7 @@ export default function UnterkunftReparaturenPage() {
       )}
 
       {canEdit && (
-        <section className="space-y-2 rounded border border-neutral-200 p-3">
+        <section className="space-y-2 rounded border border-linie p-3">
           <h2 className="text-sm font-semibold">Reparatur direkt anlegen</h2>
           <div className="flex flex-wrap items-end gap-2 text-sm">
             <label>
@@ -716,7 +716,7 @@ export default function UnterkunftReparaturenPage() {
             return (
                     <div
                       key={m.id}
-                      className="rounded border border-neutral-200 p-3"
+                      className="rounded border border-linie p-3"
                     >
                       <div className="flex flex-wrap items-start justify-between gap-2">
                         <div>
@@ -1159,10 +1159,10 @@ export default function UnterkunftReparaturenPage() {
                 return (
                   <section
                     key={g.gebId}
-                    className="overflow-hidden rounded border border-neutral-200"
+                    className="overflow-hidden rounded border border-linie"
                   >
                     <button
-                      className="flex w-full items-center gap-2 bg-neutral-50 px-3 py-2 text-left font-semibold text-emerald-900"
+                      className="flex w-full items-center gap-2 bg-sand px-3 py-2 text-left font-semibold text-emerald-900"
                       onClick={() => toggleKollaps(`g:${g.gebId}`)}
                     >
                       <span>{gZu ? "▸" : "▾"}</span>

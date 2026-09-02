@@ -345,7 +345,7 @@ export default function SvFragebogenFormular({
     kinder?: React.ReactNode
   ) {
     return (
-      <div className="rounded border border-neutral-200 p-3">
+      <div className="rounded border border-linie p-3">
         <label className="flex items-center gap-2 text-sm font-medium">
           <input
             type="checkbox"
@@ -660,7 +660,7 @@ export default function SvFragebogenFormular({
         )}
       </div>
 
-      <div className="rounded border border-neutral-200 p-3">
+      <div className="rounded border border-linie p-3">
         <p className="text-sm font-medium">
           7. Sonstiges - falls 1-6 alle "Nein"
         </p>
@@ -765,7 +765,7 @@ export default function SvFragebogenFormular({
         </div>
       </div>
 
-      <div className="rounded border border-neutral-200 p-3">
+      <div className="rounded border border-linie p-3">
         <div className="flex items-center justify-between">
           <p className="text-sm font-medium">
             8. Bisherige Beschäftigungen im Kalenderjahr (In- oder Ausland,

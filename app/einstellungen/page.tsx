@@ -254,7 +254,7 @@ export default function EinstellungenPage() {
       {isAdmin ? (
         <form
           onSubmit={handleBankdatenSubmit}
-          className="grid grid-cols-1 gap-3 rounded border border-neutral-200 bg-white p-4 sm:grid-cols-3"
+          className="grid grid-cols-1 gap-3 rounded border border-linie bg-white p-4 sm:grid-cols-3"
         >
           <input
             placeholder="Firmenname (z.B. Mömmel Agrar GmbH & Co. KG)"
@@ -308,7 +308,7 @@ export default function EinstellungenPage() {
       {isAdmin ? (
         <form
           onSubmit={handleSubmit}
-          className="grid grid-cols-2 gap-3 rounded border border-neutral-200 bg-white p-4 sm:grid-cols-4"
+          className="grid grid-cols-2 gap-3 rounded border border-linie bg-white p-4 sm:grid-cols-4"
         >
           <input
             type="number"
@@ -442,7 +442,7 @@ export default function EinstellungenPage() {
       {isAdmin && (
         <form
           onSubmit={handleGruppenSubmit}
-          className="grid grid-cols-2 gap-3 rounded border border-neutral-200 bg-white p-4 sm:grid-cols-5"
+          className="grid grid-cols-2 gap-3 rounded border border-linie bg-white p-4 sm:grid-cols-5"
         >
           <input
             placeholder="Gruppen-Nr."
@@ -550,7 +550,7 @@ export default function EinstellungenPage() {
       {isAdmin && (
         <form
           onSubmit={handleHerkunftSubmit}
-          className="grid grid-cols-2 gap-3 rounded border border-neutral-200 bg-white p-4 sm:grid-cols-4"
+          className="grid grid-cols-2 gap-3 rounded border border-linie bg-white p-4 sm:grid-cols-4"
         >
           <input
             placeholder="Herkunft (z.B. Kroatien)"

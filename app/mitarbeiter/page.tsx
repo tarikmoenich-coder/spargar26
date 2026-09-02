@@ -719,7 +719,7 @@ export default function MitarbeiterPage() {
     return (
       <form
         onSubmit={handleSubmit}
-        className="grid grid-cols-2 gap-3 rounded border border-neutral-200 bg-white p-4 sm:grid-cols-4"
+        className="grid grid-cols-2 gap-3 rounded border border-linie bg-white p-4 sm:grid-cols-4"
       >
           <div className="col-span-2 flex flex-col gap-1">
             <div className="flex gap-2">
@@ -992,7 +992,7 @@ export default function MitarbeiterPage() {
   // dokumenteId oben).
   function dokumenteFormular(emp: Employee) {
     return (
-      <div className="flex flex-col gap-3 rounded border border-neutral-300 bg-neutral-50 p-4">
+      <div className="flex flex-col gap-3 rounded border border-neutral-300 bg-sand p-4">
         <h2 className="text-sm font-semibold text-emerald-800">
           Dokumente für {emp.name}, {emp.vorname} ({emp.personal_nr})
         </h2>
@@ -1074,7 +1074,7 @@ export default function MitarbeiterPage() {
 
       {canEdit && !editingId && mitarbeiterFormular()}
 
-      <div className="sticky top-[calc(3.5rem+var(--subtabs-h,2.5rem))] z-30 flex items-center gap-3 bg-neutral-50 py-2">
+      <div className="sticky top-[calc(3.5rem+var(--subtabs-h,2.5rem))] z-30 flex items-center gap-3 bg-sand py-2">
         <input
           placeholder="Suche nach Name oder Personalnummer…"
           value={search}
@@ -1106,7 +1106,7 @@ export default function MitarbeiterPage() {
       </div>
 
       {canEdit && (
-        <div className="flex flex-col gap-2 rounded border border-neutral-200 bg-white p-3">
+        <div className="flex flex-col gap-2 rounded border border-linie bg-white p-3">
           <p className="text-sm font-medium">
             Mehrfachauswahl (z.B. für "Alle Deaktivieren" nach einem
             Reimport):

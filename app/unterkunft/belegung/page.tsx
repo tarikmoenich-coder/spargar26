@@ -302,7 +302,7 @@ export default function UnterkunftBelegungPage() {
 
       {/* --- Geplant zuordnen --- */}
       <section className="grid gap-4 lg:grid-cols-2">
-        <div className="rounded border border-neutral-200 p-3">
+        <div className="rounded border border-linie p-3">
           <div className="flex items-center justify-between">
             <h2 className="text-sm font-semibold">
               Ohne Bleibe ({personenGefiltert.length})
@@ -323,7 +323,7 @@ export default function UnterkunftBelegungPage() {
             {personenGefiltert.map((p) => (
               <label
                 key={p.employee_id}
-                className="flex cursor-pointer items-center gap-2 rounded px-1 py-0.5 text-sm hover:bg-neutral-50"
+                className="flex cursor-pointer items-center gap-2 rounded px-1 py-0.5 text-sm hover:bg-emerald-50"
               >
                 <input
                   type="checkbox"
@@ -352,7 +352,7 @@ export default function UnterkunftBelegungPage() {
           </div>
         </div>
 
-        <div className="rounded border border-neutral-200 p-3">
+        <div className="rounded border border-linie p-3">
           <h2 className="text-sm font-semibold">
             Ziel ({markiert.size} markiert)
           </h2>
@@ -576,7 +576,7 @@ export default function UnterkunftBelegungPage() {
       </section>
 
       {/* --- Direkt belegen (Notnagel, ohne Übergabe) --- */}
-      <details className="rounded border border-neutral-200 p-3">
+      <details className="rounded border border-linie p-3">
         <summary className="cursor-pointer text-sm font-semibold">
           Direkt belegen (ohne Übergabe)
         </summary>

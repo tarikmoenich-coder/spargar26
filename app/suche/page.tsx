@@ -381,7 +381,7 @@ export default function SuchePage() {
         <p className="text-sm text-neutral-500">{t("suche.untertitel")}</p>
       </div>
 
-      <div className="rounded border border-neutral-200 bg-white p-4 print:hidden">
+      <div className="rounded border border-linie bg-white p-4 print:hidden">
         <input
           autoFocus
           placeholder={t("suche.platzhalter")}
@@ -399,7 +399,7 @@ export default function SuchePage() {
         ) : (
           suchtext.trim() !== "" &&
           !ausgewaehlt && (
-            <ul className="mt-2 flex flex-col divide-y divide-neutral-100 rounded border border-neutral-200">
+            <ul className="mt-2 flex flex-col divide-y divide-neutral-100 rounded border border-linie">
               {treffer.length === 0 ? (
                 <li className="p-2 text-sm text-neutral-500">
                   {t("suche.keinetreffer")}
@@ -434,7 +434,7 @@ export default function SuchePage() {
 
       {ausgewaehlt && (
         <div className="flex flex-col gap-4 print:hidden">
-          <div className="flex flex-wrap items-center justify-between gap-3 rounded border border-neutral-200 bg-white p-4">
+          <div className="flex flex-wrap items-center justify-between gap-3 rounded border border-linie bg-white p-4">
             <div>
               <p className="text-base font-semibold">
                 {ausgewaehlt.name}, {ausgewaehlt.vorname}
@@ -482,7 +482,7 @@ export default function SuchePage() {
             <p className="text-neutral-500">{t("gemeinsam.laedt")}</p>
           ) : (
             <div className="grid gap-4 md:grid-cols-2">
-              <div className="rounded border border-neutral-200 bg-white p-4">
+              <div className="rounded border border-linie bg-white p-4">
                 <div className="mb-2 flex items-baseline justify-between">
                   <h2 className="text-base font-semibold text-emerald-800">
                     {t("suche.arbeitsstunden", { jahr: saisonJahr })}
@@ -526,7 +526,7 @@ export default function SuchePage() {
                 )}
               </div>
 
-              <div className="rounded border border-neutral-200 bg-white p-4">
+              <div className="rounded border border-linie bg-white p-4">
                 <div className="mb-2 flex items-baseline justify-between">
                   <h2 className="text-base font-semibold text-emerald-800">
                     {t("suche.vorschuesse")}
@@ -586,7 +586,7 @@ export default function SuchePage() {
                 )}
               </div>
 
-              <div className="rounded border border-neutral-200 bg-white p-4">
+              <div className="rounded border border-linie bg-white p-4">
                 <div className="mb-2 flex items-baseline justify-between">
                   <h2 className="text-base font-semibold text-emerald-800">
                     Stundenkonto ({saisonJahr})
@@ -636,7 +636,7 @@ export default function SuchePage() {
                 )}
               </div>
 
-              <div className="rounded border border-neutral-200 bg-white p-4">
+              <div className="rounded border border-linie bg-white p-4">
                 <h2 className="mb-2 text-base font-semibold text-emerald-800">
                   Unterkunft
                 </h2>
@@ -686,7 +686,7 @@ export default function SuchePage() {
               </div>
 
               {zuckermais.length > 0 && (
-                <div className="rounded border border-neutral-200 bg-white p-4">
+                <div className="rounded border border-linie bg-white p-4">
                   <div className="mb-2 flex items-baseline justify-between">
                     <h2 className="text-base font-semibold text-emerald-800">
                       {t("suche.zuckermaispraemien", { jahr: saisonJahr })}
@@ -736,7 +736,7 @@ export default function SuchePage() {
               )}
 
               {erdbeeren.length > 0 && (
-                <div className="rounded border border-neutral-200 bg-white p-4">
+                <div className="rounded border border-linie bg-white p-4">
                   <div className="mb-2 flex items-baseline justify-between">
                     <h2 className="text-base font-semibold text-emerald-800">
                       {t("suche.erdbeerenpraemien", { jahr: saisonJahr })}

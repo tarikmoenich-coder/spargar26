@@ -408,7 +408,7 @@ export default function AnreiselistePage() {
         gruppen.map((g) => (
           <div
             key={g.key}
-            className="flex flex-col gap-3 rounded border border-neutral-200 bg-white p-4"
+            className="flex flex-col gap-3 rounded border border-linie bg-white p-4"
           >
             <div className="flex items-center justify-between">
               <h2 className="text-base font-semibold text-emerald-800">

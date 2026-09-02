@@ -62,7 +62,7 @@ input[type="number"]::-webkit-inner-spin-button {
 }
 
 /* Karte/Panel - warme Trennlinie + zarter Schatten statt flachem Grau-Rand.
-   Ersetzt nach und nach das verstreute "rounded border border-neutral-200 p-3/p-4". */
+   Ersetzt nach und nach das verstreute "rounded border border-linie p-3/p-4". */
 .card {
   @apply rounded-lg border border-linie bg-white p-4 shadow-card;
 }

@@ -38,7 +38,7 @@ export default function KassenSaldoKarte({
   }, []);
 
   return (
-    <div className="rounded border border-neutral-200 bg-white p-4">
+    <div className="rounded border border-linie bg-white p-4">
       <p className="text-sm text-neutral-500">Aktueller Kassensaldo</p>
       <p className="text-2xl font-semibold text-emerald-800">
         {laden || saldo === null ? "…" : `${saldo.toFixed(2)} €`}

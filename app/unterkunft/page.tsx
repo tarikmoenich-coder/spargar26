@@ -1320,7 +1320,7 @@ export default function UnterkunftGrundrissPage() {
                     className={`rounded border p-3 text-left ${
                       aktiv
                         ? "border-emerald-700 ring-1 ring-emerald-700"
-                        : "border-neutral-200 hover:border-emerald-400"
+                        : "border-linie hover:border-emerald-400"
                     }`}
                   >
                     <div className="flex items-baseline justify-between gap-2">
@@ -1439,7 +1439,7 @@ export default function UnterkunftGrundrissPage() {
                 className={`rounded border p-3 text-left ${
                   aktiv
                     ? "border-emerald-700 ring-1 ring-emerald-700"
-                    : "border-neutral-200 hover:border-emerald-400"
+                    : "border-linie hover:border-emerald-400"
                 }`}
               >
                 <div className="flex items-baseline justify-between">
@@ -1481,14 +1481,14 @@ export default function UnterkunftGrundrissPage() {
       {einheit && (
         <div
           ref={einheitDetailRef}
-          className="space-y-3 rounded border border-neutral-200 p-3"
+          className="space-y-3 rounded border border-linie p-3"
           style={{
             scrollMarginTop: "calc(3.5rem + var(--subtabs-h, 2.5rem) + 0.5rem)",
           }}
         >
           {/* Klebende Steuerleiste: Wohneinheit wechseln + Ansicht + Zoom,
               bleibt beim Scrollen im (großen) Plan stehen. */}
-          <div className="sticky top-[calc(3.5rem+var(--subtabs-h,2.5rem))] z-30 -mx-3 -mt-3 mb-1 flex flex-wrap items-center gap-x-3 gap-y-2 border-b border-neutral-200 bg-white px-3 py-2 text-sm">
+          <div className="sticky top-[calc(3.5rem+var(--subtabs-h,2.5rem))] z-30 -mx-3 -mt-3 mb-1 flex flex-wrap items-center gap-x-3 gap-y-2 border-b border-linie bg-white px-3 py-2 text-sm">
             <div className="flex items-center gap-1">
               <button
                 className="btn-secondary"
@@ -1614,7 +1614,7 @@ export default function UnterkunftGrundrissPage() {
                       className={`px-2 py-1 text-xs ${
                         a === ansicht
                           ? "bg-emerald-700 font-semibold text-white"
-                          : "bg-white text-neutral-600 hover:bg-neutral-50"
+                          : "bg-white text-neutral-600 hover:bg-emerald-50"
                       }`}
                     >
                       {ANSICHT_LABELS[a]}
@@ -1631,7 +1631,7 @@ export default function UnterkunftGrundrissPage() {
                   <summary className="btn-secondary cursor-pointer list-none">
                     ⚙ Ansicht
                   </summary>
-                  <div className="absolute right-0 z-10 mt-1 flex flex-col gap-2 rounded border border-neutral-200 bg-white p-2 shadow-lg">
+                  <div className="absolute right-0 z-10 mt-1 flex flex-col gap-2 rounded border border-linie bg-white p-2 shadow-lg">
                     <div className="flex items-center gap-1">
                       <button
                         className="btn-secondary"
@@ -1927,7 +1927,7 @@ export default function UnterkunftGrundrissPage() {
                         className={`flex items-start gap-3 rounded-lg border p-3 text-left ${
                           z.zimmer_id === selId
                             ? "border-emerald-600 bg-emerald-50"
-                            : "border-neutral-200 bg-white"
+                            : "border-linie bg-white"
                         } ${gedimmt ? "opacity-40" : ""}`}
                       >
                         <span
@@ -2005,7 +2005,7 @@ export default function UnterkunftGrundrissPage() {
                 ref={planRef}
                 tabIndex={0}
                 onKeyDown={onWrapKeyDown}
-                className={`max-w-full flex-1 overflow-auto rounded border border-neutral-200 bg-white p-2 outline-none ${
+                className={`max-w-full flex-1 overflow-auto rounded border border-linie bg-white p-2 outline-none ${
                   mobilAnsicht === "plan"
                     ? ""
                     : istHausmeister
@@ -2245,7 +2245,7 @@ export default function UnterkunftGrundrissPage() {
 
               <div className="w-full shrink-0 space-y-4 lg:w-80">
                 {/* noch offen (geplante Personen dieser Wohneinheit) */}
-                <div className="rounded border border-neutral-200 p-3">
+                <div className="rounded border border-linie p-3">
                   <h3 className="text-sm font-semibold text-neutral-800">
                     Noch offen ({zuordnungDerEinheit.length})
                   </h3>
@@ -2275,7 +2275,7 @@ export default function UnterkunftGrundrissPage() {
                 </div>
 
                 {bearbeiten && canEditPlan && (
-                  <div className="rounded border border-neutral-200 p-3">
+                  <div className="rounded border border-linie p-3">
                     <h3 className="text-sm font-semibold text-neutral-800">
                       Nicht platziert ({ablage.length})
                     </h3>
@@ -2340,7 +2340,7 @@ export default function UnterkunftGrundrissPage() {
                   />
                 )}
                 {sel && sel.wohneinheit_id === einheitId ? (
-                  <div className="fixed inset-x-0 bottom-0 z-40 max-h-[85dvh] overflow-y-auto overscroll-contain rounded-t-2xl border border-neutral-300 bg-white p-3 shadow-2xl lg:static lg:z-auto lg:max-h-none lg:overflow-visible lg:rounded lg:border-neutral-200 lg:shadow-none">
+                  <div className="fixed inset-x-0 bottom-0 z-40 max-h-[85dvh] overflow-y-auto overscroll-contain rounded-t-2xl border border-neutral-300 bg-white p-3 shadow-2xl lg:static lg:z-auto lg:max-h-none lg:overflow-visible lg:rounded lg:border-linie lg:shadow-none">
                     <div className="mx-auto mb-2 h-1 w-10 rounded-full bg-neutral-300 lg:hidden" />
                     <div className="sticky top-0 z-10 -mx-3 -mt-3 mb-1 flex items-center justify-between border-b border-neutral-100 bg-white px-3 py-2 lg:static lg:mx-0 lg:mt-0 lg:border-0 lg:p-0">
                       <h3 className="text-base font-semibold text-emerald-900">
@@ -2745,7 +2745,7 @@ export default function UnterkunftGrundrissPage() {
                                               sel.zimmer_id
                                             )
                                           }
-                                          className="w-full rounded px-1 py-0.5 text-left hover:bg-neutral-100"
+                                          className="w-full rounded px-1 py-0.5 text-left hover:bg-emerald-50"
                                         >
                                           {p.vorname} {p.name}{" "}
                                           <span className="text-neutral-400">
@@ -3050,7 +3050,7 @@ export default function UnterkunftGrundrissPage() {
                     )}
                   </div>
                 ) : (
-                  <div className="hidden rounded border border-dashed border-neutral-200 p-3 text-sm text-neutral-400 lg:block">
+                  <div className="hidden rounded border border-dashed border-linie p-3 text-sm text-neutral-400 lg:block">
                     {belegen
                       ? "Belegen-Modus: Person antippen, dann ein Zimmer."
                       : istHausmeister

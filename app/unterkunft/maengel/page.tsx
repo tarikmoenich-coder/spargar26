@@ -389,7 +389,7 @@ export default function UnterkunftMaengelPage() {
       )}
 
       {canEdit && (
-        <section className="space-y-2 rounded border border-neutral-200 p-3">
+        <section className="space-y-2 rounded border border-linie p-3">
           <h2 className="text-sm font-semibold">Mangel direkt anlegen</h2>
           <div className="flex flex-wrap items-end gap-2 text-sm">
             <label>
@@ -605,7 +605,7 @@ export default function UnterkunftMaengelPage() {
                 </tr>
                 {offen && (
                   <tr>
-                    <td colSpan={7} className="bg-neutral-50">
+                    <td colSpan={7} className="bg-sand">
                       <div className="space-y-3 p-3">
                         <div className="text-sm text-neutral-600">
                           {m.quelle_vorgang_id
@@ -727,7 +727,7 @@ export default function UnterkunftMaengelPage() {
                           <tr>
                             <td colSpan={7} className="p-0">
                               <button
-                                className="flex w-full items-center gap-2 bg-neutral-50 px-2 py-1 pl-6 text-left text-sm font-medium text-neutral-700"
+                                className="flex w-full items-center gap-2 bg-sand px-2 py-1 pl-6 text-left text-sm font-medium text-neutral-700"
                                 onClick={() => toggleKollaps(w.key)}
                               >
                                 <span>{wZu ? "▸" : "▾"}</span>

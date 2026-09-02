@@ -171,7 +171,7 @@ export default function DoppelteHaushaltsfuehrungFormular({
         </label>
       )}
 
-      <div className="rounded border border-neutral-200 bg-white p-3">
+      <div className="rounded border border-linie bg-white p-3">
         <label className="block text-sm font-medium">
           Antrag auf Lohnsteuerabzug beim Finanzamt{" "}
           <select

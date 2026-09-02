@@ -85,7 +85,7 @@ export default function AbrechnungsHistorie({
   }
 
   return (
-    <div className="mt-3 rounded border border-neutral-200 bg-white p-3">
+    <div className="mt-3 rounded border border-linie bg-white p-3">
       <p className="text-sm font-medium text-neutral-700">
         Abschnitts-Historie {saisonJahr}
       </p>

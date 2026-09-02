@@ -55,7 +55,7 @@ function LoginFormular() {
         priority
         className="h-auto w-full rounded shadow-sm"
       />
-      <div className="w-full rounded border border-neutral-200 bg-white p-6 shadow-sm">
+      <div className="w-full rounded border border-linie bg-white p-6 shadow-sm">
         <h1 className="mb-4 text-lg font-semibold text-emerald-800">
           Spargar Anmeldung
         </h1>

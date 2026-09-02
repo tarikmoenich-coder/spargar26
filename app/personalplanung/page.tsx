@@ -457,7 +457,7 @@ export default function PersonalplanungPage() {
       {canEdit && (
         <form
           onSubmit={handleSubmit}
-          className="flex flex-col gap-3 rounded border border-neutral-200 bg-white p-4"
+          className="flex flex-col gap-3 rounded border border-linie bg-white p-4"
         >
           <div className="flex flex-col gap-1">
             <label className="text-sm font-medium text-neutral-700">
@@ -485,12 +485,12 @@ export default function PersonalplanungPage() {
                   className="w-full"
                 />
                 {employeeTreffer.length > 0 && (
-                  <div className="absolute z-10 mt-1 w-full rounded border border-neutral-200 bg-white shadow-md">
+                  <div className="absolute z-10 mt-1 w-full rounded border border-linie bg-white shadow-md">
                     {employeeTreffer.map((e) => (
                       <button
                         type="button"
                         key={e.id}
-                        className="flex w-full items-center justify-between px-2 py-1 text-left text-sm hover:bg-neutral-50"
+                        className="flex w-full items-center justify-between px-2 py-1 text-left text-sm hover:bg-emerald-50"
                         onClick={() => personVerknuepfen(e)}
                       >
                         <span>

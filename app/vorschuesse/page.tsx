@@ -863,7 +863,7 @@ export default function VorschuessePage() {
       {canWrite && (
         <form
           onSubmit={handleSubmit}
-          className="flex flex-col gap-4 rounded border border-neutral-200 bg-white p-4 print:hidden"
+          className="flex flex-col gap-4 rounded border border-linie bg-white p-4 print:hidden"
         >
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
             <input
@@ -1221,7 +1221,7 @@ export default function VorschuessePage() {
       )}
 
       {!loading && advances.length > 0 && (
-        <div className="sticky top-[calc(3.5rem+var(--subtabs-h,2.5rem))] z-30 flex flex-wrap items-center gap-3 bg-neutral-50 py-2 print:hidden">
+        <div className="sticky top-[calc(3.5rem+var(--subtabs-h,2.5rem))] z-30 flex flex-wrap items-center gap-3 bg-sand py-2 print:hidden">
           <label className="text-sm">
             Jahr{" "}
             <select
@@ -1336,7 +1336,7 @@ export default function VorschuessePage() {
                 </tr>
                 {bearbeitenAdvanceId === a.id && (
                   <tr>
-                    <td colSpan={8} className="bg-neutral-50">
+                    <td colSpan={8} className="bg-sand">
                       <p className="mb-2 text-xs text-neutral-500">
                         Betrag ändern und auf „Speichern" klicken - Grund wird
                         abgefragt und protokolliert (wer, wann, Differenz).

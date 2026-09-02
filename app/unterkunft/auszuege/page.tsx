@@ -78,7 +78,7 @@ export default function UnterkunftAuszuegePage() {
                 {liste.length}
               </span>
             </h2>
-            <ul className="divide-y divide-neutral-100 rounded border border-neutral-200">
+            <ul className="divide-y divide-neutral-100 rounded border border-linie">
               {liste.map((z) => (
                 <li
                   key={z.belegung_id}

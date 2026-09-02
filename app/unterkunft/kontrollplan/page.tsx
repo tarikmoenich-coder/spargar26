@@ -839,9 +839,9 @@ export default function UnterkunftKontrollplanPage() {
             ];
             const gZu = zu.has(`g:${g.id}`);
             return (
-              <div key={g.id} className="rounded border border-neutral-200">
+              <div key={g.id} className="rounded border border-linie">
                 <button
-                  className="flex w-full flex-wrap items-center gap-2 bg-neutral-50 px-3 py-2 text-left"
+                  className="flex w-full flex-wrap items-center gap-2 bg-sand px-3 py-2 text-left"
                   onClick={() => toggle(`g:${g.id}`)}
                 >
                   <span className="font-semibold text-emerald-900">
@@ -862,7 +862,7 @@ export default function UnterkunftKontrollplanPage() {
                       return (
                         <div
                           key={w.key}
-                          className="rounded border border-neutral-200"
+                          className="rounded border border-linie"
                         >
                           <button
                             className="flex w-full flex-wrap items-center gap-2 px-3 py-1.5 text-left"
@@ -919,7 +919,7 @@ export default function UnterkunftKontrollplanPage() {
                     })}
 
                     {g.ohne && (
-                      <div className="rounded border border-neutral-200">
+                      <div className="rounded border border-linie">
                         <button
                           className="flex w-full flex-wrap items-center gap-2 px-3 py-1.5 text-left"
                           onClick={() => toggle(g.ohne!.key)}

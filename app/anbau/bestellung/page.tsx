@@ -98,7 +98,7 @@ export default function AnbauBestellungPage() {
         </p>
       </div>
 
-      <div className="sticky top-[calc(3.5rem+var(--subtabs-h,2.5rem))] z-30 flex flex-wrap items-center gap-4 bg-neutral-50 py-2 text-sm">
+      <div className="sticky top-[calc(3.5rem+var(--subtabs-h,2.5rem))] z-30 flex flex-wrap items-center gap-4 bg-sand py-2 text-sm">
         <label>
           Saison{" "}
           <input

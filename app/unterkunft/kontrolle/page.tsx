@@ -604,7 +604,7 @@ export default function UnterkunftKontrollePage() {
 
       {runde.length === 0 && (
         <>
-          <section className="space-y-3 rounded border border-neutral-200 p-3">
+          <section className="space-y-3 rounded border border-linie p-3">
             <h1 className="text-lg font-semibold text-emerald-900">
               Zwischenkontrolle starten
             </h1>
@@ -697,7 +697,7 @@ export default function UnterkunftKontrollePage() {
             </div>
 
             {sel.modus === "wohneinheit" && sel.wohneinheit_id && (
-              <div className="rounded border border-neutral-200 bg-neutral-50 p-2">
+              <div className="rounded border border-linie bg-sand p-2">
                 <div className="text-sm font-medium">
                   Räume ({raumWahl.size} von {raeumeDerEinheit.length})
                 </div>
@@ -872,7 +872,7 @@ export default function UnterkunftKontrollePage() {
                 verursachung: "unklar" as const,
               };
               return (
-                <div key={p.id} className="rounded border border-neutral-200 p-3">
+                <div key={p.id} className="rounded border border-linie p-3">
                   <div className="flex flex-wrap items-center gap-3">
                     <span className="min-w-[9rem] font-medium">{p.bereich}</span>
                     <select
@@ -965,7 +965,7 @@ export default function UnterkunftKontrollePage() {
             })}
           </div>
 
-          <div className="space-y-3 rounded border border-neutral-200 p-3">
+          <div className="space-y-3 rounded border border-linie p-3">
             {runde.length > 1 && (
               <p className="text-xs text-neutral-500">
                 Gesamtzustand, „Kontrolliert von“ und Notiz gelten für alle Räume

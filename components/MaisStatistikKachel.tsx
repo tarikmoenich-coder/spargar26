@@ -108,7 +108,7 @@ export default function MaisStatistikKachel() {
 
   if (loading) {
     return (
-      <div ref={messRef} className="rounded border border-neutral-200 bg-white p-4">
+      <div ref={messRef} className="rounded border border-linie bg-white p-4">
         <h2 className="mb-2 text-base font-semibold text-emerald-800">
           Mais-Statistik
         </h2>
@@ -119,7 +119,7 @@ export default function MaisStatistikKachel() {
 
   if (zeilen.length === 0) {
     return (
-      <div ref={messRef} className="rounded border border-neutral-200 bg-white p-4">
+      <div ref={messRef} className="rounded border border-linie bg-white p-4">
         <h2 className="mb-2 text-base font-semibold text-emerald-800">
           Mais-Statistik
         </h2>
@@ -153,7 +153,7 @@ export default function MaisStatistikKachel() {
   const hoverZeile = hoverIndex !== null ? zeilen[hoverIndex] : null;
 
   return (
-    <div className="rounded border border-neutral-200 bg-white p-4">
+    <div className="rounded border border-linie bg-white p-4">
       <div className="mb-2 flex items-baseline justify-between">
         <h2 className="text-base font-semibold text-emerald-800">
           Mais-Statistik {CURRENT_YEAR}
@@ -358,7 +358,7 @@ export default function MaisStatistikKachel() {
               desselben Tages, statt zwei getrennter Tooltips). */}
           {hoverZeile && hoverPos && (
             <div
-              className="pointer-events-none absolute z-10 rounded border border-neutral-200 bg-white px-2 py-1 text-xs shadow-md"
+              className="pointer-events-none absolute z-10 rounded border border-linie bg-white px-2 py-1 text-xs shadow-md"
               style={{
                 left: Math.min(hoverPos.x + 10, svgBreite - 140),
                 top: Math.max(hoverPos.y - 50, 0),
