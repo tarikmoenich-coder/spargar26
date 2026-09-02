@@ -409,7 +409,7 @@ export default function DashboardPage() {
                   ton={anreiselisteOffen > 0 ? "warn" : "ok"}
                 />
                 <Kachel
-                  href="/management"
+                  href="/management/sozialversicherung"
                   titel={`90-Tage-/15-Wochen-Grenze (${CURRENT_YEAR})`}
                   wert={String(svKritisch)}
                   unterzeile="Personen mit überschrittener Grenze"
@@ -470,7 +470,7 @@ export default function DashboardPage() {
               </h2>
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
                 <Kachel
-                  href="/management"
+                  href="/management/auszahlungs-abweichungen"
                   titel={`Abweichungen bei Auszahlungen (${CURRENT_YEAR})`}
                   wert={String(abweichungen)}
                   ton={abweichungen > 0 ? "warn" : "ok"}
@@ -542,20 +542,20 @@ export default function DashboardPage() {
               </h2>
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
                 <Kachel
-                  href="/management"
+                  href="/management/sozialversicherung"
                   titel={`90-Tage-/15-Wochen-Grenze (${CURRENT_YEAR})`}
                   wert={String(svKritisch)}
                   ton={svKritisch > 0 ? "warn" : "ok"}
                 />
                 <Kachel
-                  href="/management"
+                  href="/management/stundenmonitoring"
                   titel={`Stundenmonitoring (${CURRENT_YEAR})`}
                   wert={String(stundenmonitoring)}
                   unterzeile={`Personen mit Tag(en) über ${MAX_STUNDEN_PRO_TAG} Std.`}
                   ton={stundenmonitoring > 0 ? "warn" : "ok"}
                 />
                 <Kachel
-                  href="/management"
+                  href="/management/auszahlungs-abweichungen"
                   titel={`Abweichungen bei Auszahlungen (${CURRENT_YEAR})`}
                   wert={String(abweichungen)}
                   ton={abweichungen > 0 ? "warn" : "ok"}
