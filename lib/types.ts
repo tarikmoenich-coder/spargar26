@@ -1810,3 +1810,53 @@ export interface FahrzeugUebersicht {
   batterie_prozent: number | null;
   gesamt_km: number | null;
 }
+
+// --- Fahrzeuge Stufe 2 (Geofences, Hofzeiten, Alarm; Migration 2026-09-26) ---
+
+// Raw-Tabelle fahrzeug_geofence (Spiegel der Traccar-Geofences).
+export interface FahrzeugGeofence {
+  traccar_geofence_id: number;
+  name: string | null;
+  beschreibung: string | null;
+  area: string | null;
+  ist_hof: boolean;
+  erstellt_am: string;
+  updated_at: string;
+}
+
+// Raw-Tabelle fahrzeug_arbeitszeit (globales Zeitfenster je Wochentag,
+// 0=Mo .. 6=So).
+export interface FahrzeugArbeitszeit {
+  wochentag: number;
+  aktiv: boolean;
+  von: string;
+  bis: string;
+  updated_at: string;
+}
+
+// Raw-Tabelle fahrzeug_ereignis (Poller aus Traccar-Events).
+export interface FahrzeugEreignis {
+  traccar_event_id: number;
+  traccar_unique_id: string;
+  fahrzeug_id: number | null;
+  typ: string;
+  zeitpunkt: string;
+  geofence_id: number | null;
+  geofence_name: string | null;
+  lat: number | null;
+  lng: number | null;
+  ausserhalb_arbeitszeit: boolean | null;
+  alarm_relevant: boolean;
+  alarm_gesendet_am: string | null;
+  attribute: Record<string, unknown> | null;
+}
+
+// Aus der Sicht fahrzeug_hofzeit_tag - Hofzeiten je Fahrzeug und Tag.
+export interface FahrzeugHofzeitTag {
+  fahrzeug_id: number;
+  tag: string;
+  erste_ausfahrt: string | null;
+  letzte_rueckkehr: string | null;
+  ausfahrten: number;
+  auffaellig: boolean | null;
+}

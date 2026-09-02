@@ -51,6 +51,23 @@ cd tools/fahrzeug-poller && npm ci
 # Timer läuft weiter, nächster Lauf nutzt den neuen Code automatisch
 ```
 
+## Stufe 2 – Geofences & Alarm
+
+Ab Migration `2026-09-26` spiegelt der Poller zusätzlich die **Traccar-Geofences**
+und baut aus den Traccar-Events (`geofenceEnter/Exit`, `deviceMoving`) ein
+Ereignis-Log (`fahrzeug_ereignis`). Ereignisse außerhalb der in der App
+eingestellten Arbeitszeit (`fahrzeug_arbeitszeit`) werden als `alarm_relevant`
+markiert und – wenn Telegram konfiguriert ist – als eine gebündelte Nachricht
+verschickt.
+
+Einrichtung:
+1. In Traccar 2 Geofences um die Höfe zeichnen und den Geräten zuweisen.
+2. In `/etc/fahrzeug-poller.env` ergänzen (siehe `.env.example`):
+   `TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID`, `TIMEZONE=Europe/Berlin`.
+   Kein Neustart nötig – der nächste Lauf liest die Env-Datei neu.
+3. In der App unter `/fahrzeuge/einstellungen` die Arbeitszeiten setzen und
+   markieren, welche Geofences „Höfe" sind.
+
 ## Wichtig
 
 - `/etc/fahrzeug-poller.env` enthält den Service-Key → `chmod 600`, niemals ins

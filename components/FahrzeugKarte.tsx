@@ -70,13 +70,51 @@ export interface Trackpunkt {
   lat: number;
 }
 
+export interface KartenGeofence {
+  name: string | null;
+  area: string | null;
+  ist_hof: boolean;
+}
+
+// Traccar-WKT ("CIRCLE (lat lng, radius)" / "POLYGON ((lat lng, ...))",
+// Reihenfolge lat vor lng) -> GeoJSON-Ring [lng, lat].
+function wktZuRing(area: string): [number, number][] | null {
+  const zahlen = area.match(/-?\d+(\.\d+)?/g)?.map(Number);
+  if (!zahlen || zahlen.length < 3) return null;
+  if (/^\s*CIRCLE/i.test(area)) {
+    const [lat, lng, r] = zahlen;
+    const dLat = r / 111320;
+    const dLng = r / (111320 * Math.cos((lat * Math.PI) / 180));
+    return Array.from({ length: 48 }, (_, i) => {
+      const t = (i / 48) * 2 * Math.PI;
+      return [lng + dLng * Math.cos(t), lat + dLat * Math.sin(t)] as [
+        number,
+        number,
+      ];
+    });
+  }
+  const ring: [number, number][] = [];
+  for (let i = 0; i + 1 < zahlen.length; i += 2) {
+    ring.push([zahlen[i + 1], zahlen[i]]);
+  }
+  if (ring.length >= 3) {
+    const [a] = ring;
+    const b = ring[ring.length - 1];
+    if (a[0] !== b[0] || a[1] !== b[1]) ring.push(a);
+    return ring;
+  }
+  return null;
+}
+
 export default function FahrzeugKarte({
   fahrzeuge,
   track,
+  geofences,
   hoehe = "h-[70vh]",
 }: {
   fahrzeuge: FahrzeugUebersicht[];
   track?: Trackpunkt[];
+  geofences?: KartenGeofence[];
   hoehe?: string;
 }) {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -123,6 +161,30 @@ export default function FahrzeugKarte({
         "osm"
       );
       map.addControl(new BasiskartenControl(), "top-right");
+
+      map.addSource("geofences", {
+        type: "geojson",
+        data: { type: "FeatureCollection", features: [] },
+      });
+      map.addLayer({
+        id: "geofences-flaeche",
+        type: "fill",
+        source: "geofences",
+        paint: {
+          "fill-color": ["case", ["get", "hof"], "#2b711e", "#6b7280"],
+          "fill-opacity": 0.12,
+        },
+      });
+      map.addLayer({
+        id: "geofences-rand",
+        type: "line",
+        source: "geofences",
+        paint: {
+          "line-color": ["case", ["get", "hof"], "#2b711e", "#6b7280"],
+          "line-width": 1.5,
+          "line-dasharray": [2, 1],
+        },
+      });
 
       map.addSource("track", {
         type: "geojson",
@@ -248,6 +310,28 @@ export default function FahrzeugKarte({
       map.fitBounds(b, { padding: 60, maxZoom: 15, duration: 400 });
     }
   }, [fahrzeuge, bereit, track]);
+
+  // Geofences (Höfe) zeichnen.
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !bereit) return;
+    const src = map.getSource("geofences") as
+      | maplibregl.GeoJSONSource
+      | undefined;
+    if (!src) return;
+    const features = (geofences ?? [])
+      .map((g) => {
+        const ring = g.area ? wktZuRing(g.area) : null;
+        if (!ring) return null;
+        return {
+          type: "Feature" as const,
+          geometry: { type: "Polygon" as const, coordinates: [ring] },
+          properties: { hof: g.ist_hof, name: g.name ?? "" },
+        };
+      })
+      .filter((f): f is NonNullable<typeof f> => f !== null);
+    src.setData({ type: "FeatureCollection", features });
+  }, [geofences, bereit]);
 
   // Track (Streckenverlauf) zeichnen.
   useEffect(() => {

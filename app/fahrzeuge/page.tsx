@@ -5,7 +5,11 @@ import Link from "next/link";
 import { Truck } from "lucide-react";
 import { getSupabaseClient } from "@/lib/supabase/client";
 import { formatDatumDE } from "@/lib/format";
-import type { FahrzeugTracker, FahrzeugUebersicht } from "@/lib/types";
+import type {
+  FahrzeugGeofence,
+  FahrzeugTracker,
+  FahrzeugUebersicht,
+} from "@/lib/types";
 import FahrzeugeTabs from "@/components/FahrzeugeTabs";
 import FahrzeugKarte from "@/components/FahrzeugKarte";
 import PageHeader from "@/components/PageHeader";
@@ -31,21 +35,33 @@ function tageBis(iso: string | null): number | null {
 export default function FahrzeugeUebersichtPage() {
   const [fahrzeuge, setFahrzeuge] = useState<FahrzeugUebersicht[]>([]);
   const [offeneTracker, setOffeneTracker] = useState<FahrzeugTracker[]>([]);
+  const [geofences, setGeofences] = useState<FahrzeugGeofence[]>([]);
+  const [alarmHeute, setAlarmHeute] = useState(0);
   const [loading, setLoading] = useState(true);
   const [zeige, setZeige] = useState<"karte" | "liste">("karte");
 
   const laden = useCallback(async () => {
     const supabase = getSupabaseClient();
-    const [f, t] = await Promise.all([
+    const tagesbeginn = new Date();
+    tagesbeginn.setHours(0, 0, 0, 0);
+    const [f, t, g, al] = await Promise.all([
       supabase.from("fahrzeug_uebersicht").select("*").order("bezeichnung"),
       supabase
         .from("fahrzeug_tracker")
         .select("*")
         .is("fahrzeug_id", null)
         .order("zuletzt_gesehen", { ascending: false }),
+      supabase.from("fahrzeug_geofence").select("*"),
+      supabase
+        .from("fahrzeug_ereignis")
+        .select("traccar_event_id", { count: "exact", head: true })
+        .eq("alarm_relevant", true)
+        .gte("zeitpunkt", tagesbeginn.toISOString()),
     ]);
     setFahrzeuge((f.data as FahrzeugUebersicht[]) ?? []);
     setOffeneTracker((t.data as FahrzeugTracker[]) ?? []);
+    setGeofences((g.data as FahrzeugGeofence[]) ?? []);
+    setAlarmHeute(al.count ?? 0);
     setLoading(false);
   }, []);
 
@@ -81,15 +97,26 @@ export default function FahrzeugeUebersichtPage() {
             </button>
           ))}
         </div>
-        {offeneTracker.length > 0 && (
-          <Link
-            href="/fahrzeuge/stammdaten"
-            className="badge badge-warn"
-            title="Tracker, die Daten senden, aber keinem Fahrzeug zugeordnet sind"
-          >
-            {offeneTracker.length} Tracker ohne Fahrzeug
-          </Link>
-        )}
+        <div className="flex items-center gap-2">
+          {alarmHeute > 0 && (
+            <Link
+              href="/fahrzeuge/ereignisse"
+              className="badge badge-danger"
+              title="Fahrzeugnutzung außerhalb der Arbeitszeit"
+            >
+              ⚠ {alarmHeute} Auffälligkeit{alarmHeute === 1 ? "" : "en"} heute
+            </Link>
+          )}
+          {offeneTracker.length > 0 && (
+            <Link
+              href="/fahrzeuge/stammdaten"
+              className="badge badge-warn"
+              title="Tracker, die Daten senden, aber keinem Fahrzeug zugeordnet sind"
+            >
+              {offeneTracker.length} Tracker ohne Fahrzeug
+            </Link>
+          )}
+        </div>
       </div>
 
       {loading ? (
@@ -97,7 +124,11 @@ export default function FahrzeugeUebersichtPage() {
       ) : (
         <>
           <div className={zeige === "karte" ? "" : "hidden lg:block"}>
-            <FahrzeugKarte fahrzeuge={fahrzeuge} hoehe="h-[70vh]" />
+            <FahrzeugKarte
+              fahrzeuge={fahrzeuge}
+              geofences={geofences}
+              hoehe="h-[70vh]"
+            />
           </div>
 
           <div
