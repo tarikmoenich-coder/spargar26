@@ -170,6 +170,22 @@ export default function FahrzeugeUebersichtPage() {
                     · Zündung{" "}
                     {f.zuendung == null ? "—" : f.zuendung ? "an" : "aus"} ·
                     zuletzt {vorText(min)}
+                    {f.batterie_prozent != null && (
+                      <>
+                        {" · "}
+                        <span
+                          className={
+                            f.batterie_prozent < 20
+                              ? "font-medium text-red-600"
+                              : f.batterie_prozent < 40
+                                ? "text-amber-600"
+                                : ""
+                          }
+                        >
+                          🔋 {Math.round(f.batterie_prozent)} %
+                        </span>
+                      </>
+                    )}
                   </div>
                   <div className="text-xs text-neutral-400">
                     {f.km_stand != null ? `${f.km_stand.toLocaleString("de-DE")} km` : "km —"}
