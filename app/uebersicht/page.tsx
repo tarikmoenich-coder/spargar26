@@ -111,6 +111,11 @@ export default function UebersichtPage() {
   const [druckMonat, setDruckMonat] = useState<{
     mitAusgezahlten: boolean;
   } | null>(null);
+  // Sortierung der Monats-Filter-Liste (wirkt auf Bildschirm UND Druck, damit
+  // die Buchhaltung vor dem Druck die gewünschte Reihenfolge sieht).
+  const [monatSort, setMonatSort] = useState<
+    "name" | "personal_nr" | "gruppe"
+  >("name");
   const [alleAktiven, setAlleAktiven] = useState<
     {
       id: string;
@@ -620,14 +625,49 @@ export default function UebersichtPage() {
   const passtZurGruppe = (gruppe_nr: string | null) =>
     !gruppeFilter ||
     (gruppeFilter === OHNE_GRUPPE_KEY ? !gruppe_nr : gruppe_nr === gruppeFilter);
-  const gefilterteMonatsRows = monatsRows
-    .filter((r) => passtZurGruppe(r.gruppe_nr))
-    .filter(passtZurSuche);
-  const fehlendeImMonat = alleAktiven.filter(
-    (m) =>
-      !monatsRowsById.has(m.id) &&
-      passtZurGruppe(m.gruppe_nr) &&
-      passtZurSuche(m)
+
+  // Gemeinsame Sortierung für Monats-Zeilen und "fehlende" Personen -
+  // Personalnummer/Gruppe numerisch, Name als Nachname, Vorname; ohne
+  // Gruppe ans Ende.
+  function sortiereMonat<
+    T extends {
+      personal_nr: string;
+      name: string;
+      vorname: string;
+      gruppe_nr: string | null;
+    }
+  >(list: T[]): T[] {
+    const nachName = (a: T, b: T) =>
+      `${a.name}, ${a.vorname}`.localeCompare(`${b.name}, ${b.vorname}`, "de");
+    return [...list].sort((a, b) => {
+      if (monatSort === "personal_nr") {
+        return a.personal_nr.localeCompare(b.personal_nr, "de", {
+          numeric: true,
+        });
+      }
+      if (monatSort === "gruppe") {
+        const ga = a.gruppe_nr ?? "";
+        const gb = b.gruppe_nr ?? "";
+        if (ga !== gb) {
+          if (!ga) return 1;
+          if (!gb) return -1;
+          return ga.localeCompare(gb, "de", { numeric: true });
+        }
+      }
+      return nachName(a, b);
+    });
+  }
+
+  const gefilterteMonatsRows = sortiereMonat(
+    monatsRows.filter((r) => passtZurGruppe(r.gruppe_nr)).filter(passtZurSuche)
+  );
+  const fehlendeImMonat = sortiereMonat(
+    alleAktiven.filter(
+      (m) =>
+        !monatsRowsById.has(m.id) &&
+        passtZurGruppe(m.gruppe_nr) &&
+        passtZurSuche(m)
+    )
   );
 
   // Bereits ausgezahlte (abgerechnete) Personen - aus der Saison-Sicht, die
@@ -1245,14 +1285,31 @@ export default function UebersichtPage() {
                   <strong>{fmt(summeMonatSichtbar.wohnen)} €</strong>
                 </span>
               </div>
-              <button
-                type="button"
-                className="btn-secondary"
-                disabled={gefilterteMonatsRows.length === 0}
-                onClick={() => setDruckDialogOffen(true)}
-              >
-                Liste drucken
-              </button>
+              <div className="flex items-center gap-2">
+                <label className="text-sm">
+                  Sortieren{" "}
+                  <select
+                    value={monatSort}
+                    onChange={(e) =>
+                      setMonatSort(
+                        e.target.value as "name" | "personal_nr" | "gruppe"
+                      )
+                    }
+                  >
+                    <option value="name">Name</option>
+                    <option value="personal_nr">Personalnummer</option>
+                    <option value="gruppe">Gruppe</option>
+                  </select>
+                </label>
+                <button
+                  type="button"
+                  className="btn-secondary"
+                  disabled={gefilterteMonatsRows.length === 0}
+                  onClick={() => setDruckDialogOffen(true)}
+                >
+                  Liste drucken
+                </button>
+              </div>
             </div>
             <div className="overflow-x-auto">
               <table>
@@ -1442,13 +1499,19 @@ export default function UebersichtPage() {
                 {druckMonat.mitAusgezahlten
                   ? "inkl. bereits ausgezahlter Personen"
                   : "ohne bereits ausgezahlte Personen"}
+                {" · sortiert nach "}
+                {monatSort === "personal_nr"
+                  ? "Personalnummer"
+                  : monatSort === "gruppe"
+                    ? "Gruppe"
+                    : "Name"}
               </p>
               <table className="mt-4 print-form-table print-dense-table print-persnr-schmal">
                 <thead>
                   <tr>
                     <th>Pers.-Nr.</th>
                     <th>Name</th>
-                    <th>Gruppe</th>
+                    <th>Herkunft</th>
                     <th>Std.</th>
                     <th>Tage</th>
                     <th>Basis-Brutto €</th>
@@ -1464,14 +1527,7 @@ export default function UebersichtPage() {
                       <td>
                         {r.name}, {r.vorname}
                       </td>
-                      <td>
-                        {r.gruppe_nr
-                          ? `${r.gruppe_nr} – ${
-                              gruppenByNr.get(r.gruppe_nr)?.bezeichnung ??
-                              r.gruppe_nr
-                            }`
-                          : "—"}
-                      </td>
+                      <td>{r.herkunft ?? "—"}</td>
                       <td>{fmt(r.gesamt_stunden)}</td>
                       <td>{r.anwesenheitstage}</td>
                       <td>{fmt(r.basis_brutto)}</td>

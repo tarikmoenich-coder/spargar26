@@ -3911,7 +3911,9 @@ select
     as abzug_verpflegung,
   coalesce(v.wohnen, 0)
     * count(*) filter (where we.stunden is not null or we.markierung is not null)
-    as abzug_wohnen
+    as abzug_wohnen,
+  -- Für die druckbare Monatsliste der Buchhaltung (Herkunft statt Gruppe).
+  e.herkunft
 from employees e
 join work_entries we on we.employee_id = e.id
 left join verpflegungssaetze v on v.saison_jahr = extract(year from we.datum)::int
@@ -3922,7 +3924,7 @@ left join verpflegungssaetze v on v.saison_jahr = extract(year from we.datum)::i
 where current_role_name() in
   ('admin', 'hr', 'kasse', 'lohnabrechnung', 'pruefer', 'management')
 group by
-  e.id, e.personal_nr, e.name, e.vorname, e.gruppe_nr, e.aktiv,
+  e.id, e.personal_nr, e.name, e.vorname, e.gruppe_nr, e.aktiv, e.herkunft,
   extract(year from we.datum), extract(month from we.datum),
   v.verpflegung, v.wohnen;
 

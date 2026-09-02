@@ -617,6 +617,8 @@ export interface SeasonSummaryMonatRow {
   basis_brutto: number;
   abzug_verpflegung: number;
   abzug_wohnen: number;
+  // Für die druckbare Monatsliste der Buchhaltung (Herkunft statt Gruppe).
+  herkunft: string | null;
 }
 
 // Monatsabschluss (periods-Tabelle): sperrt/entsperrt die Stundenerfassung
