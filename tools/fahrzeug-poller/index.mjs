@@ -301,6 +301,9 @@ async function historieNachziehen(devices, uidVonDevice, fahrzeugVon) {
 
 async function geofencesUndEvents(devices, uidVonDevice, fahrzeugVon) {
   // --- Geofences spiegeln ---
+  // /api/geofences wirft bei Fehlern (traccar()), ein leeres Array ist also ein
+  // echter Zustand. Daher: upsert der aktuellen + löschen der in Traccar nicht
+  // mehr vorhandenen. (Der Poller-Token sieht alle Geofences.)
   const geofences = await traccar("/api/geofences");
   if (geofences.length) {
     const { error } = await supa.from("fahrzeug_geofence").upsert(
@@ -313,6 +316,14 @@ async function geofencesUndEvents(devices, uidVonDevice, fahrzeugVon) {
       { onConflict: "traccar_geofence_id" }
     );
     if (error) throw new Error(`fahrzeug_geofence upsert: ${error.message}`);
+  }
+  {
+    const ids = geofences.map((g) => g.id);
+    const del = supa.from("fahrzeug_geofence").delete();
+    const { error } = await (ids.length
+      ? del.not("traccar_geofence_id", "in", `(${ids.join(",")})`)
+      : del.gte("traccar_geofence_id", 0));
+    if (error) console.error("[geofence] prune:", error.message);
   }
   const { data: gfRows } = await supa
     .from("fahrzeug_geofence")
