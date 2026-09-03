@@ -1,4 +1,4 @@
-// Fahrzeug-Poller: holt alle ~30 s Positionen + Geofences + Events aus Traccar
+// Fahrzeug-Poller: holt alle ~20 s Positionen + Geofences + Events aus Traccar
 // und schreibt sie nach Supabase. Läuft als systemd-Timer auf dem Hetzner-
 // Server (neben Traccar), NICHT im Vercel-Frontend. Schreibt mit dem Supabase-
 // Service-Key (umgeht RLS) - deshalb haben fahrzeug_position/fahrzeug_ereignis
@@ -54,6 +54,31 @@ function num(v, faktor = 1, stellen = 2) {
   return v === null || v === undefined || Number.isNaN(Number(v))
     ? null
     : Number((Number(v) * faktor).toFixed(stellen));
+}
+
+// Eine Traccar-Position in eine fahrzeug_position-Zeile. null, wenn der Tracker
+// unbekannt ist oder keine Koordinate hat.
+function positionRow(p, uidVonDevice, fahrzeugVon) {
+  const uid = uidVonDevice.get(p.deviceId);
+  if (!uid || p.latitude == null || p.longitude == null) return null;
+  const a = p.attributes ?? {};
+  return {
+    traccar_unique_id: uid,
+    fahrzeug_id: fahrzeugVon.get(uid) ?? null,
+    zeitpunkt: p.fixTime,
+    server_zeit: p.serverTime,
+    lat: p.latitude,
+    lng: p.longitude,
+    gueltig: !!p.valid,
+    speed_kmh: num(p.speed, 1.852),
+    kurs: num(p.course, 1, 1),
+    hoehe: num(p.altitude, 1, 1),
+    zuendung: typeof a.ignition === "boolean" ? a.ignition : null,
+    bewegung: typeof a.motion === "boolean" ? a.motion : null,
+    batterie_prozent: num(a.batteryLevel, 1, 1),
+    gesamt_km: num(a.totalDistance, 0.001, 1),
+    attribute: a,
+  };
 }
 
 const WD = { Mon: 0, Tue: 1, Wed: 2, Thu: 3, Fri: 4, Sat: 5, Sun: 6 };
@@ -147,30 +172,14 @@ async function lauf() {
   const typVon = new Map(trk.map((t) => [t.traccar_unique_id, t.geraetetyp]));
   const uidVonDevice = new Map(devices.map((d) => [d.id, String(d.uniqueId)]));
 
-  // 3. Positionen aufbereiten
+  // 3. Aktuellste Position je Gerät aufbereiten (für die Live-Ansicht)
   const rows = [];
   const typUpdates = new Map();
   for (const p of positions) {
-    const uid = uidVonDevice.get(p.deviceId);
-    if (!uid || p.latitude == null || p.longitude == null) continue;
-    const a = p.attributes ?? {};
-    rows.push({
-      traccar_unique_id: uid,
-      fahrzeug_id: fahrzeugVon.get(uid) ?? null,
-      zeitpunkt: p.fixTime,
-      server_zeit: p.serverTime,
-      lat: p.latitude,
-      lng: p.longitude,
-      gueltig: !!p.valid,
-      speed_kmh: num(p.speed, 1.852),
-      kurs: num(p.course, 1, 1),
-      hoehe: num(p.altitude, 1, 1),
-      zuendung: typeof a.ignition === "boolean" ? a.ignition : null,
-      bewegung: typeof a.motion === "boolean" ? a.motion : null,
-      batterie_prozent: num(a.batteryLevel, 1, 1),
-      gesamt_km: num(a.totalDistance, 0.001, 1),
-      attribute: a,
-    });
+    const row = positionRow(p, uidVonDevice, fahrzeugVon);
+    if (!row) continue;
+    rows.push(row);
+    const uid = row.traccar_unique_id;
     if (!typVon.get(uid) && !typUpdates.has(uid)) {
       const gt =
         p.protocol === "teltonika"
@@ -189,6 +198,16 @@ async function lauf() {
       ignoreDuplicates: true,
     });
     if (error) throw new Error(`fahrzeug_position upsert: ${error.message}`);
+  }
+
+  // 4b. Lücken zwischen den Läufen füllen: alle Punkte, die Traccar seit dem
+  //     jüngsten gespeicherten Zeitpunkt hat. Damit bestimmt das Melde-Intervall
+  //     des Trackers die Streckendichte, nicht der Poller-Takt.
+  let historie = 0;
+  try {
+    historie = await historieNachziehen(devices, uidVonDevice, fahrzeugVon);
+  } catch (e) {
+    console.error("[historie] übersprungen:", e.message);
   }
 
   // 5. Gerätetyp nachtragen
@@ -237,8 +256,47 @@ async function lauf() {
   }
 
   console.log(
-    `[${new Date().toISOString()}] ${devices.length} Geräte, ${rows.length} Positionen, ${ereignisse} Ereignisse, ${alarme} Alarm(e)`
+    `[${new Date().toISOString()}] ${devices.length} Geräte, ${rows.length} Positionen (+${historie} Historie), ${ereignisse} Ereignisse, ${alarme} Alarm(e)`
   );
+}
+
+// Zieht per Route-Report alle Positionen seit dem jüngsten gespeicherten Punkt
+// nach (max. 6 h rückwirkend, falls der Poller länger stand).
+async function historieNachziehen(devices, uidVonDevice, fahrzeugVon) {
+  if (!devices.length) return 0;
+  const { data: letzte } = await supa
+    .from("fahrzeug_position")
+    .select("zeitpunkt")
+    .order("zeitpunkt", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  const to = new Date();
+  const maxRueck = new Date(Date.now() - 6 * 3600 * 1000);
+  let von = letzte?.zeitpunkt
+    ? new Date(new Date(letzte.zeitpunkt).getTime() - 60000)
+    : new Date(Date.now() - 15 * 60000);
+  if (von < maxRueck) von = maxRueck;
+
+  const q = new URLSearchParams();
+  q.set("from", von.toISOString());
+  q.set("to", to.toISOString());
+  devices.forEach((d) => q.append("deviceId", d.id));
+  const route = await traccar(`/api/reports/route?${q}`);
+
+  const rows = [];
+  for (const p of route) {
+    const row = positionRow(p, uidVonDevice, fahrzeugVon);
+    if (row) rows.push(row);
+  }
+  if (rows.length) {
+    const { error } = await supa.from("fahrzeug_position").upsert(rows, {
+      onConflict: "traccar_unique_id,zeitpunkt",
+      ignoreDuplicates: true,
+    });
+    if (error) throw new Error(`fahrzeug_position historie: ${error.message}`);
+  }
+  return rows.length;
 }
 
 async function geofencesUndEvents(devices, uidVonDevice, fahrzeugVon) {

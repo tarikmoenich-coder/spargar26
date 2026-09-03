@@ -1,10 +1,10 @@
 [Unit]
-Description=Fahrzeug-Poller alle 30 s
+Description=Fahrzeug-Poller alle 20 s
 
 [Timer]
-OnBootSec=30
-OnUnitActiveSec=30
-AccuracySec=5
+OnBootSec=20
+OnUnitActiveSec=20
+AccuracySec=2
 # nicht mehrere Läufe gleichzeitig, falls einer mal länger braucht
 RandomizedDelaySec=0
 

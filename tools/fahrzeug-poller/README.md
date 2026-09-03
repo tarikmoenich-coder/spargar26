@@ -1,9 +1,14 @@
 # Fahrzeug-Poller
 
-Holt alle ~30 s die aktuellen Positionen aus **Traccar** (`/api/devices`,
+Holt alle ~20 s die aktuellen Positionen aus **Traccar** (`/api/devices`,
 `/api/positions`) und schreibt sie mit dem **Supabase-Service-Key** in die
 Tabellen `fahrzeug_tracker` / `fahrzeug_position`. Läuft **auf dem
 Hetzner-Server neben Traccar**, nicht im Vercel-Frontend.
+
+Zusätzlich zieht jeder Lauf per `/api/reports/route` alle Punkte seit dem
+zuletzt gespeicherten Zeitpunkt nach (max. 6 h rückwirkend). Dadurch bestimmt
+das **Melde-Intervall des Trackers** die Streckendichte, nicht der Poller-Takt –
+auch kurze Geräte-Intervalle gehen zwischen zwei Läufen nicht verloren.
 
 Die spargar26-App liest nur (`fahrzeug_uebersicht` etc.) – `fahrzeug_position`
 hat bewusst keine Insert-Policy.
