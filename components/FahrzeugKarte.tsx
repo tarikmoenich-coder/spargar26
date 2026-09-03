@@ -260,7 +260,12 @@ export default function FahrzeugKarte({
       if (!marker) {
         el = document.createElement("div");
         el.style.cursor = "pointer";
-        marker = new maplibregl.Marker({ element: el, anchor: "bottom" }).setLngLat([
+        el.style.position = "relative";
+        // anchor "center": nur der 14px-Punkt bestimmt die Ankergröße, Plakette
+        // und Foto sind absolut positioniert und verschieben den Bezugspunkt
+        // nicht. Sonst sitzt die Koordinate in der Mitte des ganzen Klotzes und
+        // der Punkt "wandert" beim Zoomen.
+        marker = new maplibregl.Marker({ element: el, anchor: "center" }).setLngLat([
           f.lng!,
           f.lat!,
         ]);
@@ -278,29 +283,28 @@ export default function FahrzeugKarte({
       }
 
       const fotoUrl = bilder?.[f.id];
+      const pfeil =
+        faehrt && f.kurs != null
+          ? ` <span style="display:inline-block;transform:rotate(${f.kurs}deg)">➤</span>`
+          : "";
       el.innerHTML = `
-        <div style="display:flex;flex-direction:column;align-items:center;gap:2px;transform:translateY(4px)">
-          ${
-            fotoUrl
-              ? `<img class="fzm-foto" src="${fotoUrl}" alt="" style="width:66px;height:46px;object-fit:cover;border-radius:5px;border:2px solid #fff;box-shadow:0 1px 3px rgba(0,0,0,.35);background:#fff;pointer-events:none" />`
-              : ""
-          }
-          <div style="display:flex;align-items:center;gap:4px">
-            <span style="width:12px;height:12px;border-radius:9999px;background:${farbe};border:2px solid #fff;box-shadow:0 0 0 1px rgba(0,0,0,.25)"></span>
-            <span style="background:#fff;border:1px solid #e6e1d5;border-radius:6px;padding:1px 5px;font:600 11px/1.3 system-ui;box-shadow:0 1px 2px rgba(0,0,0,.15);white-space:nowrap">${
-              titel
-            }${
-              faehrt && f.kurs != null
-                ? ` <span style="display:inline-block;transform:rotate(${f.kurs}deg)">➤</span>`
-                : ""
-            }</span>
-          </div>
-        </div>`;
+        <div style="width:14px;height:14px;border-radius:9999px;background:${farbe};border:2px solid #fff;box-shadow:0 0 0 1px rgba(0,0,0,.3)"></div>
+        <div style="position:absolute;left:20px;top:50%;transform:translateY(-50%);background:#fff;border:1px solid #e6e1d5;border-radius:6px;padding:1px 5px;font:600 11px/1.3 system-ui;box-shadow:0 1px 2px rgba(0,0,0,.15);white-space:nowrap">${titel}${pfeil}</div>
+        ${
+          fotoUrl
+            ? `<img class="fzm-foto" src="${fotoUrl}" alt="" style="position:absolute;left:20px;bottom:22px;width:70px;height:48px;object-fit:cover;border-radius:5px;border:2px solid #fff;box-shadow:0 1px 3px rgba(0,0,0,.35);background:#fff;pointer-events:none" />`
+            : ""
+        }`;
 
       const popup = marker.getPopup();
       if (popup) {
         popup.setHTML(`
           <div style="font:400 12px/1.45 system-ui">
+            ${
+              fotoUrl
+                ? `<img src="${fotoUrl}" alt="" style="width:100%;display:block;border-radius:6px;margin-bottom:6px" />`
+                : ""
+            }
             <div style="font-weight:600">${f.bezeichnung}${
               f.kennzeichen ? ` · ${f.kennzeichen}` : ""
             }</div>
