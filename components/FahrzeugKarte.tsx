@@ -317,6 +317,11 @@ export default function FahrzeugKarte({
                 ? `<div>Batterie: ${Math.round(f.batterie_prozent)} %</div>`
                 : ""
             }
+            ${
+              f.tracker_position
+                ? `<div>📍 Tracker verbaut: ${f.tracker_position}</div>`
+                : ""
+            }
             <div style="color:#6b7280">zuletzt: ${vorText(min)}</div>
           </div>`);
       }

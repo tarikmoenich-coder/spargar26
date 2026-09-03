@@ -64,6 +64,7 @@ interface FahrzeugForm {
   baujahr: string;
   notiz: string;
   bild: string;
+  tracker_position: string;
   aktiv: boolean;
 }
 
@@ -80,6 +81,7 @@ function leereForm(): FahrzeugForm {
     baujahr: "",
     notiz: "",
     bild: "",
+    tracker_position: "",
     aktiv: true,
   };
 }
@@ -97,6 +99,7 @@ function ausFahrzeug(f: Fahrzeug): FahrzeugForm {
     baujahr: f.baujahr?.toString() ?? "",
     notiz: f.notiz ?? "",
     bild: f.bild ?? "",
+    tracker_position: f.tracker_position ?? "",
     aktiv: f.aktiv,
   };
 }
@@ -165,6 +168,7 @@ export default function FahrzeugeStammdatenPage() {
       baujahr: form.baujahr === "" ? null : Number(form.baujahr),
       notiz: form.notiz.trim() || null,
       bild: form.bild || null,
+      tracker_position: form.tracker_position.trim() || null,
       aktiv: form.aktiv,
     };
     const { error } =
@@ -351,6 +355,21 @@ export default function FahrzeugeStammdatenPage() {
                   />
                 </label>
                 <label className="text-sm sm:col-span-2">
+                  Position Tracker
+                  <input
+                    className="mt-1 w-full"
+                    placeholder="z. B. unter dem Fahrersitz, im Sicherungskasten"
+                    value={form.tracker_position}
+                    onChange={(e) =>
+                      setForm({ ...form, tracker_position: e.target.value })
+                    }
+                  />
+                  <span className="mt-0.5 block text-xs text-neutral-400">
+                    Wo der GPS-Tracker verbaut ist – damit die Werkstatt ihn
+                    wiederfindet.
+                  </span>
+                </label>
+                <label className="text-sm sm:col-span-2">
                   Notiz
                   <textarea
                     className="mt-1 w-full"
@@ -496,6 +515,11 @@ export default function FahrzeugeStammdatenPage() {
                               t.geraetetyp ? ` (${t.geraetetyp})` : ""
                             }`
                           : "—"}
+                        {f.tracker_position && (
+                          <span className="block text-xs text-neutral-500">
+                            📍 {f.tracker_position}
+                          </span>
+                        )}
                       </td>
                       <td>
                         {canEdit && (

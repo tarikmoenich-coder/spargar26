@@ -1742,6 +1742,8 @@ export interface Fahrzeug {
   // Fahrzeugfoto als data-URL (~320 px, JPEG). Nicht in fahrzeug_uebersicht -
   // die Übersicht lädt es einmalig separat für die Karte.
   bild: string | null;
+  // Einbauort des GPS-Trackers im Fahrzeug (Freitext).
+  tracker_position: string | null;
   aktiv: boolean;
   erstellt_von: string | null;
   erstellt_am: string;
@@ -1796,6 +1798,7 @@ export interface FahrzeugUebersicht {
   baujahr: number | null;
   notiz: string | null;
   aktiv: boolean;
+  tracker_position: string | null;
   fahrer_name: string | null;
   fahrer_vorname: string | null;
   fahrer_personal_nr: string | null;

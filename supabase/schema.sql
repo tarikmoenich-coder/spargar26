@@ -5856,6 +5856,9 @@ create table fahrzeug (
   -- Fahrzeugfoto als data-URL (~320 px, JPEG), nur zur optischen Zuordnung auf
   -- der Karte. Bewusst nicht in fahrzeug_uebersicht (20-s-Poll schlank halten).
   bild text,
+  -- Einbauort des GPS-Trackers im Fahrzeug (Freitext), damit die Werkstatt ihn
+  -- wiederfindet.
+  tracker_position text,
   aktiv boolean not null default true,
   erstellt_von uuid references profiles (id) default auth.uid(),
   erstellt_am timestamptz not null default now(),
@@ -5914,6 +5917,7 @@ create view fahrzeug_uebersicht as
 select
   f.id, f.kennzeichen, f.bezeichnung, f.typ, f.fahrer_employee_id,
   f.km_stand, f.km_stand_am, f.hu_faellig, f.vin, f.baujahr, f.notiz, f.aktiv,
+  f.tracker_position,
   e.name as fahrer_name, e.vorname as fahrer_vorname,
   e.personal_nr as fahrer_personal_nr,
   t.traccar_unique_id, t.geraetetyp, t.status as tracker_status,

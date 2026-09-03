@@ -174,71 +174,95 @@ export default function FahrzeugeUebersichtPage() {
                     ? "bg-amber-500"
                     : "bg-emerald-500";
               const huTage = tageBis(f.hu_faellig);
+              const foto = bilder[f.id];
               return (
-                <div key={f.id} className="card flex flex-col gap-1">
-                  <div className="flex flex-wrap items-center justify-between gap-2">
-                    <div className="flex items-center gap-2">
-                      <span
-                        className={`h-2.5 w-2.5 shrink-0 rounded-full ${farbe}`}
-                      />
-                      <Link
-                        href={`/fahrzeuge/verlauf?fahrzeug=${f.id}`}
-                        className="font-semibold text-emerald-900 hover:underline"
-                      >
-                        {f.bezeichnung}
-                      </Link>
-                      {f.kennzeichen && (
-                        <span className="text-sm text-neutral-500">
-                          {f.kennzeichen}
+                <div key={f.id} className="card flex gap-3">
+                  {foto ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
+                      src={foto}
+                      alt=""
+                      className="h-16 w-24 shrink-0 rounded border border-linie object-cover"
+                    />
+                  ) : (
+                    <div className="flex h-16 w-24 shrink-0 items-center justify-center rounded border border-dashed border-linie text-[10px] text-neutral-300">
+                      kein Foto
+                    </div>
+                  )}
+                  <div className="flex min-w-0 flex-1 flex-col gap-1">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <div className="flex items-center gap-2">
+                        <span
+                          className={`h-2.5 w-2.5 shrink-0 rounded-full ${farbe}`}
+                        />
+                        <Link
+                          href={`/fahrzeuge/verlauf?fahrzeug=${f.id}`}
+                          className="font-semibold text-emerald-900 hover:underline"
+                        >
+                          {f.bezeichnung}
+                        </Link>
+                        {f.kennzeichen && (
+                          <span className="text-sm text-neutral-500">
+                            {f.kennzeichen}
+                          </span>
+                        )}
+                      </div>
+                      {huTage !== null && huTage < 30 && (
+                        <span
+                          className={
+                            huTage < 0
+                              ? "badge badge-danger"
+                              : "badge badge-warn"
+                          }
+                        >
+                          {huTage < 0
+                            ? `HU überfällig (${formatDatumDE(f.hu_faellig)})`
+                            : `HU in ${huTage} Tagen`}
                         </span>
                       )}
                     </div>
-                    {huTage !== null && huTage < 30 && (
-                      <span
-                        className={
-                          huTage < 0 ? "badge badge-danger" : "badge badge-warn"
-                        }
-                      >
-                        {huTage < 0
-                          ? `HU überfällig (${formatDatumDE(f.hu_faellig)})`
-                          : `HU in ${huTage} Tagen`}
-                      </span>
+                    <div className="text-sm text-neutral-600">
+                      Fahrer:{" "}
+                      {f.fahrer_name
+                        ? `${f.fahrer_name}, ${f.fahrer_vorname ?? ""}`
+                        : "—"}
+                    </div>
+                    <div className="text-sm text-neutral-600">
+                      {f.speed_kmh != null
+                        ? `${Math.round(f.speed_kmh)} km/h`
+                        : "steht"}{" "}
+                      · Zündung{" "}
+                      {f.zuendung == null ? "—" : f.zuendung ? "an" : "aus"} ·
+                      zuletzt {vorText(min)}
+                      {f.batterie_prozent != null && (
+                        <>
+                          {" · "}
+                          <span
+                            className={
+                              f.batterie_prozent < 20
+                                ? "font-medium text-red-600"
+                                : f.batterie_prozent < 40
+                                  ? "text-amber-600"
+                                  : ""
+                            }
+                          >
+                            🔋 {Math.round(f.batterie_prozent)} %
+                          </span>
+                        </>
+                      )}
+                    </div>
+                    <div className="text-xs text-neutral-400">
+                      {f.km_stand != null
+                        ? `${f.km_stand.toLocaleString("de-DE")} km`
+                        : "km —"}
+                      {f.geraetetyp ? ` · Tracker: ${f.geraetetyp}` : ""}
+                      {f.traccar_unique_id ? "" : " · kein Tracker zugeordnet"}
+                    </div>
+                    {f.tracker_position && (
+                      <div className="text-xs text-neutral-400">
+                        📍 Tracker verbaut: {f.tracker_position}
+                      </div>
                     )}
-                  </div>
-                  <div className="text-sm text-neutral-600">
-                    Fahrer:{" "}
-                    {f.fahrer_name
-                      ? `${f.fahrer_name}, ${f.fahrer_vorname ?? ""}`
-                      : "—"}
-                  </div>
-                  <div className="text-sm text-neutral-600">
-                    {f.speed_kmh != null
-                      ? `${Math.round(f.speed_kmh)} km/h`
-                      : "steht"}{" "}
-                    · Zündung{" "}
-                    {f.zuendung == null ? "—" : f.zuendung ? "an" : "aus"} ·
-                    zuletzt {vorText(min)}
-                    {f.batterie_prozent != null && (
-                      <>
-                        {" · "}
-                        <span
-                          className={
-                            f.batterie_prozent < 20
-                              ? "font-medium text-red-600"
-                              : f.batterie_prozent < 40
-                                ? "text-amber-600"
-                                : ""
-                          }
-                        >
-                          🔋 {Math.round(f.batterie_prozent)} %
-                        </span>
-                      </>
-                    )}
-                  </div>
-                  <div className="text-xs text-neutral-400">
-                    {f.km_stand != null ? `${f.km_stand.toLocaleString("de-DE")} km` : "km —"}
-                    {f.geraetetyp ? ` · Tracker: ${f.geraetetyp}` : ""}
-                    {f.traccar_unique_id ? "" : " · kein Tracker zugeordnet"}
                   </div>
                 </div>
               );
