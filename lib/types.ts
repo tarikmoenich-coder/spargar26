@@ -1739,6 +1739,9 @@ export interface Fahrzeug {
   vin: string | null;
   baujahr: number | null;
   notiz: string | null;
+  // Fahrzeugfoto als data-URL (~320 px, JPEG). Nicht in fahrzeug_uebersicht -
+  // die Übersicht lädt es einmalig separat für die Karte.
+  bild: string | null;
   aktiv: boolean;
   erstellt_von: string | null;
   erstellt_am: string;

@@ -36,6 +36,7 @@ export default function FahrzeugeUebersichtPage() {
   const [fahrzeuge, setFahrzeuge] = useState<FahrzeugUebersicht[]>([]);
   const [offeneTracker, setOffeneTracker] = useState<FahrzeugTracker[]>([]);
   const [geofences, setGeofences] = useState<FahrzeugGeofence[]>([]);
+  const [bilder, setBilder] = useState<Record<number, string>>({});
   const [alarmHeute, setAlarmHeute] = useState(0);
   const [loading, setLoading] = useState(true);
   const [zeige, setZeige] = useState<"karte" | "liste">("karte");
@@ -70,6 +71,21 @@ export default function FahrzeugeUebersichtPage() {
     const id = setInterval(laden, 20000);
     return () => clearInterval(id);
   }, [laden]);
+
+  // Fahrzeugfotos einmalig laden (nicht im 20-s-Poll, damit der klein bleibt).
+  useEffect(() => {
+    getSupabaseClient()
+      .from("fahrzeug")
+      .select("id, bild")
+      .not("bild", "is", null)
+      .then(({ data }) => {
+        const m: Record<number, string> = {};
+        (data as { id: number; bild: string | null }[] | null)?.forEach((r) => {
+          if (r.bild) m[r.id] = r.bild;
+        });
+        setBilder(m);
+      });
+  }, []);
 
   return (
     <div className="flex flex-col gap-4">
@@ -127,6 +143,7 @@ export default function FahrzeugeUebersichtPage() {
             <FahrzeugKarte
               fahrzeuge={fahrzeuge}
               geofences={geofences}
+              bilder={bilder}
               hoehe="h-[70vh]"
             />
           </div>

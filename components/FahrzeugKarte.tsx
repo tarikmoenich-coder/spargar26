@@ -45,6 +45,17 @@ class BasiskartenControl implements maplibregl.IControl {
   }
 }
 
+// Marker-Stil einmal pro Seite injizieren: solange das Detail-Popup offen ist,
+// blenden wir das Foto aus (Klasse .fzm-detail auf dem Marker-Element).
+let markerStilGesetzt = false;
+function markerStilEinmalig() {
+  if (markerStilGesetzt || typeof document === "undefined") return;
+  markerStilGesetzt = true;
+  const s = document.createElement("style");
+  s.textContent = ".fzm-detail .fzm-foto{display:none}";
+  document.head.appendChild(s);
+}
+
 function minutenHer(iso: string | null): number | null {
   if (!iso) return null;
   return Math.round((Date.now() - new Date(iso).getTime()) / 60000);
@@ -110,11 +121,14 @@ export default function FahrzeugKarte({
   fahrzeuge,
   track,
   geofences,
+  bilder,
   hoehe = "h-[70vh]",
 }: {
   fahrzeuge: FahrzeugUebersicht[];
   track?: Trackpunkt[];
   geofences?: KartenGeofence[];
+  /** Fahrzeug-ID -> Foto als data-URL, wird über dem Kennzeichen gezeigt. */
+  bilder?: Record<number, string>;
   hoehe?: string;
 }) {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -125,6 +139,7 @@ export default function FahrzeugKarte({
   // Karte einmalig aufbauen.
   useEffect(() => {
     if (!containerRef.current) return;
+    markerStilEinmalig();
     const map = new maplibregl.Map({
       container: containerRef.current,
       style: {
@@ -251,6 +266,10 @@ export default function FahrzeugKarte({
         ]);
         const popup = new maplibregl.Popup({ offset: 14, maxWidth: "260px" });
         marker.setPopup(popup);
+        // Klick aufs Kennzeichen öffnet das Popup (maplibre-Standard); dann Foto
+        // ausblenden, beim Schließen wieder zeigen.
+        popup.on("open", () => el.classList.add("fzm-detail"));
+        popup.on("close", () => el.classList.remove("fzm-detail"));
         marker.addTo(map);
         markersRef.current.set(f.id, marker);
       } else {
@@ -258,16 +277,24 @@ export default function FahrzeugKarte({
         marker.setLngLat([f.lng!, f.lat!]);
       }
 
+      const fotoUrl = bilder?.[f.id];
       el.innerHTML = `
-        <div style="display:flex;align-items:center;gap:4px;transform:translateY(4px)">
-          <span style="width:12px;height:12px;border-radius:9999px;background:${farbe};border:2px solid #fff;box-shadow:0 0 0 1px rgba(0,0,0,.25)"></span>
-          <span style="background:#fff;border:1px solid #e6e1d5;border-radius:6px;padding:1px 5px;font:600 11px/1.3 system-ui;box-shadow:0 1px 2px rgba(0,0,0,.15);white-space:nowrap">${
-            titel
-          }${
-            faehrt && f.kurs != null
-              ? ` <span style="display:inline-block;transform:rotate(${f.kurs}deg)">➤</span>`
+        <div style="display:flex;flex-direction:column;align-items:center;gap:2px;transform:translateY(4px)">
+          ${
+            fotoUrl
+              ? `<img class="fzm-foto" src="${fotoUrl}" alt="" style="width:66px;height:46px;object-fit:cover;border-radius:5px;border:2px solid #fff;box-shadow:0 1px 3px rgba(0,0,0,.35);background:#fff;pointer-events:none" />`
               : ""
-          }</span>
+          }
+          <div style="display:flex;align-items:center;gap:4px">
+            <span style="width:12px;height:12px;border-radius:9999px;background:${farbe};border:2px solid #fff;box-shadow:0 0 0 1px rgba(0,0,0,.25)"></span>
+            <span style="background:#fff;border:1px solid #e6e1d5;border-radius:6px;padding:1px 5px;font:600 11px/1.3 system-ui;box-shadow:0 1px 2px rgba(0,0,0,.15);white-space:nowrap">${
+              titel
+            }${
+              faehrt && f.kurs != null
+                ? ` <span style="display:inline-block;transform:rotate(${f.kurs}deg)">➤</span>`
+                : ""
+            }</span>
+          </div>
         </div>`;
 
       const popup = marker.getPopup();
@@ -309,7 +336,7 @@ export default function FahrzeugKarte({
       mitPos.forEach((f) => b.extend([f.lng!, f.lat!]));
       map.fitBounds(b, { padding: 60, maxZoom: 15, duration: 400 });
     }
-  }, [fahrzeuge, bereit, track]);
+  }, [fahrzeuge, bereit, track, bilder]);
 
   // Geofences (Höfe) zeichnen.
   useEffect(() => {

@@ -11,6 +11,40 @@ import PageHeader from "@/components/PageHeader";
 
 const TYPEN = ["pkw", "transporter", "traktor", "anhaenger", "sonstiges"];
 
+// Foto client-seitig auf eine kleine Kante herunterrechnen und als JPEG-data-URL
+// zurückgeben. Reicht, um auf der Karte das Auto zum Kennzeichen zu erkennen.
+function fotoVerkleinern(
+  datei: File,
+  maxKante = 320,
+  qualitaet = 0.72
+): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const url = URL.createObjectURL(datei);
+    const img = new Image();
+    img.onload = () => {
+      URL.revokeObjectURL(url);
+      const skala = Math.min(1, maxKante / Math.max(img.width, img.height));
+      const w = Math.max(1, Math.round(img.width * skala));
+      const h = Math.max(1, Math.round(img.height * skala));
+      const c = document.createElement("canvas");
+      c.width = w;
+      c.height = h;
+      const ctx = c.getContext("2d");
+      if (!ctx) {
+        reject(new Error("Canvas nicht verfügbar."));
+        return;
+      }
+      ctx.drawImage(img, 0, 0, w, h);
+      resolve(c.toDataURL("image/jpeg", qualitaet));
+    };
+    img.onerror = () => {
+      URL.revokeObjectURL(url);
+      reject(new Error("Bild konnte nicht gelesen werden."));
+    };
+    img.src = url;
+  });
+}
+
 type EmpOpt = {
   id: string;
   personal_nr: string;
@@ -29,6 +63,7 @@ interface FahrzeugForm {
   vin: string;
   baujahr: string;
   notiz: string;
+  bild: string;
   aktiv: boolean;
 }
 
@@ -44,6 +79,7 @@ function leereForm(): FahrzeugForm {
     vin: "",
     baujahr: "",
     notiz: "",
+    bild: "",
     aktiv: true,
   };
 }
@@ -60,6 +96,7 @@ function ausFahrzeug(f: Fahrzeug): FahrzeugForm {
     vin: f.vin ?? "",
     baujahr: f.baujahr?.toString() ?? "",
     notiz: f.notiz ?? "",
+    bild: f.bild ?? "",
     aktiv: f.aktiv,
   };
 }
@@ -127,6 +164,7 @@ export default function FahrzeugeStammdatenPage() {
       vin: form.vin.trim() || null,
       baujahr: form.baujahr === "" ? null : Number(form.baujahr),
       notiz: form.notiz.trim() || null,
+      bild: form.bild || null,
       aktiv: form.aktiv,
     };
     const { error } =
@@ -323,6 +361,55 @@ export default function FahrzeugeStammdatenPage() {
                     }
                   />
                 </label>
+                <div className="text-sm sm:col-span-2">
+                  Foto
+                  <div className="mt-1 flex items-center gap-3">
+                    {form.bild ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img
+                        src={form.bild}
+                        alt="Fahrzeugfoto"
+                        className="h-16 w-24 shrink-0 rounded border border-linie object-cover"
+                      />
+                    ) : (
+                      <div className="flex h-16 w-24 shrink-0 items-center justify-center rounded border border-dashed border-linie text-xs text-neutral-400">
+                        kein Foto
+                      </div>
+                    )}
+                    <div className="flex flex-col items-start gap-1">
+                      <input
+                        type="file"
+                        accept="image/*"
+                        className="text-xs"
+                        disabled={!canEdit}
+                        onChange={async (e) => {
+                          const datei = e.target.files?.[0];
+                          e.target.value = "";
+                          if (!datei) return;
+                          try {
+                            const d = await fotoVerkleinern(datei);
+                            setForm((v) => ({ ...v, bild: d }));
+                          } catch (err) {
+                            setFehler(
+                              err instanceof Error
+                                ? err.message
+                                : "Foto konnte nicht verarbeitet werden."
+                            );
+                          }
+                        }}
+                      />
+                      {form.bild && (
+                        <button
+                          type="button"
+                          className="btn-secondary text-xs"
+                          onClick={() => setForm((v) => ({ ...v, bild: "" }))}
+                        >
+                          Foto entfernen
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                </div>
                 <label className="flex items-center gap-2 text-sm">
                   <input
                     type="checkbox"
@@ -358,6 +445,7 @@ export default function FahrzeugeStammdatenPage() {
             <table>
               <thead>
                 <tr>
+                  <th>Foto</th>
                   <th>Bezeichnung</th>
                   <th>Kennzeichen</th>
                   <th>Typ</th>
@@ -376,6 +464,18 @@ export default function FahrzeugeStammdatenPage() {
                   );
                   return (
                     <tr key={f.id} className={f.aktiv ? "" : "opacity-50"}>
+                      <td>
+                        {f.bild ? (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img
+                            src={f.bild}
+                            alt=""
+                            className="h-9 w-14 rounded border border-linie object-cover"
+                          />
+                        ) : (
+                          <span className="text-neutral-300">—</span>
+                        )}
+                      </td>
                       <td>{f.bezeichnung}</td>
                       <td>{f.kennzeichen ?? "—"}</td>
                       <td>{f.typ ?? "—"}</td>
@@ -413,7 +513,7 @@ export default function FahrzeugeStammdatenPage() {
                 })}
                 {fahrzeuge.length === 0 && (
                   <tr>
-                    <td colSpan={8} className="text-neutral-500">
+                    <td colSpan={9} className="text-neutral-500">
                       Noch keine Fahrzeuge.
                     </td>
                   </tr>

@@ -5853,6 +5853,9 @@ create table fahrzeug (
   vin text,
   baujahr integer,
   notiz text,
+  -- Fahrzeugfoto als data-URL (~320 px, JPEG), nur zur optischen Zuordnung auf
+  -- der Karte. Bewusst nicht in fahrzeug_uebersicht (20-s-Poll schlank halten).
+  bild text,
   aktiv boolean not null default true,
   erstellt_von uuid references profiles (id) default auth.uid(),
   erstellt_am timestamptz not null default now(),
