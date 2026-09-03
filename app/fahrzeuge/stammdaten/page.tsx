@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Truck } from "lucide-react";
 import { getSupabaseClient } from "@/lib/supabase/client";
 import { useProfile } from "@/lib/useProfile";
@@ -102,6 +102,123 @@ function ausFahrzeug(f: Fahrzeug): FahrzeugForm {
     tracker_position: f.tracker_position ?? "",
     aktiv: f.aktiv,
   };
+}
+
+// Fahrer direkt in der Liste setzen - freie Suche nach Name / Personalnummer.
+function FahrerZelle({
+  fahrzeug,
+  mitarbeiter,
+  canEdit,
+  onGesetzt,
+}: {
+  fahrzeug: Fahrzeug;
+  mitarbeiter: EmpOpt[];
+  canEdit: boolean;
+  onGesetzt: () => void;
+}) {
+  const [offen, setOffen] = useState(false);
+  const [suche, setSuche] = useState("");
+  const [speichert, setSpeichert] = useState(false);
+
+  const aktuell = mitarbeiter.find((m) => m.id === fahrzeug.fahrer_employee_id);
+
+  const treffer = useMemo(() => {
+    const q = suche.trim().toLowerCase();
+    const liste = q
+      ? mitarbeiter.filter(
+          (m) =>
+            `${m.name} ${m.vorname}`.toLowerCase().includes(q) ||
+            `${m.vorname} ${m.name}`.toLowerCase().includes(q) ||
+            (m.personal_nr ?? "").toLowerCase().includes(q)
+        )
+      : mitarbeiter;
+    return liste.slice(0, 8);
+  }, [suche, mitarbeiter]);
+
+  async function setze(id: string | null) {
+    setSpeichert(true);
+    const { error } = await getSupabaseClient()
+      .from("fahrzeug")
+      .update({ fahrer_employee_id: id })
+      .eq("id", fahrzeug.id);
+    setSpeichert(false);
+    if (!error) {
+      setOffen(false);
+      setSuche("");
+      onGesetzt();
+    }
+  }
+
+  if (!canEdit) {
+    return <>{aktuell ? `${aktuell.name}, ${aktuell.vorname}` : "—"}</>;
+  }
+
+  if (!offen) {
+    return (
+      <button
+        type="button"
+        className="text-left hover:underline"
+        onClick={() => setOffen(true)}
+      >
+        {aktuell ? (
+          `${aktuell.name}, ${aktuell.vorname}`
+        ) : (
+          <span className="text-emerald-700">+ Fahrer</span>
+        )}
+      </button>
+    );
+  }
+
+  return (
+    <div className="flex min-w-[13rem] flex-col gap-1">
+      <input
+        autoFocus
+        className="w-full text-sm"
+        placeholder="Name oder Personalnr."
+        value={suche}
+        onChange={(e) => setSuche(e.target.value)}
+      />
+      <div className="max-h-44 overflow-auto rounded border border-linie bg-white">
+        {treffer.map((m) => (
+          <button
+            key={m.id}
+            type="button"
+            disabled={speichert}
+            className="block w-full px-2 py-1 text-left text-sm hover:bg-sand disabled:opacity-50"
+            onClick={() => setze(m.id)}
+          >
+            {m.name}, {m.vorname}{" "}
+            <span className="text-neutral-400">({m.personal_nr})</span>
+          </button>
+        ))}
+        {treffer.length === 0 && (
+          <p className="px-2 py-1 text-sm text-neutral-400">nichts gefunden</p>
+        )}
+      </div>
+      <div className="flex gap-3 text-xs">
+        {fahrzeug.fahrer_employee_id && (
+          <button
+            type="button"
+            className="text-red-600"
+            disabled={speichert}
+            onClick={() => setze(null)}
+          >
+            Fahrer entfernen
+          </button>
+        )}
+        <button
+          type="button"
+          className="text-neutral-500"
+          onClick={() => {
+            setOffen(false);
+            setSuche("");
+          }}
+        >
+          Abbrechen
+        </button>
+      </div>
+    </div>
+  );
 }
 
 export default function FahrzeugeStammdatenPage() {
@@ -479,9 +596,6 @@ export default function FahrzeugeStammdatenPage() {
               <tbody>
                 {fahrzeuge.map((f) => {
                   const t = tracker.find((x) => x.fahrzeug_id === f.id);
-                  const fahrer = mitarbeiter.find(
-                    (m) => m.id === f.fahrer_employee_id
-                  );
                   return (
                     <tr key={f.id} className={f.aktiv ? "" : "opacity-50"}>
                       <td>
@@ -499,8 +613,13 @@ export default function FahrzeugeStammdatenPage() {
                       <td>{f.bezeichnung}</td>
                       <td>{f.kennzeichen ?? "—"}</td>
                       <td>{f.typ ?? "—"}</td>
-                      <td>
-                        {fahrer ? `${fahrer.name}, ${fahrer.vorname}` : "—"}
+                      <td className="align-top">
+                        <FahrerZelle
+                          fahrzeug={f}
+                          mitarbeiter={mitarbeiter}
+                          canEdit={canEdit}
+                          onGesetzt={laden}
+                        />
                       </td>
                       <td>
                         {f.km_stand != null
