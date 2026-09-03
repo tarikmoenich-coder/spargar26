@@ -5,8 +5,11 @@ alter table fahrzeug add column if not exists tracker_position text;
 comment on column fahrzeug.tracker_position is
   'Einbauort des GPS-Trackers im Fahrzeug (Freitext), damit die Werkstatt ihn wiederfindet.';
 
--- fahrzeug_uebersicht um die Spalte ergaenzen (kurzer Text, unkritisch fuer den Poll).
-create or replace view fahrzeug_uebersicht as
+-- fahrzeug_uebersicht um die Spalte ergaenzen (kurzer Text, unkritisch fuer den
+-- Poll). create or replace kann keine Spalte in der Mitte einschieben -> neu
+-- anlegen.
+drop view if exists fahrzeug_uebersicht;
+create view fahrzeug_uebersicht as
 select
   f.id, f.kennzeichen, f.bezeichnung, f.typ, f.fahrer_employee_id,
   f.km_stand, f.km_stand_am, f.hu_faellig, f.vin, f.baujahr, f.notiz, f.aktiv,
