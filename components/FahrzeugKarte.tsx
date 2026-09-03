@@ -260,11 +260,13 @@ export default function FahrzeugKarte({
       if (!marker) {
         el = document.createElement("div");
         el.style.cursor = "pointer";
-        el.style.position = "relative";
+        // WICHTIG: kein eigenes position setzen - maplibre-gl.css gibt
+        // .maplibregl-marker { position:absolute } vor; ein inline "relative"
+        // bricht die Positionierung (Marker fliegt beim Zoomen weg). Das
+        // absolute el ist zugleich der Bezugsrahmen für Plakette/Foto darunter.
         // anchor "center": nur der 14px-Punkt bestimmt die Ankergröße, Plakette
         // und Foto sind absolut positioniert und verschieben den Bezugspunkt
-        // nicht. Sonst sitzt die Koordinate in der Mitte des ganzen Klotzes und
-        // der Punkt "wandert" beim Zoomen.
+        // nicht - so sitzt die Koordinate exakt auf dem Punkt, auch beim Zoomen.
         marker = new maplibregl.Marker({ element: el, anchor: "center" }).setLngLat([
           f.lng!,
           f.lat!,
