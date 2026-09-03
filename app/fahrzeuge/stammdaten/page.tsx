@@ -399,6 +399,7 @@ export default function FahrzeugeStammdatenPage() {
                       <input
                         type="file"
                         accept="image/*"
+                        capture="environment"
                         className="text-xs"
                         disabled={!canEdit}
                         onChange={async (e) => {
