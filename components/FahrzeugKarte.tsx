@@ -294,7 +294,7 @@ export default function FahrzeugKarte({
         <div style="position:absolute;left:20px;top:50%;transform:translateY(-50%);background:#fff;border:1px solid #e6e1d5;border-radius:6px;padding:1px 5px;font:600 11px/1.3 system-ui;box-shadow:0 1px 2px rgba(0,0,0,.15);white-space:nowrap">${titel}${pfeil}</div>
         ${
           fotoUrl
-            ? `<img class="fzm-foto" src="${fotoUrl}" alt="" style="position:absolute;left:20px;bottom:22px;width:70px;height:48px;object-fit:cover;border-radius:5px;border:2px solid #fff;box-shadow:0 1px 3px rgba(0,0,0,.35);background:#fff;pointer-events:none" />`
+            ? `<img class="fzm-foto" src="${fotoUrl}" alt="" style="position:absolute;left:20px;bottom:22px;width:70px;max-width:none;height:48px;object-fit:cover;border-radius:5px;border:2px solid #fff;box-shadow:0 1px 3px rgba(0,0,0,.35);background:#fff;pointer-events:none" />`
             : ""
         }`;
 
