@@ -65,6 +65,9 @@ export default function PersonalImportPage() {
   const [zeilen, setZeilen] = useState<ImportZeile[]>([]);
   const [parsing, setParsing] = useState(false);
   const [importing, setImporting] = useState(false);
+  // Nutzer-Vorgabe: importierte Mitarbeiter kommen standardmäßig inaktiv in den
+  // Personalstamm und werden erst bewusst scharfgeschaltet.
+  const [importAktiv, setImportAktiv] = useState(false);
   const [ergebnis, setErgebnis] = useState<{
     erfolgreich: number;
     fehlgeschlagen: { zeile: number; grund: string }[];
@@ -192,6 +195,7 @@ export default function PersonalImportPage() {
       iban: z.iban,
       bic: z.bic,
       zahlungsempfaenger: z.zahlungsempfaenger,
+      aktiv: importAktiv,
       vorgaenger_employee_id,
     };
   }
@@ -289,7 +293,9 @@ export default function PersonalImportPage() {
           Excel- oder CSV-Datei mit einer Zeile pro Mitarbeiter hochladen.
           Personalnummer, Name und Vorname sind Pflicht; alle anderen Spalten
           sind optional. Zeilen mit bereits vergebener Personalnummer werden
-          nicht importiert und einzeln als Fehler angezeigt.
+          nicht importiert und einzeln als Fehler angezeigt. Neu importierte
+          Mitarbeiter kommen standardmäßig <strong>inaktiv</strong> in den
+          Personalstamm (Haken unten setzen, um sie sofort aktiv zu schalten).
         </p>
         <button
           type="button"
@@ -366,6 +372,21 @@ export default function PersonalImportPage() {
             </table>
           </div>
 
+          <label className="flex items-start gap-2 text-sm text-neutral-700">
+            <input
+              type="checkbox"
+              className="mt-0.5"
+              checked={importAktiv}
+              onChange={(e) => setImportAktiv(e.target.checked)}
+            />
+            <span>
+              Importierte Mitarbeiter sofort{" "}
+              <span className="font-semibold">aktiv</span> setzen – ohne Haken
+              kommen sie als <span className="font-semibold">inaktiv</span> in den
+              Personalstamm und werden später einzeln scharfgeschaltet.
+            </span>
+          </label>
+
           <div className="flex items-center gap-3">
             <button
               type="button"
@@ -374,6 +395,7 @@ export default function PersonalImportPage() {
               onClick={handleImport}
             >
               {importierbareAnzahl} Zeile(n) importieren
+              {importAktiv ? " (aktiv)" : " (inaktiv)"}
             </button>
             {ergebnis && (
               <span className="text-sm">
