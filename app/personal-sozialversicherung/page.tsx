@@ -2,6 +2,7 @@
 
 import { Fragment, useEffect, useState } from "react";
 import { getSupabaseClient } from "@/lib/supabase/client";
+import { ladeAlleSeiten } from "@/lib/ladeAlle";
 import { useProfile } from "@/lib/useProfile";
 import PersonalTabs from "@/components/PersonalTabs";
 import SvFragebogenFormular, {
@@ -82,10 +83,17 @@ export default function SozialversicherungPage() {
   async function load() {
     setLoading(true);
     const supabase = getSupabaseClient();
-    let query = supabase.from("employees").select("*").order("personal_nr");
-    if (!showInactive) query = query.eq("aktiv", true);
+    // Seitenweise, sonst schneidet PostgREST bei ~1000 Zeilen ab (seit dem
+    // Historie-Import tausende inaktive employees).
+    const emps = await ladeAlleSeiten<Employee>((von, bis) => {
+      const basis = supabase
+        .from("employees")
+        .select("*")
+        .order("personal_nr")
+        .order("id");
+      return (showInactive ? basis : basis.eq("aktiv", true)).range(von, bis);
+    });
     const [
-      { data: emps },
       { data: frag },
       { data: fragVorjahr },
       { data: pr },
@@ -93,7 +101,6 @@ export default function SozialversicherungPage() {
       { data: herkunftData },
       { data: chain },
     ] = await Promise.all([
-      query,
       supabase
         .from("sv_fragebogen_auswertung")
         .select("*")
@@ -111,7 +118,7 @@ export default function SozialversicherungPage() {
       supabase.from("employee_status_chain").select("*"),
     ]);
     setSvAbschnitte((abschnitte as SvAbschnitt[]) ?? []);
-    setEmployees((emps as Employee[]) ?? []);
+    setEmployees(emps);
     setHerkuenfte((herkunftData as Herkunft[]) ?? []);
     const mapChain: Record<string, EmployeeStatusChain> = {};
     ((chain as EmployeeStatusChain[]) ?? []).forEach((c) => {

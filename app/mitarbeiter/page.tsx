@@ -2,6 +2,7 @@
 
 import { Fragment, useEffect, useState } from "react";
 import { getSupabaseClient } from "@/lib/supabase/client";
+import { ladeAlleSeiten } from "@/lib/ladeAlle";
 import { useProfile } from "@/lib/useProfile";
 import {
   ABRECHNUNGSART_LABELS,
@@ -175,27 +176,45 @@ export default function MitarbeiterPage() {
   async function load() {
     setLoading(true);
     const supabase = getSupabaseClient();
-    let query = supabase.from("employees").select("*").order("name");
-    if (!showInactive) query = query.eq("aktiv", true);
+    // Seitenweise, sonst schneidet PostgREST bei ~1000 Zeilen ab (seit dem
+    // Historie-Import tausende inaktive employees): sowohl die angezeigte
+    // Liste als auch die Nummern-Belegung (nächste freie Nummer) wären falsch.
+    const empListe = await ladeAlleSeiten<Employee>((von, bis) => {
+      const basis = supabase
+        .from("employees")
+        .select("*")
+        .order("name")
+        .order("vorname")
+        .order("personal_nr");
+      return (showInactive ? basis : basis.eq("aktiv", true)).range(von, bis);
+    });
+    const alleNr = await ladeAlleSeiten<{
+      id: string;
+      personal_nr: string;
+      name: string;
+      vorname: string;
+    }>((von, bis) =>
+      supabase
+        .from("employees")
+        .select("id, personal_nr, name, vorname")
+        .order("personal_nr")
+        .range(von, bis)
+    );
     const [
-      { data, error },
       { data: ersteTage },
       { data: abrechnungen },
       { data: gruppenData },
       { data: herkunftData },
-      { data: alleNrData },
       { data: svData },
       { data: svAbschnitteData },
       { data: fsData },
       { data: vSatzData },
       { data: checklisteData },
     ] = await Promise.all([
-      query,
       supabase.from("employee_erster_arbeitstag").select("*"),
       supabase.from("employee_letzte_abrechnung").select("*"),
       supabase.from("arbeitsgruppen").select("*").order("reihenfolge"),
       supabase.from("herkuenfte").select("*").order("reihenfolge"),
-      supabase.from("employees").select("id, personal_nr, name, vorname"),
       supabase
         .from("employee_sv_pruefung")
         .select("*")
@@ -215,7 +234,7 @@ export default function MitarbeiterPage() {
       // stehen bleibt.
       supabase.from("personal_kandidaten_checkliste").select("*"),
     ]);
-    if (!error) setEmployees((data as Employee[]) ?? []);
+    setEmployees(empListe);
     const map: Record<string, string> = {};
     (ersteTage ?? []).forEach((row: { employee_id: string; erster_arbeitstag: string }) => {
       map[row.employee_id] = row.erster_arbeitstag;
@@ -242,16 +261,12 @@ export default function MitarbeiterPage() {
     }
     setGruppen((gruppenData as Arbeitsgruppe[]) ?? []);
     setHerkuenfte((herkunftData as Herkunft[]) ?? []);
-    setAllePersonalNummern(alleNrData ?? []);
+    setAllePersonalNummern(alleNr);
     const byIdMap: Record<
       string,
       { personal_nr: string; name: string; vorname: string }
     > = {};
-    (
-      (alleNrData as
-        | { id: string; personal_nr: string; name: string; vorname: string }[]
-        | null) ?? []
-    ).forEach((r) => {
+    alleNr.forEach((r) => {
       byIdMap[r.id] = {
         personal_nr: r.personal_nr,
         name: r.name,

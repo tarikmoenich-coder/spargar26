@@ -12,6 +12,7 @@
 
 import { useEffect, useState } from "react";
 import { getSupabaseClient } from "@/lib/supabase/client";
+import { ladeAlleSeiten } from "@/lib/ladeAlle";
 import { useProfile } from "@/lib/useProfile";
 import PraemienTabs from "@/components/PraemienTabs";
 import type { Arbeitsgruppe, Employee, Herkunft } from "@/lib/types";
@@ -43,21 +44,28 @@ export default function PraemienGruppenaufteilungPage() {
   async function load() {
     setLoading(true);
     const supabase = getSupabaseClient();
-    const [{ data: emp }, { data: gr }, { data: hk }] = await Promise.all([
-      supabase
-        .from("employees")
-        // Bewusst kein "select *" (2026-08-09-Vorfall, siehe schema.sql) -
-        // die Route ist technisch auch für zeiterfassung/erntewirtschaft
-        // erreichbar (Nav blendet nur den Link aus), die keine sensiblen
-        // Felder (SV-Nr./IBAN/...) sehen sollen.
-        .select(
-          "id, personal_nr, gruppe_nr, herkunft, name, vorname, aktiv, praemien_zuckermais, praemien_erdbeeren, praemien_spargel"
-        )
-        .order("name"),
+    const [emp, { data: gr }, { data: hk }] = await Promise.all([
+      // Seitenweise, sonst schneidet PostgREST bei ~1000 Zeilen ab (seit dem
+      // Historie-Import tausende inaktive employees) und Leute fehlen still.
+      // Bewusst kein "select *" (2026-08-09-Vorfall, siehe schema.sql) -
+      // die Route ist technisch auch für zeiterfassung/erntewirtschaft
+      // erreichbar (Nav blendet nur den Link aus), die keine sensiblen
+      // Felder (SV-Nr./IBAN/...) sehen sollen.
+      ladeAlleSeiten<Employee>((von, bis) => {
+        const basis = supabase
+          .from("employees")
+          .select(
+            "id, personal_nr, gruppe_nr, herkunft, name, vorname, aktiv, praemien_zuckermais, praemien_erdbeeren, praemien_spargel"
+          )
+          .order("name")
+          .order("vorname")
+          .order("personal_nr");
+        return (showInactive ? basis : basis.eq("aktiv", true)).range(von, bis);
+      }),
       supabase.from("arbeitsgruppen").select("*").order("reihenfolge"),
       supabase.from("herkuenfte").select("*").order("reihenfolge"),
     ]);
-    setEmployees((emp as Employee[]) ?? []);
+    setEmployees(emp);
     setGruppen((gr as Arbeitsgruppe[]) ?? []);
     setHerkuenfte((hk as Herkunft[]) ?? []);
     setLoading(false);
@@ -65,7 +73,9 @@ export default function PraemienGruppenaufteilungPage() {
 
   useEffect(() => {
     load();
-  }, []);
+    // load() liest showInactive serverseitig - bei Umschalten neu laden.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [showInactive]);
 
   const gefiltert = employees
     .filter((e) => showInactive || e.aktiv)

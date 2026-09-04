@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { getSupabaseClient } from "@/lib/supabase/client";
+import { ladeAlleSeiten } from "@/lib/ladeAlle";
 import { useProfile } from "@/lib/useProfile";
 import { uebersetzung } from "@/lib/i18n";
 import type {
@@ -139,11 +140,19 @@ export default function SuchePage() {
     async function ladeMitarbeiter() {
       setLadenListe(true);
       const supabase = getSupabaseClient();
-      const { data, error } = await supabase
-        .from("employees")
-        .select("id, personal_nr, name, vorname, aktiv")
-        .order("name");
-      if (!error) setAlle((data as SucheEmployee[]) ?? []);
+      // Seitenweise, sonst schneidet PostgREST bei ~1000 Zeilen ab (seit dem
+      // Historie-Import tausende inaktive employees) und die Suche fände
+      // Personen dahinter nicht mehr.
+      const alle = await ladeAlleSeiten<SucheEmployee>((von, bis) =>
+        supabase
+          .from("employees")
+          .select("id, personal_nr, name, vorname, aktiv")
+          .order("name")
+          .order("vorname")
+          .order("personal_nr")
+          .range(von, bis)
+      );
+      setAlle(alle);
       setLadenListe(false);
     }
     ladeMitarbeiter();

@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { getSupabaseClient } from "@/lib/supabase/client";
+import { ladeAlleSeiten } from "@/lib/ladeAlle";
 import {
   ANZAHL_PERSONALNUMMERN_KREISE,
   kreisBereich,
@@ -28,11 +29,16 @@ export default function PersonalnummernPage() {
       const supabase = getSupabaseClient();
       // Absichtlich ohne .eq("aktiv", true): auch inaktive Mitarbeiter
       // behalten ihre Nummer für immer (kein Hard-Delete, ADR-011).
-      const { data, error } = await supabase
-        .from("employees")
-        .select("personal_nr, herkunft, name, vorname, aktiv")
-        .order("personal_nr");
-      if (!error) setRows((data as Row[]) ?? []);
+      // Seitenweise, sonst schneidet PostgREST bei ~1000 Zeilen ab und
+      // Nummern dahinter gälten fälschlich als frei.
+      const rows = await ladeAlleSeiten<Row>((von, bis) =>
+        supabase
+          .from("employees")
+          .select("personal_nr, herkunft, name, vorname, aktiv")
+          .order("personal_nr")
+          .range(von, bis)
+      );
+      setRows(rows);
       setLoading(false);
     }
     load();

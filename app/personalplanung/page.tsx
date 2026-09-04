@@ -10,6 +10,7 @@ import {
   parsePersonalNrNummer,
 } from "@/lib/personalnummern";
 import { formatDatumDE } from "@/lib/format";
+import { ladeAlleSeiten } from "@/lib/ladeAlle";
 import { historieKurz } from "@/lib/saisonHistorie";
 import {
   FUEHRERSCHEIN_KATEGORIEN,
@@ -69,7 +70,7 @@ export default function PersonalplanungPage() {
     const supabase = getSupabaseClient();
     const [
       { data: kData },
-      { data: eData },
+      eList,
       { data: hData },
       { data: vData },
       { data: shData },
@@ -79,7 +80,19 @@ export default function PersonalplanungPage() {
         .select("*")
         .order("herkunft")
         .order("name"),
-      supabase.from("employees").select("*").order("name"),
+      // Seitenweise inkl. inaktiver Personen - sonst schneidet PostgREST bei
+      // ~1000 Zeilen ab (seit dem Historie-Import tausende inaktive) und
+      // Rückkehrer wären hier nicht mehr zu finden bzw. die "belegt"-Zählung
+      // der Personalnummern wäre falsch.
+      ladeAlleSeiten<Employee>((von, bis) =>
+        supabase
+          .from("employees")
+          .select("*")
+          .order("name")
+          .order("vorname")
+          .order("personal_nr")
+          .range(von, bis)
+      ),
       supabase.from("herkuenfte").select("*").order("reihenfolge"),
       supabase
         .from("verpflegungssaetze")
@@ -89,7 +102,7 @@ export default function PersonalplanungPage() {
       supabase.from("employee_saison_historie_agg").select("*"),
     ]);
     setKandidaten((kData as PersonalKandidat[]) ?? []);
-    setEmployees((eData as Employee[]) ?? []);
+    setEmployees(eList);
     setHerkuenfte((hData as Herkunft[]) ?? []);
     setVerpflegungssatz(((vData as VerpflegungsSatz[]) ?? [])[0] ?? null);
     const shMap: Record<string, EmployeeSaisonHistorieAgg> = {};

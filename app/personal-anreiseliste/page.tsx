@@ -2,6 +2,7 @@
 
 import { Fragment, useEffect, useMemo, useState } from "react";
 import { getSupabaseClient } from "@/lib/supabase/client";
+import { ladeAlleSeiten } from "@/lib/ladeAlle";
 import { useProfile } from "@/lib/useProfile";
 import { formatDatumDE, formatEuro } from "@/lib/format";
 import {
@@ -62,7 +63,7 @@ export default function AnreiselistePage() {
     const supabase = getSupabaseClient();
     const [
       { data: kData },
-      { data: eData },
+      eData,
       { data: cData },
       { data: vData },
       { data: bData },
@@ -73,7 +74,14 @@ export default function AnreiselistePage() {
         .eq("status", "anreiseliste")
         .order("geplante_ankunft")
         .order("name"),
-      supabase.from("employees").select("*"),
+      ladeAlleSeiten<Employee>((von, bis) =>
+        supabase
+          .from("employees")
+          .select("*")
+          .order("personal_nr")
+          .order("id")
+          .range(von, bis)
+      ),
       supabase.from("personal_kandidaten_checkliste").select("*"),
       supabase
         .from("verpflegungssaetze")
@@ -87,7 +95,7 @@ export default function AnreiselistePage() {
     ]);
     const kandidatenListe = (kData as PersonalKandidat[]) ?? [];
     setKandidaten(kandidatenListe);
-    setEmployees((eData as Employee[]) ?? []);
+    setEmployees(eData);
     const cMap: Record<string, PersonalKandidatChecklisteRow> = {};
     ((cData as PersonalKandidatChecklisteRow[]) ?? []).forEach((row) => {
       cMap[row.kandidat_id] = row;
