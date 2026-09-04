@@ -248,3 +248,20 @@ input[type="number"]::-webkit-inner-spin-button {
     min-width: 8rem;
   }
 }
+
+/* Personalstammkarte (Deckblatt der Personalkartei) - ein Blatt A4 hoch,
+   ohne Bildschirm-Chrome. */
+@media print {
+  @page {
+    size: A4 portrait;
+    margin: 14mm;
+  }
+  .stammkarte {
+    max-width: none;
+    padding: 0;
+    font-size: 10.5pt;
+  }
+  .stammkarte table {
+    font-size: 9.5pt;
+  }
+}

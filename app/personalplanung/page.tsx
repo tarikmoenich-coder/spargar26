@@ -10,9 +10,11 @@ import {
   parsePersonalNrNummer,
 } from "@/lib/personalnummern";
 import { formatDatumDE } from "@/lib/format";
+import { historieKurz } from "@/lib/saisonHistorie";
 import {
   FUEHRERSCHEIN_KATEGORIEN,
   type Employee,
+  type EmployeeSaisonHistorieAgg,
   type Herkunft,
   type PersonalKandidat,
   type UnterkunftHerkunftKontingent,
@@ -40,6 +42,10 @@ export default function PersonalplanungPage() {
   const [kandidaten, setKandidaten] = useState<PersonalKandidat[]>([]);
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [herkuenfte, setHerkuenfte] = useState<Herkunft[]>([]);
+  // employee_id -> Saison-Historie (wann war die Person schon da)
+  const [saisonHistorie, setSaisonHistorie] = useState<
+    Record<string, EmployeeSaisonHistorieAgg>
+  >({});
   const [loading, setLoading] = useState(true);
   const [form, setForm] = useState(emptyForm);
   // Falls diese Person schon einmal hier war: Verknüpfung zu ihrer
@@ -61,25 +67,36 @@ export default function PersonalplanungPage() {
   async function load() {
     setLoading(true);
     const supabase = getSupabaseClient();
-    const [{ data: kData }, { data: eData }, { data: hData }, { data: vData }] =
-      await Promise.all([
-        supabase
-          .from("personal_kandidaten")
-          .select("*")
-          .order("herkunft")
-          .order("name"),
-        supabase.from("employees").select("*").order("name"),
-        supabase.from("herkuenfte").select("*").order("reihenfolge"),
-        supabase
-          .from("verpflegungssaetze")
-          .select("*")
-          .order("saison_jahr", { ascending: false })
-          .limit(1),
-      ]);
+    const [
+      { data: kData },
+      { data: eData },
+      { data: hData },
+      { data: vData },
+      { data: shData },
+    ] = await Promise.all([
+      supabase
+        .from("personal_kandidaten")
+        .select("*")
+        .order("herkunft")
+        .order("name"),
+      supabase.from("employees").select("*").order("name"),
+      supabase.from("herkuenfte").select("*").order("reihenfolge"),
+      supabase
+        .from("verpflegungssaetze")
+        .select("*")
+        .order("saison_jahr", { ascending: false })
+        .limit(1),
+      supabase.from("employee_saison_historie_agg").select("*"),
+    ]);
     setKandidaten((kData as PersonalKandidat[]) ?? []);
     setEmployees((eData as Employee[]) ?? []);
     setHerkuenfte((hData as Herkunft[]) ?? []);
     setVerpflegungssatz(((vData as VerpflegungsSatz[]) ?? [])[0] ?? null);
+    const shMap: Record<string, EmployeeSaisonHistorieAgg> = {};
+    ((shData as EmployeeSaisonHistorieAgg[] | null) ?? []).forEach((r) => {
+      shMap[r.employee_id] = r;
+    });
+    setSaisonHistorie(shMap);
     setLoading(false);
   }
 
@@ -464,17 +481,24 @@ export default function PersonalplanungPage() {
               Bereits einmal hier gewesen?
             </label>
             {verknuepfterEmployee ? (
-              <div className="flex flex-wrap items-center gap-2 rounded border border-emerald-200 bg-emerald-50 px-2 py-1 text-sm">
-                Verknüpft mit {verknuepfterEmployee.name},{" "}
-                {verknuepfterEmployee.vorname} ({verknuepfterEmployee.personal_nr}
-                {!verknuepfterEmployee.aktiv ? ", inaktiv" : ""})
-                <button
-                  type="button"
-                  className="btn-secondary text-xs"
-                  onClick={verknuepfungLoesen}
-                >
-                  Verknüpfung lösen
-                </button>
+              <div className="flex flex-col gap-1 rounded border border-emerald-200 bg-emerald-50 px-2 py-1 text-sm">
+                <div className="flex flex-wrap items-center gap-2">
+                  Verknüpft mit {verknuepfterEmployee.name},{" "}
+                  {verknuepfterEmployee.vorname} (
+                  {verknuepfterEmployee.personal_nr}
+                  {!verknuepfterEmployee.aktiv ? ", inaktiv" : ""})
+                  <button
+                    type="button"
+                    className="btn-secondary text-xs"
+                    onClick={verknuepfungLoesen}
+                  >
+                    Verknüpfung lösen
+                  </button>
+                </div>
+                <div className="text-xs text-neutral-600">
+                  {historieKurz(saisonHistorie[verknuepfterEmployee.id]) ??
+                    "keine Saison-Historie hinterlegt"}
+                </div>
               </div>
             ) : (
               <div className="relative">
@@ -496,6 +520,12 @@ export default function PersonalplanungPage() {
                         <span>
                           {e.name}, {e.vorname} ({e.personal_nr})
                           {!e.aktiv ? " · inaktiv" : ""}
+                          {historieKurz(saisonHistorie[e.id]) && (
+                            <span className="text-neutral-500">
+                              {" "}
+                              · {historieKurz(saisonHistorie[e.id])}
+                            </span>
+                          )}
                         </span>
                         {e.schwarze_liste && (
                           <span className="font-medium text-red-600">

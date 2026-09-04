@@ -99,6 +99,20 @@ export interface Employee {
   geburtsdatum: string | null;
   ort: string | null;
   land: string | null;
+  // Weitere Stammdaten-Felder (in der DB vorhanden, hier optional, da nicht
+  // jede select-Abfrage sie mitlädt) - u.a. für die Personalstammkarte.
+  strasse?: string | null;
+  hausnummer?: string | null;
+  plz?: string | null;
+  staatsangehoerigkeit?: string | null;
+  geschlecht?: "M" | "F" | null;
+  familienstand?: string | null;
+  geburtsname?: string | null;
+  geburtsort?: string | null;
+  hochzeitsdatum?: string | null;
+  fuehrerschein_b?: boolean;
+  fuehrerschein_c?: boolean;
+  notiz?: string | null;
   sozialversicherungsnummer?: string | null;
   steuer_id?: string | null;
   iban?: string | null;
@@ -135,6 +149,25 @@ export interface EmployeeSaisonPraesenz {
   saison_jahr: number;
   quelle: string;
   erfasst_am: string;
+}
+
+// Detailsicht employee_saison_jahre: eine Zeile je (Person, Saison-Jahr).
+export interface EmployeeSaisonJahr {
+  employee_id: string;
+  saison_jahr: number;
+  aus_kartei: boolean;
+  aus_erfassung: boolean;
+  stunden_gesamt: number | null;
+  tage_erfasst: number | null;
+}
+
+// Kurzfassung employee_saison_historie_agg für Listen.
+export interface EmployeeSaisonHistorieAgg {
+  employee_id: string;
+  erste_saison: number;
+  letzte_saison: number;
+  anzahl_saisons: number;
+  saisons: number[];
 }
 
 // Eintrag der Abschnitts-Historie (saison_abrechnungen) - jeder Eintrag

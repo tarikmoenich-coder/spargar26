@@ -1389,6 +1389,14 @@ export default function MitarbeiterPage() {
                     >
                       Dokumente
                     </button>
+                    <a
+                      className="btn-secondary"
+                      href={`/personalstammkarte?id=${emp.id}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                    >
+                      Stammkarte
+                    </a>
                   </td>
                 )}
               </tr>
