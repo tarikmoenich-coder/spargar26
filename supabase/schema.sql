@@ -229,6 +229,24 @@ create view employees_public as
     geburtsdatum, ort, land, stundenlohn, saison_beginn, saison_ende, aktiv
   from employees;
 
+-- Jahreshistorie "Person war in Saison X da" - OHNE Jahresdetails
+-- (Nutzer-Vorgabe 2026-09-04: "Nur das Wissen, dass die Person da war").
+-- Gespeist aus dem einmaligen Historie-Import (/personal-import-historie), der
+-- die komplette Vorjahres-Personaldatei (eine Zeile je Person UND Jahr) auf
+-- eine employees-Zeile je personal_nr eindampft (jüngstes Jahr liefert die
+-- Stammdaten, alle inaktiv) und die Jahre hier ablegt.
+-- min(saison_jahr)/max(saison_jahr) = erste/letzte Saison.
+create table employee_saison_praesenz (
+  employee_id uuid not null references employees (id) on delete cascade,
+  saison_jahr int not null check (saison_jahr between 1990 and 2100),
+  quelle text not null default 'import',
+  erfasst_am timestamptz not null default now(),
+  primary key (employee_id, saison_jahr)
+);
+
+create index idx_employee_saison_praesenz_jahr
+  on employee_saison_praesenz (saison_jahr);
+
 -- ---------------------------------------------------------------------------
 -- 2a. Mitarbeiter-Dokumente (z.B. Hochzeitsurkunde, Ausweiskopie) - werden
 --     als Datei in Supabase Storage abgelegt, dieser Eintrag verweist nur
@@ -4630,6 +4648,7 @@ alter table profiles enable row level security;
 alter table arbeitsgruppen enable row level security;
 alter table herkuenfte enable row level security;
 alter table employees enable row level security;
+alter table employee_saison_praesenz enable row level security;
 alter table work_entries enable row level security;
 alter table periods enable row level security;
 alter table season_bonuses enable row level security;
@@ -4687,6 +4706,16 @@ create policy "herkuenfte_admin_write" on herkuenfte for all
 create policy "employees_admin_hr_all" on employees for all
   using (current_role_name() in ('admin', 'hr'))
   with check (current_role_name() in ('admin', 'hr'));
+
+-- employee_saison_praesenz: nicht sensibel (Personen-ID + Jahr), Lesen für alle
+-- eingeloggten Rollen wie employees, Pflege nur admin/hr.
+create policy "employee_saison_praesenz_select" on employee_saison_praesenz
+  for select using (auth.uid() is not null);
+create policy "employee_saison_praesenz_admin_hr_all" on employee_saison_praesenz
+  for all
+  using (current_role_name() in ('admin', 'hr'))
+  with check (current_role_name() in ('admin', 'hr'));
+grant select, insert, update, delete on employee_saison_praesenz to authenticated;
 
 -- Personalplanung: wie employees nur admin/hr (Personalplanung-Frage
 -- vom Nutzer 2026-08-06 explizit so festgelegt).

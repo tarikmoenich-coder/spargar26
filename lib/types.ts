@@ -128,6 +128,15 @@ export interface Employee {
   version?: number;
 }
 
+// Jahreshistorie ohne Details: eine Zeile je (Person, Saison-Jahr), gesetzt
+// vom Historie-Import. min/max = erste/letzte Saison.
+export interface EmployeeSaisonPraesenz {
+  employee_id: string;
+  saison_jahr: number;
+  quelle: string;
+  erfasst_am: string;
+}
+
 // Eintrag der Abschnitts-Historie (saison_abrechnungen) - jeder Eintrag
 // setzt die 105-Tage-Uhr der SV-Prüfung zurück. auszahlungsbeleg_id
 // gesetzt = echte "Jetzt Abrechnen"-Aktion in der App, NULL = manuell

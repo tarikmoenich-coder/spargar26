@@ -61,6 +61,7 @@ const items: NavItem[] = [
     auchAktivBei: [
       "/personalnummern",
       "/personal-import",
+      "/personal-import-historie",
       "/personal-dokumente",
       "/personalplanung",
       "/personal-anreiseliste",
