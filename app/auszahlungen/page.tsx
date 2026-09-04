@@ -233,6 +233,14 @@ export default function AuszahlungenPage() {
   const [kautionSaving, setKautionSaving] = useState(false);
   const [kautionFehler, setKautionFehler] = useState<string | null>(null);
 
+  // Personenfilter: nur Belege zeigen, in denen die gesuchte Person als
+  // Zeile vorkommt (Suche über auszahlungsbeleg_zeilen). null = kein Filter.
+  const [personFilter, setPersonFilter] = useState("");
+  const [personBelegIds, setPersonBelegIds] = useState<Set<number> | null>(null);
+  const [personTreffer, setPersonTreffer] = useState<
+    { name: string; vorname: string; personal_nr: string }[]
+  >([]);
+
   async function load() {
     setLoading(true);
     const supabase = getSupabaseClient();
@@ -272,6 +280,46 @@ export default function AuszahlungenPage() {
     const id = setTimeout(() => window.print(), 50);
     return () => clearTimeout(id);
   }, [druckZeilen]);
+
+  useEffect(() => {
+    const q = personFilter.trim().replace(/[%,()*\\]/g, "");
+    if (q.length < 2) {
+      setPersonBelegIds(null);
+      setPersonTreffer([]);
+      return;
+    }
+    const timer = setTimeout(async () => {
+      const supabase = getSupabaseClient();
+      const { data } = await supabase
+        .from("auszahlungsbeleg_zeilen")
+        .select("auszahlungsbeleg_id, name, vorname, personal_nr")
+        .or(
+          `name.ilike.%${q}%,vorname.ilike.%${q}%,personal_nr.ilike.%${q}%`
+        );
+      const rows =
+        (data as {
+          auszahlungsbeleg_id: number;
+          name: string;
+          vorname: string;
+          personal_nr: string;
+        }[]) ?? [];
+      setPersonBelegIds(new Set(rows.map((r) => r.auszahlungsbeleg_id)));
+      const gesehen = new Set<string>();
+      const treffer: { name: string; vorname: string; personal_nr: string }[] =
+        [];
+      for (const r of rows) {
+        if (gesehen.has(r.personal_nr)) continue;
+        gesehen.add(r.personal_nr);
+        treffer.push({
+          name: r.name,
+          vorname: r.vorname,
+          personal_nr: r.personal_nr,
+        });
+      }
+      setPersonTreffer(treffer);
+    }, 250);
+    return () => clearTimeout(timer);
+  }, [personFilter]);
 
   async function toggleOffen(beleg: AuszahlungsbelegSummary) {
     setOffen((prev) => {
@@ -467,6 +515,7 @@ export default function AuszahlungenPage() {
       const monat = new Date(b.erstellt_am).getMonth() + 1;
       if (monat !== monatFilter) return false;
     }
+    if (personBelegIds !== null && !personBelegIds.has(b.id)) return false;
     return true;
   });
 
@@ -523,8 +572,25 @@ export default function AuszahlungenPage() {
               ))}
             </select>
           </label>
+          <label className="text-sm">
+            Person{" "}
+            <input
+              type="text"
+              value={personFilter}
+              onChange={(e) => setPersonFilter(e.target.value)}
+              placeholder="Name / Personalnummer"
+              className="w-52"
+            />
+          </label>
           <span className="text-sm text-neutral-500">
             {belegeGefiltert.length} von {belege.length} Beleg(en)
+            {personBelegIds !== null &&
+              (personTreffer.length > 0
+                ? ` · ${personTreffer
+                    .slice(0, 3)
+                    .map((p) => `${p.name}, ${p.vorname} (${p.personal_nr})`)
+                    .join("; ")}${personTreffer.length > 3 ? " …" : ""}`
+                : " · niemand gefunden")}
           </span>
         </div>
       )}
