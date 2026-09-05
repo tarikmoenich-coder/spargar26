@@ -45,6 +45,13 @@ export default function FahrzeugeUebersichtPage() {
   const [zeige, setZeige] = useState<"karte" | "liste">("karte");
   // Kartenfilter nach Fahrzeugtyp ("" = alle). Wirkt auf Karte UND Liste.
   const [typFilter, setTypFilter] = useState("");
+  // "Auf Karte zeigen" aus der Liste: neues Objekt je Klick.
+  const [fokus, setFokus] = useState<{ id: number; ts: number } | null>(null);
+
+  function aufKarteZeigen(id: number) {
+    setFokus({ id, ts: Date.now() });
+    setZeige("karte");
+  }
 
   const laden = useCallback(async () => {
     const supabase = getSupabaseClient();
@@ -134,7 +141,10 @@ export default function FahrzeugeUebersichtPage() {
           <select
             className="text-sm"
             value={typFilter}
-            onChange={(e) => setTypFilter(e.target.value)}
+            onChange={(e) => {
+              setTypFilter(e.target.value);
+              setFokus(null); // Auto-Fit für den neuen Filter wieder zulassen
+            }}
             title="Nach Fahrzeugtyp filtern"
           >
             <option value="">Alle Typen</option>
@@ -181,6 +191,8 @@ export default function FahrzeugeUebersichtPage() {
               fahrzeuge={sichtbar}
               geofences={geofences}
               bilder={bilder}
+              fokus={fokus}
+              aktiv={zeige === "karte"}
               hoehe="h-[70vh]"
             />
           </div>
@@ -307,6 +319,21 @@ export default function FahrzeugeUebersichtPage() {
                         📍 Tracker verbaut: {f.tracker_position}
                       </div>
                     )}
+                    <div className="mt-1">
+                      <button
+                        type="button"
+                        className="btn-secondary text-xs"
+                        disabled={f.lat == null || f.lng == null}
+                        title={
+                          f.lat == null || f.lng == null
+                            ? "Keine Position bekannt"
+                            : "Auf der Karte anzeigen"
+                        }
+                        onClick={() => aufKarteZeigen(f.id)}
+                      >
+                        Auf Karte zeigen
+                      </button>
+                    </div>
                   </div>
                 </div>
               );

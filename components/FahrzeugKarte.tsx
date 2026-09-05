@@ -122,6 +122,8 @@ export default function FahrzeugKarte({
   track,
   geofences,
   bilder,
+  fokus,
+  aktiv = true,
   hoehe = "h-[70vh]",
 }: {
   fahrzeuge: FahrzeugUebersicht[];
@@ -129,6 +131,13 @@ export default function FahrzeugKarte({
   geofences?: KartenGeofence[];
   /** Fahrzeug-ID -> Foto als data-URL, wird über dem Kennzeichen gezeigt. */
   bilder?: Record<number, string>;
+  /** "Auf Karte zeigen" aus der Liste: auf dieses Fahrzeug zoomen + Popup
+   *  öffnen. Neues Objekt (ts) bei jedem Klick, damit ein erneuter Klick auf
+   *  dasselbe Fahrzeug wieder auslöst. Solange gesetzt: kein Auto-Fit. */
+  fokus?: { id: number; ts: number } | null;
+  /** Ob die Karte gerade sichtbar ist (Umschalter Karte/Liste). Beim
+   *  Einblenden muss maplibre neu vermessen werden. */
+  aktiv?: boolean;
   hoehe?: string;
 }) {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -345,13 +354,38 @@ export default function FahrzeugKarte({
       }
     });
 
-    // Auf die Marker zoomen, solange kein Track aktiv ist
-    if ((!track || track.length === 0) && mitPos.length > 0) {
+    // Auf die Marker zoomen, solange kein Track aktiv ist und kein einzelnes
+    // Fahrzeug fokussiert wurde (sonst zieht der 20-s-Poll den Zoom wieder
+    // auf die ganze Flotte zurück).
+    if ((!track || track.length === 0) && mitPos.length > 0 && !fokus) {
       const b = new maplibregl.LngLatBounds();
       mitPos.forEach((f) => b.extend([f.lng!, f.lat!]));
       map.fitBounds(b, { padding: 60, maxZoom: 15, duration: 400 });
     }
-  }, [fahrzeuge, bereit, track, bilder]);
+  }, [fahrzeuge, bereit, track, bilder, fokus]);
+
+  // Karte beim Einblenden (Umschalter Karte/Liste) neu vermessen - eine im
+  // display:none aufgebaute maplibre-Karte rendert sonst mit 0 Größe.
+  useEffect(() => {
+    if (aktiv && bereit) mapRef.current?.resize();
+  }, [aktiv, bereit]);
+
+  // "Auf Karte zeigen" aus der Liste: hinfliegen + Popup öffnen.
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !bereit || !fokus) return;
+    const f = fahrzeuge.find((x) => x.id === fokus.id);
+    if (!f || f.lat == null || f.lng == null) return;
+    map.resize();
+    map.flyTo({
+      center: [f.lng, f.lat],
+      zoom: Math.max(map.getZoom(), 15),
+      duration: 600,
+    });
+    const marker = markersRef.current.get(fokus.id);
+    const popup = marker?.getPopup();
+    if (marker && popup && !popup.isOpen()) marker.togglePopup();
+  }, [fokus, bereit, fahrzeuge]);
 
   // Geofences (Höfe) zeichnen.
   useEffect(() => {
