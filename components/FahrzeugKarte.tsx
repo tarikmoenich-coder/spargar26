@@ -252,6 +252,10 @@ export default function FahrzeugKarte({
       behalten.add(f.id);
       const min = minutenHer(f.pos_zeitpunkt);
       const farbe = ampel(min);
+      // "grauer Punkt" = seit >= 60 min keine Meldung / gar keine Position.
+      // Dann auf der Karte nur noch das Kennzeichen zeigen, kein Foto
+      // (Nutzer-Vorgabe) - im Detail-Popup bleibt das Foto.
+      const veraltet = farbe === "#9ca3af";
       const faehrt = (f.speed_kmh ?? 0) > 3;
       const titel = f.kennzeichen || f.bezeichnung;
 
@@ -293,7 +297,7 @@ export default function FahrzeugKarte({
         <div style="width:14px;height:14px;border-radius:9999px;background:${farbe};border:2px solid #fff;box-shadow:0 0 0 1px rgba(0,0,0,.3)"></div>
         <div style="position:absolute;left:20px;top:50%;transform:translateY(-50%);background:#fff;border:1px solid #e6e1d5;border-radius:6px;padding:1px 5px;font:600 11px/1.3 system-ui;box-shadow:0 1px 2px rgba(0,0,0,.15);white-space:nowrap">${titel}${pfeil}</div>
         ${
-          fotoUrl
+          fotoUrl && !veraltet
             ? `<img class="fzm-foto" src="${fotoUrl}" alt="" style="position:absolute;left:20px;bottom:22px;width:70px;max-width:none;height:48px;object-fit:cover;border-radius:5px;border:2px solid #fff;box-shadow:0 1px 3px rgba(0,0,0,.35);background:#fff;pointer-events:none" />`
             : ""
         }`;
