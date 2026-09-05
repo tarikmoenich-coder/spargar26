@@ -44,6 +44,20 @@ Ergebnis:  pro Kiste: Maschine · Fahrer · Feld/Flur (aus GPS) · Zeit · netto
 - **Spitze: 1600 Kisten/Tag.**
 - Rolle **`erntewirtschaft`** existiert schon im Codebase (bisher nur lesend in
   anderen Modulen).
+- **Rollen-Abgleich mit dem Pflichtenheft (Klärung 2026-09-04):** „Mitarbeiter"
+  im Pflichtenheft = die bestehende Rolle **`zeiterfassung`** (dieselbe Ebene wie
+  Stundenerfassung – Einsicht auf Maschinen/Belegungen, teils auch Datenpflege).
+  „Techniker" ist veraltet und meint ebenfalls diese Ebene. „Chef" = **`admin`**.
+  Es gibt **keine Einzel-Logins für die ~140 Erntehelfer** – die Ebene
+  „Mitarbeiter" ist eine Vorarbeiter-/Büro-Ebene, kein Kiosk-Login pro Person.
+- **Abrechnung läuft wie bei Zuckermais/Erdbeeren/Spargel:** Tageswerte
+  erfassen/prüfen → „Freigeben/Alles speichern" → Tagesprämie fließt sofort in
+  `season_bonuses`/`season_summary` und damit automatisch in Lohnübersicht/
+  Auszahlung ein. Keine eigene Abrechnungslogik nötig, nur ein weiterer Prämien-
+  Strom im selben, schon vorhandenen Mechanismus.
+- „Liste Kassensysteme" (Vorbild für die Maschinenliste im Pflichtenheft) gibt
+  es in spargar26 nicht und ist zu ignorieren – Karte/Liste der 140 Maschinen
+  werden frei nach spargar26-Konventionen gestaltet (Muster: Fahrzeuge-Modul).
 
 ## Hardware-Entscheidungen — OFFEN, mit Empfehlung
 
@@ -179,15 +193,23 @@ Alles Abgeleitete ist hieraus reprozessierbar.
 
 **`ernte_feld`** — Feld-/Schlaggeometrien: `id identity pk`, `name`, `flur`,
 `gemarkung`, `kultur text`, `geom geometry(MultiPolygon,4326)`,
-`aktiv boolean default true`, timestamps. GIST-Index auf `geom`.
+`laufmeter_gesamt numeric(9,1)` (Summe Dammlänge/Reihen des Feldes — Stammdatum
+fürs Pflichtenheft-Feature „Arbeitsfortschritt in %", Quelle noch offen, siehe
+unten), `aktiv boolean default true`, timestamps. GIST-Index auf `geom`.
 Erstbefüllung Import aus Pachtwesen2026 (falls dort verfügbar), sonst Karten-Editor.
 
 **`ernte_maschine_energie`** (v1.1) — VE.Direct-Telemetrie: `id`, `maschine_id`,
-`zeitpunkt`, `soc_prozent`, `spannung_v`, `strom_a`, `roh jsonb`,
+`zeitpunkt`, `soc_prozent`, `spannung_v`, `strom_a`,
+`pv_status text check (pv_status in ('bulk','float','absorption'))` (Victron-
+Laderegler-Zustand, aus dem Pflichtenheft), `roh jsonb`,
 `unique(maschine_id, zeitpunkt)`.
 
 **`ernte_konfig`** — `schluessel text pk`, `wert text`, `beschreibung`. Seed:
-`tara_kg_standard`, `schicht_timeout_min`, `kiste_offen_warn_h`, `position_rate_s`.
+`tara_kg_standard`, `schicht_timeout_min`, `kiste_offen_warn_h`, `position_rate_s`,
+`offline_warn_min=5`, `offline_alarm_min=10`, `batterie_warn_v=24`,
+`batterie_alarm_v=22`, `pause_max_meter=2`, `pause_fenster_min=5` — alle
+Schwellen 1:1 aus dem Pflichtenheft (Ampel Online/Offline, Batterie, Pausen-
+Erkennung), damit sie ohne Deploy nachjustierbar bleiben statt hart codiert.
 
 **`ernte_poller_state`** — `id int pk default 1`, `letzter_lauf`,
 `letzte_position_zeit`.
@@ -198,10 +220,24 @@ Erstbefüllung Import aus Pachtwesen2026 (falls dort verfügbar), sonst Karten-E
   netto kg, Dauern. Für die Modul-Tabelle.
 - **`ernte_ertrag_tag`** — je (Tag `Europe/Berlin`, Maschine, Feld):
   `sum(netto_kg)`, `count(*) kisten`, `min(befuellt_am)`, `max(gewogen_am)`.
-- **`ernte_effizienz_schicht`** — je `ernte_schicht`: Fahrer, Maschine, Feld(er),
-  Kisten, netto kg, Schicht-Stunden (`ende − beginn`),
-  `kg_pro_stunde`; Join `work_entries` (gleicher Mitarbeiter + Tag) →
-  `gebuchte_stunden`, `differenz_stunden`.
+- **`ernte_effizienz_schicht`** — je `ernte_schicht`, Arbeitszeit-Modell 1:1 aus
+  dem Pflichtenheft (löst die frühere offene Frage 4 — der Stundenzettel bleibt
+  führend, die Maschinenzeit ist Kontrollgröße):
+  - `netto_maschinenzeit` = `ende − beginn` der Schicht.
+  - `pausenzeit` = Summe der Standzeit-Fenster (`< pause_max_meter` in
+    `pause_fenster_min` Minuten zurückgelegt, aus `ernte_position`).
+  - `produktivzeit` = `netto_maschinenzeit − pausenzeit`.
+  - `gebuchte_stunden` = Join `work_entries` (gleicher Mitarbeiter + Tag) — die
+    **weiterhin manuell erfasste Brutto-Arbeitszeit**, bleibt die bezahlte Größe.
+  - `fahrt_ruestzeit` = `gebuchte_stunden − netto_maschinenzeit` (kann negativ
+    sein → Hinweis, nicht hart validiert).
+  - `kg_pro_stunde` (kg / produktivzeit), `kg_pro_laufmeter` (kg /
+    Tages-Laufmeter aus `ernte_laufmeter_tag`).
+- **`ernte_laufmeter_tag`** — je (Tag, Maschine, Feld): aus `ernte_position`
+  aufsummierte Distanz zwischen aufeinanderfolgenden Punkten (Haversine, nur
+  während Bewegung/RTK-Fix, Ausreißer/Sprünge gekappt) = „Laufmeter heute".
+  Kumuliert über die Saison vs. `ernte_feld.laufmeter_gesamt` → Fortschritt in
+  % fürs Dashboard (inkl. Summe letzte 48 h laut Pflichtenheft).
 - **`ernte_kette_luecken`** — Reconciliation: „befüllt, nie gewogen"
   (`status='offen'` und `befuellt_am < now() − kiste_offen_warn_h`),
   „gewogen ohne Befüllung" (`status='ungeklaert'`),
@@ -212,9 +248,15 @@ Erstbefüllung Import aus Pachtwesen2026 (falls dort verfügbar), sonst Karten-E
 ### RLS (Muster wie `fahrzeug`)
 
 - `select` auf alle `ernte_*`-Tabellen + Sichten: `admin`, `hr`, `management`,
-  `erntewirtschaft`.
+  `erntewirtschaft`, **`zeiterfassung`** (= „Mitarbeiter"/„Techniker" im
+  Pflichtenheft — Dashboard, Maschinenliste, Belegungen).
 - `ernte_maschine`, `ernte_tag`, `ernte_waage`, `ernte_feld`, `ernte_konfig`:
-  `for all` `admin`, `hr` (Tag-/Feldpflege ggf. auch `erntewirtschaft`).
+  `for all` `admin`, `hr`; laufende Korrekturen (Maschine↔Feld/Mitarbeiter
+  manuell überschreiben) zusätzlich `erntewirtschaft`, `zeiterfassung` — analog
+  zu `praemien/zuckermais`, wo dieselben zwei Rollen mit-editieren dürfen.
+- Feldstufen setzen/ändern und die finale Auszahlungs-„Manipulation" (Chef laut
+  Pflichtenheft) bleiben **`admin`**-only, wie die Satz-Verwaltung bei
+  Zuckermais.
 - `ernte_scan`, `ernte_position`, `ernte_maschine_energie`: **keine
   Insert-Policy** — nur Service-Key (Ingest/Poller).
 - `ernte_schicht`, `ernte_kiste_zyklus`: Insert nur Service-Key; enge
@@ -281,6 +323,35 @@ Bulk-Import, weil 140 Maschinen + tausende Kisten-Tags niemand von Hand tippt.
   `ErnteKisteZyklus`, `ErnteScan`, `ErnteWaage`, `ErnteFeld` + Sicht-Typen +
   Label-Maps.
 
+## Teil F2 — Boni/Feldstufen (aus dem Pflichtenheft, wie Zuckermais)
+
+Wird als **weiterer Prämien-Strom** in die bestehende Prämien-Infrastruktur
+eingehängt (`praemien_zuckermais`/`praemien_erdbeeren`/`praemien_spargel`-
+Muster: Rohdaten-Tabelle je Tag/Person, Sätze-Verwaltung mit „gültig ab",
+`alleSpeichern()` → `season_bonuses`/`season_summary`), **kein** separates
+Abrechnungssystem — das beantwortet den Pflichtenheft-Punkt „Abrechnung Lohn"
+(Zeile 54, dort ohne Inhalt): funktioniert exakt wie bei Zuckermais.
+
+- Pro Person eine Vergütungsart **Akkord** oder **Feldstufe/Prämie**
+  (neues `employees`-Flag oder eigene kleine Tabelle, Muster wie die drei
+  vorhandenen `praemien_*`-Booleans).
+- **Feldstufe** 1–100 je Feld/Tag, aus dem Vortag vorgeschlagen, von `admin`
+  (Chef) änderbar — neue Tabelle `ernte_feldstufe (feld_id, tag, stufe,
+  gesetzt_von, gesetzt_am)`.
+- Tagesprämie = `ernte_ertrag_tag.netto_kg × Preis(Feldstufe)` (Satztabelle wie
+  `zuckermais_saetze`, „gültig ab"-versioniert).
+- **Offen, bewusst nicht gelöst:** das im Pflichtenheft selbst als ungeklärt
+  markierte Problem „dünne Stangen = wenig kg UND wenig Laufmeter" (Schieber
+  kg/h ↔ Lfm/h, 0–1) — braucht eine Entscheidung des Nutzers, bevor die Formel
+  feststeht. Bis dahin nur kg-basiert wie oben.
+- **Tagesliste Boni** (`/erntewirtschaft/tagesliste`, Rolle `zeiterfassung`+):
+  druckbare, optisch aufbereitete Prämienliste je Tag, Spalten ein-/ausblendbar
+  für den Ausdruck (Muster: Lohnübersicht-Monatsdruck). Beispielvorlage liegt
+  als SharePoint-Link im Pflichtenheft — kein Zugriff, Nutzer schickt sie
+  direkt/als Screenshot nach.
+- Finale **Manipulation je Person** vor „Freigeben/Alles speichern" bleibt
+  `admin`-only (Audit-relevant, wie oben bei RLS).
+
 ## Teil G — Poller-Erweiterung
 
 Neues Modul im systemd-Poller (oder zweite Instanz): liest die Spinne-Geräte aus
@@ -314,13 +385,22 @@ Spatial-Join `ernte_feld` → `flurstueck_id`/`feld`. Retention/Downsample-Job.
    liest ein UHF-Reader mehrere Kisten auf einmal.
 3. **Waage:** sobald das Modell feststeht — Schnittstelle (RS232 / Ethernet /
    Impuls)? Rechner am Hof für den Agenten vorhanden oder Teil des Projekts (RPi)?
-4. **`work_entries`-Kopplung:** treiben die Badge-Schicht-Stunden den Effizienz-
-   Check, oder bleiben die gebuchten Stunden führend und die Badge-Zeit ist nur
-   Plausibilitätsabgleich?
+4. ~~`work_entries`-Kopplung~~ — **geklärt** (Pflichtenheft): der Stundenzettel
+   bleibt führend, die Maschinenzeit ist Kontroll-/Differenzgröße.
 5. **Tara:** feste Konstante je Kistentyp (welcher Wert?), oder werden Kisten auch
    leer gewogen?
 6. **Mitbestimmung:** die Kette Fahrer→Kiste→kg→Stunden ist personenscharfe
    Leistungserfassung — vor Scharfschaltung mit den Fahrern/Betriebsrat klären.
+7. **Laufmeter-Stammdaten:** woher kommt `ernte_feld.laufmeter_gesamt`
+   (Dammlänge/Reihen je Feld) — aus Pachtwesen2026 ableitbar (Geometrie ×
+   Dammabstand), oder muss das separat gepflegt werden?
+8. **Feldstufen-Algorithmus:** wie soll der „dünne Stangen"-Fall (wenig kg UND
+   wenig Laufmeter) bewertet werden — fester Kg-Preis je Stufe reicht erstmal,
+   der im Pflichtenheft skizzierte kg/h↔Lfm/h-Schieber ist vertagt, bis eine
+   klare Formel feststeht.
+9. **Vergütungsart je Person** (Akkord vs. Feldstufe/Prämie): reicht ein
+   einfaches Flag wie bei den drei bestehenden `praemien_*`-Booleans, oder soll
+   sich das je Saison ändern können?
 
 ## Nicht in v1
 
