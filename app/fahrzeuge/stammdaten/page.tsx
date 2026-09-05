@@ -5,11 +5,15 @@ import { Truck } from "lucide-react";
 import { getSupabaseClient } from "@/lib/supabase/client";
 import { useProfile } from "@/lib/useProfile";
 import { formatDatumDE } from "@/lib/format";
-import type { Fahrzeug, FahrzeugTracker } from "@/lib/types";
+import {
+  FAHRZEUG_TYPEN,
+  FAHRZEUG_TYP_LABELS,
+  fahrzeugTypLabel,
+  type Fahrzeug,
+  type FahrzeugTracker,
+} from "@/lib/types";
 import FahrzeugeTabs from "@/components/FahrzeugeTabs";
 import PageHeader from "@/components/PageHeader";
-
-const TYPEN = ["pkw", "transporter", "traktor", "anhaenger", "sonstiges"];
 
 // Foto client-seitig auf eine kleine Kante herunterrechnen und als JPEG-data-URL
 // zurückgeben. Reicht, um auf der Karte das Auto zum Kennzeichen zu erkennen.
@@ -395,9 +399,9 @@ export default function FahrzeugeStammdatenPage() {
                     onChange={(e) => setForm({ ...form, typ: e.target.value })}
                   >
                     <option value="">—</option>
-                    {TYPEN.map((t) => (
+                    {FAHRZEUG_TYPEN.map((t) => (
                       <option key={t} value={t}>
-                        {t}
+                        {FAHRZEUG_TYP_LABELS[t]}
                       </option>
                     ))}
                   </select>
@@ -612,7 +616,7 @@ export default function FahrzeugeStammdatenPage() {
                       </td>
                       <td>{f.bezeichnung}</td>
                       <td>{f.kennzeichen ?? "—"}</td>
-                      <td>{f.typ ?? "—"}</td>
+                      <td>{fahrzeugTypLabel(f.typ)}</td>
                       <td className="align-top">
                         <FahrerZelle
                           fahrzeug={f}

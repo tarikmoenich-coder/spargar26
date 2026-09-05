@@ -5,10 +5,13 @@ import Link from "next/link";
 import { Truck } from "lucide-react";
 import { getSupabaseClient } from "@/lib/supabase/client";
 import { formatDatumDE } from "@/lib/format";
-import type {
-  FahrzeugGeofence,
-  FahrzeugTracker,
-  FahrzeugUebersicht,
+import {
+  FAHRZEUG_TYPEN,
+  FAHRZEUG_TYP_LABELS,
+  fahrzeugTypLabel,
+  type FahrzeugGeofence,
+  type FahrzeugTracker,
+  type FahrzeugUebersicht,
 } from "@/lib/types";
 import FahrzeugeTabs from "@/components/FahrzeugeTabs";
 import FahrzeugKarte from "@/components/FahrzeugKarte";
@@ -40,6 +43,8 @@ export default function FahrzeugeUebersichtPage() {
   const [alarmHeute, setAlarmHeute] = useState(0);
   const [loading, setLoading] = useState(true);
   const [zeige, setZeige] = useState<"karte" | "liste">("karte");
+  // Kartenfilter nach Fahrzeugtyp ("" = alle). Wirkt auf Karte UND Liste.
+  const [typFilter, setTypFilter] = useState("");
 
   const laden = useCallback(async () => {
     const supabase = getSupabaseClient();
@@ -87,6 +92,18 @@ export default function FahrzeugeUebersichtPage() {
       });
   }, []);
 
+  // Nur Typen anbieten, die tatsächlich vorkommen (+ die aktuelle Auswahl,
+  // falls das letzte Fahrzeug dieses Typs gerade rausgefiltert lädt).
+  const vorhandeneTypen = new Set(
+    fahrzeuge.map((f) => f.typ).filter((t): t is string => !!t)
+  );
+  const typOptionen = FAHRZEUG_TYPEN.filter(
+    (t) => vorhandeneTypen.has(t) || t === typFilter
+  );
+  const sichtbar = typFilter
+    ? fahrzeuge.filter((f) => f.typ === typFilter)
+    : fahrzeuge;
+
   return (
     <div className="flex flex-col gap-4">
       <FahrzeugeTabs />
@@ -97,21 +114,41 @@ export default function FahrzeugeUebersichtPage() {
       />
 
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <div className="inline-flex rounded-md border border-linie bg-white p-0.5 text-sm lg:hidden">
-          {(["karte", "liste"] as const).map((v) => (
-            <button
-              key={v}
-              type="button"
-              onClick={() => setZeige(v)}
-              className={`rounded px-3 py-1 ${
-                zeige === v
-                  ? "bg-emerald-700 text-white"
-                  : "text-neutral-600"
-              }`}
-            >
-              {v === "karte" ? "Karte" : "Liste"}
-            </button>
-          ))}
+        <div className="flex flex-wrap items-center gap-2">
+          <div className="inline-flex rounded-md border border-linie bg-white p-0.5 text-sm">
+            {(["karte", "liste"] as const).map((v) => (
+              <button
+                key={v}
+                type="button"
+                onClick={() => setZeige(v)}
+                className={`rounded px-3 py-1 ${
+                  zeige === v
+                    ? "bg-emerald-700 text-white"
+                    : "text-neutral-600"
+                }`}
+              >
+                {v === "karte" ? "Karte" : "Liste"}
+              </button>
+            ))}
+          </div>
+          <select
+            className="text-sm"
+            value={typFilter}
+            onChange={(e) => setTypFilter(e.target.value)}
+            title="Nach Fahrzeugtyp filtern"
+          >
+            <option value="">Alle Typen</option>
+            {typOptionen.map((t) => (
+              <option key={t} value={t}>
+                {FAHRZEUG_TYP_LABELS[t]}
+              </option>
+            ))}
+          </select>
+          {typFilter && (
+            <span className="text-xs text-neutral-500">
+              {sichtbar.length} von {fahrzeuge.length}
+            </span>
+          )}
         </div>
         <div className="flex items-center gap-2">
           {alarmHeute > 0 && (
@@ -139,9 +176,9 @@ export default function FahrzeugeUebersichtPage() {
         <p className="p-4 text-sm text-neutral-500">Lädt …</p>
       ) : (
         <>
-          <div className={zeige === "karte" ? "" : "hidden lg:block"}>
+          <div className={zeige === "karte" ? "" : "hidden"}>
             <FahrzeugKarte
-              fahrzeuge={fahrzeuge}
+              fahrzeuge={sichtbar}
               geofences={geofences}
               bilder={bilder}
               hoehe="h-[70vh]"
@@ -150,10 +187,10 @@ export default function FahrzeugeUebersichtPage() {
 
           <div
             className={`flex flex-col gap-2 ${
-              zeige === "liste" ? "" : "hidden lg:flex"
+              zeige === "liste" ? "" : "hidden"
             }`}
           >
-            {fahrzeuge.length === 0 && (
+            {fahrzeuge.length === 0 ? (
               <p className="text-sm text-neutral-500">
                 Noch keine Fahrzeuge angelegt –{" "}
                 <Link
@@ -164,8 +201,14 @@ export default function FahrzeugeUebersichtPage() {
                 </Link>{" "}
                 anlegen und einen Tracker zuordnen.
               </p>
+            ) : (
+              sichtbar.length === 0 && (
+                <p className="text-sm text-neutral-500">
+                  Kein Fahrzeug vom Typ „{fahrzeugTypLabel(typFilter)}".
+                </p>
+              )
             )}
-            {fahrzeuge.map((f) => {
+            {sichtbar.map((f) => {
               const min = minutenHer(f.pos_zeitpunkt);
               const farbe =
                 min === null || min >= 60
@@ -252,6 +295,7 @@ export default function FahrzeugeUebersichtPage() {
                       )}
                     </div>
                     <div className="text-xs text-neutral-400">
+                      {f.typ ? `${fahrzeugTypLabel(f.typ)} · ` : ""}
                       {f.km_stand != null
                         ? `${f.km_stand.toLocaleString("de-DE")} km`
                         : "km —"}

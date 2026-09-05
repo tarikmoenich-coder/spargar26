@@ -1867,6 +1867,25 @@ export interface FahrzeugUebersicht {
   gesamt_km: number | null;
 }
 
+// Fahrzeugtypen (fahrzeug.typ, freies text-Feld). Reihenfolge = Anzeige in
+// der Typ-Auswahl (Stammdaten) und im Kartenfilter. Schlüssel = stabiler Slug,
+// Wert = Anzeigetext.
+export const FAHRZEUG_TYP_LABELS: Record<string, string> = {
+  pkw: "PKW",
+  transporter: "Transporter",
+  pritsche_pkw: "Pritschen-PKW",
+  pritsche_lkw: "Pritschen-LKW",
+  lkw: "LKW",
+  traktor: "Traktor",
+  anhaenger: "Anhänger",
+  sonstiges: "Sonstiges",
+};
+export const FAHRZEUG_TYPEN = Object.keys(FAHRZEUG_TYP_LABELS);
+export function fahrzeugTypLabel(typ: string | null | undefined): string {
+  if (!typ) return "—";
+  return FAHRZEUG_TYP_LABELS[typ] ?? typ;
+}
+
 // --- Fahrzeuge Stufe 2 (Geofences, Hofzeiten, Alarm; Migration 2026-09-26) ---
 
 // Raw-Tabelle fahrzeug_geofence (Spiegel der Traccar-Geofences).
