@@ -24,7 +24,12 @@ import { getSupabaseClient } from "@/lib/supabase/client";
 import { useProfile } from "@/lib/useProfile";
 import StatistikTabs from "@/components/StatistikTabs";
 import { formatDatumDE } from "@/lib/format";
-import type { Employee, ZuckermaisPraemieTag, ZuckermaisStatistikTag } from "@/lib/types";
+import type {
+  Employee,
+  ZuckermaisDruck,
+  ZuckermaisPraemieTag,
+  ZuckermaisStatistikTag,
+} from "@/lib/types";
 
 const CURRENT_YEAR = new Date().getFullYear();
 
@@ -85,18 +90,35 @@ export default function StatistikZuckermaisPage() {
 
   const [jahr, setJahr] = useState(CURRENT_YEAR);
   const [zeilen, setZeilen] = useState<ZuckermaisStatistikTag[]>([]);
+  // Vermerk "schon gedruckt" je Tag (Nutzer-Vorgabe), aus zuckermais_druck -
+  // separat geladen statt in die Sicht aufgenommen (die ist nicht
+  // security_invoker, siehe Kommentar oben, und braucht dafür keine
+  // zusätzliche Rollenprüfung).
+  const [druckByDatum, setDruckByDatum] = useState<Record<string, ZuckermaisDruck>>({});
   const [loading, setLoading] = useState(true);
 
   async function load() {
     setLoading(true);
     const supabase = getSupabaseClient();
-    const { data, error } = await supabase
-      .from("zuckermais_statistik_tag")
-      .select("*")
-      .gte("datum", `${jahr}-01-01`)
-      .lte("datum", `${jahr}-12-31`)
-      .order("datum", { ascending: false });
+    const [{ data, error }, { data: druck }] = await Promise.all([
+      supabase
+        .from("zuckermais_statistik_tag")
+        .select("*")
+        .gte("datum", `${jahr}-01-01`)
+        .lte("datum", `${jahr}-12-31`)
+        .order("datum", { ascending: false }),
+      supabase
+        .from("zuckermais_druck")
+        .select("*")
+        .gte("datum", `${jahr}-01-01`)
+        .lte("datum", `${jahr}-12-31`),
+    ]);
     if (!error) setZeilen((data as ZuckermaisStatistikTag[]) ?? []);
+    const map: Record<string, ZuckermaisDruck> = {};
+    ((druck as ZuckermaisDruck[]) ?? []).forEach((d) => {
+      map[d.datum] = d;
+    });
+    setDruckByDatum(map);
     setLoading(false);
   }
 
@@ -328,6 +350,9 @@ export default function StatistikZuckermaisPage() {
             <thead>
               <tr>
                 <th rowSpan={2}>Datum</th>
+                <th rowSpan={2} title="Wurde die Tagesliste für diesen Tag schon gedruckt?">
+                  Gedruckt
+                </th>
                 <th rowSpan={2}>Summe Kisten</th>
                 <th rowSpan={2}>Summe Kolben</th>
                 <th rowSpan={2}>Summe Stunden</th>
@@ -350,6 +375,25 @@ export default function StatistikZuckermaisPage() {
               {zeilen.map((z) => (
                 <tr key={z.datum}>
                   <td>{formatDatumDE(z.datum)}</td>
+                  <td className="text-center">
+                    {druckByDatum[z.datum] ? (
+                      <span
+                        className="badge badge-ok"
+                        title={`Zuletzt gedruckt am ${new Date(
+                          druckByDatum[z.datum].zuletzt_gedruckt_am
+                        ).toLocaleString("de-DE", {
+                          day: "2-digit",
+                          month: "2-digit",
+                          hour: "2-digit",
+                          minute: "2-digit",
+                        })} Uhr`}
+                      >
+                        🖨️
+                      </span>
+                    ) : (
+                      <span className="text-neutral-300">—</span>
+                    )}
+                  </td>
                   <td>{fmt(z.summe_kisten)}</td>
                   <td>{fmt(z.summe_kolben)}</td>
                   <td>{fmt(z.summe_stunden)}</td>
@@ -375,6 +419,7 @@ export default function StatistikZuckermaisPage() {
             <tfoot>
               <tr className="font-semibold">
                 <td>Saison {jahr}</td>
+                <td></td>
                 <td>{fmt(summeKisten)}</td>
                 <td>{fmt(summeKolben)}</td>
                 <td>{fmt(summeStunden)}</td>

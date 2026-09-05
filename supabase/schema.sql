@@ -2512,6 +2512,15 @@ left join lateral (
 alter view zuckermais_praemie_tag set (security_invoker = true);
 grant select on zuckermais_praemie_tag to authenticated;
 
+-- Vermerkt, dass die Tagesliste für einen Tag schon gedruckt wurde (Symbol
+-- in Prämien-Erfassung + Statistik, Nutzer-Vorgabe). Ein Datensatz je Tag,
+-- wird bei jedem erneuten Druck überschrieben (letzter Druck zählt).
+create table zuckermais_druck (
+  datum date primary key,
+  zuletzt_gedruckt_am timestamptz not null default now(),
+  zuletzt_gedruckt_von uuid references profiles (id) default auth.uid()
+);
+
 -- Tagesstatistik über alle Mitarbeiter (Nutzer-Vorgabe 2026-08-09, neuer
 -- Menüpunkt "Statistik" - analog zu "Prämien" mit eigenen Untermenüs
 -- Spargel/Erdbeeren/Zuckermais, hier erstmal nur Zuckermais).
@@ -4716,6 +4725,7 @@ alter table firmen_bankdaten enable row level security;
 alter table verpflegungssaetze enable row level security;
 alter table zuckermais_rohdaten enable row level security;
 alter table zuckermais_saetze enable row level security;
+alter table zuckermais_druck enable row level security;
 alter table erdbeeren_parzellen enable row level security;
 alter table erdbeeren_anbau enable row level security;
 alter table erdbeeren_tunnel enable row level security;
@@ -5033,6 +5043,12 @@ create policy "zuckermais_saetze_select" on zuckermais_saetze for select
   using (auth.uid() is not null);
 create policy "zuckermais_saetze_write" on zuckermais_saetze for all
   using (is_admin()) with check (is_admin());
+
+create policy "zuckermais_druck_select" on zuckermais_druck for select
+  using (auth.uid() is not null);
+create policy "zuckermais_druck_write" on zuckermais_druck for all
+  using (current_role_name() in ('admin', 'hr', 'zeiterfassung', 'erntewirtschaft'))
+  with check (current_role_name() in ('admin', 'hr', 'zeiterfassung', 'erntewirtschaft'));
 
 -- Erdbeeren-Prämien: gleiches Muster wie Zuckermais. Parzellen-Stammdaten
 -- (Name/Größe/Sorte/Pflanzenanzahl) und ihre Sätze (Norm/Bonus je

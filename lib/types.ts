@@ -955,6 +955,14 @@ export interface ZuckermaisStatistikTag {
   mindestlohn: number | null;
 }
 
+// Vermerkt, dass die Zuckermais-Tagesliste für einen Tag schon gedruckt
+// wurde (Nutzer-Vorgabe: Symbol in Prämien-Erfassung + Statistik).
+export interface ZuckermaisDruck {
+  datum: string;
+  zuletzt_gedruckt_am: string;
+  zuletzt_gedruckt_von: string | null;
+}
+
 // Prämien Erdbeeren (Nutzer-Vorgabe 2026-08-09) - Norm/Bonus je Parzelle
 // UND Tag statt global (anders als Zuckermais), da auf mehreren Parzellen
 // mit sehr unterschiedlichen Gegebenheiten gleichzeitig gepflückt wird.

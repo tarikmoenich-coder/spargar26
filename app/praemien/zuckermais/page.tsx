@@ -23,6 +23,7 @@ import { formatDatumDE } from "@/lib/format";
 import type {
   Arbeitsgruppe,
   Employee,
+  ZuckermaisDruck,
   ZuckermaisRohdatenEintrag,
   ZuckermaisSatz,
 } from "@/lib/types";
@@ -33,6 +34,15 @@ function heuteIso() {
 
 function fmt(n: number | null | undefined) {
   return n === null || n === undefined ? "—" : n.toFixed(2);
+}
+
+function fmtZeit(iso: string) {
+  return new Date(iso).toLocaleString("de-DE", {
+    day: "2-digit",
+    month: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
 }
 
 interface Entwurf {
@@ -65,6 +75,10 @@ export default function PraemienZuckermaisPage() {
   const [speichernAlle, setSpeichernAlle] = useState(false);
   const [fehler, setFehler] = useState<string | null>(null);
   const [druckModus, setDruckModus] = useState(false);
+  // Vermerk "schon gedruckt" für den gewählten Tag (Nutzer-Vorgabe) - eigene
+  // Tabelle zuckermais_druck, wird bei jedem Klick auf "Tagesliste drucken"
+  // überschrieben (letzter Druck zählt, Nachdrucke sind normal).
+  const [druckVermerk, setDruckVermerk] = useState<ZuckermaisDruck | null>(null);
 
   // Neuen Satz anlegen ODER einen bestehenden korrigieren (nur admin) -
   // dasselbe Formular für beides. Nutzer-Meldung 2026-08-25: ein falsch
@@ -89,7 +103,7 @@ export default function PraemienZuckermaisPage() {
   async function load() {
     setLoading(true);
     const supabase = getSupabaseClient();
-    const [{ data: emp }, { data: gr }, { data: eintr }, { data: satzAktuell }] =
+    const [{ data: emp }, { data: gr }, { data: eintr }, { data: satzAktuell }, { data: druck }] =
       await Promise.all([
         supabase
           .from("employees")
@@ -116,6 +130,11 @@ export default function PraemienZuckermaisPage() {
           .order("gueltig_ab", { ascending: false })
           .limit(1)
           .maybeSingle(),
+        supabase
+          .from("zuckermais_druck")
+          .select("*")
+          .eq("datum", datum)
+          .maybeSingle(),
       ]);
     setEmployees((emp as Employee[]) ?? []);
     setGruppen((gr as Arbeitsgruppe[]) ?? []);
@@ -125,6 +144,7 @@ export default function PraemienZuckermaisPage() {
     });
     setEintraege(map);
     setAktuellerSatz((satzAktuell as ZuckermaisSatz) ?? null);
+    setDruckVermerk((druck as ZuckermaisDruck) ?? null);
     setLoading(false);
   }
 
@@ -319,6 +339,25 @@ export default function PraemienZuckermaisPage() {
       window.print();
       setDruckModus(false);
     }, 50);
+    vermerkeGedruckt();
+  }
+
+  // Vermerkt "heute gedruckt" für diesen Tag (Nutzer-Vorgabe) - unabhängig
+  // davon, ob der Druckdialog tatsächlich mit "Drucken" bestätigt oder
+  // abgebrochen wird (das kann der Browser nicht zurückmelden), wie bei
+  // den übrigen Drucken-Knöpfen der App auch.
+  async function vermerkeGedruckt() {
+    const supabase = getSupabaseClient();
+    const zeitpunkt = new Date().toISOString();
+    const { data } = await supabase
+      .from("zuckermais_druck")
+      .upsert(
+        { datum, zuletzt_gedruckt_am: zeitpunkt, zuletzt_gedruckt_von: profile?.id ?? null },
+        { onConflict: "datum" }
+      )
+      .select()
+      .maybeSingle();
+    if (data) setDruckVermerk(data as ZuckermaisDruck);
   }
 
   const druckZeilen = gefiltert
@@ -335,6 +374,16 @@ export default function PraemienZuckermaisPage() {
       return { emp, e, kolben, kolbenNorm, praemie };
     })
     .filter((z): z is NonNullable<typeof z> => z !== null);
+
+  // Für den Ausdruck (Nutzer-Vorgabe): "Norm heute" ist der aktuell gültige
+  // Satz, "Kolben im Schnitt" die tatsächliche Ausbeute über den ganzen Tag
+  // (Summe Kolben ÷ Summe Stunden aller gedruckten Zeilen) - dieselbe
+  // Formel wie "Kolben/Std." in der Bildschirmansicht, nur über alle
+  // Personen des Tages statt je Zeile.
+  const druckSummeStunden = druckZeilen.reduce((s, z) => s + Number(z.e.stunden), 0);
+  const druckSummeKolben = druckZeilen.reduce((s, z) => s + (z.kolben ?? 0), 0);
+  const druckKolbenImSchnitt =
+    druckSummeStunden > 0 ? druckSummeKolben / druckSummeStunden : null;
 
   if (!canEdit) {
     return (
@@ -406,6 +455,14 @@ export default function PraemienZuckermaisPage() {
           Tagesliste drucken{" "}
           {druckZeilen.length > 0 ? `(${druckZeilen.length})` : ""}
         </button>
+        {druckVermerk && (
+          <span
+            className="badge badge-ok"
+            title={`Zuletzt gedruckt am ${fmtZeit(druckVermerk.zuletzt_gedruckt_am)} Uhr`}
+          >
+            🖨️ schon gedruckt ({fmtZeit(druckVermerk.zuletzt_gedruckt_am)})
+          </span>
+        )}
       </div>
 
       {/* Sätze-Verwaltung (nur admin) - Norm/Preis ändern sich im
@@ -670,6 +727,10 @@ export default function PraemienZuckermaisPage() {
           <h2 className="text-xl font-semibold">
             Prämien Zuckermais – {formatDatumDE(datum)}
           </h2>
+          <p className="mt-1 text-sm">
+            Norm heute: {fmt(aktuellerSatz?.norm_kolben_pro_stunde)} Kolben/Std. ·{" "}
+            Kolben im Schnitt (ganzer Tag): {fmt(druckKolbenImSchnitt)} Kolben/Std.
+          </p>
           <table className="mt-4 print-form-table">
             <thead>
               <tr>
