@@ -184,6 +184,7 @@ export default function KassenbuchJournalPage() {
       supabase
         .from("cash_checks")
         .select("id, check_zeit, soll, ist, differenz, status, freigegeben")
+        .eq("kassenbuch_id", lkId ?? 0)
         .gte("check_zeit", jahresAnfang)
         .lt("check_zeit", jahresEnde)
         .order("check_zeit", { ascending: true }),

@@ -21,11 +21,17 @@ import { getSupabaseClient } from "@/lib/supabase/client";
 interface KassenSaldoKarteProps {
   onSaldoChange?: (saldo: number) => void;
   kassenbuchId?: number;
+  /** Überschrift der Karte (Default: "Aktueller Kassensaldo"). */
+  titel?: string;
+  /** Erläuterungstext unter dem Betrag. Default = Lohnkasse-Formel. */
+  hinweis?: string;
 }
 
 export default function KassenSaldoKarte({
   onSaldoChange,
   kassenbuchId,
+  titel = "Aktueller Kassensaldo",
+  hinweis,
 }: KassenSaldoKarteProps) {
   const [saldo, setSaldo] = useState<number | null>(null);
   const [laden, setLaden] = useState(true);
@@ -58,14 +64,13 @@ export default function KassenSaldoKarte({
 
   return (
     <div className="rounded border border-linie bg-white p-4">
-      <p className="text-sm text-neutral-500">Aktueller Kassensaldo</p>
+      <p className="text-sm text-neutral-500">{titel}</p>
       <p className="text-2xl font-semibold text-emerald-800">
         {laden || saldo === null ? "…" : `${saldo.toFixed(2)} €`}
       </p>
       <p className="mt-1 text-xs text-neutral-500">
-        Einzahlungen − Bar-Vorschüsse − Bar-Auszahlungen − Kautionsübergaben
-        (Überweisungen zählen nicht zum Kassenbestand) - Details siehe
-        Journal.
+        {hinweis ??
+          "Einzahlungen − Bar-Vorschüsse − Bar-Auszahlungen − Kautionsübergaben (Überweisungen zählen nicht zum Kassenbestand) - Details siehe Journal."}
       </p>
     </div>
   );
