@@ -148,7 +148,7 @@ const items: NavItem[] = [
     label: "Kassenbuch",
     icon: Notebook,
     roles: ["admin", "kasse", "pruefer", "management"],
-    auchAktivBei: ["/kasse-pruefung"],
+    auchAktivBei: ["/kasse-pruefung", "/kasse/"],
   },
   {
     href: "/management",

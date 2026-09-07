@@ -9,15 +9,23 @@
 // genau das Muster, das im Projekt schon einmal zu einem Bug führte, siehe
 // StundenkontoBereich-Kommentar). Nutzt jetzt die SQL-Funktion
 // kassenbestand_bis() (echtes SUM() ohne Zeilenlimit).
+//
+// Seit den mehreren Kassenbüchern (Migration 2026-10-03) läuft das über
+// kassenbuch_saldo_bis(<lohnkasse>): das ist kassenbestand_bis() PLUS die
+// Umbuchungen von/zu der Lohnkasse. Ohne explizite kassenbuchId wird die
+// Lohnkasse aufgelöst; die Kassenprüfung (Phase 2) reicht später eine
+// konkrete Buch-ID herein.
 import { useEffect, useState } from "react";
 import { getSupabaseClient } from "@/lib/supabase/client";
 
 interface KassenSaldoKarteProps {
   onSaldoChange?: (saldo: number) => void;
+  kassenbuchId?: number;
 }
 
 export default function KassenSaldoKarte({
   onSaldoChange,
+  kassenbuchId,
 }: KassenSaldoKarteProps) {
   const [saldo, setSaldo] = useState<number | null>(null);
   const [laden, setLaden] = useState(true);
@@ -25,7 +33,18 @@ export default function KassenSaldoKarte({
   async function laden_() {
     setLaden(true);
     const supabase = getSupabaseClient();
-    const { data } = await supabase.rpc("kassenbestand_bis");
+    let buchId = kassenbuchId;
+    if (buchId == null) {
+      const { data: lk } = await supabase
+        .from("kassenbuch")
+        .select("id")
+        .eq("typ", "lohnkasse")
+        .maybeSingle();
+      buchId = (lk as { id: number } | null)?.id;
+    }
+    const { data } = buchId
+      ? await supabase.rpc("kassenbuch_saldo_bis", { p_kassenbuch_id: buchId })
+      : await supabase.rpc("kassenbestand_bis");
     const wert = data === null || data === undefined ? 0 : Number(data);
     setSaldo(wert);
     onSaldoChange?.(wert);
@@ -35,7 +54,7 @@ export default function KassenSaldoKarte({
   useEffect(() => {
     laden_();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [kassenbuchId]);
 
   return (
     <div className="rounded border border-linie bg-white p-4">

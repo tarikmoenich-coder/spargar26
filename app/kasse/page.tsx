@@ -28,11 +28,14 @@ import type {
   AuszahlungsbelegSummary,
   CashDeposit,
   Kassenbewegung,
+  Kassenbuch,
+  KassenbuchBuchung,
   Kautionsuebergabe,
   ProfilName,
 } from "@/lib/types";
 import KassenbuchTabs from "@/components/KassenbuchTabs";
 import KassenSaldoKarte from "@/components/KassenSaldoKarte";
+import UmbuchungForm from "@/components/UmbuchungForm";
 
 function monatsSchluessel(d: Date) {
   const mm = String(d.getMonth() + 1).padStart(2, "0");
@@ -97,6 +100,9 @@ export default function KassenbuchJournalPage() {
   >([]);
   const [korrekturen, setKorrekturen] = useState<Kassenbewegung[]>([]);
   const [pruefungen, setPruefungen] = useState<CashCheckZeile[]>([]);
+  const [umbuchungen, setUmbuchungen] = useState<KassenbuchBuchung[]>([]);
+  const [buecher, setBuecher] = useState<Kassenbuch[]>([]);
+  const [lohnkasseId, setLohnkasseId] = useState<number | null>(null);
   const [namenVon, setNamenVon] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(true);
 
@@ -112,6 +118,18 @@ export default function KassenbuchJournalPage() {
     const supabase = getSupabaseClient();
     const jahresAnfang = `${jahr}-01-01T00:00:00Z`;
     const jahresEnde = `${jahr + 1}-01-01T00:00:00Z`;
+
+    // Kassenbücher zuerst - die Lohnkasse-ID wird für den Eröffnungssaldo und
+    // die Umbuchungs-Abfrage gebraucht.
+    const { data: buchDaten } = await supabase
+      .from("kassenbuch")
+      .select("*")
+      .order("reihenfolge");
+    const buchListe = (buchDaten as Kassenbuch[]) ?? [];
+    const lkId = buchListe.find((b) => b.typ === "lohnkasse")?.id ?? null;
+    setBuecher(buchListe);
+    setLohnkasseId(lkId);
+
     const [
       { data: eroeffnung },
       { data: dep },
@@ -120,9 +138,15 @@ export default function KassenbuchJournalPage() {
       { data: kaution },
       { data: bew },
       { data: chk },
+      { data: umb },
       { data: namen },
     ] = await Promise.all([
-      supabase.rpc("kassenbestand_bis", { p_bis: jahresAnfang }),
+      lkId
+        ? supabase.rpc("kassenbuch_saldo_bis", {
+            p_kassenbuch_id: lkId,
+            p_bis: jahresAnfang,
+          })
+        : supabase.rpc("kassenbestand_bis", { p_bis: jahresAnfang }),
       supabase
         .from("cash_deposits")
         .select("*")
@@ -163,11 +187,21 @@ export default function KassenbuchJournalPage() {
         .gte("check_zeit", jahresAnfang)
         .lt("check_zeit", jahresEnde)
         .order("check_zeit", { ascending: true }),
+      lkId
+        ? supabase
+            .from("kassenbuch_buchung")
+            .select("*")
+            .eq("kassenbuch_id", lkId)
+            .gte("datum", jahresAnfang)
+            .lt("datum", jahresEnde)
+            .order("datum", { ascending: true })
+        : Promise.resolve({ data: [] as KassenbuchBuchung[] }),
       supabase.from("profile_namen").select("*"),
     ]);
     setEroeffnungssaldo(
       eroeffnung === null || eroeffnung === undefined ? 0 : Number(eroeffnung)
     );
+    setUmbuchungen((umb as KassenbuchBuchung[]) ?? []);
     setDeposits((dep as CashDeposit[]) ?? []);
     setBarVorschuesse((adv as Advance[]) ?? []);
     setAuszahlungenBar((az as AuszahlungsbelegSummary[]) ?? []);
@@ -271,6 +305,23 @@ export default function KassenbuchJournalPage() {
       laufenderSaldo: null,
       pruefung: null,
     })),
+    ...umbuchungen.map((u) => ({
+      key: `umbuchung-${u.id}`,
+      datum: u.datum,
+      art: "Umbuchung",
+      belegnummer: u.belegnummer,
+      betrag: u.storniert
+        ? 0
+        : u.richtung === "eingang"
+          ? Number(u.betrag)
+          : -Number(u.betrag),
+      korrekturDelta: null,
+      storniert: u.storniert,
+      hinweis: u.verwendungszweck,
+      bearbeiter_id: u.bearbeiter_id,
+      laufenderSaldo: null,
+      pruefung: null,
+    })),
   ].sort((a, b) => (a.datum < b.datum ? -1 : 1));
 
   // Korrektur-Zeilen separat, chronologisch dazwischengemischt - eigener
@@ -338,11 +389,13 @@ export default function KassenbuchJournalPage() {
       <KassenbuchTabs />
       <div>
         <h1 className="text-lg font-semibold text-emerald-800">
-          Kassenbuch – Journal
+          Mömmel Lohnkasse – Journal
         </h1>
         <p className="text-sm text-neutral-500">
           Alle Bargeldbewegungen chronologisch mit laufendem Saldo, wie ein
-          klassisches Kassenbuch mit Jahres-Eröffnungssaldo. Korrekturen
+          klassisches Kassenbuch mit Jahres-Eröffnungssaldo. Umbuchungen von/zu
+          anderen Kassenbüchern erscheinen als eigene Zeile „Umbuchung".
+          Korrekturen
           (grau, kursiv) bewegen den Saldo nicht zusätzlich - der geänderte
           Betrag steckt bereits in der ursprünglichen Zeile. Kassenprüfungen
           erscheinen als eigene, hervorgehobene Trennzeile mit ihrem
@@ -376,6 +429,14 @@ export default function KassenbuchJournalPage() {
           </button>
           {error && <span className="text-sm text-red-600">{error}</span>}
         </form>
+      )}
+
+      {canWrite && lohnkasseId != null && buecher.length > 1 && (
+        <UmbuchungForm
+          buecher={buecher}
+          quelleFest={lohnkasseId}
+          onDone={load}
+        />
       )}
 
       <label className="text-sm">

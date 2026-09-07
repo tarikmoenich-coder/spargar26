@@ -1283,6 +1283,45 @@ export interface CashDeposit {
 }
 
 // ---------------------------------------------------------------------------
+// Mehrere Kassenbücher (Migration 2026-10-03, Phase 1). "Mömmel Lohnkasse"
+// (typ 'lohnkasse') behält ihre bestehende Logik (kassenbestand_bis), die
+// drei weiteren Bücher (typ 'allgemein') sind reine Einnahme-/Ausgabe-Journale
+// mit Umbuchungen untereinander und zur Lohnkasse.
+// ---------------------------------------------------------------------------
+export type KassenbuchTyp = "lohnkasse" | "allgemein";
+export type KassenbuchRichtung = "eingang" | "ausgang";
+
+export interface Kassenbuch {
+  id: number;
+  bezeichnung: string;
+  kuerzel: string;
+  typ: KassenbuchTyp;
+  eroeffnungssaldo: number;
+  aktiv: boolean;
+  reihenfolge: number;
+}
+
+export interface KassenbuchBuchung {
+  id: number;
+  kassenbuch_id: number;
+  belegnummer: string;
+  datum: string;
+  datum_kassenbuch: string;
+  betrag: number;
+  richtung: KassenbuchRichtung;
+  verwendungszweck: string | null;
+  hinweis: string | null;
+  umbuchung_id: string | null;
+  gegenbuchung_id: number | null;
+  bearbeiter_id: string | null;
+  storniert: boolean;
+  storniert_am: string | null;
+  storniert_von: string | null;
+  storno_grund: string | null;
+  erstellt_am: string;
+}
+
+// ---------------------------------------------------------------------------
 // Modul "Unterkunft" (Zimmerverwaltung, Migration 2026-08-29). Zimmerplanung
 // Gebäude > Zimmer > Bett > Belegung, dazu Übergabe/Abnahme und
 // Zwischenkontrollen je Zimmer mit Fotodokumentation und Mängelerfassung.
