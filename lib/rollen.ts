@@ -7,9 +7,13 @@
 //
 // WICHTIG: Die tatsächlichen Server-Rechte stehen als Row Level Security in
 // supabase/schema.sql (~156 current_role_name()-Prüfungen). MENUE_RECHTE
-// steuert NUR die Menü-Sichtbarkeit - bei Rechte-Änderungen immer beide
-// Stellen anfassen. Die Rollentabelle in der README wird aus diesem File
-// gepflegt.
+// steuert NUR die Menü-Sichtbarkeit. Bei JEDER Rechte-Änderung (RLS-Policy,
+// security-definer-Funktion, Client-canWrite) immer mit anpassen:
+//   1. MENUE_RECHTE (falls sich die Menü-Sichtbarkeit ändert),
+//   2. die `kurz`-Beschreibung der betroffenen Rolle in ROLLEN unten
+//      (Nutzer-Vorgabe - sie erscheint 1:1 als "Was die Rollen dürfen" in
+//      /einstellungen/nutzer),
+//   3. die Rollentabelle in der README.
 
 import type { UserRole } from "@/lib/types";
 
@@ -44,7 +48,7 @@ export const ROLLEN: RolleInfo[] = [
   {
     wert: "lohnabrechnung",
     label: "Lohnabrechnung",
-    kurz: "Lohnübersicht bearbeiten (Buskosten, Kautionen, 'Jetzt Abrechnen'), Vorschüsse einsehen, Prämien ansehen.",
+    kurz: "Lohnübersicht bearbeiten (Netto, Buskosten, Kautionen, 'Jetzt Abrechnen'), Vorschüsse erstellen/korrigieren, Prämien und Statistik ansehen.",
   },
   {
     wert: "pruefer",
