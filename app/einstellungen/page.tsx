@@ -1,32 +1,24 @@
 "use client";
 
+// Einstellungen → Allgemein: Firmen-Bankdaten (SEPA-Auftraggeber) und die je
+// Saisonjahr versionierten Sätze für Verpflegung/Unterkunft/Mindestlohn/
+// Arbeitskleidung. Arbeitsgruppen, Herkünfte und Nutzer & Rollen sind eigene
+// Unterseiten (components/EinstellungenTabs.tsx).
+
 import { useEffect, useState } from "react";
 import { formatMenge } from "@/lib/format";
 import { getSupabaseClient } from "@/lib/supabase/client";
 import { useProfile } from "@/lib/useProfile";
-import {
-  KULTUREN,
-  KULTUR_LABELS,
-  type Arbeitsgruppe,
-  type FirmenBankdaten,
-  type Herkunft,
-  type VerpflegungsSatz,
-} from "@/lib/types";
+import EinstellungenTabs from "@/components/EinstellungenTabs";
+import type { FirmenBankdaten, VerpflegungsSatz } from "@/lib/types";
 
 const CURRENT_YEAR = new Date().getFullYear();
 
-const emptyGruppenForm = {
-  gruppe_nr: "",
-  bezeichnung: "",
-  reihenfolge: "0",
-  kultur: "",
-};
-const emptyHerkunftForm = { wert: "", reihenfolge: "0" };
-
-export default function EinstellungenPage() {
+export default function EinstellungenAllgemeinPage() {
   const { profile } = useProfile();
+  const isAdmin = profile?.role === "admin";
+
   const [saetze, setSaetze] = useState<VerpflegungsSatz[]>([]);
-  const [gruppen, setGruppen] = useState<Arbeitsgruppe[]>([]);
   const [loading, setLoading] = useState(true);
   const [form, setForm] = useState({
     saison_jahr: CURRENT_YEAR.toString(),
@@ -40,23 +32,6 @@ export default function EinstellungenPage() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const [gruppenForm, setGruppenForm] = useState(emptyGruppenForm);
-  const [editingGruppeNr, setEditingGruppeNr] = useState<string | null>(null);
-  const [gruppenSaving, setGruppenSaving] = useState(false);
-  const [gruppenError, setGruppenError] = useState<string | null>(null);
-
-  const [herkuenfte, setHerkuenfte] = useState<Herkunft[]>([]);
-  const [herkunftForm, setHerkunftForm] = useState(emptyHerkunftForm);
-  const [editingHerkunftWert, setEditingHerkunftWert] = useState<
-    string | null
-  >(null);
-  const [herkunftSaving, setHerkunftSaving] = useState(false);
-  const [herkunftError, setHerkunftError] = useState<string | null>(null);
-
-  const isAdmin = profile?.role === "admin";
-
-  // Firmen-Bankdaten (Nutzer-Vorgabe 2026-08-25): Auftraggeber-Konto für
-  // den SEPA-Überweisungs-Export bei Vorschüssen - Singleton-Zeile.
   const [bankdaten, setBankdaten] = useState<FirmenBankdaten | null>(null);
   const [bankdatenForm, setBankdatenForm] = useState({
     name: "",
@@ -70,23 +45,14 @@ export default function EinstellungenPage() {
   async function load() {
     setLoading(true);
     const supabase = getSupabaseClient();
-    const [
-      { data, error },
-      { data: gruppenData },
-      { data: herkunftData },
-      { data: bankdatenData },
-    ] = await Promise.all([
+    const [{ data, error }, { data: bankdatenData }] = await Promise.all([
       supabase
         .from("verpflegungssaetze")
         .select("*")
         .order("saison_jahr", { ascending: false }),
-      supabase.from("arbeitsgruppen").select("*").order("reihenfolge"),
-      supabase.from("herkuenfte").select("*").order("reihenfolge"),
       supabase.from("firmen_bankdaten").select("*").eq("id", 1).maybeSingle(),
     ]);
     if (!error) setSaetze((data as VerpflegungsSatz[]) ?? []);
-    setGruppen((gruppenData as Arbeitsgruppe[]) ?? []);
-    setHerkuenfte((herkunftData as Herkunft[]) ?? []);
     const bd = (bankdatenData as FirmenBankdaten) ?? null;
     setBankdaten(bd);
     setBankdatenForm({
@@ -106,8 +72,7 @@ export default function EinstellungenPage() {
     setBankdatenSaving(true);
     setBankdatenError(null);
     setBankdatenGespeichert(false);
-    const supabase = getSupabaseClient();
-    const { error } = await supabase
+    const { error } = await getSupabaseClient()
       .from("firmen_bankdaten")
       .update({
         name: bankdatenForm.name,
@@ -140,18 +105,21 @@ export default function EinstellungenPage() {
     e.preventDefault();
     setSaving(true);
     setError(null);
-    const supabase = getSupabaseClient();
-    const { error } = await supabase.from("verpflegungssaetze").upsert({
-      saison_jahr: Number(form.saison_jahr),
-      verpflegung: Number(form.verpflegung),
-      wohnen: Number(form.wohnen),
-      mindestlohn: form.mindestlohn ? Number(form.mindestlohn) : null,
-      kleidung_hose: form.kleidung_hose ? Number(form.kleidung_hose) : null,
-      kleidung_jacke: form.kleidung_jacke ? Number(form.kleidung_jacke) : null,
-      kleidung_stiefel: form.kleidung_stiefel
-        ? Number(form.kleidung_stiefel)
-        : null,
-    });
+    const { error } = await getSupabaseClient()
+      .from("verpflegungssaetze")
+      .upsert({
+        saison_jahr: Number(form.saison_jahr),
+        verpflegung: Number(form.verpflegung),
+        wohnen: Number(form.wohnen),
+        mindestlohn: form.mindestlohn ? Number(form.mindestlohn) : null,
+        kleidung_hose: form.kleidung_hose ? Number(form.kleidung_hose) : null,
+        kleidung_jacke: form.kleidung_jacke
+          ? Number(form.kleidung_jacke)
+          : null,
+        kleidung_stiefel: form.kleidung_stiefel
+          ? Number(form.kleidung_stiefel)
+          : null,
+      });
     setSaving(false);
     if (error) {
       setError(error.message);
@@ -160,88 +128,20 @@ export default function EinstellungenPage() {
     load();
   }
 
-  function editGruppe(g: Arbeitsgruppe) {
-    setEditingGruppeNr(g.gruppe_nr);
-    setGruppenForm({
-      gruppe_nr: g.gruppe_nr,
-      bezeichnung: g.bezeichnung,
-      reihenfolge: g.reihenfolge.toString(),
-      kultur: g.kultur ?? "",
-    });
-  }
-
-  function resetGruppenForm() {
-    setEditingGruppeNr(null);
-    setGruppenForm(emptyGruppenForm);
-  }
-
-  async function handleGruppenSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    setGruppenSaving(true);
-    setGruppenError(null);
-    const supabase = getSupabaseClient();
-    const { error } = await supabase.from("arbeitsgruppen").upsert({
-      gruppe_nr: gruppenForm.gruppe_nr,
-      bezeichnung: gruppenForm.bezeichnung,
-      reihenfolge: Number(gruppenForm.reihenfolge) || 0,
-      kultur: gruppenForm.kultur || null,
-    });
-    setGruppenSaving(false);
-    if (error) {
-      setGruppenError(error.message);
-      return;
-    }
-    resetGruppenForm();
-    load();
-  }
-
-  function editHerkunft(h: Herkunft) {
-    setEditingHerkunftWert(h.wert);
-    setHerkunftForm({ wert: h.wert, reihenfolge: h.reihenfolge.toString() });
-  }
-
-  function resetHerkunftForm() {
-    setEditingHerkunftWert(null);
-    setHerkunftForm(emptyHerkunftForm);
-  }
-
-  async function handleHerkunftSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    setHerkunftSaving(true);
-    setHerkunftError(null);
-    const supabase = getSupabaseClient();
-    const { error } = await supabase.from("herkuenfte").upsert({
-      wert: herkunftForm.wert,
-      reihenfolge: Number(herkunftForm.reihenfolge) || 0,
-    });
-    setHerkunftSaving(false);
-    if (error) {
-      setHerkunftError(error.message);
-      return;
-    }
-    resetHerkunftForm();
-    load();
-  }
-
   return (
     <div className="flex flex-col gap-6">
+      <EinstellungenTabs />
       <div>
         <h1 className="text-lg font-semibold text-emerald-800">
-          Einstellungen
+          Einstellungen – Allgemein
         </h1>
-        <p className="mt-1 text-sm">
-          <a href="/einstellungen/nutzer" className="text-emerald-700 underline">
-            → Nutzer &amp; Rollen verwalten
-          </a>
-        </p>
-        <p className="mt-2 text-sm text-neutral-500">
-          Verpflegungs- und Unterkunft-Abzüge pro Anwesenheitstag sowie der
-          gesetzliche Mindestlohn, je Saisonjahr. Änderungen wirken sich nur
-          auf das jeweilige Saisonjahr aus (ADR-007: versionierte Sätze) -
-          bereits berechnete andere Jahre bleiben unverändert. Der
-          Mindestlohn wird beim Neuanlegen einer Person (Personalstamm oder
-          Personalplanung) automatisch als Stundenlohn vorbelegt, bleibt dort
-          aber frei änderbar.
+        <p className="mt-1 text-sm text-neutral-500">
+          Firmen-Bankdaten für den SEPA-Export sowie die je Saisonjahr
+          versionierten Sätze (ADR-007) für Verpflegung, Unterkunft,
+          Mindestlohn und Arbeitskleidung. Änderungen wirken nur auf das
+          jeweilige Saisonjahr; bereits berechnete Jahre bleiben unverändert.
+          Der Mindestlohn wird beim Neuanlegen einer Person als Stundenlohn
+          vorbelegt, bleibt dort aber änderbar.
         </p>
       </div>
 
@@ -250,10 +150,9 @@ export default function EinstellungenPage() {
           Firmen-Bankdaten
         </h2>
         <p className="text-sm text-neutral-500">
-          Auftraggeber-Konto für den SEPA-Überweisungs-Export bei
-          Vorschüssen (Zahlungsart Banküberweisung) - wird einmal
-          hinterlegt und für jede erzeugte SEPA-Datei verwendet. Nur
-          admin/kasse können diese Daten überhaupt lesen.
+          Auftraggeber-Konto für den SEPA-Überweisungs-Export bei Vorschüssen
+          (Zahlungsart Banküberweisung). Nur admin/kasse können diese Daten
+          lesen.
         </p>
       </div>
 
@@ -307,7 +206,7 @@ export default function EinstellungenPage() {
 
       <div>
         <h2 className="text-lg font-semibold text-emerald-800">
-          Verpflegung/Unterkunft/Mindestlohn/Arbeitskleidung
+          Verpflegung / Unterkunft / Mindestlohn / Arbeitskleidung
         </h2>
       </div>
 
@@ -389,243 +288,61 @@ export default function EinstellungenPage() {
       {loading ? (
         <p className="text-neutral-500">Lädt…</p>
       ) : (
-        <table>
-          <thead>
-            <tr>
-              <th>Saison-Jahr</th>
-              <th>Verpflegung €/Tag</th>
-              <th>Unterkunft €/Tag</th>
-              <th>Mindestlohn €/Std.</th>
-              <th>Hose €/Stück</th>
-              <th>Jacke €/Stück</th>
-              <th>Stiefel €/Stück</th>
-              {isAdmin && <th></th>}
-            </tr>
-          </thead>
-          <tbody>
-            {saetze.map((s) => (
-              <tr key={s.saison_jahr}>
-                <td>{s.saison_jahr}</td>
-                <td>{formatMenge(Number(s.verpflegung), 2)}</td>
-                <td>{formatMenge(Number(s.wohnen), 2)}</td>
-                <td>{s.mindestlohn != null ? formatMenge(Number(s.mindestlohn), 2) : "—"}</td>
-                <td>{s.kleidung_hose != null ? formatMenge(Number(s.kleidung_hose), 2) : "—"}</td>
-                <td>{s.kleidung_jacke != null ? formatMenge(Number(s.kleidung_jacke), 2) : "—"}</td>
-                <td>{s.kleidung_stiefel != null ? formatMenge(Number(s.kleidung_stiefel), 2) : "—"}</td>
-                {isAdmin && (
-                  <td>
-                    <button
-                      className="btn-secondary"
-                      onClick={() => editRow(s)}
-                    >
-                      Bearbeiten
-                    </button>
-                  </td>
-                )}
+        <div className="overflow-x-auto">
+          <table>
+            <thead>
+              <tr>
+                <th>Saison-Jahr</th>
+                <th>Verpflegung €/Tag</th>
+                <th>Unterkunft €/Tag</th>
+                <th>Mindestlohn €/Std.</th>
+                <th>Hose €/Stück</th>
+                <th>Jacke €/Stück</th>
+                <th>Stiefel €/Stück</th>
+                {isAdmin && <th></th>}
               </tr>
-            ))}
-          </tbody>
-        </table>
-      )}
-
-      <div>
-        <h2 className="text-lg font-semibold text-emerald-800">
-          Arbeitsgruppen
-        </h2>
-        <p className="text-sm text-neutral-500">
-          Gruppen (z.B. Sortierer, Träger, Schälmannschaft) für die
-          übersichtliche Gruppierung auf der Stundenerfassung und die
-          gedruckten Gruppenstundenzettel. Die Reihenfolge bestimmt die
-          Anzeige-/Druckreihenfolge der Gruppen. Die optionale Kultur
-          ordnet die in dieser Gruppe erfassten Stunden einer Kultur zu -
-          auf der jeweiligen Statistik-Seite werden diese Stunden ×
-          Mindestlohn zusätzlich auf die an diesem Tag geerntete Menge
-          umgelegt (ergänzend zu den Prämien-Stunden der tatsächlich in der
-          Prämien-Erfassung stehenden Personen).
-        </p>
-      </div>
-
-      {isAdmin && (
-        <form
-          onSubmit={handleGruppenSubmit}
-          className="grid grid-cols-2 gap-3 rounded border border-linie bg-white p-4 sm:grid-cols-5"
-        >
-          <input
-            placeholder="Gruppen-Nr."
-            required
-            disabled={editingGruppeNr !== null}
-            value={gruppenForm.gruppe_nr}
-            onChange={(e) =>
-              setGruppenForm({ ...gruppenForm, gruppe_nr: e.target.value })
-            }
-          />
-          <input
-            placeholder="Bezeichnung (z.B. Sortierer)"
-            required
-            value={gruppenForm.bezeichnung}
-            onChange={(e) =>
-              setGruppenForm({ ...gruppenForm, bezeichnung: e.target.value })
-            }
-          />
-          <input
-            type="number"
-            placeholder="Reihenfolge"
-            value={gruppenForm.reihenfolge}
-            onChange={(e) =>
-              setGruppenForm({ ...gruppenForm, reihenfolge: e.target.value })
-            }
-          />
-          <select
-            value={gruppenForm.kultur}
-            onChange={(e) =>
-              setGruppenForm({ ...gruppenForm, kultur: e.target.value })
-            }
-          >
-            <option value="">Kultur: keine</option>
-            {KULTUREN.map((k) => (
-              <option key={k} value={k}>
-                {KULTUR_LABELS[k]}
-              </option>
-            ))}
-          </select>
-          <div className="col-span-full flex items-center gap-2">
-            <button type="submit" className="btn" disabled={gruppenSaving}>
-              {editingGruppeNr ? "Speichern" : "Anlegen"}
-            </button>
-            {editingGruppeNr && (
-              <button
-                type="button"
-                className="btn-secondary"
-                onClick={resetGruppenForm}
-              >
-                Abbrechen
-              </button>
-            )}
-            {gruppenError && (
-              <span className="text-sm text-red-600">{gruppenError}</span>
-            )}
-          </div>
-        </form>
-      )}
-
-      {!loading && (
-        <table>
-          <thead>
-            <tr>
-              <th>Gruppen-Nr.</th>
-              <th>Bezeichnung</th>
-              <th>Reihenfolge</th>
-              <th>Kultur</th>
-              {isAdmin && <th></th>}
-            </tr>
-          </thead>
-          <tbody>
-            {gruppen.map((g) => (
-              <tr key={g.gruppe_nr}>
-                <td>{g.gruppe_nr}</td>
-                <td>{g.bezeichnung}</td>
-                <td>{g.reihenfolge}</td>
-                <td>{g.kultur ? KULTUR_LABELS[g.kultur] : "—"}</td>
-                {isAdmin && (
+            </thead>
+            <tbody>
+              {saetze.map((s) => (
+                <tr key={s.saison_jahr}>
+                  <td>{s.saison_jahr}</td>
+                  <td>{formatMenge(Number(s.verpflegung), 2)}</td>
+                  <td>{formatMenge(Number(s.wohnen), 2)}</td>
                   <td>
-                    <button
-                      className="btn-secondary"
-                      onClick={() => editGruppe(g)}
-                    >
-                      Bearbeiten
-                    </button>
+                    {s.mindestlohn != null
+                      ? formatMenge(Number(s.mindestlohn), 2)
+                      : "—"}
                   </td>
-                )}
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      )}
-
-      <div>
-        <h2 className="text-lg font-semibold text-emerald-800">
-          Herkünfte
-        </h2>
-        <p className="text-sm text-neutral-500">
-          Feste Liste der Herkünfte für den Personalstamm - damit sich
-          Vorschüsse zuverlässig nach Herkunft auswählen lassen (keine
-          Tippfehler-Varianten).
-        </p>
-      </div>
-
-      {isAdmin && (
-        <form
-          onSubmit={handleHerkunftSubmit}
-          className="grid grid-cols-2 gap-3 rounded border border-linie bg-white p-4 sm:grid-cols-4"
-        >
-          <input
-            placeholder="Herkunft (z.B. Kroatien)"
-            required
-            disabled={editingHerkunftWert !== null}
-            value={herkunftForm.wert}
-            onChange={(e) =>
-              setHerkunftForm({ ...herkunftForm, wert: e.target.value })
-            }
-          />
-          <input
-            type="number"
-            placeholder="Reihenfolge"
-            value={herkunftForm.reihenfolge}
-            onChange={(e) =>
-              setHerkunftForm({
-                ...herkunftForm,
-                reihenfolge: e.target.value,
-              })
-            }
-          />
-          <div className="col-span-full flex items-center gap-2">
-            <button type="submit" className="btn" disabled={herkunftSaving}>
-              {editingHerkunftWert ? "Speichern" : "Anlegen"}
-            </button>
-            {editingHerkunftWert && (
-              <button
-                type="button"
-                className="btn-secondary"
-                onClick={resetHerkunftForm}
-              >
-                Abbrechen
-              </button>
-            )}
-            {herkunftError && (
-              <span className="text-sm text-red-600">{herkunftError}</span>
-            )}
-          </div>
-        </form>
-      )}
-
-      {!loading && (
-        <table>
-          <thead>
-            <tr>
-              <th>Herkunft</th>
-              <th>Reihenfolge</th>
-              {isAdmin && <th></th>}
-            </tr>
-          </thead>
-          <tbody>
-            {herkuenfte.map((h) => (
-              <tr key={h.wert}>
-                <td>{h.wert}</td>
-                <td>{h.reihenfolge}</td>
-                {isAdmin && (
                   <td>
-                    <button
-                      className="btn-secondary"
-                      onClick={() => editHerkunft(h)}
-                    >
-                      Bearbeiten
-                    </button>
+                    {s.kleidung_hose != null
+                      ? formatMenge(Number(s.kleidung_hose), 2)
+                      : "—"}
                   </td>
-                )}
-              </tr>
-            ))}
-          </tbody>
-        </table>
+                  <td>
+                    {s.kleidung_jacke != null
+                      ? formatMenge(Number(s.kleidung_jacke), 2)
+                      : "—"}
+                  </td>
+                  <td>
+                    {s.kleidung_stiefel != null
+                      ? formatMenge(Number(s.kleidung_stiefel), 2)
+                      : "—"}
+                  </td>
+                  {isAdmin && (
+                    <td>
+                      <button
+                        className="btn-secondary"
+                        onClick={() => editRow(s)}
+                      >
+                        Bearbeiten
+                      </button>
+                    </td>
+                  )}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       )}
     </div>
   );

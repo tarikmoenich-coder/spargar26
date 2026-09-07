@@ -4,8 +4,6 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import {
-  Award,
-  BarChart3,
   Building2,
   Clock,
   Gauge,
@@ -89,24 +87,12 @@ const items: NavItem[] = [
     auchAktivBei: ["/vorschuesse", "/auszahlungen"],
   },
   {
-    href: "/praemien/zuckermais",
-    label: "Prämien",
-    icon: Award,
-    auchAktivBei: ["/praemien"],
-  },
-  {
-    href: "/anbau/erdbeeren",
-    label: "Anbau",
+    // Prämien + Anbau + Statistik unter einem Menüpunkt (Nutzer-Vorgabe) -
+    // die Unterreiter kommen aus components/ErntewirtschaftTabs.tsx.
+    href: "/erntewirtschaft",
+    label: "Erntewirtschaft",
     icon: Sprout,
-    // Nutzer-Vorgabe 2026-08-11: nur admin und erntewirtschaft - die
-    // Anbauplanung ist deren Arbeitsbereich.
-    auchAktivBei: ["/anbau"],
-  },
-  {
-    href: "/statistik/zuckermais",
-    label: "Statistik",
-    icon: BarChart3,
-    auchAktivBei: ["/statistik"],
+    auchAktivBei: ["/praemien", "/anbau", "/statistik"],
   },
   {
     href: "/kasse",
@@ -128,7 +114,11 @@ const items: NavItem[] = [
     href: "/einstellungen",
     label: "Einstellungen",
     icon: Settings,
-    auchAktivBei: ["/einstellungen/nutzer"],
+    auchAktivBei: [
+      "/einstellungen/arbeitsgruppen",
+      "/einstellungen/herkuenfte",
+      "/einstellungen/nutzer",
+    ],
   },
 ];
 

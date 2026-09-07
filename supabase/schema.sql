@@ -3358,7 +3358,7 @@ declare
   v_datum timestamptz;
   v_delta numeric;
 begin
-  if current_role_name() not in ('admin', 'kasse') then
+  if current_role_name() not in ('admin', 'kasse', 'lohnabrechnung') then
     raise exception 'Keine Berechtigung für Beleg-Korrektur';
   end if;
 
@@ -5451,15 +5451,15 @@ create policy "erdbeeren_rohdaten_delete" on erdbeeren_rohdaten for delete
 create policy "advances_select" on advances for select
   using (current_role_name() in ('admin', 'hr', 'kasse', 'lohnabrechnung', 'pruefer', 'management'));
 create policy "advances_write" on advances for insert
-  with check (current_role_name() in ('admin', 'kasse'));
+  with check (current_role_name() in ('admin', 'kasse', 'lohnabrechnung'));
 create policy "advances_update" on advances for update
   using (
-    current_role_name() in ('admin', 'kasse')
+    current_role_name() in ('admin', 'kasse', 'lohnabrechnung')
     and not ist_kassenpruefung_gesperrt(datum)
   );
 create policy "advance_recipients_rw" on advance_recipients for all
   using (current_role_name() in ('admin', 'hr', 'kasse', 'lohnabrechnung', 'pruefer'))
-  with check (current_role_name() in ('admin', 'kasse'));
+  with check (current_role_name() in ('admin', 'kasse', 'lohnabrechnung'));
 -- Strafe/Rechnung-Belege: gleiche Rollenaufteilung wie advance_recipients_rw
 -- (lesen: wie bisherige Vorschuss-Rechte, schreiben: wie advances_write).
 create policy "vorschuss_belege_storage_select" on storage.objects for select
@@ -5469,11 +5469,13 @@ create policy "vorschuss_belege_storage_select" on storage.objects for select
   );
 create policy "vorschuss_belege_storage_insert" on storage.objects for insert
   with check (
-    bucket_id = 'vorschuss-belege' and current_role_name() in ('admin', 'kasse')
+    bucket_id = 'vorschuss-belege'
+    and current_role_name() in ('admin', 'kasse', 'lohnabrechnung')
   );
 create policy "vorschuss_belege_storage_delete" on storage.objects for delete
   using (
-    bucket_id = 'vorschuss-belege' and current_role_name() in ('admin', 'kasse')
+    bucket_id = 'vorschuss-belege'
+    and current_role_name() in ('admin', 'kasse', 'lohnabrechnung')
   );
 -- kassenbewegungen: nur lesend per Policy - Schreiben ausschließlich über
 -- die security-definer Funktion vorschuss_korrigieren.

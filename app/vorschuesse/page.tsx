@@ -138,7 +138,10 @@ export default function VorschuessePage() {
   >({});
   const [korrekturLaeuft, setKorrekturLaeuft] = useState<string | null>(null);
 
-  const canWrite = profile?.role === "admin" || profile?.role === "kasse";
+  const canWrite =
+    profile?.role === "admin" ||
+    profile?.role === "kasse" ||
+    profile?.role === "lohnabrechnung";
   // Deckt sich mit der RLS-Policy "advance_recipients_rw" - management sieht
   // zwar die Vorschuss-Liste, aber keine Empfänger-Details.
   const canSeeDetails =
@@ -856,7 +859,7 @@ export default function VorschuessePage() {
           </ul>
           {!canWrite && (
             <p className="mt-2 text-xs text-amber-700">
-              Bestätigen kann nur admin / kasse.
+              Bestätigen kann nur admin / kasse / lohnabrechnung.
             </p>
           )}
         </section>

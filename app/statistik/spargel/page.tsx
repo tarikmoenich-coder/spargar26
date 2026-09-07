@@ -1,12 +1,12 @@
 "use client";
 
-import StatistikTabs from "@/components/StatistikTabs";
+import ErntewirtschaftTabs from "@/components/ErntewirtschaftTabs";
 
 // Platzhalter (Stand 2026-08-09) - folgt, sobald Prämien -> Spargel steht.
 export default function StatistikSpargelPage() {
   return (
     <div className="flex flex-col gap-4">
-      <StatistikTabs />
+      <ErntewirtschaftTabs />
       <div>
         <h1 className="text-lg font-semibold text-emerald-800">
           Statistik – Spargel

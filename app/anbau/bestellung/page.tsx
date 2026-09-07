@@ -11,7 +11,7 @@
 import { useEffect, useState } from "react";
 import { getSupabaseClient } from "@/lib/supabase/client";
 import { useProfile } from "@/lib/useProfile";
-import AnbauTabs from "@/components/AnbauTabs";
+import ErntewirtschaftTabs from "@/components/ErntewirtschaftTabs";
 import type { ErdbeerenBestellungUebersicht } from "@/lib/types";
 import { formatZahlDE } from "@/lib/format";
 
@@ -85,7 +85,7 @@ export default function AnbauBestellungPage() {
 
   return (
     <div className="flex flex-col gap-4">
-      <AnbauTabs />
+      <ErntewirtschaftTabs />
       <div>
         <h1 className="text-lg font-semibold text-emerald-800">
           Pflanzen-Bestellung

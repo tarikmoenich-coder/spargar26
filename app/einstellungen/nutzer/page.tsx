@@ -12,6 +12,7 @@ import { getSupabaseClient } from "@/lib/supabase/client";
 import { useProfile } from "@/lib/useProfile";
 import { formatDatumDE } from "@/lib/format";
 import { ROLLEN, rolleLabel } from "@/lib/rollen";
+import EinstellungenTabs from "@/components/EinstellungenTabs";
 import type { UserRole } from "@/lib/types";
 
 interface Nutzer {
@@ -131,6 +132,7 @@ export default function NutzerVerwaltungPage() {
   if (!istAdmin) {
     return (
       <div className="flex flex-col gap-4">
+        <EinstellungenTabs />
         <h1 className="text-lg font-semibold text-emerald-800">
           Nutzer &amp; Rollen
         </h1>
@@ -143,6 +145,7 @@ export default function NutzerVerwaltungPage() {
 
   return (
     <div className="flex flex-col gap-6">
+      <EinstellungenTabs />
       <div>
         <h1 className="text-lg font-semibold text-emerald-800">
           Nutzer &amp; Rollen

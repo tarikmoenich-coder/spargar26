@@ -109,6 +109,14 @@ export const MENUE_RECHTE: Record<string, UserRole[]> = {
     "pruefer",
     "management",
   ],
+  "/erntewirtschaft": [
+    "admin",
+    "hr",
+    "zeiterfassung",
+    "lohnabrechnung",
+    "management",
+    "erntewirtschaft",
+  ],
   "/praemien/zuckermais": [
     "admin",
     "hr",

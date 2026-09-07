@@ -22,7 +22,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { getSupabaseClient } from "@/lib/supabase/client";
 import { useProfile } from "@/lib/useProfile";
-import StatistikTabs from "@/components/StatistikTabs";
+import ErntewirtschaftTabs from "@/components/ErntewirtschaftTabs";
 import { formatDatumDE, formatMenge } from "@/lib/format";
 import type {
   Employee,
@@ -309,7 +309,7 @@ export default function StatistikZuckermaisPage() {
 
   return (
     <div className="flex flex-col gap-4">
-      <StatistikTabs />
+      <ErntewirtschaftTabs />
       <div>
         <h1 className="text-lg font-semibold text-emerald-800">
           Statistik – Zuckermais

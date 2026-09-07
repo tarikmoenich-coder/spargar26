@@ -12,7 +12,7 @@
 import { useEffect, useState } from "react";
 import { getSupabaseClient } from "@/lib/supabase/client";
 import { useProfile } from "@/lib/useProfile";
-import AnbauTabs from "@/components/AnbauTabs";
+import ErntewirtschaftTabs from "@/components/ErntewirtschaftTabs";
 import type { ErdbeerenParzelle } from "@/lib/types";
 import { formatZahlDE } from "@/lib/format";
 
@@ -118,7 +118,7 @@ export default function AnbauFelderPage() {
 
   return (
     <div className="flex flex-col gap-4">
-      <AnbauTabs />
+      <ErntewirtschaftTabs />
       <div>
         <h1 className="text-lg font-semibold text-emerald-800">Felder</h1>
         <p className="text-sm text-neutral-500">

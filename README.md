@@ -1322,13 +1322,13 @@ Breite des Login Feldes. So sieht das nicht gut aus").
 | Rolle | Sichtbare Menüpunkte | Kernrechte |
 |---|---|---|
 | `admin` | Alle | Voller Zugriff auf alles, inkl. Einstellungen, Kassenprüfungen freigeben, Änderungsprotokoll (Seite "Protokoll") |
-| `hr` | Personal, Stundenerfassung, Suche, Lohn, Prämien, Statistik, Controlling | Personalstamm + Dokumente voll pflegen (inkl. SV-Nr./IBAN/Ausweiskopien), Sozialversicherung + Lohnsteuer erfassen, Personalplanung + Anreiseliste (Kandidaten, Schwarze Liste, Buskosten) verwalten, Stunden erfassen, Lohnübersicht/Vorschüsse nur ansehen (nicht bearbeiten), Prämien erfassen, Monatsabschluss sperren/öffnen |
-| `zeiterfassung` | Stundenerfassung, Suche, Prämien | Nur Stunden eintragen/ändern; sieht Personal nur mit eingeschränkten Feldern (keine SV-Nr./IBAN etc.); erfasst zusätzlich die Ausgabe von Arbeitskleidung (Stundenerfassung → Arbeitskleidung) sowie Prämien (Kisten/Stunden je Tag) |
+| `hr` | Personal, Stundenerfassung, Suche, Lohn, Erntewirtschaft, Controlling | Personalstamm + Dokumente voll pflegen (inkl. SV-Nr./IBAN/Ausweiskopien), Sozialversicherung + Lohnsteuer erfassen, Personalplanung + Anreiseliste (Kandidaten, Schwarze Liste, Buskosten) verwalten, Stunden erfassen, Lohnübersicht/Vorschüsse nur ansehen (nicht bearbeiten), Prämien erfassen, Monatsabschluss sperren/öffnen |
+| `zeiterfassung` | Stundenerfassung, Suche, Erntewirtschaft (nur Prämien) | Nur Stunden eintragen/ändern; sieht Personal nur mit eingeschränkten Feldern (keine SV-Nr./IBAN etc.); erfasst zusätzlich die Ausgabe von Arbeitskleidung (Stundenerfassung → Arbeitskleidung) sowie Prämien (Kisten/Stunden je Tag) |
 | `kasse` | Suche, Lohn, Kassenbuch | Vorschüsse erfassen/stornieren/korrigieren, Kassenbuch führen, Kassenprüfung durchführen |
-| `lohnabrechnung` | Suche, Lohn, Prämien, Statistik | Lohnübersicht ansehen **und bearbeiten** (Buskosten, Kautionen, "Jetzt Abrechnen"), Vorschüsse einsehen, Prämien ansehen |
+| `lohnabrechnung` | Suche, Lohn, Erntewirtschaft (Prämien lesen, Statistik) | Lohnübersicht ansehen **und bearbeiten** (Netto, Buskosten, Kautionen, "Jetzt Abrechnen"), **Vorschüsse erstellen/korrigieren**, Prämien ansehen |
 | `pruefer` | Suche, Lohn, Kassenbuch | Nur lesen, außer: Kassenprüfungen freigeben; einzige Nicht-Admin-Rolle mit Audit-Log-Einsicht |
-| `management` | Start, Suche, Lohn, Kassenbuch, Prämien, Statistik, Controlling, Fahrzeuge | Überwiegend lesende/aggregierte Sicht; darf zusätzlich Stundenkonto-Guthaben "In Auszahlung umwandeln" (Vorgabe 2026-08-21) |
-| `erntewirtschaft` | Start, Suche, Prämien, Anbau, Statistik, Unterkunft | Eigener Arbeitsbereich (Vorgabe 2026-08-09, seither erweitert): erfasst Prämien (wie zeiterfassung), sieht Statistik, pflegt die Anbauplanung, sieht Unterkunft (lesend), eigenes Tages-Dashboard; kein Zugriff auf Personal, Lohnübersicht, Kassenbuch, Controlling, Einstellungen |
+| `management` | Start, Suche, Lohn, Kassenbuch, Erntewirtschaft, Controlling, Fahrzeuge | Überwiegend lesende/aggregierte Sicht; darf zusätzlich Stundenkonto-Guthaben "In Auszahlung umwandeln" (Vorgabe 2026-08-21) |
+| `erntewirtschaft` | Start, Suche, Erntewirtschaft (Prämien/Anbau/Statistik), Unterkunft | Eigener Arbeitsbereich (Vorgabe 2026-08-09, seither erweitert): erfasst Prämien (wie zeiterfassung), sieht Statistik, pflegt die Anbauplanung, sieht Unterkunft (lesend), eigenes Tages-Dashboard; kein Zugriff auf Personal, Lohnübersicht, Kassenbuch, Controlling, Einstellungen |
 | `hausmeister` | Nur Unterkunft (Reparaturen) | Pflegt in der Unterkunft die laufende Arbeit (Vorgabe 2026-09-15); kein anderer Menüpunkt, auch keine Suche |
 
 Neuen Benutzer anlegen: Supabase-Dashboard → Authentication → Users →

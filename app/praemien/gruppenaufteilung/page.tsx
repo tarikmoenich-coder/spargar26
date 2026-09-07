@@ -14,7 +14,7 @@ import { useEffect, useState } from "react";
 import { getSupabaseClient } from "@/lib/supabase/client";
 import { ladeAlleSeiten } from "@/lib/ladeAlle";
 import { useProfile } from "@/lib/useProfile";
-import PraemienTabs from "@/components/PraemienTabs";
+import ErntewirtschaftTabs from "@/components/ErntewirtschaftTabs";
 import type { Arbeitsgruppe, Employee, Herkunft } from "@/lib/types";
 
 type Kultur = "praemien_zuckermais" | "praemien_erdbeeren" | "praemien_spargel";
@@ -129,7 +129,7 @@ export default function PraemienGruppenaufteilungPage() {
   if (!canEdit) {
     return (
       <div className="flex flex-col gap-4">
-        <PraemienTabs />
+        <ErntewirtschaftTabs />
         <p className="text-neutral-500">
           Nur admin/hr dürfen die Gruppenaufteilung ändern.
         </p>
@@ -139,7 +139,7 @@ export default function PraemienGruppenaufteilungPage() {
 
   return (
     <div className="flex flex-col gap-4">
-      <PraemienTabs />
+      <ErntewirtschaftTabs />
       <div>
         <h1 className="text-lg font-semibold text-emerald-800">
           Prämien – Gruppenaufteilung

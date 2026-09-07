@@ -15,7 +15,7 @@
 import { Fragment, useEffect, useState } from "react";
 import { getSupabaseClient } from "@/lib/supabase/client";
 import { useProfile } from "@/lib/useProfile";
-import AnbauTabs from "@/components/AnbauTabs";
+import ErntewirtschaftTabs from "@/components/ErntewirtschaftTabs";
 import {
   PFLANZTYPEN,
   PFLANZTYP_LABELS,
@@ -451,7 +451,7 @@ export default function AnbauErdbeerenPage() {
 
   return (
     <div className="flex flex-col gap-4">
-      <AnbauTabs />
+      <ErntewirtschaftTabs />
       <div>
         <h1 className="text-lg font-semibold text-emerald-800">
           Anbauplanung Erdbeeren

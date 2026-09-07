@@ -1,22 +1,22 @@
 "use client";
 
+// Reiter für den Einstellungen-Bereich (Nutzer-Vorgabe: aufteilen, "da hängt
+// jetzt zuviel untereinander"). Allgemein = Firmen-Bankdaten +
+// Verpflegung/Unterkunft/Mindestlohn/Arbeitskleidung; dazu je ein eigener
+// Reiter für Arbeitsgruppen, Herkünfte und Nutzer & Rollen.
+
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useRef } from "react";
 
-// Prämien (Nutzer-Vorgabe 2026-08-09): Spargel/Erdbeeren/Zuckermais,
-// ersetzt schrittweise die drei bisherigen Excel-Dateien. Start mit
-// Zuckermais - Spargel/Erdbeeren zunächst als "in Vorbereitung"-
-// Platzhalter. Gleiches Muster wie LohnTabs/ErfassungTabs - siehe dort für
-// die Erklärung der ResizeObserver-Logik.
 const tabs = [
-  { href: "/praemien/zuckermais", label: "Zuckermais" },
-  { href: "/praemien/spargel", label: "Spargel" },
-  { href: "/praemien/erdbeeren", label: "Erdbeeren" },
-  { href: "/praemien/gruppenaufteilung", label: "Gruppenaufteilung" },
+  { href: "/einstellungen", label: "Allgemein" },
+  { href: "/einstellungen/arbeitsgruppen", label: "Arbeitsgruppen" },
+  { href: "/einstellungen/herkuenfte", label: "Herkünfte" },
+  { href: "/einstellungen/nutzer", label: "Nutzer & Rollen" },
 ];
 
-export default function PraemienTabs() {
+export default function EinstellungenTabs() {
   const pathname = usePathname();
   const ref = useRef<HTMLDivElement>(null);
 

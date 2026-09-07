@@ -14,7 +14,7 @@
 import { useEffect, useState } from "react";
 import { getSupabaseClient } from "@/lib/supabase/client";
 import { useProfile } from "@/lib/useProfile";
-import PraemienTabs from "@/components/PraemienTabs";
+import ErntewirtschaftTabs from "@/components/ErntewirtschaftTabs";
 import { formatDatumDE, formatMenge } from "@/lib/format";
 import type {
   Arbeitsgruppe,
@@ -330,7 +330,7 @@ export default function PraemienErdbeerenPage() {
   if (!canEdit) {
     return (
       <div className="flex flex-col gap-4">
-        <PraemienTabs />
+        <ErntewirtschaftTabs />
         <p className="text-neutral-500">
           Nur admin/hr/zeiterfassung/erntewirtschaft dürfen
           Erdbeeren-Prämien erfassen.
@@ -341,7 +341,7 @@ export default function PraemienErdbeerenPage() {
 
   return (
     <div className="flex flex-col gap-4">
-      <PraemienTabs />
+      <ErntewirtschaftTabs />
       <div className="print:hidden">
         <h1 className="text-lg font-semibold text-emerald-800">
           Prämien – Erdbeeren

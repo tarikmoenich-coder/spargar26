@@ -1,6 +1,6 @@
 "use client";
 
-import PraemienTabs from "@/components/PraemienTabs";
+import ErntewirtschaftTabs from "@/components/ErntewirtschaftTabs";
 
 // Platzhalter (Stand 2026-08-09) - Struktur steht (Menü/Reiter), Aufbau
 // folgt nach Klärung der Waage-Anbindung (Rohdaten kommen von einer
@@ -9,7 +9,7 @@ import PraemienTabs from "@/components/PraemienTabs";
 export default function PraemienSpargelPage() {
   return (
     <div className="flex flex-col gap-4">
-      <PraemienTabs />
+      <ErntewirtschaftTabs />
       <div>
         <h1 className="text-lg font-semibold text-emerald-800">
           Prämien – Spargel
