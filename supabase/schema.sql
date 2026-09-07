@@ -6304,6 +6304,10 @@ create table fahrzeug_geofence (
   beschreibung text,
   area text,
   ist_hof boolean not null default true,
+  -- Genehmigter Ort (z.B. ein REWE zum Einkaufen): Bewegung/Ausfahrt INNERHALB
+  -- eines erlaubten Geofence löst keinen Alarm aus - auch außerhalb der
+  -- Arbeitszeit. App-editierbar, der Poller fasst das Feld nicht an.
+  erlaubt boolean not null default false,
   erstellt_am timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );

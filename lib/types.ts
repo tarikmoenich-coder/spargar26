@@ -1934,6 +1934,9 @@ export interface FahrzeugGeofence {
   beschreibung: string | null;
   area: string | null;
   ist_hof: boolean;
+  // Genehmigter Ort (z.B. REWE): Bewegung/Ausfahrt innerhalb löst keinen
+  // Alarm aus, auch außerhalb der Arbeitszeit.
+  erlaubt: boolean;
   erstellt_am: string;
   updated_at: string;
 }

@@ -66,6 +66,18 @@ export default function FahrzeugeEinstellungenPage() {
       .eq("traccar_geofence_id", id);
   }
 
+  async function erlaubtAendern(id: number, erlaubt: boolean) {
+    setGeofences((prev) =>
+      prev.map((g) =>
+        g.traccar_geofence_id === id ? { ...g, erlaubt } : g
+      )
+    );
+    await getSupabaseClient()
+      .from("fahrzeug_geofence")
+      .update({ erlaubt })
+      .eq("traccar_geofence_id", id);
+  }
+
   return (
     <div className="flex flex-col gap-4">
       <FahrzeugeTabs />
@@ -149,7 +161,9 @@ export default function FahrzeugeEinstellungenPage() {
           <p className="text-sm text-neutral-500">
             Geofences werden in Traccar gezeichnet und hier gespiegelt. „Hof"
             steuert die Ein-/Ausfahrt-Auswertung und den Alarm bei
-            Hof-Ausfahrten außerhalb der Arbeitszeit.
+            Hof-Ausfahrten außerhalb der Arbeitszeit. „genehmigt" markiert einen
+            erlaubten Ort (z. B. ein REWE zum Einkaufen): Bewegung innerhalb
+            löst keinen Alarm aus – auch außerhalb der Arbeitszeit.
           </p>
           <div className="overflow-x-auto">
             <table>
@@ -158,6 +172,7 @@ export default function FahrzeugeEinstellungenPage() {
                   <th>Name</th>
                   <th>Beschreibung</th>
                   <th>ist Hof</th>
+                  <th>genehmigt</th>
                 </tr>
               </thead>
               <tbody>
@@ -177,11 +192,24 @@ export default function FahrzeugeEinstellungenPage() {
                         }
                       />
                     </td>
+                    <td>
+                      <input
+                        type="checkbox"
+                        checked={g.erlaubt}
+                        disabled={!canEdit}
+                        onChange={(e) =>
+                          erlaubtAendern(
+                            g.traccar_geofence_id,
+                            e.target.checked
+                          )
+                        }
+                      />
+                    </td>
                   </tr>
                 ))}
                 {geofences.length === 0 && (
                   <tr>
-                    <td colSpan={3} className="text-neutral-500">
+                    <td colSpan={4} className="text-neutral-500">
                       Noch keine Geofences aus Traccar. In Traccar 2 Geofences um
                       die Höfe anlegen und den Geräten zuweisen.
                     </td>

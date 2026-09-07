@@ -85,6 +85,7 @@ export interface KartenGeofence {
   name: string | null;
   area: string | null;
   ist_hof: boolean;
+  erlaubt: boolean;
 }
 
 // Traccar-WKT ("CIRCLE (lat lng, radius)" / "POLYGON ((lat lng, ...))",
@@ -190,12 +191,20 @@ export default function FahrzeugKarte({
         type: "geojson",
         data: { type: "FeatureCollection", features: [] },
       });
+      // Hof = grün, genehmigter Ort (z.B. REWE) = blau, sonst grau.
       map.addLayer({
         id: "geofences-flaeche",
         type: "fill",
         source: "geofences",
         paint: {
-          "fill-color": ["case", ["get", "hof"], "#2b711e", "#6b7280"],
+          "fill-color": [
+            "case",
+            ["get", "hof"],
+            "#2b711e",
+            ["get", "erlaubt"],
+            "#0284c7",
+            "#6b7280",
+          ],
           "fill-opacity": 0.12,
         },
       });
@@ -204,7 +213,14 @@ export default function FahrzeugKarte({
         type: "line",
         source: "geofences",
         paint: {
-          "line-color": ["case", ["get", "hof"], "#2b711e", "#6b7280"],
+          "line-color": [
+            "case",
+            ["get", "hof"],
+            "#2b711e",
+            ["get", "erlaubt"],
+            "#0284c7",
+            "#6b7280",
+          ],
           "line-width": 1.5,
           "line-dasharray": [2, 1],
         },
@@ -402,7 +418,7 @@ export default function FahrzeugKarte({
         return {
           type: "Feature" as const,
           geometry: { type: "Polygon" as const, coordinates: [ring] },
-          properties: { hof: g.ist_hof, name: g.name ?? "" },
+          properties: { hof: g.ist_hof, erlaubt: g.erlaubt, name: g.name ?? "" },
         };
       })
       .filter((f): f is NonNullable<typeof f> => f !== null);

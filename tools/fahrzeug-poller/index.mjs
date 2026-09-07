@@ -111,6 +111,47 @@ function istAusserhalb(iso, azByWd) {
   return minuten < vh * 60 + vm || minuten >= bh * 60 + bm;
 }
 
+// Punkt in Traccar-Geofence? WKT ist "CIRCLE (lat lng, radius_m)" bzw.
+// "POLYGON ((lat lng, lat lng, ...))" - Reihenfolge lat vor lng. Genutzt, um
+// Alarme zu unterdrücken, wenn Bewegung/Ausfahrt innerhalb eines als
+// "erlaubt" markierten Geofence (z.B. REWE) passiert.
+function haversineM(lat1, lon1, lat2, lon2) {
+  const R = 6371000;
+  const r = (d) => (d * Math.PI) / 180;
+  const dLat = r(lat2 - lat1);
+  const dLon = r(lon2 - lon1);
+  const a =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos(r(lat1)) * Math.cos(r(lat2)) * Math.sin(dLon / 2) ** 2;
+  return 2 * R * Math.asin(Math.sqrt(a));
+}
+
+function inArea(lat, lng, wkt) {
+  if (!wkt || lat == null || lng == null) return false;
+  const zahlen = (wkt.match(/-?\d+(?:\.\d+)?/g) || []).map(Number);
+  if (/^\s*CIRCLE/i.test(wkt)) {
+    if (zahlen.length < 3) return false;
+    const [clat, clng, radius] = zahlen;
+    return haversineM(lat, lng, clat, clng) <= radius;
+  }
+  // POLYGON: zahlen = [lat, lng, lat, lng, ...] -> Ray-Casting auf (x=lng, y=lat)
+  const pts = [];
+  for (let i = 0; i + 1 < zahlen.length; i += 2) {
+    pts.push([zahlen[i + 1], zahlen[i]]); // [x=lng, y=lat]
+  }
+  if (pts.length < 3) return false;
+  let drin = false;
+  for (let i = 0, j = pts.length - 1; i < pts.length; j = i++) {
+    const [xi, yi] = pts[i];
+    const [xj, yj] = pts[j];
+    const schneidet =
+      yi > lat !== yj > lat &&
+      lng < ((xj - xi) * (lat - yi)) / (yj - yi) + xi;
+    if (schneidet) drin = !drin;
+  }
+  return drin;
+}
+
 async function telegram(text) {
   if (!TELEGRAM_BOT_TOKEN || !TELEGRAM_CHAT_ID) {
     console.log("[alarm] (kein Telegram konfiguriert)", text.replace(/\n/g, " | "));
@@ -327,11 +368,17 @@ async function geofencesUndEvents(devices, uidVonDevice, fahrzeugVon) {
   }
   const { data: gfRows } = await supa
     .from("fahrzeug_geofence")
-    .select("traccar_geofence_id, name, ist_hof");
+    .select("traccar_geofence_id, name, ist_hof, erlaubt, area");
   const gfName = new Map((gfRows ?? []).map((g) => [g.traccar_geofence_id, g.name]));
   const hofIds = new Set(
     (gfRows ?? []).filter((g) => g.ist_hof).map((g) => g.traccar_geofence_id)
   );
+  // Flächen der als "erlaubt" markierten Geofences (z.B. REWE): passiert eine
+  // Bewegung/Ausfahrt innerhalb einer davon, wird KEIN Alarm ausgelöst - auch
+  // außerhalb der Arbeitszeit.
+  const erlaubtAreas = (gfRows ?? [])
+    .filter((g) => g.erlaubt && g.area)
+    .map((g) => g.area);
 
   // --- Arbeitszeiten ---
   const { data: azRows } = await supa
@@ -375,8 +422,12 @@ async function geofencesUndEvents(devices, uidVonDevice, fahrzeugVon) {
       const uid = uidVonDevice.get(e.deviceId) ?? null;
       const pos = posMap.get(e.positionId);
       const ausserhalb = istAusserhalb(e.eventTime, azByWd);
+      const imErlaubten =
+        pos != null &&
+        erlaubtAreas.some((a) => inArea(pos.latitude, pos.longitude, a));
       const alarmRelevant =
         ausserhalb &&
+        !imErlaubten &&
         (e.type === "deviceMoving" ||
           (e.type === "geofenceExit" && hofIds.has(e.geofenceId)));
       return {
