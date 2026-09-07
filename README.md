@@ -1275,7 +1275,9 @@ atomare Belegnummern).
    der Tabelle `profiles` eine Zeile mit derselben `id` (siehe Auth →
    Users → User UID), `full_name` und `role` anlegen
    (`admin`, `hr`, `zeiterfassung`, `kasse`, `lohnabrechnung`, `pruefer`,
-   `management` oder `erntewirtschaft`).
+   `management`, `erntewirtschaft` oder `hausmeister`). Danach laufen alle
+   weiteren Nutzer über die App: **Einstellungen → Nutzer & Rollen**
+   (`/einstellungen/nutzer`, nur admin).
 4. Unter Project Settings → API: `Project URL` und `anon public key`
    kopieren.
 
@@ -1287,7 +1289,12 @@ Reihenfolge, jede nur einmal) im SQL Editor aus.
 ### Rollen & Berechtigungen
 
 Rechte sind serverseitig in der Datenbank festgelegt (Row Level Security),
-nicht nur im Menü versteckt.
+nicht nur im Menü versteckt. Die kanonische Rollenliste (Bezeichnung,
+Kurzbeschreibung, Menü-Zuordnung) steht in **`lib/rollen.ts`** - die
+Menü-Sichtbarkeit in `components/Nav.tsx` und die Tabelle unten ziehen
+daraus. Verwaltung der Nutzer/Rollen: **Einstellungen → Nutzer & Rollen**
+(admin). `profiles.role`/`aktiv` sind gegen Selbst-Änderung geschützt
+(Trigger `trg_profiles_schutz`), Rollenwechsel landen im Änderungsprotokoll.
 
 **Automatische Abmeldung nach Inaktivität (Stand 2026-08-28, Nutzer-Vorgabe:
 "alle Nutzer nach 60 Minuten Inaktivität automatisch abgemeldet"):** jede
@@ -1320,13 +1327,14 @@ Breite des Login Feldes. So sieht das nicht gut aus").
 | `kasse` | Suche, Lohn, Kassenbuch | Vorschüsse erfassen/stornieren/korrigieren, Kassenbuch führen, Kassenprüfung durchführen |
 | `lohnabrechnung` | Suche, Lohn, Prämien, Statistik | Lohnübersicht ansehen **und bearbeiten** (Buskosten, Kautionen, "Jetzt Abrechnen"), Vorschüsse einsehen, Prämien ansehen |
 | `pruefer` | Suche, Lohn, Kassenbuch | Nur lesen, außer: Kassenprüfungen freigeben; einzige Nicht-Admin-Rolle mit Audit-Log-Einsicht |
-| `management` | Suche, Lohn, Kassenbuch, Prämien, Statistik, Controlling | Nur lesende/aggregierte Sicht |
-| `erntewirtschaft` | Start, Suche, Prämien, Anbau, Statistik | Eigener, eingeschränkter Arbeitsbereich (Nutzer-Vorgabe 2026-08-09) - erfasst Prämien (Kisten/Stunden je Tag, wie zeiterfassung), sieht die Statistik, eigenes Dashboard mit Tageskennzahlen; kein Zugriff auf Personal, Lohnübersicht, Kassenbuch, Controlling, Einstellungen |
+| `management` | Start, Suche, Lohn, Kassenbuch, Prämien, Statistik, Controlling, Fahrzeuge | Überwiegend lesende/aggregierte Sicht; darf zusätzlich Stundenkonto-Guthaben "In Auszahlung umwandeln" (Vorgabe 2026-08-21) |
+| `erntewirtschaft` | Start, Suche, Prämien, Anbau, Statistik, Unterkunft | Eigener Arbeitsbereich (Vorgabe 2026-08-09, seither erweitert): erfasst Prämien (wie zeiterfassung), sieht Statistik, pflegt die Anbauplanung, sieht Unterkunft (lesend), eigenes Tages-Dashboard; kein Zugriff auf Personal, Lohnübersicht, Kassenbuch, Controlling, Einstellungen |
+| `hausmeister` | Nur Unterkunft (Reparaturen) | Pflegt in der Unterkunft die laufende Arbeit (Vorgabe 2026-09-15); kein anderer Menüpunkt, auch keine Suche |
 
 Neuen Benutzer anlegen: Supabase-Dashboard → Authentication → Users →
-"Add user" (E-Mail + Passwort) → User UID kopieren → Table Editor →
-Tabelle `profiles` → neue Zeile mit `id` = User UID, `full_name`, `role`
-(eine der obigen), `aktiv` = `true`.
+"Add user" (E-Mail + Passwort) → User UID kopieren → in der App unter
+**Einstellungen → Nutzer & Rollen** "Nutzer hinzufügen" (UID + Name +
+Rolle). Rolle/Name/Aktiv-Status später ebenfalls dort.
 
 ## 2. Lokale Konfiguration
 

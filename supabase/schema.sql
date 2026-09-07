@@ -87,6 +87,24 @@ returns boolean language sql stable as $$
   select current_role_name() = 'admin';
 $$;
 
+-- profiles.role / profiles.aktiv dürfen NICHT über den Selbst-Service
+-- (profiles_update_self) geändert werden - sonst könnte sich jeder Nutzer
+-- selbst zum Admin machen. full_name/sprache bleiben selbst änderbar.
+create or replace function profiles_schutz()
+returns trigger language plpgsql as $$
+begin
+  if (new.role is distinct from old.role
+      or new.aktiv is distinct from old.aktiv)
+     and not is_admin() then
+    raise exception
+      'Rolle und Aktiv-Status können nur von einem Administrator geändert werden.';
+  end if;
+  return new;
+end;
+$$;
+create trigger trg_profiles_schutz before update on profiles
+  for each row execute function profiles_schutz();
+
 -- Schmale, breit zugängliche Sicht (nur id + full_name, kein role/aktiv) -
 -- "profiles_select" lässt jeden nur die eigene Zeile lesen, wodurch z.B.
 -- der Bearbeiter-Name bei Kassenbewegungen für alle außer admin/die
@@ -3858,6 +3876,10 @@ begin
 end;
 $$;
 
+-- Rollenwechsel / Aktiv-Status / Namensänderungen an Nutzern protokollieren.
+create trigger trg_audit_profiles
+  after insert or update or delete on profiles
+  for each row execute function write_audit_log();
 create trigger trg_audit_employees
   after insert or update on employees
   for each row execute function write_audit_log();
@@ -5060,6 +5082,10 @@ create policy "profiles_select" on profiles for select
   using (id = auth.uid() or is_admin());
 create policy "profiles_update_self" on profiles for update
   using (id = auth.uid());
+-- Admin: alle Profile lesen/anlegen/ändern (Nutzerverwaltung /einstellungen/nutzer).
+-- Der Spaltenschutz für role/aktiv steckt zusätzlich in trg_profiles_schutz.
+create policy "profiles_admin_all" on profiles for all
+  using (is_admin()) with check (is_admin());
 
 -- arbeitsgruppen: alle eingeloggten Rollen lesen, nur admin pflegt
 create policy "arbeitsgruppen_select" on arbeitsgruppen for select

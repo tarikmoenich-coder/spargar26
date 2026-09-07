@@ -26,13 +26,12 @@ import {
 import { getSupabaseClient } from "@/lib/supabase/client";
 import { useProfile } from "@/lib/useProfile";
 import { SPRACHEN, type Sprache } from "@/lib/i18n";
-import type { UserRole } from "@/lib/types";
+import { MENUE_RECHTE } from "@/lib/rollen";
 
 interface NavItem {
   href: string;
   label: string;
   icon: LucideIcon;
-  roles: UserRole[] | "all";
   // Weitere Pfade, die diesen Menüpunkt ebenfalls als aktiv markieren sollen
   // (z.B. Unterseiten wie Personalnummern/Import unter "Personal").
   auchAktivBei?: string[];
@@ -43,21 +42,11 @@ const items: NavItem[] = [
     href: "/dashboard",
     label: "Start",
     icon: LayoutDashboard,
-    roles: [
-      "admin",
-      "hr",
-      "kasse",
-      "lohnabrechnung",
-      "pruefer",
-      "management",
-      "erntewirtschaft",
-    ],
   },
   {
     href: "/mitarbeiter",
     label: "Personal",
     icon: Users,
-    roles: ["admin", "hr"],
     auchAktivBei: [
       "/personalnummern",
       "/personal-import",
@@ -74,20 +63,17 @@ const items: NavItem[] = [
     icon: Building2,
     // hausmeister sieht ausschliesslich dieses Modul (nur Reparaturen, Vorgabe
     // 2026-09-15). erntewirtschaft nur lesend (Durchsetzung via RLS).
-    roles: ["admin", "hr", "erntewirtschaft", "hausmeister"],
   },
   {
     href: "/fahrzeuge",
     label: "Fahrzeuge",
     icon: Truck,
     // GPS-Flotte (Traccar). Stufe 1: admin/hr pflegen, management liest.
-    roles: ["admin", "hr", "management"],
   },
   {
     href: "/erfassung",
     label: "Stundenerfassung",
     icon: Clock,
-    roles: ["admin", "hr", "zeiterfassung"],
     auchAktivBei: ["/erfassung-import", "/arbeitskleidung", "/lager"],
   },
   {
@@ -95,36 +81,17 @@ const items: NavItem[] = [
     label: "Suche",
     icon: Search,
     // Alle ausser hausmeister (der sieht nur Reparaturen, Vorgabe 2026-09-15).
-    roles: [
-      "admin",
-      "hr",
-      "zeiterfassung",
-      "kasse",
-      "lohnabrechnung",
-      "pruefer",
-      "management",
-      "erntewirtschaft",
-    ],
   },
   {
     href: "/uebersicht",
     label: "Lohn",
     icon: Wallet,
-    roles: ["admin", "hr", "kasse", "lohnabrechnung", "pruefer", "management"],
     auchAktivBei: ["/vorschuesse", "/auszahlungen"],
   },
   {
     href: "/praemien/zuckermais",
     label: "Prämien",
     icon: Award,
-    roles: [
-      "admin",
-      "hr",
-      "zeiterfassung",
-      "lohnabrechnung",
-      "management",
-      "erntewirtschaft",
-    ],
     auchAktivBei: ["/praemien"],
   },
   {
@@ -133,40 +100,35 @@ const items: NavItem[] = [
     icon: Sprout,
     // Nutzer-Vorgabe 2026-08-11: nur admin und erntewirtschaft - die
     // Anbauplanung ist deren Arbeitsbereich.
-    roles: ["admin", "erntewirtschaft"],
     auchAktivBei: ["/anbau"],
   },
   {
     href: "/statistik/zuckermais",
     label: "Statistik",
     icon: BarChart3,
-    roles: ["admin", "hr", "lohnabrechnung", "management", "erntewirtschaft"],
     auchAktivBei: ["/statistik"],
   },
   {
     href: "/kasse",
     label: "Kassenbuch",
     icon: Notebook,
-    roles: ["admin", "kasse", "pruefer", "management"],
     auchAktivBei: ["/kasse-pruefung", "/kasse/"],
   },
   {
     href: "/management",
     label: "Controlling",
     icon: Gauge,
-    roles: ["admin", "hr", "management"],
   },
   {
     href: "/aenderungsprotokoll",
     label: "Protokoll",
     icon: History,
-    roles: ["admin"],
   },
   {
     href: "/einstellungen",
     label: "Einstellungen",
     icon: Settings,
-    roles: ["admin"],
+    auchAktivBei: ["/einstellungen/nutzer"],
   },
 ];
 
@@ -237,8 +199,7 @@ export default function Nav() {
 
   const sichtbareItems = items.filter(
     (item) =>
-      item.roles === "all" ||
-      (profile && item.roles.includes(profile.role))
+      !!profile && (MENUE_RECHTE[item.href] ?? []).includes(profile.role)
   );
   const istAktiv = (item: NavItem) =>
     !!(

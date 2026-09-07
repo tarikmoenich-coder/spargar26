@@ -229,7 +229,12 @@ export default function EinstellungenPage() {
         <h1 className="text-lg font-semibold text-emerald-800">
           Einstellungen
         </h1>
-        <p className="text-sm text-neutral-500">
+        <p className="mt-1 text-sm">
+          <a href="/einstellungen/nutzer" className="text-emerald-700 underline">
+            → Nutzer &amp; Rollen verwalten
+          </a>
+        </p>
+        <p className="mt-2 text-sm text-neutral-500">
           Verpflegungs- und Unterkunft-Abzüge pro Anwesenheitstag sowie der
           gesetzliche Mindestlohn, je Saisonjahr. Änderungen wirken sich nur
           auf das jeweilige Saisonjahr aus (ADR-007: versionierte Sätze) -
