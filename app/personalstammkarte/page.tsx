@@ -4,7 +4,7 @@ import { Suspense, useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { getSupabaseClient } from "@/lib/supabase/client";
 import { useProfile } from "@/lib/useProfile";
-import { formatDatumDE } from "@/lib/format";
+import { formatDatumDE, formatMenge } from "@/lib/format";
 import { saisonsKompakt } from "@/lib/saisonHistorie";
 import {
   ABRECHNUNGSART_LABELS,
@@ -211,7 +211,7 @@ function StammkarteInner() {
         />
         <Feld
           label="Stundenlohn (aktuell)"
-          wert={emp.stundenlohn != null ? `${emp.stundenlohn.toFixed(2)} €` : "—"}
+          wert={emp.stundenlohn != null ? `${formatMenge(emp.stundenlohn, 2)} €` : "—"}
         />
         <Feld
           label="Führerschein"

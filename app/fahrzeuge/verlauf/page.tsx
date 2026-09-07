@@ -4,7 +4,7 @@ import { Suspense, useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { Route } from "lucide-react";
 import { getSupabaseClient } from "@/lib/supabase/client";
-import { formatDatumDE } from "@/lib/format";
+import { formatDatumDE, formatMenge } from "@/lib/format";
 import type { Fahrzeug, FahrzeugPosition } from "@/lib/types";
 import FahrzeugeTabs from "@/components/FahrzeugeTabs";
 import FahrzeugKarte, { type Trackpunkt } from "@/components/FahrzeugKarte";
@@ -168,7 +168,7 @@ function VerlaufInner() {
         <span className="text-sm text-neutral-500">
           {loading
             ? "lädt …"
-            : `${fahrten.length} Fahrt(en) · ${gesamtKm.toFixed(1)} km · ${Math.round(
+            : `${fahrten.length} Fahrt(en) · ${formatMenge(gesamtKm, 1)} km · ${Math.round(
                 gesamtMin
               )} min unterwegs`}
         </span>
@@ -212,7 +212,7 @@ function VerlaufInner() {
                     })}
                   </td>
                   <td>{f.minuten} min</td>
-                  <td>{f.km.toFixed(1)} km</td>
+                  <td>{formatMenge(f.km, 1)} km</td>
                   <td>{Math.round(f.maxSpeed)} km/h</td>
                 </tr>
               ))}

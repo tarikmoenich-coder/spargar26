@@ -9,6 +9,7 @@
 // es die kassenbuch_buchung-Zeilen des Buchs.
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { formatMenge } from "@/lib/format";
 import { getSupabaseClient } from "@/lib/supabase/client";
 import { useProfile } from "@/lib/useProfile";
 import type {
@@ -261,7 +262,7 @@ export default function KassenpruefungPage() {
         </h1>
         <p className="text-sm text-neutral-500">
           Jedes Kassenbuch wird einzeln geprüft. Toleranz aktuell:{" "}
-          {toleranz.toFixed(2)} € (konfigurierbar, siehe README). Eine
+          {formatMenge(toleranz, 2)} € (konfigurierbar, siehe README). Eine
           freigegebene Prüfung sperrt die Belege dieses Buchs im geprüften
           Zeitraum gegen nachträgliche Änderung.
         </p>
@@ -292,7 +293,7 @@ export default function KassenpruefungPage() {
                       className={b.id === aktivBuchId ? "bg-emerald-50" : ""}
                     >
                       <td className="font-medium">{b.bezeichnung}</td>
-                      <td>{(salden[b.id] ?? 0).toFixed(2)}</td>
+                      <td>{formatMenge(salden[b.id] ?? 0, 2)}</td>
                       <td>
                         {letzte
                           ? new Date(letzte.check_zeit).toLocaleDateString("de-DE")
@@ -398,7 +399,7 @@ export default function KassenpruefungPage() {
                           <td>{b.belegnummer}</td>
                           <td className={b.betrag < 0 ? "text-red-600" : ""}>
                             {b.betrag > 0 ? "+" : ""}
-                            {b.betrag.toFixed(2)}
+                            {formatMenge(b.betrag, 2)}
                           </td>
                           <td>
                             {b.bearbeiter_id ? namenVon[b.bearbeiter_id] ?? "—" : "—"}
@@ -412,9 +413,10 @@ export default function KassenpruefungPage() {
                           Summe
                         </td>
                         <td className="font-semibold">
-                          {bewegungenSeitPruefung
-                            .reduce((s, b) => s + b.betrag, 0)
-                            .toFixed(2)}
+                          {formatMenge(
+                            bewegungenSeitPruefung.reduce((s, b) => s + b.betrag, 0),
+                            2
+                          )}
                         </td>
                         <td></td>
                       </tr>
@@ -442,10 +444,10 @@ export default function KassenpruefungPage() {
                     {checksAktiv.map((c) => (
                       <tr key={c.id}>
                         <td>{new Date(c.check_zeit).toLocaleString("de-DE")}</td>
-                        <td>{Number(c.soll).toFixed(2)}</td>
-                        <td>{Number(c.ist).toFixed(2)}</td>
+                        <td>{formatMenge(c.soll, 2)}</td>
+                        <td>{formatMenge(c.ist, 2)}</td>
                         <td className={Number(c.differenz) !== 0 ? "text-red-600" : ""}>
-                          {Number(c.differenz).toFixed(2)}
+                          {formatMenge(c.differenz, 2)}
                         </td>
                         <td>{c.status}</td>
                         <td>

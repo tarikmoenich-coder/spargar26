@@ -16,6 +16,7 @@
 // Lohnkasse aufgelöst; die Kassenprüfung (Phase 2) reicht später eine
 // konkrete Buch-ID herein.
 import { useEffect, useState } from "react";
+import { formatMenge } from "@/lib/format";
 import { getSupabaseClient } from "@/lib/supabase/client";
 
 interface KassenSaldoKarteProps {
@@ -66,7 +67,7 @@ export default function KassenSaldoKarte({
     <div className="rounded border border-linie bg-white p-4">
       <p className="text-sm text-neutral-500">{titel}</p>
       <p className="text-2xl font-semibold text-emerald-800">
-        {laden || saldo === null ? "…" : `${saldo.toFixed(2)} €`}
+        {laden || saldo === null ? "…" : `${formatMenge(saldo, 2)} €`}
       </p>
       <p className="mt-1 text-xs text-neutral-500">
         {hinweis ??

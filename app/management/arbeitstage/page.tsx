@@ -5,7 +5,7 @@ import Link from "next/link";
 import { CalendarClock, Calculator } from "lucide-react";
 import { getSupabaseClient } from "@/lib/supabase/client";
 import { useProfile } from "@/lib/useProfile";
-import { formatDatumDE } from "@/lib/format";
+import { formatDatumDE, formatMenge } from "@/lib/format";
 import { arbeitsserieRelevant, serieCutoffISO } from "@/lib/controlling";
 import {
   speichereWorkEntryFeld,
@@ -733,13 +733,13 @@ export default function ControllingArbeitstagePage() {
                                             })}
                                             <td className="align-top">
                                               <span className="font-semibold">
-                                                {frozen.toFixed(2)}
+                                                {formatMenge(frozen, 2)}
                                               </span>
                                               {Math.abs(delta) >= 0.005 && (
                                                 <span className="ml-1 inline-flex items-center gap-0.5 text-amber-700">
                                                   <Calculator className="h-3 w-3" />
                                                   Δ {delta > 0 ? "+" : ""}
-                                                  {delta.toFixed(2)}
+                                                  {formatMenge(delta, 2)}
                                                 </span>
                                               )}
                                             </td>

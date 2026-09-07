@@ -23,7 +23,7 @@ import { useEffect, useMemo, useState } from "react";
 import { getSupabaseClient } from "@/lib/supabase/client";
 import { useProfile } from "@/lib/useProfile";
 import StatistikTabs from "@/components/StatistikTabs";
-import { formatDatumDE } from "@/lib/format";
+import { formatDatumDE, formatMenge } from "@/lib/format";
 import type {
   Employee,
   ZuckermaisDruck,
@@ -34,7 +34,7 @@ import type {
 const CURRENT_YEAR = new Date().getFullYear();
 
 function fmt(n: number | null | undefined, nachkomma = 2) {
-  return n === null || n === undefined ? "—" : n.toFixed(nachkomma);
+  return formatMenge(n, nachkomma);
 }
 
 // Personenauswertung (Nutzer-Vorgabe 2026-08-23: "wen schicke ich zuerst

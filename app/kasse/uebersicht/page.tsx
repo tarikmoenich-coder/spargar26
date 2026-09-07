@@ -6,6 +6,7 @@
 // sobald das Buch eine freigegebene Kassenprüfung hat).
 
 import { useCallback, useEffect, useState } from "react";
+import { formatMenge } from "@/lib/format";
 import Link from "next/link";
 import { getSupabaseClient } from "@/lib/supabase/client";
 import { useProfile } from "@/lib/useProfile";
@@ -94,12 +95,12 @@ export default function KassenbuecherUebersichtPage() {
                   <span className="badge badge-neutral">{b.kuerzel}</span>
                 </div>
                 <span className="text-2xl font-semibold text-emerald-800">
-                  {(salden[b.id] ?? 0).toFixed(2)} €
+                  {formatMenge(salden[b.id] ?? 0, 2)} €
                 </span>
                 <span className="text-xs text-neutral-500">
                   {b.typ === "lohnkasse"
                     ? "inkl. Vorschüsse / Auszahlungen / Kautionen"
-                    : `Eröffnungssaldo ${b.eroeffnungssaldo.toFixed(2)} €`}
+                    : `Eröffnungssaldo ${formatMenge(b.eroeffnungssaldo, 2)} €`}
                 </span>
 
                 {isAdmin && b.typ === "allgemein" && (

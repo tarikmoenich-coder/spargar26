@@ -25,7 +25,7 @@
 import { useEffect, useState } from "react";
 import { getSupabaseClient } from "@/lib/supabase/client";
 import StatistikTabs from "@/components/StatistikTabs";
-import { formatDatumDE } from "@/lib/format";
+import { formatDatumDE, formatMenge } from "@/lib/format";
 import type {
   ErdbeerenGruppenkostenTag,
   ErdbeerenParzelle,
@@ -36,7 +36,7 @@ const CURRENT_YEAR = new Date().getFullYear();
 const KG_PRO_STEIGE = 5;
 
 function fmt(n: number | null | undefined, nachkomma = 2) {
-  return n === null || n === undefined ? "—" : n.toFixed(nachkomma);
+  return formatMenge(n, nachkomma);
 }
 
 interface ParzellenSumme {

@@ -5,7 +5,7 @@ import Link from "next/link";
 import type { LucideIcon } from "lucide-react";
 import { getSupabaseClient } from "@/lib/supabase/client";
 import { useProfile } from "@/lib/useProfile";
-import { formatZahlDE } from "@/lib/format";
+import { formatMenge, formatZahlDE } from "@/lib/format";
 import MaisStatistikKachel from "@/components/MaisStatistikKachel";
 
 const CURRENT_YEAR = new Date().getFullYear();
@@ -428,7 +428,7 @@ export default function DashboardPage() {
                 <Kachel
                   href="/kasse"
                   titel="Aktueller Kassensaldo"
-                  wert={`${kassenSaldo.toFixed(2)} €`}
+                  wert={`${formatMenge(kassenSaldo, 2)} €`}
                 />
                 <Kachel
                   href="/kasse"
@@ -574,7 +574,7 @@ export default function DashboardPage() {
                   href="/praemien/zuckermais"
                   titel="Zuckermais - erfasste Personen heute"
                   wert={String(zmHeuteAnzahl)}
-                  unterzeile={`${zmHeuteSumme.toFixed(2)} € Prämie heute`}
+                  unterzeile={`${formatMenge(zmHeuteSumme, 2)} € Prämie heute`}
                 />
                 <Kachel
                   href="/praemien/zuckermais"
@@ -591,7 +591,7 @@ export default function DashboardPage() {
                   href="/praemien/erdbeeren"
                   titel="Erdbeeren - erfasste Personen heute"
                   wert={String(ebHeuteAnzahl)}
-                  unterzeile={`${ebHeuteSumme.toFixed(2)} € Prämie heute (alle Parzellen)`}
+                  unterzeile={`${formatMenge(ebHeuteSumme, 2)} € Prämie heute (alle Parzellen)`}
                 />
                 <Kachel
                   href="/statistik/zuckermais"

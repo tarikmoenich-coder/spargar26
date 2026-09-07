@@ -19,7 +19,7 @@ import { useEffect, useState } from "react";
 import { getSupabaseClient } from "@/lib/supabase/client";
 import { useProfile } from "@/lib/useProfile";
 import PraemienTabs from "@/components/PraemienTabs";
-import { formatDatumDE } from "@/lib/format";
+import { formatDatumDE, formatMenge } from "@/lib/format";
 import type {
   Arbeitsgruppe,
   Employee,
@@ -33,7 +33,7 @@ function heuteIso() {
 }
 
 function fmt(n: number | null | undefined) {
-  return n === null || n === undefined ? "—" : n.toFixed(2);
+  return formatMenge(n, 2);
 }
 
 function fmtZeit(iso: string) {
@@ -579,7 +579,7 @@ export default function PraemienZuckermaisPage() {
                     <td>{formatDatumDE(s.gueltig_ab)}</td>
                     <td>{s.norm_kolben_pro_stunde}</td>
                     <td>{s.kolben_pro_kiste}</td>
-                    <td>{s.satz_pro_kolben.toFixed(4)}</td>
+                    <td>{formatMenge(s.satz_pro_kolben, 4)}</td>
                     <td className="flex gap-2">
                       <button
                         type="button"
@@ -625,7 +625,7 @@ export default function PraemienZuckermaisPage() {
           Gültiger Satz seit {formatDatumDE(aktuellerSatz.gueltig_ab)}: Norm{" "}
           {aktuellerSatz.norm_kolben_pro_stunde} Kolben/Std. ·{" "}
           {aktuellerSatz.kolben_pro_kiste} Kolben/Kiste ·{" "}
-          {aktuellerSatz.satz_pro_kolben.toFixed(4)} €/Kolben über Norm
+          {formatMenge(aktuellerSatz.satz_pro_kolben, 4)} €/Kolben über Norm
         </p>
       )}
 
@@ -764,9 +764,7 @@ export default function PraemienZuckermaisPage() {
                   Summe Prämie
                 </td>
                 <td className="font-semibold">
-                  {druckZeilen
-                    .reduce((s, z) => s + (z.praemie ?? 0), 0)
-                    .toFixed(2)}
+                  {fmt(druckZeilen.reduce((s, z) => s + (z.praemie ?? 0), 0))}
                 </td>
               </tr>
             </tfoot>

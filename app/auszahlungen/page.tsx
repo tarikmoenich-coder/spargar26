@@ -9,7 +9,7 @@ import type {
   Kautionsuebergabe,
   SeasonSummaryRow,
 } from "@/lib/types";
-import { formatDatumDE } from "@/lib/format";
+import { formatDatumDE, formatMenge } from "@/lib/format";
 import LohnTabs from "@/components/LohnTabs";
 import {
   FARBE_ABZUG_TH,
@@ -27,19 +27,15 @@ function monatsSchluessel(d: Date) {
 }
 
 function fmt(n: number | string | null | undefined) {
-  return n === null || n === undefined || n === "" ? "—" : Number(n).toFixed(2);
+  return n === null || n === undefined || n === "" ? "—" : formatMenge(Number(n), 2);
 }
 
-// Nur für den Ausdruck (Nutzer-Vorgabe 2026-08-21: "Tausender
-// Trennpunkte") - bewusst eine eigene Funktion statt fmt() selbst zu
-// ändern, damit die interaktive Ansicht (aufklappbare Liste oben) beim
-// bisherigen Format bleibt.
+// Früher eigenes Druck-Format mit 1000er-Punkten; seit der App-weiten
+// Umstellung auf deutsches Zahlenformat (2026-10) identisch zu fmt() -
+// bleibt als Alias, damit die Aufrufstellen im Ausdruck nicht angefasst
+// werden müssen.
 function fmtDruck(n: number | string | null | undefined) {
-  if (n === null || n === undefined || n === "") return "—";
-  return Number(n).toLocaleString("de-DE", {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  });
+  return fmt(n);
 }
 
 // Liest ein Feld aus dem eingefrorenen Schnappschuss (immer vorhanden, da
@@ -731,10 +727,10 @@ export default function AuszahlungenPage() {
                                     {fmt(anzeige(r, "netto"))}
                                   </td>
                                   <td>
-                                    {(
+                                    {fmt(
                                       Number(anzeige(r, "abzug_verpflegung")) +
-                                      Number(anzeige(r, "abzug_wohnen"))
-                                    ).toFixed(2)}
+                                        Number(anzeige(r, "abzug_wohnen"))
+                                    )}
                                   </td>
                                   <td>{fmt(anzeige(r, "vorschuss_summe"))}</td>
                                   <td>{fmt(anzeige(r, "bus_kosten"))}</td>
@@ -770,7 +766,7 @@ export default function AuszahlungenPage() {
                                       ✓ Kaution übergeben: Beleg{" "}
                                       <strong>{bestehend.belegnummer}</strong>{" "}
                                       an <strong>{bestehend.uebergeben_an}</strong>{" "}
-                                      ({Number(bestehend.betrag_summe).toFixed(2)} €)
+                                      ({fmt(bestehend.betrag_summe)} €)
                                       am {formatDatumDE(bestehend.erstellt_am)}
                                     </p>
                                     <button
@@ -792,13 +788,13 @@ export default function AuszahlungenPage() {
                                   <div className="flex flex-col gap-2">
                                     <p className="text-sm font-medium text-blue-900">
                                       Kaution übergeben ({kandidaten.length}{" "}
-                                      Person(en), {summe.toFixed(2)} € gesamt)
+                                      Person(en), {fmt(summe)} € gesamt)
                                     </p>
                                     <ul className="text-sm text-neutral-700">
                                       {kandidaten.map((p) => (
                                         <li key={p.employee_id}>
                                           {p.personal_nr} – {p.name}, {p.vorname}:{" "}
-                                          {p.betrag.toFixed(2)} €
+                                          {fmt(p.betrag)} €
                                         </li>
                                       ))}
                                     </ul>

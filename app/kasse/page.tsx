@@ -21,6 +21,7 @@
 // ihn doppelt zu zählen.
 
 import { useEffect, useState } from "react";
+import { formatMenge } from "@/lib/format";
 import { getSupabaseClient } from "@/lib/supabase/client";
 import { useProfile } from "@/lib/useProfile";
 import type {
@@ -476,7 +477,7 @@ export default function KassenbuchJournalPage() {
                 <td colSpan={5} className="text-right">
                   Eröffnungssaldo {jahr} (Stand 1.1.)
                 </td>
-                <td>{(eroeffnungssaldo ?? 0).toFixed(2)}</td>
+                <td>{formatMenge(eroeffnungssaldo ?? 0, 2)}</td>
                 <td colSpan={2}></td>
               </tr>
               {journal.map((z) =>
@@ -488,9 +489,9 @@ export default function KassenbuchJournalPage() {
                     >
                       🔍 Kassenprüfung {new Date(z.datum).toLocaleString(
                         "de-DE"
-                      )} — Soll {Number(z.pruefung.soll).toFixed(2)} € / Ist{" "}
-                      {Number(z.pruefung.ist).toFixed(2)} € / Differenz{" "}
-                      {Number(z.pruefung.differenz).toFixed(2)} € —{" "}
+                      )} — Soll {formatMenge(z.pruefung.soll, 2)} € / Ist{" "}
+                      {formatMenge(z.pruefung.ist, 2)} € / Differenz{" "}
+                      {formatMenge(z.pruefung.differenz, 2)} € —{" "}
                       {z.pruefung.status}
                       {z.pruefung.freigegeben && " (freigegeben, gesperrt)"}
                     </td>
@@ -515,7 +516,7 @@ export default function KassenbuchJournalPage() {
                   <td className={(z.betrag ?? 0) < 0 ? "text-red-600" : ""}>
                     {z.betrag === null
                       ? "—"
-                      : `${z.betrag > 0 ? "+" : ""}${z.betrag.toFixed(2)}`}
+                      : `${z.betrag > 0 ? "+" : ""}${formatMenge(z.betrag, 2)}`}
                   </td>
                   <td
                     className={
@@ -526,12 +527,12 @@ export default function KassenbuchJournalPage() {
                   >
                     {z.korrekturDelta === null
                       ? "—"
-                      : `${z.korrekturDelta > 0 ? "+" : ""}${z.korrekturDelta.toFixed(2)}`}
+                      : `${z.korrekturDelta > 0 ? "+" : ""}${formatMenge(z.korrekturDelta, 2)}`}
                   </td>
                   <td className="font-medium">
                     {z.korrekturDelta !== null
                       ? "—"
-                      : z.laufenderSaldo?.toFixed(2)}
+                      : formatMenge(z.laufenderSaldo, 2)}
                   </td>
                   <td>
                     {z.bearbeiter_id ? namenVon[z.bearbeiter_id] ?? "—" : "—"}
@@ -554,7 +555,7 @@ export default function KassenbuchJournalPage() {
                   Endsaldo {jahr}
                   {jahr === CURRENT_YEAR && " (= aktueller Kassensaldo)"}
                 </td>
-                <td>{(endsaldo ?? 0).toFixed(2)}</td>
+                <td>{formatMenge(endsaldo ?? 0, 2)}</td>
                 <td colSpan={2}></td>
               </tr>
             </tfoot>

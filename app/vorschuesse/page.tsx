@@ -1,6 +1,7 @@
 "use client";
 
 import { Fragment, useEffect, useState } from "react";
+import { formatMenge } from "@/lib/format";
 import { getSupabaseClient } from "@/lib/supabase/client";
 import { useProfile } from "@/lib/useProfile";
 import type {
@@ -769,7 +770,8 @@ export default function VorschuessePage() {
     if (!neuerWert || !(neuerBetrag > 0)) return;
     if (neuerBetrag === p.anteil) return; // keine Änderung
     const hinweis = window.prompt(
-      `Grund für die Korrektur von ${p.anteil.toFixed(2)} € auf ${neuerBetrag.toFixed(
+      `Grund für die Korrektur von ${formatMenge(p.anteil, 2)} € auf ${formatMenge(
+        neuerBetrag,
         2
       )} € bei ${p.name}, ${p.vorname} (Pflichtfeld, wird protokolliert):`
     );
@@ -828,7 +830,7 @@ export default function VorschuessePage() {
                     : b.employee_id}
                 </span>
                 <span className="font-semibold tabular-nums text-red-700">
-                  {b.betrag.toFixed(2)} €
+                  {formatMenge(b.betrag, 2)} €
                 </span>
                 <span className="text-neutral-600">{belastungLabel(b)}</span>
                 {canWrite && (
@@ -1003,7 +1005,7 @@ export default function VorschuessePage() {
               <div className="mb-1 flex items-center justify-between">
                 <p className="text-sm font-medium">
                   Ausgewählt: {ausgewaehlt.length} Person(en), Summe:{" "}
-                  {summeAusgewaehlt.toFixed(2)} €
+                  {formatMenge(summeAusgewaehlt, 2)} €
                 </p>
                 <div className="flex gap-2">
                   <button
@@ -1068,7 +1070,7 @@ export default function VorschuessePage() {
                           : "—"}
                       </td>
                       <td className="text-sm">
-                        {(historie?.summe ?? 0).toFixed(2)}
+                        {formatMenge(historie?.summe ?? 0, 2)}
                       </td>
                       {art !== "Strafe/Rechnung" && zahlungsart === "BÜ" && (
                         <>
@@ -1180,9 +1182,10 @@ export default function VorschuessePage() {
           <div className="flex flex-wrap items-center gap-3">
             <span className="text-sm text-emerald-800">
               Beleg {letzterBeleg.belegnummer} erfasst, Summe{" "}
-              {letzterBeleg.empfaenger
-                .reduce((s, p) => s + p.anteil, 0)
-                .toFixed(2)}{" "}
+              {formatMenge(
+                letzterBeleg.empfaenger.reduce((s, p) => s + p.anteil, 0),
+                2
+              )}{" "}
               €.
             </span>
             <button
@@ -1294,7 +1297,7 @@ export default function VorschuessePage() {
                 <tr className={a.storniert ? "opacity-50" : ""}>
                   <td>{a.belegnummer}</td>
                   <td>{new Date(a.datum).toLocaleString("de-DE")}</td>
-                  <td>{Number(a.betrag).toFixed(2)}</td>
+                  <td>{formatMenge(Number(a.betrag), 2)}</td>
                   <td>{a.empfaenger_text}</td>
                   <td>{a.begruendung}</td>
                   <td>{a.art === "Strafe/Rechnung" ? a.art : a.zahlungsart}</td>
@@ -1446,7 +1449,7 @@ export default function VorschuessePage() {
                     <br />
                     <span className="text-xs">{p.bic || "-"}</span>
                   </td>
-                  <td>{p.anteil.toFixed(2)}</td>
+                  <td>{formatMenge(p.anteil, 2)}</td>
                   <td></td>
                 </tr>
               ))}
@@ -1457,9 +1460,10 @@ export default function VorschuessePage() {
                   Summe
                 </td>
                 <td className="font-semibold">
-                  {anzeigeBeleg.empfaenger
-                    .reduce((s, p) => s + p.anteil, 0)
-                    .toFixed(2)}
+                  {formatMenge(
+                    anzeigeBeleg.empfaenger.reduce((s, p) => s + p.anteil, 0),
+                    2
+                  )}
                 </td>
                 <td></td>
               </tr>
@@ -1508,7 +1512,7 @@ export default function VorschuessePage() {
                   <td>
                     {p.name}, {p.vorname}
                   </td>
-                  <td>{p.anteil.toFixed(2)}</td>
+                  <td>{formatMenge(p.anteil, 2)}</td>
                   <td></td>
                 </tr>
               ))}
@@ -1545,7 +1549,7 @@ export default function VorschuessePage() {
                       <td>
                         {p.name}, {p.vorname}
                       </td>
-                      <td>{p.anteil.toFixed(2)}</td>
+                      <td>{formatMenge(p.anteil, 2)}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -1555,9 +1559,10 @@ export default function VorschuessePage() {
                       Summe
                     </td>
                     <td className="font-semibold">
-                      {anzeigeBeleg.empfaenger
-                        .reduce((s, p) => s + p.anteil, 0)
-                        .toFixed(2)}
+                      {formatMenge(
+                        anzeigeBeleg.empfaenger.reduce((s, p) => s + p.anteil, 0),
+                        2
+                      )}
                     </td>
                   </tr>
                 </tfoot>

@@ -16,7 +16,7 @@ import type {
   WorkEntry,
   ZuckermaisPraemieTag,
 } from "@/lib/types";
-import { formatDatumDE } from "@/lib/format";
+import { formatDatumDE, formatMenge } from "@/lib/format";
 
 const VORSCHUSS_BUCKET = "vorschuss-belege";
 
@@ -498,7 +498,7 @@ export default function SuchePage() {
                   </h2>
                   <span className="text-sm text-neutral-500">
                     {t("suche.stdtage", {
-                      std: stundenGesamt.toFixed(2),
+                      std: formatMenge(stundenGesamt, 2),
                       tage: tageGesamt,
                     })}
                   </span>
@@ -542,7 +542,7 @@ export default function SuchePage() {
                   </h2>
                   <span className="text-sm text-neutral-500">
                     {t("suche.betragaktiv", {
-                      betrag: vorschussGesamt.toFixed(2),
+                      betrag: formatMenge(vorschussGesamt, 2),
                     })}
                   </span>
                 </div>
@@ -566,7 +566,7 @@ export default function SuchePage() {
                         {vorschussZeilen.map((z) => (
                           <tr key={z.key} className={z.storniert ? "opacity-50" : ""}>
                             <td>{z.datumAnzeige}</td>
-                            <td>{z.betrag.toFixed(2)}</td>
+                            <td>{formatMenge(z.betrag, 2)}</td>
                             <td>{z.artLabel}</td>
                             <td>
                               {z.begruendung}
@@ -607,7 +607,7 @@ export default function SuchePage() {
                         : "text-sm font-medium text-neutral-700"
                     }
                   >
-                    Saldo: {stundenkontoSaldo.toFixed(2)} Std.
+                    Saldo: {formatMenge(stundenkontoSaldo, 2)} Std.
                   </span>
                 </div>
                 {stundenkontoBewegungen.length === 0 ? (
@@ -631,7 +631,7 @@ export default function SuchePage() {
                             <td>{formatDatumDE(b.datum)}</td>
                             <td className={b.stunden < 0 ? "text-red-600" : ""}>
                               {b.stunden > 0 ? "+" : ""}
-                              {Number(b.stunden).toFixed(2)}
+                              {formatMenge(Number(b.stunden), 2)}
                             </td>
                             <td>{b.art}</td>
                             <td className="text-neutral-500">
@@ -702,7 +702,7 @@ export default function SuchePage() {
                     </h2>
                     <span className="text-sm text-neutral-500">
                       {t("suche.praemiegesamt", {
-                        betrag: zuckermaisGesamt.toFixed(2),
+                        betrag: formatMenge(zuckermaisGesamt, 2),
                       })}
                     </span>
                   </div>
@@ -728,13 +728,14 @@ export default function SuchePage() {
                             <td>{z.kisten}</td>
                             <td>{z.stunden}</td>
                             <td className="text-neutral-500">
-                              {(
+                              {formatMenge(
                                 Number(z.stunden) *
-                                Number(z.norm_kolben_pro_stunde ?? 0)
-                              ).toFixed(2)}
+                                  Number(z.norm_kolben_pro_stunde ?? 0),
+                                2
+                              )}
                             </td>
                             <td className="font-medium">
-                              {Number(z.praemie).toFixed(2)}
+                              {formatMenge(Number(z.praemie), 2)}
                             </td>
                           </tr>
                         ))}
@@ -752,7 +753,7 @@ export default function SuchePage() {
                     </h2>
                     <span className="text-sm text-neutral-500">
                       {t("suche.praemiegesamt", {
-                        betrag: erdbeerenGesamt.toFixed(2),
+                        betrag: formatMenge(erdbeerenGesamt, 2),
                       })}
                     </span>
                   </div>
@@ -777,7 +778,7 @@ export default function SuchePage() {
                             <td>{e.stunden}</td>
                             <td className="text-neutral-500">{e.sut}</td>
                             <td className="font-medium">
-                              {Number(e.praemie).toFixed(2)}
+                              {formatMenge(Number(e.praemie), 2)}
                             </td>
                           </tr>
                         ))}
@@ -804,7 +805,7 @@ export default function SuchePage() {
           </p>
 
           <h3 className="mt-4 text-base font-semibold">
-            Arbeitsstunden ({stundenGesamt.toFixed(2)} Std. · {tageGesamt} Tage)
+            Arbeitsstunden ({formatMenge(stundenGesamt, 2)} Std. · {tageGesamt} Tage)
           </h3>
           {stundenWochen.length === 0 ? (
             <p className="mt-1 text-sm">Keine Einträge in diesem Jahr.</p>
@@ -839,7 +840,7 @@ export default function SuchePage() {
                         </div>
                         <div className="font-bold">
                           {tag.entry?.stunden != null
-                            ? Number(tag.entry.stunden).toFixed(2)
+                            ? formatMenge(Number(tag.entry.stunden), 2)
                             : tag.entry?.markierung ?? "–"}
                         </div>
                         {tag.entry?.notiz && (
@@ -849,7 +850,7 @@ export default function SuchePage() {
                         )}
                       </td>
                     ))}
-                    <td className="font-semibold">{woche.summe.toFixed(2)}</td>
+                    <td className="font-semibold">{formatMenge(woche.summe, 2)}</td>
                   </tr>
                 ))}
               </tbody>
@@ -857,7 +858,7 @@ export default function SuchePage() {
           )}
 
           <h3 className="mt-6 text-base font-semibold">
-            Vorschüsse ({vorschussGesamt.toFixed(2)} € aktiv)
+            Vorschüsse ({formatMenge(vorschussGesamt, 2)} € aktiv)
           </h3>
           {vorschussZeilen.length === 0 ? (
             <p className="mt-1 text-sm">Keine Vorschüsse erfasst.</p>
@@ -876,7 +877,7 @@ export default function SuchePage() {
                 {vorschussZeilen.map((z) => (
                   <tr key={z.key}>
                     <td>{z.datumAnzeige}</td>
-                    <td>{z.betrag.toFixed(2)}</td>
+                    <td>{formatMenge(z.betrag, 2)}</td>
                     <td>{z.artLabel}</td>
                     <td>
                       {z.begruendung}
@@ -890,7 +891,7 @@ export default function SuchePage() {
           )}
 
           <h3 className="mt-6 text-base font-semibold">
-            Stundenkonto {saisonJahr} (Saldo: {stundenkontoSaldo.toFixed(2)}{" "}
+            Stundenkonto {saisonJahr} (Saldo: {formatMenge(stundenkontoSaldo, 2)}{" "}
             Std.)
           </h3>
           {stundenkontoBewegungen.length === 0 ? (
@@ -911,7 +912,7 @@ export default function SuchePage() {
                     <td>{formatDatumDE(b.datum)}</td>
                     <td>
                       {b.stunden > 0 ? "+" : ""}
-                      {Number(b.stunden).toFixed(2)}
+                      {formatMenge(Number(b.stunden), 2)}
                     </td>
                     <td>{b.art}</td>
                     <td>{b.notiz ?? "—"}</td>
@@ -924,7 +925,7 @@ export default function SuchePage() {
           {zuckermaisDruck.length > 0 && (
             <>
               <h3 className="mt-6 text-base font-semibold">
-                Zuckermais-Prämien ({zuckermaisGesamt.toFixed(2)} € gesamt)
+                Zuckermais-Prämien ({formatMenge(zuckermaisGesamt, 2)} € gesamt)
               </h3>
               <table className="mt-2 print-form-table print-dense-table">
                 <thead>
@@ -943,12 +944,13 @@ export default function SuchePage() {
                       <td>{z.kisten}</td>
                       <td>{z.stunden}</td>
                       <td>
-                        {(
+                        {formatMenge(
                           Number(z.stunden) *
-                          Number(z.norm_kolben_pro_stunde ?? 0)
-                        ).toFixed(2)}
+                            Number(z.norm_kolben_pro_stunde ?? 0),
+                          2
+                        )}
                       </td>
-                      <td>{Number(z.praemie).toFixed(2)}</td>
+                      <td>{formatMenge(Number(z.praemie), 2)}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -959,7 +961,7 @@ export default function SuchePage() {
           {erdbeerenDruck.length > 0 && (
             <>
               <h3 className="mt-6 text-base font-semibold">
-                Erdbeeren-Prämien ({erdbeerenGesamt.toFixed(2)} € gesamt)
+                Erdbeeren-Prämien ({formatMenge(erdbeerenGesamt, 2)} € gesamt)
               </h3>
               <table className="mt-2 print-form-table print-dense-table">
                 <thead>
@@ -980,7 +982,7 @@ export default function SuchePage() {
                       <td>{e.steigen}</td>
                       <td>{e.stunden}</td>
                       <td>{e.sut}</td>
-                      <td>{Number(e.praemie).toFixed(2)}</td>
+                      <td>{formatMenge(Number(e.praemie), 2)}</td>
                     </tr>
                   ))}
                 </tbody>

@@ -13,7 +13,7 @@ import {
   type SeasonSummaryMonatRow,
   type SeasonSummaryRow,
 } from "@/lib/types";
-import { formatDatumDE } from "@/lib/format";
+import { formatDatumDE, formatMenge } from "@/lib/format";
 import LohnTabs from "@/components/LohnTabs";
 import {
   FARBE_ABZUG_TH,
@@ -41,7 +41,7 @@ function letzterTagDesMonats(jahr: number, monat: number): string {
 }
 
 function fmt(n: number | string | null | undefined) {
-  return n === null || n === undefined || n === "" ? "—" : Number(n).toFixed(2);
+  return n === null || n === undefined || n === "" ? "—" : formatMenge(Number(n), 2);
 }
 
 // Liest ein Feld aus dem eingefrorenen Schnappschuss, falls die Person
@@ -497,11 +497,9 @@ export default function UebersichtPage() {
     const alterNetto = Number(anzeige(row, "netto"));
     if (neuerNetto === alterNetto) return; // keine Änderung
     const grund = window.prompt(
-      `Grund für die Korrektur von ${alterNetto.toFixed(
-        2
-      )} € auf ${neuerNetto.toFixed(2)} € (Netto) bei ${row.name}, ${
-        row.vorname
-      } (Pflichtfeld, wird protokolliert):`
+      `Grund für die Korrektur von ${fmt(alterNetto)} € auf ${fmt(
+        neuerNetto
+      )} € (Netto) bei ${row.name}, ${row.vorname} (Pflichtfeld, wird protokolliert):`
     );
     if (!grund) return;
     setKorrekturLaeuft(key);
@@ -1010,10 +1008,10 @@ export default function UebersichtPage() {
                     )}
                   </td>
                   <td>
-                    {(
+                    {fmt(
                       Number(anzeige(r, "abzug_verpflegung")) +
-                      Number(anzeige(r, "abzug_wohnen"))
-                    ).toFixed(2)}
+                        Number(anzeige(r, "abzug_wohnen"))
+                    )}
                   </td>
                   <td>
                     {!canEdit ? (

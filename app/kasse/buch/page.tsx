@@ -7,6 +7,7 @@
 // Journal unter /kasse - hierher gerät man mit ihr nur über einen alten Link.
 
 import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
+import { formatMenge } from "@/lib/format";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { getSupabaseClient } from "@/lib/supabase/client";
@@ -289,7 +290,7 @@ function BuchJournalInner() {
                   <td colSpan={5} className="text-right">
                     Eröffnungssaldo {jahr} (Stand 1.1.)
                   </td>
-                  <td>{eroeffnung.toFixed(2)}</td>
+                  <td>{formatMenge(eroeffnung, 2)}</td>
                   <td colSpan={canWrite ? 2 : 1}></td>
                 </tr>
                 {zeilen.map(({ b, saldo }) => (
@@ -305,15 +306,15 @@ function BuchJournalInner() {
                     </td>
                     <td className="text-emerald-700">
                       {!b.storniert && b.richtung === "eingang"
-                        ? Number(b.betrag).toFixed(2)
+                        ? formatMenge(Number(b.betrag), 2)
                         : ""}
                     </td>
                     <td className="text-red-600">
                       {!b.storniert && b.richtung === "ausgang"
-                        ? Number(b.betrag).toFixed(2)
+                        ? formatMenge(Number(b.betrag), 2)
                         : ""}
                     </td>
-                    <td className="font-medium">{saldo.toFixed(2)}</td>
+                    <td className="font-medium">{formatMenge(saldo, 2)}</td>
                     <td className="text-neutral-500">
                       {b.bearbeiter_id ? namenVon[b.bearbeiter_id] ?? "—" : "—"}
                     </td>
@@ -349,7 +350,7 @@ function BuchJournalInner() {
                     Endsaldo {jahr}
                     {jahr === CURRENT_YEAR && " (= aktueller Saldo)"}
                   </td>
-                  <td>{endsaldo.toFixed(2)}</td>
+                  <td>{formatMenge(endsaldo, 2)}</td>
                   <td colSpan={canWrite ? 2 : 1}></td>
                 </tr>
               </tfoot>

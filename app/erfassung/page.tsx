@@ -1,6 +1,7 @@
 "use client";
 
 import { Fragment, Suspense, useCallback, useEffect, useRef, useState } from "react";
+import { formatMenge } from "@/lib/format";
 import { useSearchParams } from "next/navigation";
 import { getSupabaseClient } from "@/lib/supabase/client";
 import { useProfile } from "@/lib/useProfile";
@@ -718,8 +719,8 @@ function ErfassungInner() {
             </span>
           </label>
           <span className="text-sm text-neutral-500">
-            {t("erfassung.tagessumme", { wert: gesamtStunden.toFixed(2) })} ·
-            Woche {wochenStunden.toFixed(2)}
+            {t("erfassung.tagessumme", { wert: formatMenge(gesamtStunden, 2) })} ·
+            Woche {formatMenge(wochenStunden, 2)}
           </span>
         </div>
 
@@ -789,7 +790,7 @@ function ErfassungInner() {
                   (
                   {t("erfassung.personenstd", {
                     n: g.employees.length,
-                    std: gruppenStunden(g).toFixed(2),
+                    std: formatMenge(gruppenStunden(g), 2),
                   })}
                   )
                 </span>
@@ -949,7 +950,7 @@ function ErfassungInner() {
                               : "font-medium"
                           }
                         >
-                          {saldo.toFixed(2)} Std.
+                          {formatMenge(saldo, 2)} Std.
                         </span>{" "}
                         {(canStundenkontoBuchen || canStundenkontoAuszahlen) && (
                           <button

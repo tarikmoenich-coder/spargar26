@@ -13,7 +13,7 @@
 import { useEffect, useState } from "react";
 import { getSupabaseClient } from "@/lib/supabase/client";
 import { useProfile } from "@/lib/useProfile";
-import { formatDatumDE } from "@/lib/format";
+import { formatDatumDE, formatMenge } from "@/lib/format";
 import {
   kannStundenkontoAuszahlen,
   kannStundenkontoBuchen,
@@ -158,9 +158,7 @@ export default function StundenkontoBereich({
       return;
     }
     setErfolg(
-      `${wert} Std. in ${Number(data ?? 0).toFixed(
-        2
-      )} € umgewandelt - erscheint auf der Lohnübersicht.`
+      `${wert} Std. in ${formatMenge(Number(data ?? 0), 2)} € umgewandelt - erscheint auf der Lohnübersicht.`
     );
     setAuszahlungStunden("");
     setAuszahlungNotiz("");
@@ -189,7 +187,7 @@ export default function StundenkontoBereich({
       return;
     }
     setErfolg(
-      `Umwandlung storniert - ${Math.abs(b.stunden).toFixed(2)} Std. sind wieder auf dem Stundenkonto.`
+      `Umwandlung storniert - ${formatMenge(Math.abs(b.stunden), 2)} Std. sind wieder auf dem Stundenkonto.`
     );
     await neuLaden();
   }
@@ -198,7 +196,7 @@ export default function StundenkontoBereich({
     <div className="flex flex-col gap-3 p-2">
       <p className="text-sm font-semibold">
         Stundenkonto {personLabel} - Saison {saisonJahr}: aktueller Saldo{" "}
-        {saldo.toFixed(2)} Std.
+        {formatMenge(saldo, 2)} Std.
       </p>
       <p className="text-xs text-neutral-500">
         Unabhängig vom oben gewählten Tag - hier werden nur Buchungen für
@@ -329,7 +327,7 @@ export default function StundenkontoBereich({
                   <td>{formatDatumDE(b.datum)}</td>
                   <td className={b.stunden < 0 ? "text-red-600" : ""}>
                     {b.stunden > 0 ? "+" : ""}
-                    {Number(b.stunden).toFixed(2)}
+                    {formatMenge(Number(b.stunden), 2)}
                   </td>
                   <td>
                     {b.art}

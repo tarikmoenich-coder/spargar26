@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { formatMenge } from "@/lib/format";
 import { getSupabaseClient } from "@/lib/supabase/client";
 import { useProfile } from "@/lib/useProfile";
 import {
@@ -400,12 +401,12 @@ export default function EinstellungenPage() {
             {saetze.map((s) => (
               <tr key={s.saison_jahr}>
                 <td>{s.saison_jahr}</td>
-                <td>{Number(s.verpflegung).toFixed(2)}</td>
-                <td>{Number(s.wohnen).toFixed(2)}</td>
-                <td>{s.mindestlohn != null ? Number(s.mindestlohn).toFixed(2) : "—"}</td>
-                <td>{s.kleidung_hose != null ? Number(s.kleidung_hose).toFixed(2) : "—"}</td>
-                <td>{s.kleidung_jacke != null ? Number(s.kleidung_jacke).toFixed(2) : "—"}</td>
-                <td>{s.kleidung_stiefel != null ? Number(s.kleidung_stiefel).toFixed(2) : "—"}</td>
+                <td>{formatMenge(Number(s.verpflegung), 2)}</td>
+                <td>{formatMenge(Number(s.wohnen), 2)}</td>
+                <td>{s.mindestlohn != null ? formatMenge(Number(s.mindestlohn), 2) : "—"}</td>
+                <td>{s.kleidung_hose != null ? formatMenge(Number(s.kleidung_hose), 2) : "—"}</td>
+                <td>{s.kleidung_jacke != null ? formatMenge(Number(s.kleidung_jacke), 2) : "—"}</td>
+                <td>{s.kleidung_stiefel != null ? formatMenge(Number(s.kleidung_stiefel), 2) : "—"}</td>
                 {isAdmin && (
                   <td>
                     <button

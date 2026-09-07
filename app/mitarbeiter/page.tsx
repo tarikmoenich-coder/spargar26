@@ -24,7 +24,7 @@ import {
   naechsteFreieNummer,
   parsePersonalNrNummer,
 } from "@/lib/personalnummern";
-import { formatDatumDE, formatEuro } from "@/lib/format";
+import { formatDatumDE, formatEuro, formatMenge } from "@/lib/format";
 import { generiereDokument } from "@/lib/dokumentGenerator";
 import PersonalTabs from "@/components/PersonalTabs";
 
@@ -1285,7 +1285,7 @@ export default function MitarbeiterPage() {
                 <td>{emp.name}</td>
                 <td>{emp.vorname}</td>
                 <td>{emp.ort}</td>
-                <td>{emp.stundenlohn?.toFixed(2)}</td>
+                <td>{emp.stundenlohn != null ? formatMenge(emp.stundenlohn, 2) : ""}</td>
                 <td>{ABRECHNUNGSART_LABELS[emp.abrechnungsart]}</td>
                 <td>{formatDatumDE(aktivSeit[emp.id])}</td>
                 <td>{formatDatumDE(letzteAbrechnung[emp.id])}</td>

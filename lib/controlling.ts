@@ -8,6 +8,7 @@ import type {
   ArbeitstageSerie,
   SeasonSummaryRow,
 } from "@/lib/types";
+import { formatEuro } from "@/lib/format";
 
 // Maximale Arbeitsstunden pro Tag, ab deren Überschreitung eine Person im
 // Stundenmonitoring auftaucht.
@@ -52,7 +53,7 @@ export function formatWert(v: unknown, eur: boolean): string {
   if (v === null || v === undefined || v === "") return "—";
   const n = Number(v);
   if (Number.isNaN(n)) return String(v);
-  return eur ? `${n.toFixed(2)} €` : String(n);
+  return eur ? `${formatEuro(n)} €` : String(n);
 }
 
 // Vergleicht den eingefrorenen Schnappschuss mit dem aktuellen Live-Stand

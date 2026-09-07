@@ -15,7 +15,7 @@ import { useEffect, useState } from "react";
 import { getSupabaseClient } from "@/lib/supabase/client";
 import { useProfile } from "@/lib/useProfile";
 import PraemienTabs from "@/components/PraemienTabs";
-import { formatDatumDE } from "@/lib/format";
+import { formatDatumDE, formatMenge } from "@/lib/format";
 import type {
   Arbeitsgruppe,
   Employee,
@@ -29,7 +29,7 @@ function heuteIso() {
 }
 
 function fmt(n: number | null | undefined) {
-  return n === null || n === undefined ? "—" : n.toFixed(2);
+  return formatMenge(n, 2);
 }
 
 interface Entwurf {
@@ -482,7 +482,7 @@ export default function PraemienErdbeerenPage() {
                   <tr key={s.id}>
                     <td>{formatDatumDE(s.gueltig_ab)}</td>
                     <td>{s.norm_steigen_pro_stunde}</td>
-                    <td>{s.bonus_pro_steige.toFixed(4)}</td>
+                    <td>{formatMenge(s.bonus_pro_steige, 4)}</td>
                   </tr>
                 ))}
               </tbody>
@@ -509,7 +509,7 @@ export default function PraemienErdbeerenPage() {
         <p className="text-sm text-neutral-500 print:hidden">
           Gültiger Satz seit {formatDatumDE(aktuellerSatz.gueltig_ab)}: Norm{" "}
           {aktuellerSatz.norm_steigen_pro_stunde} Steigen/Std. ·{" "}
-          {aktuellerSatz.bonus_pro_steige.toFixed(4)} €/Steige über Norm
+          {formatMenge(aktuellerSatz.bonus_pro_steige, 4)} €/Steige über Norm
         </p>
       )}
 
@@ -638,9 +638,7 @@ export default function PraemienErdbeerenPage() {
                   Summe Prämie
                 </td>
                 <td className="font-semibold">
-                  {druckZeilen
-                    .reduce((s, z) => s + (z.praemie ?? 0), 0)
-                    .toFixed(2)}
+                  {fmt(druckZeilen.reduce((s, z) => s + (z.praemie ?? 0), 0))}
                 </td>
               </tr>
             </tfoot>

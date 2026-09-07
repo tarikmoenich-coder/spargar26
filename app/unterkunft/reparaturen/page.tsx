@@ -11,7 +11,7 @@ import { getSupabaseClient } from "@/lib/supabase/client";
 import { useProfile } from "@/lib/useProfile";
 import UnterkunftTabs from "@/components/UnterkunftTabs";
 import FotoAufnahme from "@/components/FotoAufnahme";
-import { formatDatumDE } from "@/lib/format";
+import { formatDatumDE, formatMenge } from "@/lib/format";
 import { raumName } from "@/lib/unterkunft";
 import {
   UNTERKUNFT_BELASTUNG_STATUS_LABELS,
@@ -551,7 +551,7 @@ export default function UnterkunftReparaturenPage() {
             {kennzahlen.gemeldet} gemeldet · {kennzahlen.beauftragt} beauftragt ·
             geschätzte Kosten „vom Bewohner verschuldet" (offen):{" "}
             <span className="font-medium text-red-700">
-              {kennzahlen.kostenBewohner.toFixed(2)} €
+              {formatMenge(kennzahlen.kostenBewohner, 2)} €
             </span>
           </p>
         </div>
@@ -855,7 +855,7 @@ export default function UnterkunftReparaturenPage() {
                                 {personName(id)}
                                 {anteil != null && (
                                   <span className="text-red-700">
-                                    · {anteil.toFixed(2)} €
+                                    · {formatMenge(anteil, 2)} €
                                   </span>
                                 )}
                                 {canEdit && (
@@ -993,7 +993,7 @@ export default function UnterkunftReparaturenPage() {
                             />
                             {anteil != null && (
                               <span className="text-neutral-500">
-                                = {anteil.toFixed(2)} € je Person ({vids.length})
+                                = {formatMenge(anteil, 2)} € je Person ({vids.length})
                               </span>
                             )}
                           </label>
@@ -1029,7 +1029,7 @@ export default function UnterkunftReparaturenPage() {
                                         >
                                           <span>{personName(b.employee_id)}</span>
                                           <span className="font-medium tabular-nums">
-                                            {b.betrag.toFixed(2)} €
+                                            {formatMenge(b.betrag, 2)} €
                                           </span>
                                           <span
                                             className={`rounded px-1.5 py-0.5 text-xs ${
@@ -1139,14 +1139,14 @@ export default function UnterkunftReparaturenPage() {
                 <div className="rounded border border-red-200 bg-red-50 p-2 text-sm">
                   <div className="font-medium text-red-900">
                     Belastung je Person (offen, anteilig)
-                    {kostenOffen > 0 && ` · ${kostenOffen.toFixed(2)} € gesamt`}
+                    {kostenOffen > 0 && ` · ${formatMenge(kostenOffen, 2)} € gesamt`}
                   </div>
                   <ul className="mt-1 space-y-0.5">
                     {belastungJePerson.map(([id, betrag]) => (
                       <li key={id} className="flex justify-between gap-4">
                         <span>{personName(id)}</span>
                         <span className="font-medium tabular-nums">
-                          {betrag.toFixed(2)} €
+                          {formatMenge(betrag, 2)} €
                         </span>
                       </li>
                     ))}

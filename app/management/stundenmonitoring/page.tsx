@@ -4,7 +4,7 @@ import { Fragment, useEffect, useState } from "react";
 import { AlarmClock } from "lucide-react";
 import { getSupabaseClient } from "@/lib/supabase/client";
 import { useProfile } from "@/lib/useProfile";
-import { formatDatumDE } from "@/lib/format";
+import { formatDatumDE, formatMenge } from "@/lib/format";
 import {
   MAX_STUNDEN_PRO_TAG,
   type UeberstundenEintrag,
@@ -145,13 +145,11 @@ export default function ControllingStundenmonitoringPage() {
       <PageHeader
         icon={AlarmClock}
         titel="Stundenmonitoring"
-        beschreibung={`Personen mit mindestens einem Tag über ${MAX_STUNDEN_PRO_TAG.toFixed(
-          2
-        )} Stunden in der Stundenerfassung. Aufklappen zeigt die betroffenen Tage – direkt hier bearbeitbar.`}
+        beschreibung={`Personen mit mindestens einem Tag über ${formatMenge(MAX_STUNDEN_PRO_TAG, 2)} Stunden in der Stundenerfassung. Aufklappen zeigt die betroffenen Tage – direkt hier bearbeitbar.`}
       />
 
       <p className="text-sm text-neutral-600">
-        Anzahl Tage &gt; {MAX_STUNDEN_PRO_TAG.toFixed(0)} Std.:{" "}
+        Anzahl Tage &gt; {formatMenge(MAX_STUNDEN_PRO_TAG, 0)} Std.:{" "}
         <span className="font-medium text-amber-600">
           {loadingUeberstunden ? "…" : tageGesamt}
         </span>
@@ -171,7 +169,7 @@ export default function ControllingStundenmonitoringPage() {
         <p className="text-neutral-500">Lädt…</p>
       ) : ueberstunden.length === 0 ? (
         <p className="text-neutral-500">
-          Keine Tage über {MAX_STUNDEN_PRO_TAG.toFixed(2)} Stunden für {jahr}.
+          Keine Tage über {formatMenge(MAX_STUNDEN_PRO_TAG, 2)} Stunden für {jahr}.
         </p>
       ) : (
         <div className="overflow-x-auto">
@@ -180,7 +178,7 @@ export default function ControllingStundenmonitoringPage() {
               <tr>
                 <th>Pers.-Nr.</th>
                 <th>Name</th>
-                <th>Anzahl Tage &gt; {MAX_STUNDEN_PRO_TAG.toFixed(0)} Std.</th>
+                <th>Anzahl Tage &gt; {formatMenge(MAX_STUNDEN_PRO_TAG, 0)} Std.</th>
                 <th>Höchstwert Std.</th>
                 <th></th>
               </tr>
@@ -199,7 +197,7 @@ export default function ControllingStundenmonitoringPage() {
                       <td className="font-medium text-amber-600">
                         {u.tage.length}
                       </td>
-                      <td>{hoechstwert.toFixed(2)}</td>
+                      <td>{formatMenge(hoechstwert, 2)}</td>
                       <td>
                         <button
                           type="button"
