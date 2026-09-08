@@ -6332,6 +6332,10 @@ create table fahrzeug_tracker (
   bezeichnung text,
   status text,
   zuletzt_gesehen timestamptz,
+  -- true, wenn der Tracker einem Fahrzeug zugeordnet ist, aber in Traccar
+  -- nicht mehr existiert (umbenannte uniqueId / gelöscht). Nicht zugeordnete
+  -- Karteileichen löscht der Poller direkt.
+  traccar_fehlt boolean not null default false,
   erstellt_am timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );

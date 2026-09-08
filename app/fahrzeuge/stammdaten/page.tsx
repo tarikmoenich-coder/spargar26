@@ -326,6 +326,29 @@ export default function FahrzeugeStammdatenPage() {
     laden();
   }
 
+  // Tracker-Eintrag von Hand löschen - für Geräte, die in Traccar umbenannt/
+  // gelöscht wurden und einem Fahrzeug zugeordnet waren (die räumt der Poller
+  // bewusst nicht selbst weg). Der Poller legt ihn wieder an, falls das Gerät
+  // doch wieder Daten sendet.
+  async function trackerEntfernen(t: FahrzeugTracker) {
+    if (
+      !window.confirm(
+        `Tracker ${t.bezeichnung ?? t.traccar_unique_id} aus der Liste entfernen?`
+      )
+    )
+      return;
+    const { error } = await getSupabaseClient()
+      .from("fahrzeug_tracker")
+      .delete()
+      .eq("traccar_unique_id", t.traccar_unique_id);
+    if (error) {
+      setFehler(error.message);
+      return;
+    }
+    setFehler(null);
+    laden();
+  }
+
   const belegt = new Set(
     tracker.filter((t) => t.fahrzeug_id != null).map((t) => t.fahrzeug_id)
   );
@@ -676,7 +699,9 @@ export default function FahrzeugeStammdatenPage() {
           </h2>
           <p className="text-sm text-neutral-500">
             Tracker erscheinen automatisch, sobald sie Daten an Traccar senden.
-            Hier einem Fahrzeug zuordnen.
+            Hier einem Fahrzeug zuordnen. Nicht mehr in Traccar vorhandene
+            Tracker ohne Fahrzeug räumt der Poller selbst weg; zugeordnete
+            werden markiert (⚠) und können hier entfernt werden.
           </p>
           <div className="overflow-x-auto">
             <table>
@@ -688,13 +713,25 @@ export default function FahrzeugeStammdatenPage() {
                   <th>Status</th>
                   <th>Zuletzt gesehen</th>
                   <th>Fahrzeug</th>
+                  {canEdit && <th></th>}
                 </tr>
               </thead>
               <tbody>
                 {tracker.map((t) => (
-                  <tr key={t.traccar_unique_id}>
+                  <tr
+                    key={t.traccar_unique_id}
+                    className={t.traccar_fehlt ? "bg-amber-50" : ""}
+                  >
                     <td className="font-mono text-xs">
                       {t.traccar_unique_id}
+                      {t.traccar_fehlt && (
+                        <span
+                          className="ml-1 font-sans text-amber-700"
+                          title="Dieser Tracker existiert in Traccar nicht mehr (umbenannt oder gelöscht)."
+                        >
+                          ⚠ nicht in Traccar
+                        </span>
+                      )}
                     </td>
                     <td>{t.bezeichnung ?? "—"}</td>
                     <td>{t.geraetetyp ?? "—"}</td>
@@ -736,11 +773,22 @@ export default function FahrzeugeStammdatenPage() {
                         ))}
                       </select>
                     </td>
+                    {canEdit && (
+                      <td>
+                        <button
+                          type="button"
+                          className="btn-secondary text-xs"
+                          onClick={() => trackerEntfernen(t)}
+                        >
+                          Entfernen
+                        </button>
+                      </td>
+                    )}
                   </tr>
                 ))}
                 {tracker.length === 0 && (
                   <tr>
-                    <td colSpan={6} className="text-neutral-500">
+                    <td colSpan={canEdit ? 7 : 6} className="text-neutral-500">
                       Noch keine Tracker gemeldet.
                     </td>
                   </tr>

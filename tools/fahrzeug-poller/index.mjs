@@ -198,10 +198,35 @@ async function lauf() {
         bezeichnung: d.name ?? null,
         status: d.status ?? null,
         zuletzt_gesehen: d.lastUpdate ?? null,
+        traccar_fehlt: false,
       })),
       { onConflict: "traccar_unique_id" }
     );
     if (error) throw new Error(`fahrzeug_tracker upsert: ${error.message}`);
+  }
+
+  // 1b. Aufräumen: in Traccar geänderte (neue uniqueId) oder gelöschte Geräte
+  //     bleiben sonst als Karteileichen stehen. Ohne Fahrzeug-Zuordnung
+  //     löschen, mit Zuordnung nur markieren (traccar_fehlt) - so verliert
+  //     ein Fahrzeug seinen Tracker-Eintrag nicht stillschweigend.
+  {
+    const inListe = `(${devices
+      .map((d) => `"${String(d.uniqueId)}"`)
+      .join(",")})`;
+    const hatGeraete = devices.length > 0;
+
+    let del = supa.from("fahrzeug_tracker").delete().is("fahrzeug_id", null);
+    if (hatGeraete) del = del.not("traccar_unique_id", "in", inListe);
+    const { error: delErr } = await del;
+    if (delErr) console.error("[tracker] prune:", delErr.message);
+
+    let mark = supa
+      .from("fahrzeug_tracker")
+      .update({ traccar_fehlt: true })
+      .not("fahrzeug_id", "is", null);
+    if (hatGeraete) mark = mark.not("traccar_unique_id", "in", inListe);
+    const { error: markErr } = await mark;
+    if (markErr) console.error("[tracker] mark fehlt:", markErr.message);
   }
 
   // 2. Zuordnung traccar_unique_id -> fahrzeug_id / geraetetyp

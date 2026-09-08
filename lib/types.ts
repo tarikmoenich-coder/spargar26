@@ -1859,6 +1859,8 @@ export interface FahrzeugTracker {
   bezeichnung: string | null;
   status: string | null;
   zuletzt_gesehen: string | null;
+  // true = einem Fahrzeug zugeordnet, aber in Traccar nicht mehr vorhanden.
+  traccar_fehlt: boolean;
   erstellt_am: string;
   updated_at: string;
 }
