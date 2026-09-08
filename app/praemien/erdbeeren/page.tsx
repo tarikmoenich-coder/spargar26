@@ -63,6 +63,7 @@ export default function PraemienErdbeerenPage() {
   const [loading, setLoading] = useState(true);
   const [entwurf, setEntwurf] = useState<Record<string, Entwurf>>({});
   const [speichernAlle, setSpeichernAlle] = useState(false);
+  const [stornoLaeuft, setStornoLaeuft] = useState(false);
   const [fehler, setFehler] = useState<string | null>(null);
   const [druckModus, setDruckModus] = useState(false);
 
@@ -272,6 +273,93 @@ export default function PraemienErdbeerenPage() {
     load();
   }
 
+  // Prämie stornieren (Nutzer-Vorgabe 2026-09-08), analog zu Zuckermais: bei
+  // Qualitätsreklamationen fällt die Tagesprämie auf 0, Steigen/Stunden/Sut
+  // bleiben für die Statistik erhalten. Grund ist Pflicht und erscheint in
+  // der Suche. Nur möglich, solange die Person für die Saison noch nicht
+  // abgerechnet ist (RLS erdbeeren_rohdaten_update).
+  async function praemieStornieren(ids: number[], grund: string) {
+    if (ids.length === 0) return;
+    setStornoLaeuft(true);
+    setFehler(null);
+    const { error } = await getSupabaseClient()
+      .from("erdbeeren_rohdaten")
+      .update({
+        praemie_storniert: true,
+        storno_grund: grund,
+        storno_am: new Date().toISOString(),
+        storno_von: profile?.id ?? null,
+      })
+      .in("id", ids);
+    setStornoLaeuft(false);
+    if (error) {
+      setFehler(error.message);
+      return;
+    }
+    load();
+  }
+
+  async function stornoAufheben(ids: number[]) {
+    if (ids.length === 0) return;
+    if (
+      !window.confirm(
+        "Storno aufheben? Die Tagesprämie wird wieder gutgeschrieben."
+      )
+    )
+      return;
+    setStornoLaeuft(true);
+    setFehler(null);
+    const { error } = await getSupabaseClient()
+      .from("erdbeeren_rohdaten")
+      .update({
+        praemie_storniert: false,
+        storno_grund: null,
+        storno_am: null,
+        storno_von: null,
+      })
+      .in("id", ids);
+    setStornoLaeuft(false);
+    if (error) {
+      setFehler(error.message);
+      return;
+    }
+    load();
+  }
+
+  function stornoGrundAbfragen(text: string): string | null {
+    const grund = window.prompt(
+      `${text}\n\nGrund (Pflicht, erscheint in der Mitarbeiter-Auskunft/Suche):`
+    );
+    if (grund === null) return null;
+    if (!grund.trim()) {
+      setFehler("Storno-Grund ist Pflicht.");
+      return null;
+    }
+    return grund.trim();
+  }
+
+  function einzelStornieren(e: ErdbeerenRohdatenEintrag, name: string) {
+    const grund = stornoGrundAbfragen(
+      `Erdbeer-Prämie von ${name} (${aktuelleParzelle?.name ?? "Parzelle"}, ` +
+        `${formatDatumDE(datum)}) stornieren.`
+    );
+    if (grund) praemieStornieren([e.id], grund);
+  }
+
+  function tagStornieren() {
+    if (tagOffen.length === 0) return;
+    const grund = stornoGrundAbfragen(
+      `Erdbeer-Prämie für ${aktuelleParzelle?.name ?? "diese Parzelle"} am ` +
+        `${formatDatumDE(datum)} bei ${tagOffen.length} Person(en) ` +
+        `stornieren${gruppeFilter ? " (nur gefilterte Gruppe)" : ""}.`
+    );
+    if (grund)
+      praemieStornieren(
+        tagOffen.map((e) => e.id),
+        grund
+      );
+  }
+
   async function neuenSatzSpeichern() {
     if (parzelleId === null) return;
     if (!neuNorm || !neuBonus) {
@@ -304,6 +392,15 @@ export default function PraemienErdbeerenPage() {
   const gruppenByNr = new Map(gruppen.map((g) => [g.gruppe_nr, g]));
   const aktuelleParzelle = parzellen.find((p) => p.id === parzelleId) ?? null;
 
+  // Erfasste Zeilen des gewählten Tages + der gewählten Parzelle (respektiert
+  // den Gruppenfilter) - Grundlage für "Prämien stornieren" / "Storno
+  // aufheben" in der Werkzeugleiste.
+  const tagEintraege = gefiltert
+    .map((emp) => eintraege[emp.id])
+    .filter((e): e is ErdbeerenRohdatenEintrag => Boolean(e));
+  const tagOffen = tagEintraege.filter((e) => !e.praemie_storniert);
+  const tagStorniert = tagEintraege.filter((e) => e.praemie_storniert);
+
   function drucken() {
     setDruckModus(true);
     setTimeout(() => {
@@ -316,14 +413,15 @@ export default function PraemienErdbeerenPage() {
     .map((emp) => {
       const e = eintraege[emp.id];
       if (!e || (!e.steigen && !e.stunden && !e.sut)) return null;
-      const praemie = aktuellerSatz
+      const praemieBrutto = aktuellerSatz
         ? Math.max(
             (e.steigen - e.stunden * aktuellerSatz.norm_steigen_pro_stunde) *
               aktuellerSatz.bonus_pro_steige,
             0
           )
         : null;
-      return { emp, e, praemie };
+      const praemie = e.praemie_storniert ? 0 : praemieBrutto;
+      return { emp, e, praemie, storniert: e.praemie_storniert };
     })
     .filter((z): z is NonNullable<typeof z> => z !== null);
 
@@ -417,6 +515,28 @@ export default function PraemienErdbeerenPage() {
             Tagesliste drucken{" "}
             {druckZeilen.length > 0 ? `(${druckZeilen.length})` : ""}
           </button>
+          <span className="mx-1 h-5 w-px bg-linie" aria-hidden />
+          <button
+            type="button"
+            className="btn-secondary"
+            disabled={stornoLaeuft || tagOffen.length === 0}
+            onClick={tagStornieren}
+            title="Tagesprämie aller erfassten Personen dieser Parzelle/dieses Tages stornieren (mit Begründung)"
+          >
+            Prämien stornieren{" "}
+            {tagOffen.length > 0 ? `(${tagOffen.length})` : ""}
+          </button>
+          {tagStorniert.length > 0 && (
+            <button
+              type="button"
+              className="btn-secondary"
+              disabled={stornoLaeuft}
+              onClick={() => stornoAufheben(tagStorniert.map((e) => e.id))}
+              title="Storno für alle stornierten Zeilen dieser Parzelle/dieses Tages aufheben"
+            >
+              Storno aufheben ({tagStorniert.length})
+            </button>
+          )}
         </div>
       )}
 
@@ -535,12 +655,14 @@ export default function PraemienErdbeerenPage() {
                     Sut
                   </th>
                   <th>Prämie €</th>
+                  <th>Storno</th>
                 </tr>
               </thead>
               <tbody>
                 {gefiltert.map((emp) => {
                   const werte = werteFuer(emp.id);
                   const praemie = praemieVorschau(werte);
+                  const e = eintraege[emp.id];
                   return (
                     <tr key={emp.id}>
                       <td>{emp.personal_nr}</td>
@@ -591,7 +713,48 @@ export default function PraemienErdbeerenPage() {
                           }
                         />
                       </td>
-                      <td className="font-medium">{fmt(praemie)}</td>
+                      <td className="font-medium">
+                        {e?.praemie_storniert ? (
+                          <span className="text-neutral-400 line-through">
+                            {fmt(praemie)}
+                          </span>
+                        ) : (
+                          fmt(praemie)
+                        )}
+                      </td>
+                      <td>
+                        {!e ? (
+                          <span className="text-neutral-300">—</span>
+                        ) : e.praemie_storniert ? (
+                          <span className="inline-flex items-center gap-1.5">
+                            <span
+                              className="badge badge-danger"
+                              title={e.storno_grund ?? undefined}
+                            >
+                              storniert
+                            </span>
+                            <button
+                              type="button"
+                              className="btn-secondary text-xs"
+                              disabled={stornoLaeuft}
+                              onClick={() => stornoAufheben([e.id])}
+                            >
+                              aufheben
+                            </button>
+                          </span>
+                        ) : (
+                          <button
+                            type="button"
+                            className="btn-secondary text-xs"
+                            disabled={stornoLaeuft}
+                            onClick={() =>
+                              einzelStornieren(e, `${emp.name}, ${emp.vorname}`)
+                            }
+                          >
+                            stornieren
+                          </button>
+                        )}
+                      </td>
                     </tr>
                   );
                 })}
@@ -619,7 +782,7 @@ export default function PraemienErdbeerenPage() {
               </tr>
             </thead>
             <tbody>
-              {druckZeilen.map(({ emp, e, praemie }) => (
+              {druckZeilen.map(({ emp, e, praemie, storniert }) => (
                 <tr key={emp.id}>
                   <td>{emp.personal_nr}</td>
                   <td>
@@ -628,7 +791,7 @@ export default function PraemienErdbeerenPage() {
                   <td>{e.steigen}</td>
                   <td>{e.stunden}</td>
                   <td>{e.sut}</td>
-                  <td>{fmt(praemie)}</td>
+                  <td>{storniert ? "0,00 (storniert)" : fmt(praemie)}</td>
                 </tr>
               ))}
             </tbody>

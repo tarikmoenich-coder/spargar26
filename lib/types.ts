@@ -1150,6 +1150,13 @@ export interface ErdbeerenRohdatenEintrag {
   updated_by: string | null;
   updated_at: string;
   version: number;
+  // Prämie stornieren (Nutzer-Vorgabe 2026-09-08) - Steigen/Stunden/Sut
+  // bleiben, die Tagesprämie fällt auf 0. Grund ist Pflicht, erscheint in
+  // der Suche.
+  praemie_storniert: boolean;
+  storno_grund: string | null;
+  storno_am: string | null;
+  storno_von: string | null;
 }
 
 // Aus der Sicht erdbeeren_praemie_tag - Rohdaten-Zeile plus dem am
@@ -1167,6 +1174,11 @@ export interface ErdbeerenPraemieTag {
   norm_steigen_pro_stunde: number | null;
   bonus_pro_steige: number | null;
   praemie: number;
+  // Prämie storniert (Nutzer-Vorgabe 2026-09-08) - praemie ist dann 0, hier
+  // der Grund für die Auskunft an den Mitarbeiter (Suche).
+  praemie_storniert: boolean;
+  storno_grund: string | null;
+  storno_am: string | null;
 }
 
 // Aus der Sicht erdbeeren_statistik_tag - Tagesstatistik je Parzelle

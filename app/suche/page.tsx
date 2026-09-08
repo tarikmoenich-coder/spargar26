@@ -58,6 +58,13 @@ function zuckermaisPraemieOhneStorno(z: ZuckermaisPraemieTag) {
   return Math.max((kolben - norm) * Number(z.satz_pro_kolben ?? 0), 0);
 }
 
+// Dasselbe für Erdbeeren - Formel wie erdbeeren_praemie_tag ("Sut" zählt
+// nicht zur Prämie).
+function erdbeerenPraemieOhneStorno(e: ErdbeerenPraemieTag) {
+  const norm = Number(e.stunden) * Number(e.norm_steigen_pro_stunde ?? 0);
+  return Math.max((Number(e.steigen) - norm) * Number(e.bonus_pro_steige ?? 0), 0);
+}
+
 const WOCHENTAGE = [
   "Montag",
   "Dienstag",
@@ -362,7 +369,9 @@ export default function SuchePage() {
   const zuckermaisDruck = zuckermais.filter(
     (z) => Number(z.praemie ?? 0) > 0 || z.praemie_storniert
   );
-  const erdbeerenDruck = erdbeeren.filter((e) => Number(e.praemie ?? 0) > 0);
+  const erdbeerenDruck = erdbeeren.filter(
+    (e) => Number(e.praemie ?? 0) > 0 || e.praemie_storniert
+  );
 
   // Wochenraster für den Ausdruck (Nutzer-Vorgabe 2026-08-21): eine Zeile
   // je Kalenderwoche (Montag-Sonntag) von der ersten bis zur letzten
@@ -807,18 +816,44 @@ export default function SuchePage() {
                           <th>{t("gemeinsam.std")}</th>
                           <th>{t("gemeinsam.sut")}</th>
                           <th>{t("gemeinsam.praemieeuro")}</th>
+                          <th>{t("suche.stornogrund")}</th>
                         </tr>
                       </thead>
                       <tbody>
                         {erdbeeren.map((e) => (
-                          <tr key={e.id}>
+                          <tr
+                            key={e.id}
+                            className={e.praemie_storniert ? "opacity-60" : ""}
+                          >
                             <td>{formatDatumDE(e.datum)}</td>
                             <td>{e.parzelle_name}</td>
                             <td>{e.steigen}</td>
                             <td>{e.stunden}</td>
                             <td className="text-neutral-500">{e.sut}</td>
                             <td className="font-medium">
-                              {formatMenge(Number(e.praemie), 2)}
+                              {e.praemie_storniert ? (
+                                <>
+                                  <span className="text-neutral-400 line-through">
+                                    {formatMenge(
+                                      erdbeerenPraemieOhneStorno(e),
+                                      2
+                                    )}
+                                  </span>{" "}
+                                  {formatMenge(0, 2)}
+                                </>
+                              ) : (
+                                formatMenge(Number(e.praemie), 2)
+                              )}
+                            </td>
+                            <td className="text-sm">
+                              {e.praemie_storniert ? (
+                                <span className="text-red-700">
+                                  {t("gemeinsam.storniert")}
+                                  {e.storno_grund ? `: ${e.storno_grund}` : ""}
+                                </span>
+                              ) : (
+                                <span className="text-neutral-300">—</span>
+                              )}
                             </td>
                           </tr>
                         ))}
@@ -1020,6 +1055,7 @@ export default function SuchePage() {
                     <th>Std.</th>
                     <th>Sut</th>
                     <th>Prämie €</th>
+                    <th>Storno-Grund</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -1031,6 +1067,13 @@ export default function SuchePage() {
                       <td>{e.stunden}</td>
                       <td>{e.sut}</td>
                       <td>{formatMenge(Number(e.praemie), 2)}</td>
+                      <td>
+                        {e.praemie_storniert
+                          ? `storniert${
+                              e.storno_grund ? `: ${e.storno_grund}` : ""
+                            }`
+                          : ""}
+                      </td>
                     </tr>
                   ))}
                 </tbody>

@@ -605,8 +605,8 @@ Enthalten:
   fallen weg - Tage komplett ohne Eintrag bei den Arbeitsstunden,
   Prämientage mit 0 € bei Zuckermais/Erdbeeren (nur im Ausdruck, die
   interaktive Ansicht bleibt vollständig - Ausnahme seit 2026-09-08:
-  stornierte Zuckermais-Prämientage bleiben mit Grund stehen, damit die
-  gestrichene Prämie bei der Auskunft nachvollziehbar ist). Die Arbeitsstunden-Tabelle im
+  stornierte Zuckermais-/Erdbeeren-Prämientage bleiben mit Grund stehen,
+  damit die gestrichene Prämie bei der Auskunft nachvollziehbar ist). Die Arbeitsstunden-Tabelle im
   Ausdruck ist zusätzlich als echtes Wochenraster aufgebaut (Nutzer-Vorgabe
   "jede Zeile eine Woche"): eine Zeile je Kalenderwoche (Montag-Sonntag)
   von der ersten bis zur letzten Buchung, eine Spalte je Wochentag mit
@@ -1112,7 +1112,17 @@ Enthalten:
   erscheint in der "Suche" (Mitarbeiter-Auskunft, inkl. Ausdruck) neben dem
   durchgestrichenen Betrag. Aufheben jederzeit möglich, solange die Person
   für die Saison noch nicht abgerechnet ist (gleiche RLS wie die
-  Rohdaten-Bearbeitung: admin/hr/zeiterfassung/erntewirtschaft).
+  Rohdaten-Bearbeitung: admin/hr/zeiterfassung/erntewirtschaft). **Dieselbe
+  Storno-Funktion für Erdbeeren** (Stand 2026-09-08, Migration
+  `migration_2026-10-10_erdbeeren_praemie_storno.sql`): identisches Muster,
+  Storno gilt pro Person bzw. für die gewählte Parzelle + den gewählten Tag
+  (der Knopf "Prämien stornieren" in der Werkzeugleiste bezieht sich immer
+  auf die aktuell gewählte Parzelle). Wirkt über `praemie = 0` in
+  `erdbeeren_praemie_tag` automatisch in `season_summary`,
+  `erdbeeren_statistik_tag` und `erdbeeren_gruppenkosten_tag`. Für **Spargel**
+  ist noch nichts vorzusehen - der Reiter ist bis zur Waage-Anbindung ein
+  Platzhalter ohne Prämiendaten; das Storno wird dort beim Aufbau des Moduls
+  direkt mitgedacht.
   **Erdbeeren**
   (Prämien → Erdbeeren,
   admin/hr/zeiterfassung/erntewirtschaft, Stand 2026-08-09) nach

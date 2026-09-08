@@ -2736,6 +2736,17 @@ create table erdbeeren_rohdaten (
   updated_by uuid references profiles (id),
   updated_at timestamptz not null default now(),
   version int not null default 1,
+  -- Prämie stornieren (Nutzer-Vorgabe 2026-09-08), analog zu
+  -- zuckermais_rohdaten: Steigen/Stunden/Sut bleiben für die Statistik, die
+  -- Tagesprämie fällt auf 0. Grund ist Pflicht, erscheint in der Suche.
+  praemie_storniert boolean not null default false,
+  storno_grund text,
+  storno_am timestamptz,
+  storno_von uuid references profiles (id),
+  constraint erdbeeren_rohdaten_storno_grund_check check (
+    not praemie_storniert
+    or (storno_grund is not null and length(btrim(storno_grund)) > 0)
+  ),
   unique (employee_id, parzelle_id, datum)
 );
 
@@ -2758,11 +2769,22 @@ select
   r.sut,
   s.norm_steigen_pro_stunde,
   s.bonus_pro_steige,
-  greatest(
-    (r.steigen - r.stunden * coalesce(s.norm_steigen_pro_stunde, 0))
-      * coalesce(s.bonus_pro_steige, 0),
-    0
-  ) as praemie
+  -- praemie = 0 sobald storniert (Nutzer-Vorgabe 2026-09-08). Wirkt dadurch
+  -- automatisch in season_summary, erdbeeren_statistik_tag und
+  -- erdbeeren_gruppenkosten_tag.
+  case
+    when r.praemie_storniert then 0::numeric
+    else greatest(
+      (r.steigen - r.stunden * coalesce(s.norm_steigen_pro_stunde, 0))
+        * coalesce(s.bonus_pro_steige, 0),
+      0
+    )
+  end as praemie,
+  -- Storno-Infos ans Ende angehängt (42P16: "create or replace view" verbietet
+  -- Positionswechsel bestehender Spalten).
+  r.praemie_storniert,
+  r.storno_grund,
+  r.storno_am
 from erdbeeren_rohdaten r
 join erdbeeren_parzellen p on p.id = r.parzelle_id
 left join lateral (
