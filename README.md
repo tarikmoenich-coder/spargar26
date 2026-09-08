@@ -604,7 +604,9 @@ Enthalten:
   Auszahlungsliste (`.print-dense-table`), und Zeilen ohne jede Information
   fallen weg - Tage komplett ohne Eintrag bei den Arbeitsstunden,
   Prämientage mit 0 € bei Zuckermais/Erdbeeren (nur im Ausdruck, die
-  interaktive Ansicht bleibt vollständig). Die Arbeitsstunden-Tabelle im
+  interaktive Ansicht bleibt vollständig - Ausnahme seit 2026-09-08:
+  stornierte Zuckermais-Prämientage bleiben mit Grund stehen, damit die
+  gestrichene Prämie bei der Auskunft nachvollziehbar ist). Die Arbeitsstunden-Tabelle im
   Ausdruck ist zusätzlich als echtes Wochenraster aufgebaut (Nutzer-Vorgabe
   "jede Zeile eine Woche"): eine Zeile je Kalenderwoche (Montag-Sonntag)
   von der ersten bis zur letzten Buchung, eine Spalte je Wochentag mit
@@ -1098,6 +1100,19 @@ Enthalten:
   Update/Delete für admin bereits, nur die UI fehlte). Sätze-Verwaltung
   zusätzlich einklappbar (Stand 2026-08-28, standardmäßig eingeklappt -
   wird nur selten gebraucht, soll die tägliche Erfassung nicht überladen).
+  **Prämie stornieren** (Stand 2026-09-08, Migration
+  `migration_2026-10-09_zuckermais_praemie_storno.sql`): bei
+  Qualitätsreklamationen lässt sich die Tagesprämie pro Person
+  (Knopf "stornieren" je Zeile) oder für den ganzen Tag (Knopf
+  "Prämien stornieren" in der Werkzeugleiste, respektiert den
+  Gruppenfilter) mit Pflicht-Begründung streichen. Kisten/Stunden bleiben
+  erfasst (Statistik/Kolben-Schnitt/Kulturkosten), nur `praemie` fällt in
+  der Sicht `zuckermais_praemie_tag` auf 0 - wirkt dadurch automatisch in
+  `season_summary` (Auszahlung) und `zuckermais_statistik_tag`. Der Grund
+  erscheint in der "Suche" (Mitarbeiter-Auskunft, inkl. Ausdruck) neben dem
+  durchgestrichenen Betrag. Aufheben jederzeit möglich, solange die Person
+  für die Saison noch nicht abgerechnet ist (gleiche RLS wie die
+  Rohdaten-Bearbeitung: admin/hr/zeiterfassung/erntewirtschaft).
   **Erdbeeren**
   (Prämien → Erdbeeren,
   admin/hr/zeiterfassung/erntewirtschaft, Stand 2026-08-09) nach

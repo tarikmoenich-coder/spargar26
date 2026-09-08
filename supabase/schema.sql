@@ -2504,6 +2504,18 @@ create table zuckermais_rohdaten (
   -- Speicherversuchen - version schützt zusätzlich vor echten
   -- Wettlaufsituationen bei gleichzeitiger Bearbeitung).
   version int not null default 1,
+  -- Prämie stornieren (Nutzer-Vorgabe 2026-09-08): bei Qualitätsreklamationen
+  -- fällt die Tagesprämie einzelner Personen / eines ganzen Tages auf 0, die
+  -- Rohdaten (Kisten/Stunden) bleiben für die Statistik erhalten. Grund ist
+  -- Pflicht und erscheint in der Suche (Mitarbeiter-Auskunft).
+  praemie_storniert boolean not null default false,
+  storno_grund text,
+  storno_am timestamptz,
+  storno_von uuid references profiles (id),
+  constraint zuckermais_rohdaten_storno_grund_check check (
+    not praemie_storniert
+    or (storno_grund is not null and length(btrim(storno_grund)) > 0)
+  ),
   unique (employee_id, datum)
 );
 
@@ -2524,11 +2536,16 @@ select
   s.kolben_pro_kiste,
   s.satz_pro_kolben,
   r.kisten * s.kolben_pro_kiste as kolben,
-  greatest(
-    (r.kisten * s.kolben_pro_kiste - r.stunden * coalesce(s.norm_kolben_pro_stunde, 0))
-      * coalesce(s.satz_pro_kolben, 0),
-    0
-  ) as praemie,
+  -- praemie = 0 sobald storniert (Nutzer-Vorgabe 2026-09-08). Wirkt dadurch
+  -- automatisch in season_summary (Auszahlung) und zuckermais_statistik_tag.
+  case
+    when r.praemie_storniert then 0::numeric
+    else greatest(
+      (r.kisten * s.kolben_pro_kiste - r.stunden * coalesce(s.norm_kolben_pro_stunde, 0))
+        * coalesce(s.satz_pro_kolben, 0),
+      0
+    )
+  end as praemie,
   -- Spiegelbild der Prämie (Nutzer-Vorgabe 2026-08-23, Konzept "Wer kostet
   -- am meisten?"): derselbe Satz, aber nur wenn UNTER statt ÜBER der Norm
   -- gearbeitet wurde. War bisher nur client-seitig in der
@@ -2540,7 +2557,12 @@ select
     (r.stunden * coalesce(s.norm_kolben_pro_stunde, 0) - r.kisten * s.kolben_pro_kiste)
       * coalesce(s.satz_pro_kolben, 0),
     0
-  ) as negativpraemie
+  ) as negativpraemie,
+  -- Storno-Infos ans Ende angehängt (42P16: "create or replace view" verbietet
+  -- Positionswechsel bestehender Spalten).
+  r.praemie_storniert,
+  r.storno_grund,
+  r.storno_am
 from zuckermais_rohdaten r
 left join lateral (
   select z.norm_kolben_pro_stunde, z.kolben_pro_kiste, z.satz_pro_kolben

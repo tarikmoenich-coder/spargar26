@@ -96,6 +96,7 @@ const de = {
   "suche.praemiegesamt": "{betrag} € gesamt",
   "suche.keinezuckermais": "Keine Zuckermais-Einträge in diesem Jahr.",
   "suche.erdbeerenpraemien": "Erdbeeren-Prämien {jahr}",
+  "suche.stornogrund": "Storno-Grund",
 
   // Arbeitskleidung (app/arbeitskleidung/page.tsx)
   "arbeitskleidung.title": "Arbeitskleidung {jahr}",
@@ -196,6 +197,7 @@ const hr: Record<TKey, string> = {
   "suche.praemiegesamt": "{betrag} € ukupno",
   "suche.keinezuckermais": "Nema unosa za kukuruz šećerac u ovoj godini.",
   "suche.erdbeerenpraemien": "Premije jagode {jahr}",
+  "suche.stornogrund": "Razlog storniranja",
 
   "arbeitskleidung.title": "Radna odjeća {jahr}",
   "arbeitskleidung.untertitel":

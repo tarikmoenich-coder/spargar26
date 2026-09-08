@@ -927,6 +927,12 @@ export interface ZuckermaisRohdatenEintrag {
   updated_by: string | null;
   updated_at: string;
   version: number;
+  // Prämie stornieren (Nutzer-Vorgabe 2026-09-08) - Kisten/Stunden bleiben,
+  // die Tagesprämie fällt auf 0. Grund ist Pflicht, erscheint in der Suche.
+  praemie_storniert: boolean;
+  storno_grund: string | null;
+  storno_am: string | null;
+  storno_von: string | null;
 }
 
 // Aus der Sicht zuckermais_praemie_tag - Rohdaten-Zeile plus dem am
@@ -945,6 +951,11 @@ export interface ZuckermaisPraemieTag {
   // Spiegelbild der Prämie (Nutzer-Vorgabe 2026-08-23/25) - derselbe Satz,
   // nur wenn UNTER statt ÜBER der Norm gearbeitet wurde.
   negativpraemie: number;
+  // Prämie storniert (Nutzer-Vorgabe 2026-09-08) - praemie ist dann 0, hier
+  // der Grund für die Auskunft an den Mitarbeiter (Suche).
+  praemie_storniert: boolean;
+  storno_grund: string | null;
+  storno_am: string | null;
 }
 
 // Aus der Sicht zuckermais_statistik_tag - Tagesstatistik über alle

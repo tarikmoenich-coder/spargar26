@@ -73,6 +73,7 @@ export default function PraemienZuckermaisPage() {
   const [loading, setLoading] = useState(true);
   const [entwurf, setEntwurf] = useState<Record<string, Entwurf>>({});
   const [speichernAlle, setSpeichernAlle] = useState(false);
+  const [stornoLaeuft, setStornoLaeuft] = useState(false);
   const [fehler, setFehler] = useState<string | null>(null);
   const [druckModus, setDruckModus] = useState(false);
   // Vermerk "schon gedruckt" für den gewählten Tag (Nutzer-Vorgabe) - eigene
@@ -257,6 +258,92 @@ export default function PraemienZuckermaisPage() {
     load();
   }
 
+  // Prämie stornieren (Nutzer-Vorgabe 2026-09-08): bei Qualitätsreklamationen
+  // fällt die Tagesprämie auf 0, Kisten/Stunden bleiben für die Statistik
+  // erhalten. Grund ist Pflicht und erscheint in der Suche (Auskunft an den
+  // Mitarbeiter). Nur möglich, solange die Person für die Saison noch nicht
+  // abgerechnet ist (RLS zuckermais_rohdaten_update).
+  async function praemieStornieren(ids: number[], grund: string) {
+    if (ids.length === 0) return;
+    setStornoLaeuft(true);
+    setFehler(null);
+    const { error } = await getSupabaseClient()
+      .from("zuckermais_rohdaten")
+      .update({
+        praemie_storniert: true,
+        storno_grund: grund,
+        storno_am: new Date().toISOString(),
+        storno_von: profile?.id ?? null,
+      })
+      .in("id", ids);
+    setStornoLaeuft(false);
+    if (error) {
+      setFehler(error.message);
+      return;
+    }
+    load();
+  }
+
+  async function stornoAufheben(ids: number[]) {
+    if (ids.length === 0) return;
+    if (
+      !window.confirm(
+        "Storno aufheben? Die Tagesprämie wird wieder gutgeschrieben."
+      )
+    )
+      return;
+    setStornoLaeuft(true);
+    setFehler(null);
+    const { error } = await getSupabaseClient()
+      .from("zuckermais_rohdaten")
+      .update({
+        praemie_storniert: false,
+        storno_grund: null,
+        storno_am: null,
+        storno_von: null,
+      })
+      .in("id", ids);
+    setStornoLaeuft(false);
+    if (error) {
+      setFehler(error.message);
+      return;
+    }
+    load();
+  }
+
+  function stornoGrundAbfragen(text: string): string | null {
+    const grund = window.prompt(
+      `${text}\n\nGrund (Pflicht, erscheint in der Mitarbeiter-Auskunft/Suche):`
+    );
+    if (grund === null) return null;
+    if (!grund.trim()) {
+      setFehler("Storno-Grund ist Pflicht.");
+      return null;
+    }
+    return grund.trim();
+  }
+
+  function einzelStornieren(e: ZuckermaisRohdatenEintrag, name: string) {
+    const grund = stornoGrundAbfragen(
+      `Maisprämie von ${name} am ${formatDatumDE(datum)} stornieren.`
+    );
+    if (grund) praemieStornieren([e.id], grund);
+  }
+
+  function tagStornieren() {
+    if (tagOffen.length === 0) return;
+    const grund = stornoGrundAbfragen(
+      `Maisprämie für den ${formatDatumDE(datum)} bei ${tagOffen.length} ` +
+        `Person(en) stornieren${
+          gruppeFilter ? " (nur gefilterte Gruppe)" : ""
+        }.`
+    );
+    if (grund) praemieStornieren(
+      tagOffen.map((e) => e.id),
+      grund
+    );
+  }
+
   async function neuenSatzSpeichern() {
     if (!neuNorm || !neuSatzProKolben) {
       setSatzFehler("Norm und Satz je Kolben sind Pflichtfelder.");
@@ -333,6 +420,14 @@ export default function PraemienZuckermaisPage() {
   );
   const gruppenByNr = new Map(gruppen.map((g) => [g.gruppe_nr, g]));
 
+  // Erfasste Zeilen des gewählten Tages (respektiert den Gruppenfilter) -
+  // Grundlage für "Tag stornieren" / "Storno für Tag aufheben".
+  const tagEintraege = gefiltert
+    .map((emp) => eintraege[emp.id])
+    .filter((e): e is ZuckermaisRohdatenEintrag => Boolean(e));
+  const tagOffen = tagEintraege.filter((e) => !e.praemie_storniert);
+  const tagStorniert = tagEintraege.filter((e) => e.praemie_storniert);
+
   function drucken() {
     setDruckModus(true);
     setTimeout(() => {
@@ -368,10 +463,11 @@ export default function PraemienZuckermaisPage() {
       const kolbenNorm = aktuellerSatz
         ? e.stunden * aktuellerSatz.norm_kolben_pro_stunde
         : null;
-      const praemie = aktuellerSatz
+      const praemieBrutto = aktuellerSatz
         ? Math.max(((kolben ?? 0) - (kolbenNorm ?? 0)) * aktuellerSatz.satz_pro_kolben, 0)
         : null;
-      return { emp, e, kolben, kolbenNorm, praemie };
+      const praemie = e.praemie_storniert ? 0 : praemieBrutto;
+      return { emp, e, kolben, kolbenNorm, praemie, storniert: e.praemie_storniert };
     })
     .filter((z): z is NonNullable<typeof z> => z !== null);
 
@@ -462,6 +558,28 @@ export default function PraemienZuckermaisPage() {
           >
             🖨️ schon gedruckt ({fmtZeit(druckVermerk.zuletzt_gedruckt_am)})
           </span>
+        )}
+        <span className="mx-1 h-5 w-px bg-linie" aria-hidden />
+        <button
+          type="button"
+          className="btn-secondary"
+          disabled={stornoLaeuft || tagOffen.length === 0}
+          onClick={tagStornieren}
+          title="Tagesprämie aller erfassten Personen dieses Tages stornieren (mit Begründung)"
+        >
+          Prämien stornieren{" "}
+          {tagOffen.length > 0 ? `(${tagOffen.length})` : ""}
+        </button>
+        {tagStorniert.length > 0 && (
+          <button
+            type="button"
+            className="btn-secondary"
+            disabled={stornoLaeuft}
+            onClick={() => stornoAufheben(tagStorniert.map((e) => e.id))}
+            title="Storno für alle stornierten Zeilen dieses Tages aufheben"
+          >
+            Storno aufheben ({tagStorniert.length})
+          </button>
         )}
       </div>
 
@@ -654,11 +772,13 @@ export default function PraemienZuckermaisPage() {
                   Kolben Norm
                 </th>
                 <th>Prämie €</th>
+                <th>Storno</th>
               </tr>
             </thead>
             <tbody>
               {gefiltert.map((emp) => {
                 const werte = werteFuer(emp.id);
+                const e = eintraege[emp.id];
                 const kolben = (Number(werte.kisten) || 0) *
                   (aktuellerSatz?.kolben_pro_kiste ?? 0);
                 const kolbenNorm = (Number(werte.stunden) || 0) *
@@ -712,7 +832,48 @@ export default function PraemienZuckermaisPage() {
                     <td className="text-neutral-500">
                       {kolbenNorm ? fmt(kolbenNorm) : "—"}
                     </td>
-                    <td className="font-medium">{fmt(praemie)}</td>
+                    <td className="font-medium">
+                      {e?.praemie_storniert ? (
+                        <span className="text-neutral-400 line-through">
+                          {fmt(praemie)}
+                        </span>
+                      ) : (
+                        fmt(praemie)
+                      )}
+                    </td>
+                    <td>
+                      {!e ? (
+                        <span className="text-neutral-300">—</span>
+                      ) : e.praemie_storniert ? (
+                        <span className="inline-flex items-center gap-1.5">
+                          <span
+                            className="badge badge-danger"
+                            title={e.storno_grund ?? undefined}
+                          >
+                            storniert
+                          </span>
+                          <button
+                            type="button"
+                            className="btn-secondary text-xs"
+                            disabled={stornoLaeuft}
+                            onClick={() => stornoAufheben([e.id])}
+                          >
+                            aufheben
+                          </button>
+                        </span>
+                      ) : (
+                        <button
+                          type="button"
+                          className="btn-secondary text-xs"
+                          disabled={stornoLaeuft}
+                          onClick={() =>
+                            einzelStornieren(e, `${emp.name}, ${emp.vorname}`)
+                          }
+                        >
+                          stornieren
+                        </button>
+                      )}
+                    </td>
                   </tr>
                 );
               })}
@@ -744,7 +905,7 @@ export default function PraemienZuckermaisPage() {
               </tr>
             </thead>
             <tbody>
-              {druckZeilen.map(({ emp, e, kolben, kolbenNorm, praemie }) => (
+              {druckZeilen.map(({ emp, e, kolben, kolbenNorm, praemie, storniert }) => (
                 <tr key={emp.id}>
                   <td>{emp.personal_nr}</td>
                   <td>
@@ -754,7 +915,7 @@ export default function PraemienZuckermaisPage() {
                   <td>{e.stunden}</td>
                   <td>{fmt(kolben)}</td>
                   <td>{fmt(kolbenNorm)}</td>
-                  <td>{fmt(praemie)}</td>
+                  <td>{storniert ? "0,00 (storniert)" : fmt(praemie)}</td>
                 </tr>
               ))}
             </tbody>

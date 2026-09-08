@@ -49,6 +49,15 @@ function jetzigeSaison() {
   return new Date().getFullYear();
 }
 
+// Was die Zuckermais-Tagesprämie ohne Storno gewesen wäre - dieselbe Formel
+// wie in der Sicht zuckermais_praemie_tag, aus den mitgelieferten Satz-Feldern
+// nachgerechnet. Nur für die Anzeige "durchgestrichener Betrag" in der Suche.
+function zuckermaisPraemieOhneStorno(z: ZuckermaisPraemieTag) {
+  const kolben = Number(z.kisten) * Number(z.kolben_pro_kiste ?? 0);
+  const norm = Number(z.stunden) * Number(z.norm_kolben_pro_stunde ?? 0);
+  return Math.max((kolben - norm) * Number(z.satz_pro_kolben ?? 0), 0);
+}
+
 const WOCHENTAGE = [
   "Montag",
   "Dienstag",
@@ -347,7 +356,12 @@ export default function SuchePage() {
   const stundenDruck = stunden.filter(
     (e) => e.stunden !== null || e.markierung !== null
   );
-  const zuckermaisDruck = zuckermais.filter((z) => Number(z.praemie ?? 0) > 0);
+  // Stornierte Prämientage (praemie = 0) trotzdem mit aufführen - der
+  // Mitarbeiter soll bei der Auskunft sehen, dass und warum die Prämie
+  // gestrichen wurde (Nutzer-Vorgabe 2026-09-08).
+  const zuckermaisDruck = zuckermais.filter(
+    (z) => Number(z.praemie ?? 0) > 0 || z.praemie_storniert
+  );
   const erdbeerenDruck = erdbeeren.filter((e) => Number(e.praemie ?? 0) > 0);
 
   // Wochenraster für den Ausdruck (Nutzer-Vorgabe 2026-08-21): eine Zeile
@@ -719,11 +733,15 @@ export default function SuchePage() {
                             {t("gemeinsam.kolbennorm")}
                           </th>
                           <th>{t("gemeinsam.praemieeuro")}</th>
+                          <th>{t("suche.stornogrund")}</th>
                         </tr>
                       </thead>
                       <tbody>
                         {zuckermais.map((z) => (
-                          <tr key={z.id}>
+                          <tr
+                            key={z.id}
+                            className={z.praemie_storniert ? "opacity-60" : ""}
+                          >
                             <td>{formatDatumDE(z.datum)}</td>
                             <td>{z.kisten}</td>
                             <td>{z.stunden}</td>
@@ -735,7 +753,29 @@ export default function SuchePage() {
                               )}
                             </td>
                             <td className="font-medium">
-                              {formatMenge(Number(z.praemie), 2)}
+                              {z.praemie_storniert ? (
+                                <>
+                                  <span className="text-neutral-400 line-through">
+                                    {formatMenge(
+                                      zuckermaisPraemieOhneStorno(z),
+                                      2
+                                    )}
+                                  </span>{" "}
+                                  {formatMenge(0, 2)}
+                                </>
+                              ) : (
+                                formatMenge(Number(z.praemie), 2)
+                              )}
+                            </td>
+                            <td className="text-sm">
+                              {z.praemie_storniert ? (
+                                <span className="text-red-700">
+                                  {t("gemeinsam.storniert")}
+                                  {z.storno_grund ? `: ${z.storno_grund}` : ""}
+                                </span>
+                              ) : (
+                                <span className="text-neutral-300">—</span>
+                              )}
                             </td>
                           </tr>
                         ))}
@@ -935,6 +975,7 @@ export default function SuchePage() {
                     <th>Std.</th>
                     <th>Kolben Norm</th>
                     <th>Prämie €</th>
+                    <th>Storno-Grund</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -951,6 +992,13 @@ export default function SuchePage() {
                         )}
                       </td>
                       <td>{formatMenge(Number(z.praemie), 2)}</td>
+                      <td>
+                        {z.praemie_storniert
+                          ? `storniert${
+                              z.storno_grund ? `: ${z.storno_grund}` : ""
+                            }`
+                          : ""}
+                      </td>
                     </tr>
                   ))}
                 </tbody>
