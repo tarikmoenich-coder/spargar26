@@ -11,12 +11,21 @@ import type {
   Employee,
   FirmenBankdaten,
   Herkunft,
+  SepaExport,
 } from "@/lib/types";
 import LohnTabs from "@/components/LohnTabs";
 import { erzeugeSepaXml, sepaDateiHerunterladen } from "@/lib/sepa";
 
 function heuteIsoDatum() {
   return new Date().toISOString().slice(0, 10);
+}
+
+function sepaKurz(iso: string) {
+  return new Date(iso).toLocaleDateString("de-DE", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "2-digit",
+  });
 }
 
 function monatsSchluessel(d: Date) {
@@ -44,6 +53,7 @@ interface AusgewaehltePerson {
 }
 
 interface Beleg {
+  id: number;
   belegnummer: string;
   datum: string;
   zahlungsart: string;
@@ -125,6 +135,11 @@ export default function VorschuessePage() {
     useState<FirmenBankdaten | null>(null);
   const [sepaDatum, setSepaDatum] = useState(heuteIsoDatum());
   const [sepaFehler, setSepaFehler] = useState<string | null>(null);
+  // Vermerk "SEPA-Datei schon erzeugt" je Vorschussbeleg (advance.id -> Export).
+  const [sepaExporte, setSepaExporte] = useState<Record<number, SepaExport>>({});
+  // Inline-Zeile in der Liste zum nachträglichen Erzeugen (advance.id).
+  const [sepaListeId, setSepaListeId] = useState<number | null>(null);
+  const [sepaListeDatum, setSepaListeDatum] = useState(heuteIsoDatum());
 
   // Nachträgliche Korrektur eines bereits bestätigten Vorschuss-Betrags.
   const [bearbeitenAdvanceId, setBearbeitenAdvanceId] = useState<
@@ -160,6 +175,7 @@ export default function VorschuessePage() {
       { data: gr },
       { data: hk },
       { data: bankdaten },
+      { data: sepaEx },
     ] = await Promise.all([
       supabase
         .from("advances")
@@ -179,12 +195,16 @@ export default function VorschuessePage() {
       // dann bleibt firmenBankdaten einfach null und der SEPA-Button prüft
       // das selbst ab.
       supabase.from("firmen_bankdaten").select("*").eq("id", 1).maybeSingle(),
+      supabase.from("sepa_export").select("*").eq("art", "vorschuss"),
     ]);
     setAdvances((adv as Advance[]) ?? []);
     setEmployees((emp as Employee[]) ?? []);
     setGruppen((gr as Arbeitsgruppe[]) ?? []);
     setHerkuenfte((hk as Herkunft[]) ?? []);
     setFirmenBankdaten((bankdaten as FirmenBankdaten) ?? null);
+    const sm: Record<number, SepaExport> = {};
+    ((sepaEx as SepaExport[]) ?? []).forEach((e) => (sm[e.beleg_id] = e));
+    setSepaExporte(sm);
     await ladeBelastungen();
     setLoading(false);
   }
@@ -593,6 +613,7 @@ export default function VorschuessePage() {
     }
 
     setLetzterBeleg({
+      id: inserted.id,
       belegnummer,
       datum: inserted.datum,
       zahlungsart: effektiveZahlungsart,
@@ -684,6 +705,7 @@ export default function VorschuessePage() {
       bic: row.bic,
     }));
     setDruckBeleg({
+      id: adv.id,
       belegnummer: adv.belegnummer,
       datum: adv.datum,
       zahlungsart: adv.zahlungsart,
@@ -702,7 +724,7 @@ export default function VorschuessePage() {
   // mit einer klaren Fehlermeldung ab statt Empfänger ohne IBAN/BIC
   // stillschweigend zu überspringen - sonst würde eine Person unbemerkt
   // nicht bezahlt.
-  function sepaErstellen(beleg: Beleg) {
+  async function sepaErstellen(beleg: Beleg, datum: string) {
     setSepaFehler(null);
     if (!firmenBankdaten?.iban || !firmenBankdaten?.bic) {
       setSepaFehler(
@@ -719,6 +741,7 @@ export default function VorschuessePage() {
       );
       return;
     }
+    const summe = beleg.empfaenger.reduce((s, p) => s + p.anteil, 0);
     const xml = erzeugeSepaXml(
       {
         name: firmenBankdaten.name,
@@ -733,10 +756,66 @@ export default function VorschuessePage() {
         betrag: p.anteil,
         verwendungszweck: `${beleg.belegnummer}, ${p.name}, ${p.vorname}`,
       })),
-      sepaDatum,
+      datum,
       beleg.belegnummer
     );
-    sepaDateiHerunterladen(xml, `SEPA_${beleg.belegnummer}_${sepaDatum}.xml`);
+    sepaDateiHerunterladen(xml, `SEPA_${beleg.belegnummer}_${datum}.xml`);
+
+    // Vermerk speichern ("SEPA schon erzeugt" + Datum neben dem Beleg).
+    const eintrag: SepaExport = {
+      art: "vorschuss",
+      beleg_id: beleg.id,
+      zuletzt_erzeugt_am: new Date().toISOString(),
+      zuletzt_erzeugt_von: profile?.id ?? null,
+      anzahl: beleg.empfaenger.length,
+      summe,
+    };
+    setSepaExporte((prev) => ({ ...prev, [beleg.id]: eintrag }));
+    await getSupabaseClient()
+      .from("sepa_export")
+      .upsert(eintrag, { onConflict: "art,beleg_id" });
+  }
+
+  // Nachträglich aus der Liste: Empfänger nachladen und dann die SEPA-Datei
+  // mit dem in der Zeile gewählten Zahlungsdatum erzeugen.
+  async function sepaAusListe(adv: Advance) {
+    const { data } = await getSupabaseClient()
+      .from("advance_recipients")
+      .select(
+        "employee_id, anteil, zahlungsempfaenger, iban, bic, employees(personal_nr, name, vorname)"
+      )
+      .eq("advance_id", adv.id);
+    if (!data) {
+      setSepaFehler("Empfänger konnten nicht geladen werden.");
+      return;
+    }
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const empfaenger: AdvanceRecipientDetail[] = data.map((row: any) => ({
+      employee_id: row.employee_id,
+      personal_nr: row.employees?.personal_nr ?? "",
+      name: row.employees?.name ?? "",
+      vorname: row.employees?.vorname ?? "",
+      anteil: Number(row.anteil ?? 0),
+      zahlungsempfaenger: row.zahlungsempfaenger,
+      iban: row.iban,
+      bic: row.bic,
+    }));
+    await sepaErstellen(
+      {
+        id: adv.id,
+        belegnummer: adv.belegnummer,
+        datum: adv.datum,
+        zahlungsart: adv.zahlungsart,
+        art: adv.art,
+        storniert: adv.storniert,
+        begruendung: adv.begruendung,
+        uebergeben_an: adv.uebergeben_an,
+        beleg_dateiname: adv.beleg_dateiname,
+        empfaenger,
+      },
+      sepaListeDatum
+    );
+    setSepaListeId(null);
   }
 
   async function toggleBearbeiten(adv: Advance) {
@@ -1213,7 +1292,7 @@ export default function VorschuessePage() {
                 <button
                   type="button"
                   className="btn-secondary text-xs"
-                  onClick={() => sepaErstellen(letzterBeleg)}
+                  onClick={() => sepaErstellen(letzterBeleg, sepaDatum)}
                 >
                   SEPA-Datei erstellen
                 </button>
@@ -1291,6 +1370,7 @@ export default function VorschuessePage() {
               <th>Begründung</th>
               <th>Art</th>
               <th>Status</th>
+              <th>SEPA</th>
               <th></th>
             </tr>
           </thead>
@@ -1305,6 +1385,22 @@ export default function VorschuessePage() {
                   <td>{a.begruendung}</td>
                   <td>{a.art === "Strafe/Rechnung" ? a.art : a.zahlungsart}</td>
                   <td>{a.storniert ? `storniert: ${a.storno_grund}` : "aktiv"}</td>
+                  <td className="whitespace-nowrap text-xs">
+                    {sepaExporte[a.id] ? (
+                      <span
+                        className="text-emerald-700"
+                        title={`SEPA-Datei zuletzt erzeugt am ${sepaKurz(
+                          sepaExporte[a.id].zuletzt_erzeugt_am
+                        )}`}
+                      >
+                        🏦 {sepaKurz(sepaExporte[a.id].zuletzt_erzeugt_am)}
+                      </span>
+                    ) : a.zahlungsart === "BÜ" && !a.storniert ? (
+                      <span className="text-neutral-300">offen</span>
+                    ) : (
+                      ""
+                    )}
+                  </td>
                   <td className="flex gap-2">
                     {canSeeDetails && a.beleg_storage_path && (
                       <button
@@ -1330,6 +1426,18 @@ export default function VorschuessePage() {
                         {bearbeitenAdvanceId === a.id ? "Schließen" : "Bearbeiten"}
                       </button>
                     )}
+                    {canWrite && !a.storniert && a.zahlungsart === "BÜ" && (
+                      <button
+                        className="btn-secondary text-xs"
+                        onClick={() => {
+                          setSepaFehler(null);
+                          setSepaListeDatum(heuteIsoDatum());
+                          setSepaListeId(sepaListeId === a.id ? null : a.id);
+                        }}
+                      >
+                        {sepaExporte[a.id] ? "SEPA erneut" : "SEPA-Datei"}
+                      </button>
+                    )}
                     {canWrite && !a.storniert && (
                       <button
                         className="btn-danger text-xs"
@@ -1340,9 +1448,42 @@ export default function VorschuessePage() {
                     )}
                   </td>
                 </tr>
+                {sepaListeId === a.id && (
+                  <tr>
+                    <td colSpan={9} className="bg-sand">
+                      <div className="flex flex-wrap items-center gap-3 p-2 text-sm">
+                        <label>
+                          Zahlungsdatum{" "}
+                          <input
+                            type="date"
+                            value={sepaListeDatum}
+                            onChange={(e) => setSepaListeDatum(e.target.value)}
+                          />
+                        </label>
+                        <button
+                          type="button"
+                          className="btn text-xs"
+                          onClick={() => sepaAusListe(a)}
+                        >
+                          SEPA-Datei erzeugen
+                        </button>
+                        <button
+                          type="button"
+                          className="btn-secondary text-xs"
+                          onClick={() => setSepaListeId(null)}
+                        >
+                          Abbrechen
+                        </button>
+                        {sepaFehler && (
+                          <span className="text-red-600">{sepaFehler}</span>
+                        )}
+                      </div>
+                    </td>
+                  </tr>
+                )}
                 {bearbeitenAdvanceId === a.id && (
                   <tr>
-                    <td colSpan={8} className="bg-sand">
+                    <td colSpan={9} className="bg-sand">
                       <p className="mb-2 text-xs text-neutral-500">
                         Betrag ändern und auf „Speichern" klicken - Grund wird
                         abgefragt und protokolliert (wer, wann, Differenz).

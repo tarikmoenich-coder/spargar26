@@ -1070,6 +1070,29 @@ create table auszahlungsbeleg_zeilen (
 create unique index idx_auszahlungsbeleg_zeilen_beleg_employee
   on auszahlungsbeleg_zeilen (auszahlungsbeleg_id, employee_id);
 
+-- Vermerk, ob/wann für einen Vorschuss- oder Auszahlungsbeleg schon eine
+-- SEPA-Überweisungsdatei erzeugt wurde (Migration 2026-10-07). Ein Datensatz
+-- je (art, beleg_id), letzter Export gewinnt.
+create table sepa_export (
+  art text not null check (art in ('vorschuss', 'auszahlung')),
+  beleg_id bigint not null,
+  zuletzt_erzeugt_am timestamptz not null default now(),
+  zuletzt_erzeugt_von uuid references profiles (id) default auth.uid(),
+  anzahl int not null default 0,
+  summe numeric(12, 2) not null default 0,
+  primary key (art, beleg_id)
+);
+alter table sepa_export enable row level security;
+create policy "sepa_export_select" on sepa_export for select
+  using (
+    current_role_name() in
+      ('admin', 'hr', 'kasse', 'lohnabrechnung', 'pruefer', 'management')
+  );
+create policy "sepa_export_write" on sepa_export for all
+  using (current_role_name() in ('admin', 'kasse', 'lohnabrechnung'))
+  with check (current_role_name() in ('admin', 'kasse', 'lohnabrechnung'));
+grant select, insert, update on sepa_export to authenticated;
+
 -- ---------------------------------------------------------------------------
 -- 4b. Kautionsübergabe (Nutzer-Vorgabe 2026-08-09): die bei der Auszahlung
 --     einbehaltene Zimmerkaution wird real an den Hausmeister übergeben -

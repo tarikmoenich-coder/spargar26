@@ -6,10 +6,13 @@ import { useProfile } from "@/lib/useProfile";
 import type {
   AuszahlungsbelegSummary,
   AuszahlungsbelegZeile,
+  FirmenBankdaten,
   Kautionsuebergabe,
   SeasonSummaryRow,
+  SepaExport,
 } from "@/lib/types";
 import { formatDatumDE, formatMenge } from "@/lib/format";
+import { erzeugeSepaXml, sepaDateiHerunterladen } from "@/lib/sepa";
 import LohnTabs from "@/components/LohnTabs";
 import {
   FARBE_ABZUG_TH,
@@ -36,6 +39,18 @@ function fmt(n: number | string | null | undefined) {
 // werden müssen.
 function fmtDruck(n: number | string | null | undefined) {
   return fmt(n);
+}
+
+function sepaKurz(iso: string) {
+  return new Date(iso).toLocaleDateString("de-DE", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "2-digit",
+  });
+}
+
+function heuteIso() {
+  return new Date().toISOString().slice(0, 10);
 }
 
 // Liest ein Feld aus dem eingefrorenen Schnappschuss (immer vorhanden, da
@@ -202,6 +217,7 @@ export default function AuszahlungenPage() {
     profile?.role === "admin" ||
     profile?.role === "kasse" ||
     profile?.role === "lohnabrechnung";
+  const canSepa = canKaution;
 
   const [belege, setBelege] = useState<AuszahlungsbelegSummary[]>([]);
   const [jahrFilter, setJahrFilter] = useState<number | "alle">("alle");
@@ -237,10 +253,23 @@ export default function AuszahlungenPage() {
     { name: string; vorname: string; personal_nr: string }[]
   >([]);
 
+  // SEPA-Überweisungsdatei je Auszahlungsbeleg mit Zahlungsart Überweisung.
+  const [firmenBankdaten, setFirmenBankdaten] =
+    useState<FirmenBankdaten | null>(null);
+  const [sepaExporte, setSepaExporte] = useState<Record<number, SepaExport>>({});
+  const [sepaBelegId, setSepaBelegId] = useState<number | null>(null);
+  const [sepaBelegDatum, setSepaBelegDatum] = useState(heuteIso());
+  const [sepaFehler, setSepaFehler] = useState<string | null>(null);
+
   async function load() {
     setLoading(true);
     const supabase = getSupabaseClient();
-    const [{ data, error }, { data: kautionenData }] = await Promise.all([
+    const [
+      { data, error },
+      { data: kautionenData },
+      { data: bankdaten },
+      { data: sepaEx },
+    ] = await Promise.all([
       supabase
         .from("auszahlungsbeleg_summary")
         .select("*")
@@ -249,8 +278,14 @@ export default function AuszahlungenPage() {
         .from("kautionsuebergaben")
         .select("*")
         .eq("storniert", false),
+      supabase.from("firmen_bankdaten").select("*").eq("id", 1).maybeSingle(),
+      supabase.from("sepa_export").select("*").eq("art", "auszahlung"),
     ]);
     if (!error) setBelege((data as AuszahlungsbelegSummary[]) ?? []);
+    setFirmenBankdaten((bankdaten as FirmenBankdaten) ?? null);
+    const sm: Record<number, SepaExport> = {};
+    ((sepaEx as SepaExport[]) ?? []).forEach((e) => (sm[e.beleg_id] = e));
+    setSepaExporte(sm);
     const kautionMap: Record<number, Kautionsuebergabe> = {};
     ((kautionenData as Kautionsuebergabe[]) ?? []).forEach((k) => {
       kautionMap[k.auszahlungsbeleg_id] = k;
@@ -372,6 +407,90 @@ export default function AuszahlungenPage() {
         }));
       }
     }
+  }
+
+  // SEPA-Überweisungsdatei für einen Auszahlungsbeleg mit Zahlungsart
+  // Überweisung. IBAN/BIC/Zahlungsempfänger werden LIVE aus dem Personalstamm
+  // gezogen (nicht im Beleg eingefroren) - eine Person ohne IBAN/BIC bricht
+  // ab und wird namentlich genannt, niemand wird still übersprungen.
+  async function sepaErstellen(beleg: AuszahlungsbelegSummary) {
+    setSepaFehler(null);
+    if (!firmenBankdaten?.iban || !firmenBankdaten?.bic) {
+      setSepaFehler(
+        "Bitte zuerst IBAN/BIC von Mömmel Agrar unter Einstellungen hinterlegen."
+      );
+      return;
+    }
+    const { data, error } = await getSupabaseClient()
+      .from("auszahlungsbeleg_zeilen")
+      .select("employee_id, name, vorname, zeile, employees(iban, bic, zahlungsempfaenger)")
+      .eq("auszahlungsbeleg_id", beleg.id);
+    if (error || !data) {
+      setSepaFehler(error?.message ?? "Zeilen konnten nicht geladen werden.");
+      return;
+    }
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const rows = (data as any[]).map((r) => ({
+      employee_id: r.employee_id as string,
+      name: r.name as string,
+      vorname: r.vorname as string,
+      betrag: Number(
+        (r.zeile as Record<string, unknown>)?.["auszahlungsbetrag"] ?? 0
+      ),
+      iban: (r.employees?.iban as string | null) ?? "",
+      bic: (r.employees?.bic as string | null) ?? "",
+      zahlungsempfaenger:
+        (r.employees?.zahlungsempfaenger as string | null) ?? "",
+    }));
+    const zuZahlen = rows.filter((r) => r.betrag > 0);
+    if (zuZahlen.length === 0) {
+      setSepaFehler("Keine Zeile mit einem Auszahlungsbetrag > 0.");
+      return;
+    }
+    const ohneIban = zuZahlen.filter((r) => !r.iban || !r.bic);
+    if (ohneIban.length > 0) {
+      setSepaFehler(
+        `Fehlende IBAN/BIC bei: ${ohneIban
+          .map((r) => `${r.name}, ${r.vorname}`)
+          .join("; ")} - bitte zuerst im Personalstamm nachtragen.`
+      );
+      return;
+    }
+    const summe = zuZahlen.reduce((s, r) => s + r.betrag, 0);
+    const xml = erzeugeSepaXml(
+      {
+        name: firmenBankdaten.name,
+        iban: firmenBankdaten.iban,
+        bic: firmenBankdaten.bic,
+      },
+      zuZahlen.map((r) => ({
+        employeeId: r.employee_id,
+        name: r.zahlungsempfaenger || `${r.vorname} ${r.name}`,
+        iban: r.iban,
+        bic: r.bic,
+        betrag: r.betrag,
+        verwendungszweck: `Lohnauszahlung ${beleg.belegnummer}, ${r.name}, ${r.vorname}`,
+      })),
+      sepaBelegDatum,
+      beleg.belegnummer
+    );
+    sepaDateiHerunterladen(
+      xml,
+      `SEPA_${beleg.belegnummer}_${sepaBelegDatum}.xml`
+    );
+    const eintrag: SepaExport = {
+      art: "auszahlung",
+      beleg_id: beleg.id,
+      zuletzt_erzeugt_am: new Date().toISOString(),
+      zuletzt_erzeugt_von: profile?.id ?? null,
+      anzahl: zuZahlen.length,
+      summe,
+    };
+    setSepaExporte((prev) => ({ ...prev, [beleg.id]: eintrag }));
+    await getSupabaseClient()
+      .from("sepa_export")
+      .upsert(eintrag, { onConflict: "art,beleg_id" });
+    setSepaBelegId(null);
   }
 
   async function drucken(beleg: AuszahlungsbelegSummary) {
@@ -638,6 +757,16 @@ export default function AuszahlungenPage() {
                   <span className="w-56 shrink-0 text-sm text-neutral-500">
                     Saison {beleg.saison_jahr} · {formatDatumDE(beleg.erstellt_am)} ·{" "}
                     {beleg.zahlungsart === "BAR" ? "Bar" : "Überweisung"}
+                    {beleg.zahlungsart !== "BAR" && sepaExporte[beleg.id] && (
+                      <span
+                        className="ml-1 text-emerald-700"
+                        title={`SEPA-Datei zuletzt erzeugt am ${sepaKurz(
+                          sepaExporte[beleg.id].zuletzt_erzeugt_am
+                        )}`}
+                      >
+                        · 🏦 {sepaKurz(sepaExporte[beleg.id].zuletzt_erzeugt_am)}
+                      </span>
+                    )}
                   </span>
                   <span className="w-24 shrink-0 text-right text-sm text-neutral-500">
                     {beleg.anzahl_personen} Person(en)
@@ -668,7 +797,58 @@ export default function AuszahlungenPage() {
                       <p className="text-sm text-neutral-500">Lädt…</p>
                     ) : (
                       <>
-                        <div className="mb-2 flex justify-end">
+                        <div className="mb-2 flex flex-wrap items-center justify-end gap-2">
+                          {canSepa && beleg.zahlungsart !== "BAR" && (
+                            <>
+                              {sepaBelegId === beleg.id ? (
+                                <>
+                                  <label className="text-xs">
+                                    Zahlungsdatum{" "}
+                                    <input
+                                      type="date"
+                                      value={sepaBelegDatum}
+                                      onChange={(e) =>
+                                        setSepaBelegDatum(e.target.value)
+                                      }
+                                    />
+                                  </label>
+                                  <button
+                                    type="button"
+                                    className="btn text-xs"
+                                    onClick={() => sepaErstellen(beleg)}
+                                  >
+                                    SEPA-Datei erzeugen
+                                  </button>
+                                  <button
+                                    type="button"
+                                    className="btn-secondary text-xs"
+                                    onClick={() => setSepaBelegId(null)}
+                                  >
+                                    Abbrechen
+                                  </button>
+                                </>
+                              ) : (
+                                <button
+                                  type="button"
+                                  className="btn-secondary text-xs"
+                                  onClick={() => {
+                                    setSepaFehler(null);
+                                    setSepaBelegDatum(heuteIso());
+                                    setSepaBelegId(beleg.id);
+                                  }}
+                                >
+                                  {sepaExporte[beleg.id]
+                                    ? "SEPA erneut erstellen"
+                                    : "SEPA-Datei erstellen"}
+                                </button>
+                              )}
+                              {sepaFehler && sepaBelegId === beleg.id && (
+                                <span className="text-xs text-red-600">
+                                  {sepaFehler}
+                                </span>
+                              )}
+                            </>
+                          )}
                           <button
                             type="button"
                             className="btn-secondary text-xs"

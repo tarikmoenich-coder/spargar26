@@ -801,6 +801,17 @@ export interface FirmenBankdaten {
   updated_at: string;
 }
 
+// Vermerk "SEPA-Datei schon erzeugt" je Vorschuss-/Auszahlungsbeleg
+// (Migration 2026-10-07).
+export interface SepaExport {
+  art: "vorschuss" | "auszahlung";
+  beleg_id: number;
+  zuletzt_erzeugt_am: string;
+  zuletzt_erzeugt_von: string | null;
+  anzahl: number;
+  summe: number;
+}
+
 export const KULTUREN = ["zuckermais", "erdbeeren", "spargel"] as const;
 export type Kultur = (typeof KULTUREN)[number];
 export const KULTUR_LABELS: Record<Kultur, string> = {
