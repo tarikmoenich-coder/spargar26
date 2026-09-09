@@ -278,7 +278,7 @@ input[type="number"]::-webkit-inner-spin-button {
   align-items: center;
   gap: 0.75rem;
   padding: 0 1rem 0.75rem;
-  font-size: 0.85rem;
+  font-size: 0.9rem;
 }
 .strichliste-print .sl-bar .sl-hint {
   color: #6b7280;
@@ -292,52 +292,49 @@ input[type="number"]::-webkit-inner-spin-button {
   align-items: baseline;
   gap: 1.5rem;
   flex-wrap: wrap;
-  margin-bottom: 4pt;
+  margin-bottom: 5pt;
 }
 .strichliste-print .sl-titel {
   font-weight: 700;
-  font-size: 11pt;
+  font-size: 14pt;
   white-space: nowrap;
 }
 .strichliste-print .sl-felder {
   display: flex;
   flex-wrap: wrap;
-  gap: 0.35rem 1.25rem;
-  font-size: 8.5pt;
+  gap: 0.4rem 1.4rem;
+  font-size: 10.5pt;
 }
 .strichliste-print .sl-line {
   display: inline-block;
-  min-width: 22mm;
-  border-bottom: 0.5pt solid #000;
-}
-.strichliste-print .sl-line-lang {
-  min-width: 48mm;
+  min-width: 24mm;
+  border-bottom: 0.6pt solid #000;
 }
 .strichliste-print .sl-box {
   display: inline-block;
-  width: 3.5mm;
-  height: 3.5mm;
-  border: 0.6pt solid #000;
+  width: 4mm;
+  height: 4mm;
+  border: 0.7pt solid #000;
   vertical-align: -0.5mm;
 }
 .strichliste-print .sl-tab {
   border-collapse: collapse;
   table-layout: fixed;
   width: 100%;
-  min-width: 1180px;
-  font-size: 6.5pt;
+  min-width: 1220px;
+  font-size: 9pt;
   line-height: 1.05;
 }
 .strichliste-print .sl-tab th,
 .strichliste-print .sl-tab td {
-  border: 0.5pt solid #000;
-  padding: 0 1pt;
+  border: 0.6pt solid #000;
+  padding: 0 1.5pt;
   text-align: center;
   overflow: hidden;
 }
 .strichliste-print .sl-tab thead th {
   font-weight: 700;
-  font-size: 6pt;
+  font-size: 8pt;
 }
 .strichliste-print .sl-tab .sl-l {
   text-align: left;
@@ -345,34 +342,28 @@ input[type="number"]::-webkit-inner-spin-button {
   word-break: break-word;
 }
 .strichliste-print .sl-tab td {
-  height: 8.5mm;
-}
-.strichliste-print .sl-tab .sl-pnr {
-  font-size: 5.5pt;
-  color: #333;
-  white-space: nowrap;
+  height: 10mm;
 }
 .strichliste-print .sl-tab .sl-k5 {
-  border-left-width: 1.3pt;
+  border-left-width: 1.4pt;
 }
 .strichliste-print .sl-tab .sl-na {
-  background: #f0f0f0;
+  background: #eeeeee;
   print-color-adjust: exact;
   -webkit-print-color-adjust: exact;
 }
 .strichliste-print .sl-legende {
-  margin-top: 2mm;
-  font-size: 6pt;
-  line-height: 1.3;
+  margin-top: 2.5mm;
+  font-size: 8pt;
+  line-height: 1.35;
 }
 
 /* Bildschirm: Spalten grob halten, damit die Vorschau lesbar bleibt. */
-.strichliste-print .sl-tab .c-nr { width: 22px; }
-.strichliste-print .sl-tab .c-name { width: 150px; }
-.strichliste-print .sl-tab .c-zeit { width: 34px; }
-.strichliste-print .sl-tab .c-k { width: 20px; }
-.strichliste-print .sl-tab .c-na { width: 22px; }
-.strichliste-print .sl-tab .c-sum { width: 40px; }
+.strichliste-print .sl-tab .c-nr { width: 26px; }
+.strichliste-print .sl-tab .c-name { width: 170px; }
+.strichliste-print .sl-tab .c-k { width: 22px; }
+.strichliste-print .sl-tab .c-na { width: 24px; }
+.strichliste-print .sl-tab .c-sum { width: 46px; }
 
 @media print {
   @page strichliste-a3 {
@@ -392,13 +383,13 @@ input[type="number"]::-webkit-inner-spin-button {
   .strichliste-print .sl-tab {
     min-width: 0;
   }
-  /* Druck-Spaltenbreiten in mm (Summe passt in A3 quer, ~408 mm nutzbar). */
-  .strichliste-print .sl-tab .c-nr { width: 6mm; }
-  .strichliste-print .sl-tab .c-name { width: 42mm; }
-  .strichliste-print .sl-tab .c-zeit { width: 8mm; }
-  .strichliste-print .sl-tab .c-k { width: 5mm; }
-  .strichliste-print .sl-tab .c-na { width: 5mm; }
-  .strichliste-print .sl-tab .c-sum { width: 9mm; }
+  /* Druck-Spaltenbreiten in mm (Summe ~360 mm, A3 quer ~408 mm nutzbar -
+     table-layout:fixed + width:100% verteilt den Rest gleichmäßig). */
+  .strichliste-print .sl-tab .c-nr { width: 7mm; }
+  .strichliste-print .sl-tab .c-name { width: 44mm; }
+  .strichliste-print .sl-tab .c-k { width: 5.4mm; }
+  .strichliste-print .sl-tab .c-na { width: 5.4mm; }
+  .strichliste-print .sl-tab .c-sum { width: 13mm; }
   .strichliste-print .sl-tab thead {
     display: table-header-group;
   }

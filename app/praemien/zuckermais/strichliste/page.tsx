@@ -1,19 +1,18 @@
 "use client";
 
 // Blanko-Strichliste Zuckermais zum Ausdrucken (Nutzer-Vorgabe 2026-09-09) -
-// ersetzt die von Hand gepflegte A3-Papierliste "Name, Pers. Nr." (Vor-/
-// Nachmittag). Namen + Pers.-Nr. kommen live aus dem Personalstamm
-// (praemien_zuckermais = true, optional nach Gruppe gefiltert), damit die
-// Liste nie veraltet ist. Das Kreuz-Raster (40 Felder je Person, X je
-// abgegebene Kiste) bleibt wie gewohnt; neu ist rechts ein
-// Nacharbeit-Block, in den der Prüfer bei einer abgelehnten Kiste den
-// Fehlercode einträgt (QS-Konzept). Reine Druckseite - keine Erfassung,
-// keine Migration. Rückerfassung der Zahlen kommt als Phase 2.
+// ersetzt die von Hand gepflegte A3-Papierliste. Wird BLANKO gedruckt; die
+// Halle trägt Datum und Arbeitszeiten selbst ein. Namen kommen live aus dem
+// Personalstamm (praemien_zuckermais = true, optional nach Gruppe gefiltert),
+// damit die Liste nie veraltet ist - ohne angehängte Pers.-Nr. (spart Platz).
+// Das Kreuz-Raster (40 Felder je Person, X je abgegebene Kiste) bleibt wie
+// gewohnt; rechts ein grau hinterlegter Nacharbeit-Block, in den der Prüfer
+// bei einer abgelehnten Kiste den Fehlercode einträgt (QS-Konzept). Reine
+// Druckseite - keine Erfassung, keine Migration. Rückerfassung = Phase 2.
 
 import { Suspense, useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { getSupabaseClient } from "@/lib/supabase/client";
-import { formatDatumDE } from "@/lib/format";
 import type { Arbeitsgruppe, Employee } from "@/lib/types";
 
 // ---------------------------------------------------------------------------
@@ -34,23 +33,17 @@ const FEHLER_CODES: { code: string; text: string }[] = [
   { code: "N4", text: "Druckstelle" },
 ];
 
-const KISTEN_SPALTEN = 40; // Kreuzfelder je Person (Nutzer-Vorgabe: manche schaffen 40/Halbschicht)
+const KISTEN_SPALTEN = 40; // Kreuzfelder je Person (manche schaffen 40/Halbschicht)
 const NACHARBEIT_SPALTEN = 12;
 const MIN_ZEILEN = 22; // mind. so viele Zeilen drucken (Reserve zum Nachtragen)
 
-function heuteIso() {
-  return new Date().toISOString().slice(0, 10);
-}
-
 function Inner() {
   const params = useSearchParams();
-  const datum = params.get("datum") || heuteIso();
   const gruppeParam = params.get("gruppe") || "";
 
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [gruppen, setGruppen] = useState<Arbeitsgruppe[]>([]);
   const [loading, setLoading] = useState(true);
-  const [schicht, setSchicht] = useState("");
   const gedruckt = useRef(false);
 
   useEffect(() => {
@@ -89,27 +82,33 @@ function Inner() {
   const nacharbeit = Array.from({ length: NACHARBEIT_SPALTEN }, (_, i) => i + 1);
   const leerzeilen = Math.max(0, MIN_ZEILEN - gefiltert.length);
 
-  const feldKlasse = (n: number) =>
-    "sl-k" + (n % 5 === 0 ? " sl-k5" : "");
+  const feldKlasse = (n: number) => "sl-k" + (n % 5 === 0 ? " sl-k5" : "");
+
+  const zeile = (nr: number, name: string, key: string) => (
+    <tr key={key}>
+      <td className="sl-c">{nr}</td>
+      <td className="sl-l">{name}</td>
+      <td></td>
+      <td></td>
+      {kisten.map((n) => (
+        <td key={key + "k" + n} className={feldKlasse(n)}></td>
+      ))}
+      {nacharbeit.map((n) => (
+        <td key={key + "n" + n} className="sl-na"></td>
+      ))}
+    </tr>
+  );
 
   return (
     <div className="strichliste-print -mx-4 -my-6">
       {/* Bildschirm-Bedienleiste - nicht im Druck */}
       <div className="sl-bar print:hidden">
-        <label>
-          Schicht/Zeit&nbsp;
-          <select value={schicht} onChange={(e) => setSchicht(e.target.value)}>
-            <option value="">— (von Hand)</option>
-            <option value="Vormittag">Vormittag</option>
-            <option value="Nachmittag">Nachmittag</option>
-          </select>
-        </label>
         <button type="button" className="btn" onClick={() => window.print()}>
           Drucken
         </button>
         <span className="sl-hint">
-          A3 quer. Kein A3-Drucker? Im Druckdialog „Größe anpassen / An Seite
-          anpassen" auf A4 wählen.
+          Wird blanko gedruckt (A3 quer). Kein A3-Drucker? Im Druckdialog
+          „Größe anpassen / An Seite anpassen" auf A4 wählen.
         </span>
       </div>
 
@@ -118,18 +117,20 @@ function Inner() {
           <div className="sl-titel">Zuckermais – Strichliste</div>
           <div className="sl-felder">
             <span>
-              <b>Datum:</b> {formatDatumDE(datum)}
+              <b>Datum:</b>
+              <span className="sl-line" />
             </span>
             <span>
               <b>Gruppe:</b> {gruppeLabel || "alle"}
             </span>
             <span>
-              <b>Schicht/Zeit:</b> {schicht}
+              <b>Arbeitszeit von</b>
+              <span className="sl-line" /> <b>bis</b>
               <span className="sl-line" />
             </span>
             <span>
-              <b>Feld / Charge:</b>
-              <span className="sl-line sl-line-lang" />
+              <b>Pause(n):</b>
+              <span className="sl-line" />
             </span>
             <span>
               <b>Grenzmuster gezogen</b> <span className="sl-box" />
@@ -145,36 +146,30 @@ function Inner() {
           <colgroup>
             <col className="c-nr" />
             <col className="c-name" />
-            <col className="c-zeit" />
-            <col className="c-zeit" />
-            <col className="c-zeit" />
+            <col className="c-sum" />
+            <col className="c-sum" />
             {kisten.map((n) => (
               <col key={"c" + n} className="c-k" />
             ))}
             {nacharbeit.map((n) => (
               <col key={"cn" + n} className="c-na" />
             ))}
-            <col className="c-sum" />
-            <col className="c-sum" />
-            <col className="c-sum" />
           </colgroup>
           <thead>
             <tr>
               <th rowSpan={2}>Nr</th>
               <th rowSpan={2} className="sl-l">
-                Name, Pers.-Nr.
+                Name
               </th>
-              <th colSpan={3}>Zeit</th>
+              <th colSpan={2}>Summen</th>
               <th colSpan={KISTEN_SPALTEN}>Kiste i.O. — Kreuz (X) je Kiste</th>
               <th colSpan={NACHARBEIT_SPALTEN}>
                 Nacharbeit — Fehlercode je abgelehnter Kiste
               </th>
-              <th colSpan={3}>Übertrag spargar</th>
             </tr>
             <tr>
-              <th>von</th>
-              <th>bis</th>
-              <th>Pause</th>
+              <th>Std.</th>
+              <th>Kisten</th>
               {kisten.map((n) => (
                 <th key={"h" + n} className={feldKlasse(n)}>
                   {n}
@@ -183,51 +178,15 @@ function Inner() {
               {nacharbeit.map((n) => (
                 <th key={"hn" + n}></th>
               ))}
-              <th>Σ i.O.</th>
-              <th>Σ NA</th>
-              <th>Std.</th>
             </tr>
           </thead>
           <tbody>
-            {gefiltert.map((e, i) => (
-              <tr key={e.id}>
-                <td className="sl-c">{i + 1}</td>
-                <td className="sl-l">
-                  {e.name}, {e.vorname}{" "}
-                  <span className="sl-pnr">({e.personal_nr})</span>
-                </td>
-                <td></td>
-                <td></td>
-                <td></td>
-                {kisten.map((n) => (
-                  <td key={"k" + n} className={feldKlasse(n)}></td>
-                ))}
-                {nacharbeit.map((n) => (
-                  <td key={"n" + n} className="sl-na"></td>
-                ))}
-                <td></td>
-                <td></td>
-                <td></td>
-              </tr>
-            ))}
-            {Array.from({ length: leerzeilen }, (_, i) => (
-              <tr key={"leer" + i}>
-                <td className="sl-c">{gefiltert.length + i + 1}</td>
-                <td className="sl-l"></td>
-                <td></td>
-                <td></td>
-                <td></td>
-                {kisten.map((n) => (
-                  <td key={"lk" + n} className={feldKlasse(n)}></td>
-                ))}
-                {nacharbeit.map((n) => (
-                  <td key={"ln" + n} className="sl-na"></td>
-                ))}
-                <td></td>
-                <td></td>
-                <td></td>
-              </tr>
-            ))}
+            {gefiltert.map((e, i) =>
+              zeile(i + 1, `${e.name}, ${e.vorname}`, e.id)
+            )}
+            {Array.from({ length: leerzeilen }, (_, i) =>
+              zeile(gefiltert.length + i + 1, "", "leer" + i)
+            )}
           </tbody>
         </table>
 
@@ -237,7 +196,8 @@ function Inner() {
           {FEHLER_CODES.map((c) => `${c.code} ${c.text}`).join(" · ")}{" "}
           &nbsp;·&nbsp; nachgearbeitet &amp; i.O. = Häkchen, verworfen = Code
           einkreisen. &nbsp;·&nbsp; Unterbrechungen als Uhrzeit ins jeweilige
-          Kistenfeld schreiben (wie bisher).
+          Kistenfeld schreiben. &nbsp;·&nbsp; <b>Summen:</b> je Schicht die
+          Tagessumme an Stunden und Kisten eintragen.
         </div>
       </div>
     </div>
@@ -246,9 +206,7 @@ function Inner() {
 
 export default function ZuckermaisStrichlistePage() {
   return (
-    <Suspense
-      fallback={<p className="p-4 text-sm text-neutral-500">Lädt…</p>}
-    >
+    <Suspense fallback={<p className="p-4 text-sm text-neutral-500">Lädt…</p>}>
       <Inner />
     </Suspense>
   );
