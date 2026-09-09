@@ -551,6 +551,17 @@ export default function PraemienZuckermaisPage() {
           Tagesliste drucken{" "}
           {druckZeilen.length > 0 ? `(${druckZeilen.length})` : ""}
         </button>
+        <a
+          className="btn-secondary"
+          href={`/praemien/zuckermais/strichliste?datum=${datum}${
+            gruppeFilter ? `&gruppe=${encodeURIComponent(gruppeFilter)}` : ""
+          }`}
+          target="_blank"
+          rel="noopener"
+          title="Leere A3-Strichliste mit aktuellen Namen + Pers.-Nr. zum Ausdrucken und von Hand Führen (Kreuze je Kiste + Nacharbeit)"
+        >
+          Blanko-Strichliste A3
+        </a>
         {druckVermerk && (
           <span
             className="badge badge-ok"
