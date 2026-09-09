@@ -310,6 +310,11 @@ input[type="number"]::-webkit-inner-spin-button {
   min-width: 24mm;
   border-bottom: 0.6pt solid #000;
 }
+.strichliste-print .sl-linenum {
+  display: inline-block;
+  min-width: 11mm;
+  border-bottom: 0.6pt solid #000;
+}
 .strichliste-print .sl-box {
   display: inline-block;
   width: 4mm;

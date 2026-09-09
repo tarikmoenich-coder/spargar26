@@ -128,7 +128,8 @@ export default function ZuckermaisStrichlistePage() {
               <span className="sl-line" />
             </span>
             <span>
-              <b>Grenzmuster gezogen</b> <span className="sl-box" />
+              <b>Schichtmuster gezogen</b> <span className="sl-box" />{" "}
+              <b>Ergebnis:</b> <span className="sl-linenum" /> / 20 Kolben i.O.
             </span>
             <span>
               <b>Prüfer:</b>
