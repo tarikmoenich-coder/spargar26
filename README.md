@@ -1157,6 +1157,13 @@ Enthalten:
   Block „Schichtkontrollen" in `/statistik/zuckermais` (Datum/Uhrzeit/
   Schicht/i.O.-von-geprüft/Quote-%/Notiz/Foto, Quote < 85 % rot, < 95 %
   gelb).
+  Darunter der Block **„Qualitätsverrechnung – Vorschlag"** (Stand
+  2026-09-09, reine Anzeige, wird NICHT gebucht): je Kontrolltag Tages-Ø-
+  Quote → Stufe (`QS_STUFEN` oben in `app/statistik/zuckermais/page.tsx`,
+  tunbar) → Wertung als Anteil der Zuckermais-Gruppen-Tagesprämie (schlechte
+  Tage Abzug, sehr gute Bonus-Anspruch); der ausgezahlte Bonus wird auf die
+  Summe der Abzüge gedeckelt (Umverteilung, Netto-Effekt ≤ 0). Das Verbuchen
+  (per Person / eigene Zeile) folgt, wenn die Zahlen passen.
   **Erdbeeren**
   (Prämien → Erdbeeren,
   admin/hr/zeiterfassung/erntewirtschaft, Stand 2026-08-09) nach

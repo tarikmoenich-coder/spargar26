@@ -55,6 +55,27 @@ function qsUhrzeit(iso: string) {
   });
 }
 
+// ---------------------------------------------------------------------------
+// Qualitätsverrechnung (Nutzer-Vorgabe 2026-09-09): reine Vorschlagsrechnung,
+// wird NICHT automatisch in die Prämien gebucht. Aus dem Tages-Durchschnitt
+// der Schichtkontrollen ergibt sich je Kontrolltag eine Wertung als Anteil
+// der Zuckermais-Gruppenprämie dieses Tages: schlechte Tage → Abzug, sehr
+// gute Tage → Bonus-Anspruch. Der ausgezahlte Bonus wird auf die Summe der
+// Abzüge GEDECKELT (Umverteilung - kostet die Lohnsumme nie mehr als die
+// Abzüge). Stufen/Sätze HIER ANPASSEN.
+// ---------------------------------------------------------------------------
+const QS_STUFEN: { abQuote: number; rate: number; label: string }[] = [
+  { abQuote: 97, rate: 0.04, label: "Bonus-Anspruch +4 %" },
+  { abQuote: 94, rate: 0.02, label: "Bonus-Anspruch +2 %" },
+  { abQuote: 90, rate: 0, label: "neutral" },
+  { abQuote: 86, rate: -0.06, label: "Abzug −6 %" },
+  { abQuote: 82, rate: -0.12, label: "Abzug −12 %" },
+  { abQuote: 0, rate: -0.25, label: "Abzug −25 %" },
+];
+function qsStufe(q: number) {
+  return QS_STUFEN.find((s) => q >= s.abQuote) ?? QS_STUFEN[QS_STUFEN.length - 1];
+}
+
 // Personenauswertung (Nutzer-Vorgabe 2026-08-23: "wen schicke ich zuerst
 // nach Hause" - siehe Konzept "Wer kostet am meisten?"). Wer mit weniger
 // als dieser Stundenzahl im gewählten Zeitraum erfasst ist, bekommt eine
@@ -325,6 +346,54 @@ export default function StatistikZuckermaisPage() {
     (s, z) => s + Number(z.gruppen_stunden ?? 0),
     0
   );
+
+  // Qualitätsverrechnung (Vorschlag) - je Kontrolltag: Tages-Ø-Quote,
+  // Gruppen-Tagesprämie, Stufe → Wertung €. Danach Deckel: ausgezahlter
+  // Bonus = min(Σ Bonus-Ansprüche, Σ Abzüge).
+  const qsVerrechnung = useMemo(() => {
+    const praemieByDatum = new Map(
+      zeilen.map((z) => [z.datum, Number(z.summe_praemie) || 0])
+    );
+    const proTag = new Map<string, { io: number; gesamt: number }>();
+    for (const k of qsKontrollen) {
+      const v = proTag.get(k.datum) ?? { io: 0, gesamt: 0 };
+      v.io += k.kolben_io;
+      v.gesamt += k.kolben_gesamt;
+      proTag.set(k.datum, v);
+    }
+    const tage = [...proTag.entries()]
+      .map(([datum, v]) => {
+        const quote = v.gesamt > 0 ? (v.io / v.gesamt) * 100 : 0;
+        const stufe = qsStufe(quote);
+        const praemie = praemieByDatum.get(datum) ?? 0;
+        const wertung = Math.round(stufe.rate * praemie * 100) / 100;
+        return { datum, quote, stufe, praemie, wertung };
+      })
+      .sort((a, b) => b.datum.localeCompare(a.datum));
+
+    const summeAbzuege = tage.reduce(
+      (s, t) => s + (t.wertung < 0 ? -t.wertung : 0),
+      0
+    );
+    const summeBonusAnspruch = tage.reduce(
+      (s, t) => s + (t.wertung > 0 ? t.wertung : 0),
+      0
+    );
+    const bonusAusgezahlt = Math.min(summeBonusAnspruch, summeAbzuege);
+    const deckelFaktor =
+      summeBonusAnspruch > 0 ? bonusAusgezahlt / summeBonusAnspruch : 0;
+    const nettoEffekt = bonusAusgezahlt - summeAbzuege; // ≤ 0
+
+    return {
+      tage,
+      summeAbzuege,
+      summeBonusAnspruch,
+      bonusAusgezahlt,
+      deckelFaktor,
+      nettoEffekt,
+      gedeckelt: summeBonusAnspruch > summeAbzuege,
+    };
+  }, [qsKontrollen, zeilen]);
   // Mindestlohn kommt aus der Sicht selbst mit (das Frontend darf
   // verpflegungssaetze nicht direkt lesen) - alle Zeilen desselben
   // Saison-Jahrs tragen denselben Wert.
@@ -544,6 +613,100 @@ export default function StatistikZuckermaisPage() {
               </table>
             </div>
           )}
+        </div>
+      )}
+
+      {!loading && qsVerrechnung.tage.length > 0 && (
+        <div className="mt-4 flex flex-col gap-3 border-t border-linie pt-6">
+          <div>
+            <h2 className="text-base font-semibold text-emerald-800">
+              Qualitätsverrechnung – Vorschlag ({jahr})
+            </h2>
+            <p className="text-sm text-neutral-500">
+              Reine Vorschlagsrechnung, <strong>wird nicht automatisch
+              gebucht.</strong> Je Kontrolltag wird aus dem Tages-Durchschnitt
+              der Schichtkontrollen eine Wertung als Anteil der
+              Zuckermais-Gruppenprämie dieses Tages gebildet: schlechte Tage →
+              Abzug, sehr gute Tage → Bonus-Anspruch. Der ausgezahlte Bonus
+              ist auf die Summe der Abzüge gedeckelt (Umverteilung – kostet die
+              Lohnsumme nie mehr als die Abzüge).
+            </p>
+            <p className="mt-1 text-xs text-neutral-400">
+              Stufen (Tages-Ø): {QS_STUFEN.map((s) => `≥ ${s.abQuote} % → ${s.label}`).join(" · ")}
+            </p>
+          </div>
+
+          <div className="flex flex-wrap gap-4 rounded border border-linie bg-white p-3 text-sm">
+            <span>
+              Summe Abzüge:{" "}
+              <span className="font-medium text-red-600">
+                −{fmt(qsVerrechnung.summeAbzuege)} €
+              </span>
+            </span>
+            <span>
+              Summe Bonus-Ansprüche:{" "}
+              <span className="font-medium">
+                {fmt(qsVerrechnung.summeBonusAnspruch)} €
+              </span>
+            </span>
+            <span>
+              davon ausgezahlt (gedeckelt):{" "}
+              <span className="font-medium text-emerald-700">
+                {fmt(qsVerrechnung.bonusAusgezahlt)} €
+              </span>
+              {qsVerrechnung.gedeckelt && (
+                <span className="text-neutral-500">
+                  {" "}
+                  (Boni × {fmt(qsVerrechnung.deckelFaktor * 100, 0)} %)
+                </span>
+              )}
+            </span>
+            <span>
+              Netto-Effekt auf die Lohnsumme:{" "}
+              <span className="font-medium">
+                {fmt(qsVerrechnung.nettoEffekt)} €
+              </span>
+            </span>
+          </div>
+
+          <div className="overflow-x-auto">
+            <table>
+              <thead>
+                <tr>
+                  <th>Datum</th>
+                  <th>Ø-Quote Tag</th>
+                  <th>Gruppen-Prämie Tag €</th>
+                  <th>Stufe</th>
+                  <th>Wertung €</th>
+                </tr>
+              </thead>
+              <tbody>
+                {qsVerrechnung.tage.map((t) => (
+                  <tr key={t.datum}>
+                    <td>{formatDatumDE(t.datum)}</td>
+                    <td>
+                      <span className={qsBadge(Math.round(t.quote * 10) / 10)}>
+                        {fmt(t.quote, 1)} %
+                      </span>
+                    </td>
+                    <td>{fmt(t.praemie)}</td>
+                    <td className="text-sm text-neutral-600">{t.stufe.label}</td>
+                    <td
+                      className={
+                        t.wertung < 0
+                          ? "font-medium text-red-600"
+                          : t.wertung > 0
+                            ? "font-medium text-emerald-700"
+                            : "text-neutral-400"
+                      }
+                    >
+                      {t.wertung === 0 ? "—" : `${t.wertung > 0 ? "+" : ""}${fmt(t.wertung)}`}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </div>
       )}
 
