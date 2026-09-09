@@ -2,18 +2,19 @@
 
 // Blanko-Strichliste Zuckermais zum Ausdrucken (Nutzer-Vorgabe 2026-09-09) -
 // ersetzt die von Hand gepflegte A3-Papierliste. Wird BLANKO gedruckt; die
-// Halle trägt Datum und Arbeitszeiten selbst ein. Namen kommen live aus dem
-// Personalstamm (praemien_zuckermais = true, optional nach Gruppe gefiltert),
-// damit die Liste nie veraltet ist - ohne angehängte Pers.-Nr. (spart Platz).
-// Das Kreuz-Raster (40 Felder je Person, X je abgegebene Kiste) bleibt wie
-// gewohnt; rechts ein grau hinterlegter Nacharbeit-Block, in den der Prüfer
-// bei einer abgelehnten Kiste den Fehlercode einträgt (QS-Konzept). Reine
-// Druckseite - keine Erfassung, keine Migration. Rückerfassung = Phase 2.
+// Halle trägt Datum und Arbeitszeiten selbst ein. Es werden genau die
+// Personen genommen, die in "Prämien → Gruppenaufteilung" dem Zuckermais
+// zugeordnet UND aktiv sind (employees.praemien_zuckermais = true, aktiv =
+// true) - kein weiterer Gruppenfilter (die Halle entliest als eine Gruppe).
+// Namen ohne angehängte Pers.-Nr. (spart Platz). Das Kreuz-Raster (40 Felder
+// je Person, X je abgegebene Kiste) bleibt wie gewohnt; rechts ein grau
+// hinterlegter Nacharbeit-Block, in den der Prüfer bei einer abgelehnten
+// Kiste den Fehlercode einträgt (QS-Konzept). Reine Druckseite - keine
+// Erfassung, keine Migration. Rückerfassung = Phase 2.
 
-import { Suspense, useEffect, useMemo, useRef, useState } from "react";
-import { useSearchParams } from "next/navigation";
+import { useEffect, useRef, useState } from "react";
 import { getSupabaseClient } from "@/lib/supabase/client";
-import type { Arbeitsgruppe, Employee } from "@/lib/types";
+import type { Employee } from "@/lib/types";
 
 // ---------------------------------------------------------------------------
 // Fehlercodes für die Nacharbeit-Felder. HIER ANPASSEN, wenn sich die
@@ -37,38 +38,26 @@ const KISTEN_SPALTEN = 40; // Kreuzfelder je Person (manche schaffen 40/Halbschi
 const NACHARBEIT_SPALTEN = 12;
 const MIN_ZEILEN = 22; // mind. so viele Zeilen drucken (Reserve zum Nachtragen)
 
-function Inner() {
-  const params = useSearchParams();
-  const gruppeParam = params.get("gruppe") || "";
-
+export default function ZuckermaisStrichlistePage() {
   const [employees, setEmployees] = useState<Employee[]>([]);
-  const [gruppen, setGruppen] = useState<Arbeitsgruppe[]>([]);
   const [loading, setLoading] = useState(true);
   const gedruckt = useRef(false);
 
   useEffect(() => {
     (async () => {
-      const supabase = getSupabaseClient();
-      const [{ data: emp }, { data: gr }] = await Promise.all([
-        supabase
-          .from("employees")
-          .select("id, personal_nr, gruppe_nr, name, vorname, aktiv")
-          .eq("aktiv", true)
-          .eq("praemien_zuckermais", true)
-          .order("name"),
-        supabase.from("arbeitsgruppen").select("*").order("reihenfolge"),
-      ]);
-      setEmployees((emp as Employee[]) ?? []);
-      setGruppen((gr as Arbeitsgruppe[]) ?? []);
+      const { data } = await getSupabaseClient()
+        .from("employees")
+        .select("id, name, vorname")
+        // Genau die Zuckermais-Gruppenaufteilung, aktiv - kein weiterer Filter.
+        .eq("aktiv", true)
+        .eq("praemien_zuckermais", true)
+        .order("name");
+      setEmployees((data as Employee[]) ?? []);
       setLoading(false);
     })();
   }, []);
 
-  const gefiltert = useMemo(
-    () => employees.filter((e) => !gruppeParam || e.gruppe_nr === gruppeParam),
-    [employees, gruppeParam]
-  );
-  const gruppeLabel = gruppen.find((g) => g.gruppe_nr === gruppeParam)?.bezeichnung;
+  const gefiltert = employees;
 
   // Auto-Druck, sobald die Namen geladen sind - einmal.
   useEffect(() => {
@@ -120,9 +109,6 @@ function Inner() {
             <span>
               <b>Datum:</b>
               <span className="sl-line" />
-            </span>
-            <span>
-              <b>Gruppe:</b> {gruppeLabel || "alle"}
             </span>
             <span>
               <b>Arbeitszeit von</b>
@@ -205,13 +191,5 @@ function Inner() {
         </div>
       </div>
     </div>
-  );
-}
-
-export default function ZuckermaisStrichlistePage() {
-  return (
-    <Suspense fallback={<p className="p-4 text-sm text-neutral-500">Lädt…</p>}>
-      <Inner />
-    </Suspense>
   );
 }

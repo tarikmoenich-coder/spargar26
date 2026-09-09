@@ -553,12 +553,10 @@ export default function PraemienZuckermaisPage() {
         </button>
         <a
           className="btn-secondary"
-          href={`/praemien/zuckermais/strichliste?datum=${datum}${
-            gruppeFilter ? `&gruppe=${encodeURIComponent(gruppeFilter)}` : ""
-          }`}
+          href="/praemien/zuckermais/strichliste"
           target="_blank"
           rel="noopener"
-          title="Leere A3-Strichliste mit aktuellen Namen + Pers.-Nr. zum Ausdrucken und von Hand Führen (Kreuze je Kiste + Nacharbeit)"
+          title="Leere A3-Strichliste mit den für Zuckermais freigegebenen, aktiven Personen zum Ausdrucken und von Hand Führen (Kreuze je Kiste + Nacharbeit)"
         >
           Blanko-Strichliste A3
         </a>
