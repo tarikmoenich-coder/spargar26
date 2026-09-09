@@ -71,7 +71,15 @@ export default function ZuckermaisStrichlistePage() {
   const nacharbeit = Array.from({ length: NACHARBEIT_SPALTEN }, (_, i) => i + 1);
   const leerzeilen = Math.max(0, MIN_ZEILEN - gefiltert.length);
 
+  // Dicke Linie nach jedem 5. Kreuzfeld (5, 10, 15 … = rechte Kante der 5er-
+  // Gruppe), damit die Blöcke 1–5, 6–10 … sauber abgeteilt sind.
   const feldKlasse = (n: number) => "sl-k" + (n % 5 === 0 ? " sl-k5" : "");
+  // Dicke Umrandung um den ganzen Nacharbeit-Block: dicke linke Kante am
+  // ersten, dicke rechte Kante am letzten Feld.
+  const naKlasse = (n: number) =>
+    "sl-na" +
+    (n === 1 ? " sl-na-l" : "") +
+    (n === NACHARBEIT_SPALTEN ? " sl-na-r" : "");
 
   const zeile = (nr: number, name: string, key: string) => (
     <tr key={key}>
@@ -81,7 +89,7 @@ export default function ZuckermaisStrichlistePage() {
         <td key={key + "k" + n} className={feldKlasse(n)}></td>
       ))}
       {nacharbeit.map((n) => (
-        <td key={key + "n" + n} className="sl-na"></td>
+        <td key={key + "n" + n} className={naKlasse(n)}></td>
       ))}
       <td></td>
       <td></td>
@@ -150,7 +158,7 @@ export default function ZuckermaisStrichlistePage() {
                 Name
               </th>
               <th colSpan={KISTEN_SPALTEN}>Kiste i.O. — Kreuz (X) je Kiste</th>
-              <th colSpan={NACHARBEIT_SPALTEN}>
+              <th colSpan={NACHARBEIT_SPALTEN} className="sl-na sl-na-l sl-na-r">
                 Nacharbeit — Fehlercode je abgelehnter Kiste
               </th>
               <th colSpan={3}>Übertrag spargar</th>
@@ -162,7 +170,7 @@ export default function ZuckermaisStrichlistePage() {
                 </th>
               ))}
               {nacharbeit.map((n) => (
-                <th key={"hn" + n}></th>
+                <th key={"hn" + n} className={naKlasse(n)}></th>
               ))}
               <th>Σ i.O.</th>
               <th>Σ NA</th>
