@@ -92,7 +92,7 @@ const items: NavItem[] = [
     href: "/erntewirtschaft",
     label: "Erntewirtschaft",
     icon: Sprout,
-    auchAktivBei: ["/praemien", "/anbau", "/statistik"],
+    auchAktivBei: ["/praemien", "/anbau", "/statistik", "/qualitaet"],
   },
   {
     href: "/kasse",

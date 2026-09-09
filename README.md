@@ -1141,6 +1141,19 @@ Enthalten:
   Legende. A3 quer über benannte `@page` (`strichliste-a3`) in `globals.css`.
   Rückerfassung der handschriftlichen Zahlen (Wochen-Annahmequote je Person,
   Kopplung an „Prämie stornieren") = Phase 2, noch offen.
+  **Qualität – Schichtkontrolle Halle** (Stand 2026-09-09, Migration
+  `migration_2026-10-11_qs_kontrolle.sql`): neuer Menüpunkt Erntewirtschaft →
+  **Qualität** (`/qualitaet`, admin/hr/zeiterfassung/erntewirtschaft
+  erfassen, +lohnabrechnung/management lesen). Handy-tauglich: der Prüfer
+  nimmt in der Halle eine fertige Kiste, prüft 20 Kolben und trägt Datum,
+  Uhrzeit, Schicht (optional), i.O.-Kolben (Stepper) und ein Foto
+  (`capture="environment"`, client-verkleinert auf ~800 px als JPEG-data-URL
+  in `qs_kontrolle.foto`) ein. Mehrere Kontrollen pro Tag. Tabelle
+  `qs_kontrolle` (kulturneutral, `kultur`-Spalte; hier fest `zuckermais`),
+  Sicht `qs_kontrolle_tag` (Tagesaggregat/Quote). Das Ergebnis erscheint als
+  Block „Schichtkontrollen" in `/statistik/zuckermais` (Datum/Uhrzeit/
+  Schicht/i.O.-von-geprüft/Quote-%/Notiz/Foto, Quote < 85 % rot, < 95 %
+  gelb).
   **Erdbeeren**
   (Prämien → Erdbeeren,
   admin/hr/zeiterfassung/erntewirtschaft, Stand 2026-08-09) nach
@@ -1366,12 +1379,12 @@ Breite des Login Feldes. So sieht das nicht gut aus").
 |---|---|---|
 | `admin` | Alle | Voller Zugriff auf alles, inkl. Einstellungen, Kassenprüfungen freigeben, Änderungsprotokoll (Seite "Protokoll") |
 | `hr` | Personal, Stundenerfassung, Suche, Lohn, Erntewirtschaft, Controlling | Personalstamm + Dokumente voll pflegen (inkl. SV-Nr./IBAN/Ausweiskopien), Sozialversicherung + Lohnsteuer erfassen, Personalplanung + Anreiseliste (Kandidaten, Schwarze Liste, Buskosten) verwalten, Stunden erfassen, Lohnübersicht/Vorschüsse nur ansehen (nicht bearbeiten), Prämien erfassen, Monatsabschluss sperren/öffnen |
-| `zeiterfassung` | Stundenerfassung, Suche, Erntewirtschaft (nur Prämien) | Nur Stunden eintragen/ändern; sieht Personal nur mit eingeschränkten Feldern (keine SV-Nr./IBAN etc.); erfasst zusätzlich die Ausgabe von Arbeitskleidung (Stundenerfassung → Arbeitskleidung) sowie Prämien (Kisten/Stunden je Tag) |
+| `zeiterfassung` | Stundenerfassung, Suche, Erntewirtschaft (Prämien + Qualität) | Nur Stunden eintragen/ändern; sieht Personal nur mit eingeschränkten Feldern (keine SV-Nr./IBAN etc.); erfasst zusätzlich die Ausgabe von Arbeitskleidung (Stundenerfassung → Arbeitskleidung), Prämien (Kisten/Stunden je Tag) und die Schichtkontrollen (Erntewirtschaft → Qualität) |
 | `kasse` | Suche, Lohn, Kassenbuch | Vorschüsse erfassen/stornieren/korrigieren, Kassenbuch führen, Kassenprüfung durchführen |
 | `lohnabrechnung` | Suche, Lohn, Erntewirtschaft (Prämien lesen, Statistik) | Lohnübersicht ansehen **und bearbeiten** (Netto, Buskosten, Kautionen, "Jetzt Abrechnen"), **Vorschüsse erstellen/korrigieren**, Prämien ansehen |
 | `pruefer` | Suche, Lohn, Kassenbuch | Nur lesen, außer: Kassenprüfungen freigeben; einzige Nicht-Admin-Rolle mit Audit-Log-Einsicht |
 | `management` | Start, Suche, Lohn, Kassenbuch, Erntewirtschaft, Controlling, Fahrzeuge | Überwiegend lesende/aggregierte Sicht; darf zusätzlich Stundenkonto-Guthaben "In Auszahlung umwandeln" (Vorgabe 2026-08-21) |
-| `erntewirtschaft` | Start, Suche, Erntewirtschaft (Prämien/Anbau/Statistik), Unterkunft | Eigener Arbeitsbereich (Vorgabe 2026-08-09, seither erweitert): erfasst Prämien (wie zeiterfassung), sieht Statistik, pflegt die Anbauplanung, sieht Unterkunft (lesend), eigenes Tages-Dashboard; kein Zugriff auf Personal, Lohnübersicht, Kassenbuch, Controlling, Einstellungen |
+| `erntewirtschaft` | Start, Suche, Erntewirtschaft (Prämien/Anbau/Statistik/Qualität), Unterkunft | Eigener Arbeitsbereich (Vorgabe 2026-08-09, seither erweitert): erfasst Prämien (wie zeiterfassung) und Schichtkontrollen (Qualität), sieht Statistik, pflegt die Anbauplanung, sieht Unterkunft (lesend), eigenes Tages-Dashboard; kein Zugriff auf Personal, Lohnübersicht, Kassenbuch, Controlling, Einstellungen |
 | `hausmeister` | Nur Unterkunft (Reparaturen) | Pflegt in der Unterkunft die laufende Arbeit (Vorgabe 2026-09-15); kein anderer Menüpunkt, auch keine Suche |
 
 Neuen Benutzer anlegen: Supabase-Dashboard → Authentication → Users →

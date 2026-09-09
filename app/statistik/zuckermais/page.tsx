@@ -26,6 +26,7 @@ import ErntewirtschaftTabs from "@/components/ErntewirtschaftTabs";
 import { formatDatumDE, formatMenge } from "@/lib/format";
 import type {
   Employee,
+  QsKontrolle,
   ZuckermaisDruck,
   ZuckermaisPraemieTag,
   ZuckermaisStatistikTag,
@@ -35,6 +36,23 @@ const CURRENT_YEAR = new Date().getFullYear();
 
 function fmt(n: number | null | undefined, nachkomma = 2) {
   return formatMenge(n, nachkomma);
+}
+
+// Schichtkontrollen (qs_kontrolle): Quote in % und Farb-Badge.
+function qsQuote(io: number, gesamt: number): number | null {
+  return gesamt > 0 ? Math.round((io / gesamt) * 1000) / 10 : null;
+}
+function qsBadge(q: number | null): string {
+  if (q === null) return "badge badge-neutral";
+  if (q >= 95) return "badge badge-ok";
+  if (q >= 85) return "badge badge-warn";
+  return "badge badge-danger";
+}
+function qsUhrzeit(iso: string) {
+  return new Date(iso).toLocaleTimeString("de-DE", {
+    hour: "2-digit",
+    minute: "2-digit",
+  });
 }
 
 // Personenauswertung (Nutzer-Vorgabe 2026-08-23: "wen schicke ich zuerst
@@ -97,10 +115,16 @@ export default function StatistikZuckermaisPage() {
   const [druckByDatum, setDruckByDatum] = useState<Record<string, ZuckermaisDruck>>({});
   const [loading, setLoading] = useState(true);
 
+  // Schichtkontrollen (Erntewirtschaft → Qualität, Tabelle qs_kontrolle) für
+  // das gewählte Saison-Jahr. Nutzer-Vorgabe 2026-09-09: das Ergebnis der
+  // Handy-Kontrollen soll auch hier in der Statistik auftauchen.
+  const [qsKontrollen, setQsKontrollen] = useState<QsKontrolle[]>([]);
+  const [qsFoto, setQsFoto] = useState<string | null>(null);
+
   async function load() {
     setLoading(true);
     const supabase = getSupabaseClient();
-    const [{ data, error }, { data: druck }] = await Promise.all([
+    const [{ data, error }, { data: druck }, { data: qs }] = await Promise.all([
       supabase
         .from("zuckermais_statistik_tag")
         .select("*")
@@ -112,6 +136,13 @@ export default function StatistikZuckermaisPage() {
         .select("*")
         .gte("datum", `${jahr}-01-01`)
         .lte("datum", `${jahr}-12-31`),
+      supabase
+        .from("qs_kontrolle")
+        .select("*")
+        .eq("kultur", "zuckermais")
+        .gte("datum", `${jahr}-01-01`)
+        .lte("datum", `${jahr}-12-31`)
+        .order("zeitpunkt", { ascending: false }),
     ]);
     if (!error) setZeilen((data as ZuckermaisStatistikTag[]) ?? []);
     const map: Record<string, ZuckermaisDruck> = {};
@@ -119,6 +150,7 @@ export default function StatistikZuckermaisPage() {
       map[d.datum] = d;
     });
     setDruckByDatum(map);
+    setQsKontrollen((qs as QsKontrolle[]) ?? []);
     setLoading(false);
   }
 
@@ -437,6 +469,94 @@ export default function StatistikZuckermaisPage() {
             </tfoot>
           </table>
         </div>
+      )}
+
+      {!loading && (
+        <div className="mt-4 flex flex-col gap-3 border-t border-linie pt-6">
+          <div>
+            <h2 className="text-base font-semibold text-emerald-800">
+              Schichtkontrollen ({jahr})
+            </h2>
+            <p className="text-sm text-neutral-500">
+              Stichproben-Kontrollen aus der Halle (Erntewirtschaft → Qualität):
+              i.O.-Kolben je Kontrolle, mit Foto. Quote unter 85 % rot, unter
+              95 % gelb.
+            </p>
+          </div>
+          {qsKontrollen.length === 0 ? (
+            <p className="text-sm text-neutral-500">
+              Keine Schichtkontrollen für {jahr} erfasst.
+            </p>
+          ) : (
+            <div className="overflow-x-auto">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Datum</th>
+                    <th>Uhrzeit</th>
+                    <th>Schicht</th>
+                    <th>i.O. / geprüft</th>
+                    <th>Quote</th>
+                    <th>Notiz</th>
+                    <th>Foto</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {qsKontrollen.map((k) => {
+                    const q = qsQuote(k.kolben_io, k.kolben_gesamt);
+                    return (
+                      <tr key={k.id}>
+                        <td>{formatDatumDE(k.datum)}</td>
+                        <td>{qsUhrzeit(k.zeitpunkt)}</td>
+                        <td>
+                          {k.schicht
+                            ? k.schicht === "vormittag"
+                              ? "Vormittag"
+                              : "Nachmittag"
+                            : "—"}
+                        </td>
+                        <td>
+                          {k.kolben_io} / {k.kolben_gesamt}
+                        </td>
+                        <td>
+                          <span className={qsBadge(q)}>{q ?? "—"} %</span>
+                        </td>
+                        <td className="text-sm text-neutral-600">
+                          {k.fehler_notiz ?? "—"}
+                        </td>
+                        <td>
+                          {k.foto ? (
+                            <button
+                              type="button"
+                              onClick={() => setQsFoto(k.foto)}
+                              className="text-emerald-800 underline"
+                            >
+                              ansehen
+                            </button>
+                          ) : (
+                            <span className="text-neutral-300">—</span>
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      )}
+
+      {qsFoto && (
+        <button
+          type="button"
+          onClick={() => setQsFoto(null)}
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4"
+          aria-label="Foto schließen"
+        >
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src={qsFoto} alt="Kontrollfoto" className="max-h-full max-w-full rounded" />
+        </button>
       )}
 
       {kannPersonenauswertungSehen && (

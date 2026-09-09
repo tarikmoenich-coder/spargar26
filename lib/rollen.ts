@@ -38,7 +38,7 @@ export const ROLLEN: RolleInfo[] = [
   {
     wert: "zeiterfassung",
     label: "Stundenerfassung",
-    kurz: "Stunden, Prämien und Arbeitskleidung erfassen. Personal nur mit eingeschränkten Feldern.",
+    kurz: "Stunden, Prämien, Arbeitskleidung und Qualitätskontrollen (Halle) erfassen. Personal nur mit eingeschränkten Feldern.",
   },
   {
     wert: "kasse",
@@ -63,7 +63,7 @@ export const ROLLEN: RolleInfo[] = [
   {
     wert: "erntewirtschaft",
     label: "Erntewirtschaft",
-    kurz: "Prämien + Statistik + Anbauplanung, Unterkunft lesend, eigenes Tages-Dashboard. Kein Personal/Lohn/Kasse/Controlling.",
+    kurz: "Prämien + Statistik + Anbauplanung + Qualitätskontrolle (Halle), Unterkunft lesend, eigenes Tages-Dashboard. Kein Personal/Lohn/Kasse/Controlling.",
   },
   {
     wert: "hausmeister",
@@ -133,6 +133,14 @@ export const MENUE_RECHTE: Record<string, UserRole[]> = {
   "/statistik/zuckermais": [
     "admin",
     "hr",
+    "lohnabrechnung",
+    "management",
+    "erntewirtschaft",
+  ],
+  "/qualitaet": [
+    "admin",
+    "hr",
+    "zeiterfassung",
     "lohnabrechnung",
     "management",
     "erntewirtschaft",

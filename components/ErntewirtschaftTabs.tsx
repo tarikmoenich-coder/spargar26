@@ -13,7 +13,7 @@ import { useProfile } from "@/lib/useProfile";
 import { MENUE_RECHTE } from "@/lib/rollen";
 import type { UserRole } from "@/lib/types";
 
-type BereichKey = "praemien" | "anbau" | "statistik";
+type BereichKey = "praemien" | "anbau" | "statistik" | "qualitaet";
 
 const BEREICHE: {
   key: BereichKey;
@@ -59,6 +59,14 @@ const BEREICHE: {
       { href: "/statistik/spargel", label: "Spargel" },
       { href: "/statistik/erdbeeren", label: "Erdbeeren" },
     ],
+  },
+  {
+    key: "qualitaet",
+    label: "Qualität",
+    href: "/qualitaet",
+    prefix: "/qualitaet",
+    rechteKey: "/qualitaet",
+    unter: [],
   },
 ];
 

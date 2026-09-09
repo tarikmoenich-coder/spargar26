@@ -2671,6 +2671,57 @@ alter view zuckermais_statistik_tag reset (security_invoker);
 grant select on zuckermais_statistik_tag to authenticated;
 
 -- ---------------------------------------------------------------------------
+-- 6a2. Qualitätskontrolle Halle (Nutzer-Vorgabe 2026-09-09, Menüpunkt
+--      "Erntewirtschaft → Qualität"). Der Prüfer steht mit dem Handy in der
+--      Halle, nimmt eine fertige Kiste, kontrolliert 20 Kolben und hält
+--      Datum/Uhrzeit/Ergebnis/Foto direkt in der App fest. Eine oder mehrere
+--      Kontrollen pro Tag; das Ergebnis erscheint auch in
+--      /statistik/zuckermais. Kulturneutral (kultur-Spalte), auch wenn
+--      erstmal nur die Zuckermais-Halle damit arbeitet.
+--      Migration migration_2026-10-11_qs_kontrolle.sql.
+-- ---------------------------------------------------------------------------
+create table qs_kontrolle (
+  id bigint generated always as identity primary key,
+  kultur text not null default 'zuckermais'
+    check (kultur in ('zuckermais', 'erdbeeren', 'spargel')),
+  datum date not null default current_date,
+  zeitpunkt timestamptz not null default now(),
+  schicht text check (schicht in ('vormittag', 'nachmittag')),
+  kolben_gesamt int not null default 20 check (kolben_gesamt between 1 and 200),
+  kolben_io int not null check (kolben_io >= 0),
+  fehler_notiz text,
+  -- JPEG-data-URL, client-seitig verkleinert (~800 px) - wie fahrzeug.bild,
+  -- kein Storage-Bucket nötig, erbt die Tabellen-RLS.
+  foto text,
+  erfasst_von uuid references profiles (id) default auth.uid(),
+  erfasst_am timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  constraint qs_kontrolle_io_le_gesamt check (kolben_io <= kolben_gesamt)
+);
+
+create index idx_qs_kontrolle_kultur_datum
+  on qs_kontrolle (kultur, datum desc, zeitpunkt desc);
+
+-- Tagesaggregat je Kultur (Anzahl Kontrollen, Tagesquote %, schlechteste
+-- Einzelkontrolle) - für die Statistik.
+create or replace view qs_kontrolle_tag as
+select
+  kultur,
+  datum,
+  count(*)::int as kontrollen,
+  sum(kolben_io)::int as kolben_io,
+  sum(kolben_gesamt)::int as kolben_gesamt,
+  round(sum(kolben_io)::numeric / nullif(sum(kolben_gesamt), 0) * 100, 1)
+    as quote_prozent,
+  min(round(kolben_io::numeric / nullif(kolben_gesamt, 0) * 100, 1))
+    as quote_min_prozent
+from qs_kontrolle
+group by kultur, datum;
+
+alter view qs_kontrolle_tag set (security_invoker = true);
+grant select on qs_kontrolle_tag to authenticated;
+
+-- ---------------------------------------------------------------------------
 -- 6b. Prämien Erdbeeren (Nutzer-Vorgabe 2026-08-09) - gleiches Grundmuster
 --     wie Zuckermais (Strichliste je Mitarbeiter/Tag), aber mit einem
 --     wichtigen Unterschied: es wird auf mehreren Parzellen gleichzeitig
@@ -3962,6 +4013,9 @@ create trigger trg_audit_work_entries
 create trigger trg_audit_zuckermais_rohdaten
   after insert or update or delete on zuckermais_rohdaten
   for each row execute function write_audit_log();
+create trigger trg_audit_qs_kontrolle
+  after insert or update or delete on qs_kontrolle
+  for each row execute function write_audit_log();
 create trigger trg_audit_erdbeeren_rohdaten
   after insert or update or delete on erdbeeren_rohdaten
   for each row execute function write_audit_log();
@@ -4085,6 +4139,8 @@ create trigger trg_work_entries_updated_at before update on work_entries
   for each row execute function set_updated_at_and_version();
 create trigger trg_zuckermais_rohdaten_updated_at before update on zuckermais_rohdaten
   for each row execute function set_updated_at_and_version();
+create trigger trg_qs_kontrolle_updated_at before update on qs_kontrolle
+  for each row execute function set_updated_at();
 create trigger trg_erdbeeren_rohdaten_updated_at before update on erdbeeren_rohdaten
   for each row execute function set_updated_at_and_version();
 create trigger trg_erdbeeren_anbau_updated_at before update on erdbeeren_anbau
@@ -5124,6 +5180,7 @@ alter table verpflegungssaetze enable row level security;
 alter table zuckermais_rohdaten enable row level security;
 alter table zuckermais_saetze enable row level security;
 alter table zuckermais_druck enable row level security;
+alter table qs_kontrolle enable row level security;
 alter table erdbeeren_parzellen enable row level security;
 alter table erdbeeren_anbau enable row level security;
 alter table erdbeeren_tunnel enable row level security;
@@ -5451,6 +5508,17 @@ create policy "zuckermais_druck_select" on zuckermais_druck for select
 create policy "zuckermais_druck_write" on zuckermais_druck for all
   using (current_role_name() in ('admin', 'hr', 'zeiterfassung', 'erntewirtschaft'))
   with check (current_role_name() in ('admin', 'hr', 'zeiterfassung', 'erntewirtschaft'));
+
+-- Qualitätskontrolle Halle: lesen alle Angemeldeten (Statistik), erfassen/
+-- ändern wie die Prämien-Rohdaten, löschen nur admin/hr/erntewirtschaft.
+create policy "qs_kontrolle_select" on qs_kontrolle for select
+  using (auth.uid() is not null);
+create policy "qs_kontrolle_insert" on qs_kontrolle for insert
+  with check (current_role_name() in ('admin', 'hr', 'zeiterfassung', 'erntewirtschaft'));
+create policy "qs_kontrolle_update" on qs_kontrolle for update
+  using (current_role_name() in ('admin', 'hr', 'zeiterfassung', 'erntewirtschaft'));
+create policy "qs_kontrolle_delete" on qs_kontrolle for delete
+  using (current_role_name() in ('admin', 'hr', 'erntewirtschaft'));
 
 -- Erdbeeren-Prämien: gleiches Muster wie Zuckermais. Parzellen-Stammdaten
 -- (Name/Größe/Sorte/Pflanzenanzahl) und ihre Sätze (Norm/Bonus je

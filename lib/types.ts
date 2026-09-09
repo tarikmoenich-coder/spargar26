@@ -985,6 +985,38 @@ export interface ZuckermaisDruck {
   zuletzt_gedruckt_von: string | null;
 }
 
+// Qualitätskontrolle Halle (Nutzer-Vorgabe 2026-09-09) - Menüpunkt
+// "Erntewirtschaft → Qualität". Eine Stichprobe von (i.d.R.) 20 Kolben aus
+// einer fertigen Kiste, mit Foto, mehrmals pro Tag möglich.
+export type QsKultur = "zuckermais" | "erdbeeren" | "spargel";
+export type QsSchicht = "vormittag" | "nachmittag";
+
+export interface QsKontrolle {
+  id: number;
+  kultur: QsKultur;
+  datum: string;
+  zeitpunkt: string;
+  schicht: QsSchicht | null;
+  kolben_gesamt: number;
+  kolben_io: number;
+  fehler_notiz: string | null;
+  foto: string | null; // JPEG-data-URL, client-verkleinert
+  erfasst_von: string | null;
+  erfasst_am: string;
+  updated_at: string;
+}
+
+// Aus der Sicht qs_kontrolle_tag - Tagesaggregat je Kultur.
+export interface QsKontrolleTag {
+  kultur: QsKultur;
+  datum: string;
+  kontrollen: number;
+  kolben_io: number;
+  kolben_gesamt: number;
+  quote_prozent: number | null;
+  quote_min_prozent: number | null;
+}
+
 // Prämien Erdbeeren (Nutzer-Vorgabe 2026-08-09) - Norm/Bonus je Parzelle
 // UND Tag statt global (anders als Zuckermais), da auf mehreren Parzellen
 // mit sehr unterschiedlichen Gegebenheiten gleichzeitig gepflückt wird.
