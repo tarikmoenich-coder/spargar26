@@ -387,11 +387,17 @@ input[type="number"]::-webkit-inner-spin-button {
   line-height: 1.35;
 }
 
+/* Start-/Ende-Zelle (Arbeitszeit je Person, über beide Zeilen). */
+.strichliste-print .sl-tab .sl-se {
+  vertical-align: top;
+}
+
 /* Bildschirm: Spalten grob halten, damit die Vorschau lesbar bleibt. */
 .strichliste-print .sl-tab .c-nr { width: 28px; }
 .strichliste-print .sl-tab .c-name { width: 180px; }
+.strichliste-print .sl-tab .c-se { width: 34px; }
 .strichliste-print .sl-tab .c-k { width: 32px; }
-.strichliste-print .sl-tab .c-na { width: 30px; }
+.strichliste-print .sl-tab .c-na { width: 32px; }
 .strichliste-print .sl-tab .c-sum { width: 52px; }
 
 @media print {
@@ -413,13 +419,16 @@ input[type="number"]::-webkit-inner-spin-button {
     min-width: 0;
   }
   /* Druck-Spaltenbreiten in mm - Kreuz-/Nacharbeit-Felder ~quadratisch
-     (10 mm, Zeilenhöhe je Zeile 10 mm → Person 20 mm). Summe:
-     9 + 46 + 20·10 + 12·9 + 3·13 = 402 mm bei ~408 mm nutzbar auf A3 quer. */
+     (10 mm, Zeilenhöhe je Zeile 10 mm → Person 20 mm). Start/Ende 10 breit,
+     über beide Zeilen 20 hoch. Summe:
+     9 + 42 + 10 + 20·10 + 10 + 10·9 + 3·12 = 407 mm bei ~408 mm nutzbar auf
+     A3 quer. */
   .strichliste-print .sl-tab .c-nr { width: 9mm; }
-  .strichliste-print .sl-tab .c-name { width: 46mm; }
+  .strichliste-print .sl-tab .c-name { width: 42mm; }
+  .strichliste-print .sl-tab .c-se { width: 10mm; }
   .strichliste-print .sl-tab .c-k { width: 10mm; }
   .strichliste-print .sl-tab .c-na { width: 9mm; }
-  .strichliste-print .sl-tab .c-sum { width: 13mm; }
+  .strichliste-print .sl-tab .c-sum { width: 12mm; }
   .strichliste-print .sl-tab thead {
     display: table-header-group;
   }

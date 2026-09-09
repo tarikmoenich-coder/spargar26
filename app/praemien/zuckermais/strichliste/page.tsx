@@ -39,8 +39,8 @@ const FEHLER_CODES: { code: string; text: string }[] = [
   { code: "N4", text: "Druckstelle" },
 ];
 
-const KISTEN_PRO_ZEILE = 20; // obere Zeile 1-20, untere 21-40
-const NACHARBEIT_SPALTEN = 12;
+const KISTEN_PRO_ZEILE = 20; // obere Zeile Kiste 1-20, untere 21-40
+const NACHARBEIT_PRO_ZEILE = 10; // obere Zeile Nacharbeit 1-10, untere 11-20
 const BLOCK = 10; // dicke Linie nach jedem 10. Kreuzfeld
 const MIN_PERSONEN = 20; // mind. so viele Personen-Blöcke drucken (Reserve)
 
@@ -50,13 +50,15 @@ type Zeile = { key: string; nr: number; name: string };
 // 1-10, 11-20 oben; darunter 21-30, 31-40).
 const feldKlasse = (spalte: number) =>
   "sl-k" + (spalte % BLOCK === 0 ? " sl-kblock" : "");
+// Nacharbeit-Block: dicke Aussenkanten + dicke Linie nach jeder 5. Spalte.
 const naKlasse = (n: number) =>
   "sl-na" +
   (n === 1 ? " sl-na-l" : "") +
-  (n === NACHARBEIT_SPALTEN ? " sl-na-r" : "");
+  (n === NACHARBEIT_PRO_ZEILE ? " sl-na-r" : "") +
+  (n % 5 === 0 ? " sl-kblock" : "");
 
 const spalten = Array.from({ length: KISTEN_PRO_ZEILE }, (_, i) => i + 1);
-const na = Array.from({ length: NACHARBEIT_SPALTEN }, (_, i) => i + 1);
+const na = Array.from({ length: NACHARBEIT_PRO_ZEILE }, (_, i) => i + 1);
 
 function Person({ z }: { z: Zeile }) {
   return (
@@ -68,11 +70,13 @@ function Person({ z }: { z: Zeile }) {
         <td className="sl-l" rowSpan={2}>
           {z.name}
         </td>
+        <td className="sl-se" rowSpan={2}></td>
         {spalten.map((n) => (
           <td key={z.key + "a" + n} className={feldKlasse(n)}></td>
         ))}
+        <td className="sl-se" rowSpan={2}></td>
         {na.map((n) => (
-          <td key={z.key + "n" + n} className={naKlasse(n)} rowSpan={2}></td>
+          <td key={z.key + "na" + n} className={naKlasse(n)}></td>
         ))}
         <td rowSpan={2}></td>
         <td rowSpan={2}></td>
@@ -81,6 +85,9 @@ function Person({ z }: { z: Zeile }) {
       <tr className="sl-pb">
         {spalten.map((n) => (
           <td key={z.key + "b" + n} className={feldKlasse(n)}></td>
+        ))}
+        {na.map((n) => (
+          <td key={z.key + "nb" + n} className={naKlasse(n)}></td>
         ))}
       </tr>
     </tbody>
@@ -171,9 +178,11 @@ export default function ZuckermaisStrichlistePage() {
           <colgroup>
             <col className="c-nr" />
             <col className="c-name" />
+            <col className="c-se" />
             {spalten.map((n) => (
               <col key={"c" + n} className="c-k" />
             ))}
+            <col className="c-se" />
             {na.map((n) => (
               <col key={"cn" + n} className="c-na" />
             ))}
@@ -187,16 +196,19 @@ export default function ZuckermaisStrichlistePage() {
               <th rowSpan={2} className="sl-l">
                 Name
               </th>
+              <th rowSpan={2}>Start</th>
               <th colSpan={KISTEN_PRO_ZEILE}>
                 Kiste i.O. — Kreuz (X) je Kiste · obere Zeile 1–
                 {KISTEN_PRO_ZEILE}, untere Zeile {KISTEN_PRO_ZEILE + 1}–
                 {KISTEN_PRO_ZEILE * 2}
               </th>
+              <th rowSpan={2}>Ende</th>
               <th
-                colSpan={NACHARBEIT_SPALTEN}
+                colSpan={NACHARBEIT_PRO_ZEILE}
                 className="sl-na sl-na-l sl-na-r"
               >
-                Nacharbeit — Fehlercode je abgelehnter Kiste
+                Nacharbeit — Fehlercode · obere Zeile 1–{NACHARBEIT_PRO_ZEILE},
+                untere {NACHARBEIT_PRO_ZEILE + 1}–{NACHARBEIT_PRO_ZEILE * 2}
               </th>
               <th colSpan={3}>Übertrag spargar</th>
             </tr>
@@ -208,7 +220,10 @@ export default function ZuckermaisStrichlistePage() {
                 </th>
               ))}
               {na.map((n) => (
-                <th key={"hn" + n} className={naKlasse(n)}></th>
+                <th key={"hn" + n} className={naKlasse(n)}>
+                  {n}
+                  <span className="sl-u">{n + NACHARBEIT_PRO_ZEILE}</span>
+                </th>
               ))}
               <th>Σ i.O.</th>
               <th>Σ NA</th>
@@ -223,7 +238,10 @@ export default function ZuckermaisStrichlistePage() {
         <div className="sl-legende">
           <b>X</b> = Kiste i.O. — obere Zeile Kiste 1–{KISTEN_PRO_ZEILE}, untere
           Zeile {KISTEN_PRO_ZEILE + 1}–{KISTEN_PRO_ZEILE * 2}. &nbsp;·&nbsp;{" "}
-          <b>Nacharbeit-Feld:</b> Fehlercode eintragen —{" "}
+          <b>Start / Ende:</b> Arbeitszeit dieser Person. &nbsp;·&nbsp;{" "}
+          <b>Nacharbeit-Feld:</b> Fehlercode eintragen (obere Zeile 1–
+          {NACHARBEIT_PRO_ZEILE}, untere {NACHARBEIT_PRO_ZEILE + 1}–
+          {NACHARBEIT_PRO_ZEILE * 2}) —{" "}
           {FEHLER_CODES.map((c) => `${c.code} ${c.text}`).join(" · ")}{" "}
           &nbsp;·&nbsp; nachgearbeitet &amp; i.O. = Häkchen, verworfen = Code
           einkreisen. &nbsp;·&nbsp; Unterbrechungen als Uhrzeit ins jeweilige

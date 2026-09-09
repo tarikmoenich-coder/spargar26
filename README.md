@@ -1129,13 +1129,16 @@ Enthalten:
   A3-Papierliste ab - Namen kommen live aus dem Personalstamm (genau
   `praemien_zuckermais = true` + `aktiv = true`, kein weiterer Gruppenfilter),
   sind also nie veraltet, ohne Pers.-Nr. A3 quer, **zwei Tabellen-Zeilen je
-  Person** untereinander (obere = Kreuzfelder 1–20, untere = 21–40), rechts
-  je Person über beide Zeilen: 12 Nacharbeit-Felder (grau, dick umrandet) +
-  „Übertrag spargar" (Σ i.O. / Σ NA / Std.). Alles zu einer Person steht
-  zusammen (`<tbody>` je Person, `break-inside: avoid`) - kein Blättern beim
-  Zusammenaddieren; bei vielen Personen läuft die Liste nach unten auf Seite
-  2. Felder ~quadratisch (10 mm), dicke Linie nach jedem 10. Kreuzfeld
-  (Block 1–10 …). Kopf: Datum · Arbeitszeit von…bis · Pause(n) ·
+  Person** untereinander: obere = Kreuzfelder 1–20, untere = 21–40; ebenso
+  der Nacharbeit-Block 10 Spalten × 2 Zeilen (obere 1–10, untere 11–20, grau,
+  dick umrandet). Je Person über beide Zeilen (rowSpan, 10 mm breit × 20 mm
+  hoch): **Start** und **Ende** (Arbeitszeit der Person, links bzw. rechts
+  vom Kreuz-Block) sowie rechts „Übertrag spargar" (Σ i.O. / Σ NA / Std.).
+  Alles zu einer Person steht zusammen (`<tbody>` je Person,
+  `break-inside: avoid`) - kein Blättern beim Zusammenaddieren; bei vielen
+  Personen läuft die Liste nach unten auf Seite 2. Felder ~quadratisch
+  (10 mm), dicke Linie nach jedem 10. Kreuzfeld / 5. Nacharbeit-Feld. Kopf:
+  Datum · Arbeitszeit von…bis · Pause(n) ·
   „Schichtmuster gezogen ☐  Ergebnis __/20 Kolben i.O." · Prüfer. Fehlercodes
   zentral als `FEHLER_CODES` oben in der Seite, erscheinen 1:1 in der
   Legende. A3 quer über benannte `@page` (`strichliste-a3`) in `globals.css`.

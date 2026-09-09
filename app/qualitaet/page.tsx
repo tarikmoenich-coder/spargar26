@@ -38,6 +38,11 @@ function uhrzeit(iso: string) {
     minute: "2-digit",
   });
 }
+// Schicht automatisch aus der Uhrzeit: ab 14:00 Nachmittag, davor Vormittag.
+function schichtAusZeit(hhmm: string): QsSchicht {
+  const stunde = Number((hhmm || "").slice(0, 2));
+  return Number.isFinite(stunde) && stunde >= 14 ? "nachmittag" : "vormittag";
+}
 
 function quote(io: number, gesamt: number): number | null {
   return gesamt > 0 ? Math.round((io / gesamt) * 1000) / 10 : null;
@@ -95,9 +100,13 @@ export default function QualitaetPage() {
   // --- Formular ---
   const [datum, setDatum] = useState(heuteIso());
   const [zeit, setZeit] = useState(jetztHhmm());
-  const [schicht, setSchicht] = useState<QsSchicht | "">("");
+  // Standardmäßig aus der Uhrzeit abgeleitet; per Knopf überschreibbar.
+  const [schicht, setSchicht] = useState<QsSchicht>(() =>
+    schichtAusZeit(jetztHhmm())
+  );
   const [kolbenGesamt, setKolbenGesamt] = useState(STANDARD_KOLBEN);
-  const [kolbenIo, setKolbenIo] = useState<number | "">("");
+  // Startwert = alle i.O.; runterkorrigiert wird vorrangig mit „−".
+  const [kolbenIo, setKolbenIo] = useState<number>(STANDARD_KOLBEN);
   const [notiz, setNotiz] = useState("");
   const [foto, setFoto] = useState<string | null>(null);
   const [fotoLaeuft, setFotoLaeuft] = useState(false);
@@ -144,16 +153,17 @@ export default function QualitaetPage() {
   }
 
   function formularZuruecksetzen() {
-    setZeit(jetztHhmm());
-    setKolbenIo("");
+    const jetzt = jetztHhmm();
+    setZeit(jetzt);
+    setSchicht(schichtAusZeit(jetzt));
+    setKolbenIo(kolbenGesamt);
     setNotiz("");
     setFoto(null);
-    // datum, schicht und kolbenGesamt bewusst stehen lassen (nächste
-    // Kontrolle derselben Schicht ist wahrscheinlich).
+    // datum und kolbenGesamt bewusst stehen lassen.
   }
 
   async function speichernKontrolle() {
-    const io = typeof kolbenIo === "number" ? kolbenIo : NaN;
+    const io = kolbenIo;
     if (!Number.isFinite(io) || io < 0 || io > kolbenGesamt) {
       setFehler(`Bitte i.O.-Kolben zwischen 0 und ${kolbenGesamt} eintragen.`);
       return;
@@ -167,7 +177,7 @@ export default function QualitaetPage() {
       kultur: KULTUR,
       datum,
       zeitpunkt,
-      schicht: schicht || null,
+      schicht,
       kolben_gesamt: kolbenGesamt,
       kolben_io: io,
       fehler_notiz: notiz.trim() || null,
@@ -201,8 +211,7 @@ export default function QualitaetPage() {
     ladeListe();
   }
 
-  const io = typeof kolbenIo === "number" ? kolbenIo : null;
-  const vorschau = io !== null ? quote(io, kolbenGesamt) : null;
+  const vorschau = quote(kolbenIo, kolbenGesamt);
 
   const heuteZusammenfassung = useMemo(() => {
     const heute = liste.filter((k) => k.datum === heuteIso());
@@ -283,21 +292,26 @@ export default function QualitaetPage() {
                 type="time"
                 className="mt-1 w-full"
                 value={zeit}
-                onChange={(e) => setZeit(e.target.value)}
+                onChange={(e) => {
+                  setZeit(e.target.value);
+                  setSchicht(schichtAusZeit(e.target.value));
+                }}
               />
             </label>
           </div>
 
           <div className="text-sm">
-            Schicht
+            Schicht{" "}
+            <span className="text-xs text-neutral-400">
+              (automatisch aus der Uhrzeit, ab 14:00 Nachmittag)
+            </span>
             <div className="mt-1 flex gap-2">
               {([
-                ["", "—"],
                 ["vormittag", "Vormittag"],
                 ["nachmittag", "Nachmittag"],
-              ] as [QsSchicht | "", string][]).map(([wert, label]) => (
+              ] as [QsSchicht, string][]).map(([wert, label]) => (
                 <button
-                  key={label}
+                  key={wert}
                   type="button"
                   onClick={() => setSchicht(wert)}
                   className={
@@ -313,16 +327,16 @@ export default function QualitaetPage() {
           </div>
 
           <div className="text-sm">
-            i.O.-Kolben
+            i.O.-Kolben{" "}
+            <span className="text-xs text-neutral-400">
+              (Start = alle i.O., mit „−" runterkorrigieren)
+            </span>
             <div className="mt-1 flex items-center gap-3">
               <button
                 type="button"
-                className="btn-secondary h-10 w-10 text-lg"
-                onClick={() =>
-                  setKolbenIo((v) =>
-                    Math.max(0, (typeof v === "number" ? v : 0) - 1)
-                  )
-                }
+                aria-label="einen weniger"
+                className="btn-secondary h-11 w-11 text-xl"
+                onClick={() => setKolbenIo((v) => Math.max(0, v - 1))}
               >
                 −
               </button>
@@ -335,21 +349,18 @@ export default function QualitaetPage() {
                 value={kolbenIo}
                 onChange={(e) =>
                   setKolbenIo(
-                    e.target.value === "" ? "" : Number(e.target.value)
+                    Math.max(
+                      0,
+                      Math.min(kolbenGesamt, Number(e.target.value) || 0)
+                    )
                   )
                 }
               />
               <button
                 type="button"
-                className="btn-secondary h-10 w-10 text-lg"
-                onClick={() =>
-                  setKolbenIo((v) =>
-                    Math.min(
-                      kolbenGesamt,
-                      (typeof v === "number" ? v : 0) + 1
-                    )
-                  )
-                }
+                aria-label="einen mehr"
+                className="btn-secondary h-11 w-11 text-xl"
+                onClick={() => setKolbenIo((v) => Math.min(kolbenGesamt, v + 1))}
               >
                 +
               </button>
@@ -362,9 +373,11 @@ export default function QualitaetPage() {
                   max={200}
                   className="w-16 text-center"
                   value={kolbenGesamt}
-                  onChange={(e) =>
-                    setKolbenGesamt(Math.max(1, Number(e.target.value) || 1))
-                  }
+                  onChange={(e) => {
+                    const g = Math.max(1, Number(e.target.value) || 1);
+                    setKolbenGesamt(g);
+                    setKolbenIo((v) => Math.min(v, g));
+                  }}
                 />{" "}
                 Kolben
               </span>
