@@ -268,10 +268,12 @@ input[type="number"]::-webkit-inner-spin-button {
 
 /* ---------------------------------------------------------------------------
    Blanko-Strichliste Zuckermais (app/praemien/zuckermais/strichliste) -
-   ZWEI A3-Querseiten zum Ausdrucken und von Hand Führen. Seite 1: Kreuzfelder
-   1-22 + 12 Nacharbeit-Felder. Seite 2: Kreuzfelder 23-42 + 10 Nacharbeit-
-   Felder + "Übertrag spargar". Felder ~quadratisch (10 mm). Namen aus dem
-   Personalstamm, damit die Liste nie veraltet. Nutzer-Vorgabe 2026-09-09.
+   A3 quer, ZWEI Zeilen je Person untereinander (obere = Kreuzfelder 1-20,
+   untere = 21-40), rechts je Person über beide Zeilen: 12 Nacharbeit-Felder
+   + "Übertrag spargar" (Σ i.O./Σ NA/Std.). Felder ~quadratisch (10 mm),
+   dicke Linie nach jedem 10. Kreuzfeld. Läuft bei vielen Personen nach unten
+   auf Seite 2. Ein <tbody> je Person (bleibt beim Seitenumbruch zusammen).
+   Namen aus dem Personalstamm. Nutzer-Vorgabe 2026-09-09.
    --------------------------------------------------------------------------- */
 .strichliste-print .sl-bar {
   display: flex;
@@ -295,18 +297,10 @@ input[type="number"]::-webkit-inner-spin-button {
   flex-wrap: wrap;
   margin-bottom: 6pt;
 }
-.strichliste-print .sl-kopf.sl-kopf-kurz {
-  margin-bottom: 4pt;
-}
 .strichliste-print .sl-titel {
   font-weight: 700;
   font-size: 16pt;
   white-space: nowrap;
-}
-.strichliste-print .sl-seite {
-  font-size: 10pt;
-  font-weight: 500;
-  color: #555;
 }
 .strichliste-print .sl-felder {
   display: flex;
@@ -358,8 +352,15 @@ input[type="number"]::-webkit-inner-spin-button {
 .strichliste-print .sl-tab td {
   height: 10mm;
 }
-/* Dicke Linie an der RECHTEN Kante jedes 5. Kreuzfelds (5, 10, 15 …). */
-.strichliste-print .sl-tab .sl-k5 {
+/* kleine Nummer der unteren Zeile (n+20) unter der oberen Nummer im Kopf */
+.strichliste-print .sl-tab .sl-u {
+  display: block;
+  font-size: 8pt;
+  font-weight: 400;
+  color: #555;
+}
+/* Dicke Linie an der rechten Kante jedes 10. Kreuzfelds (Block 1-10, 11-20). */
+.strichliste-print .sl-tab .sl-kblock {
   border-right-width: 1.6pt;
 }
 .strichliste-print .sl-tab .sl-na {
@@ -374,7 +375,10 @@ input[type="number"]::-webkit-inner-spin-button {
 .strichliste-print .sl-tab .sl-na-r {
   border-right-width: 1.6pt;
 }
-.strichliste-print .sl-tab tbody tr:last-child .sl-na {
+/* Kräftigere Linie unter jeder Person (untere Zeile + die über beide Zeilen
+   gehenden Zellen Nr/Name/Nacharbeit/Übertrag) - trennt die Personen-Blöcke. */
+.strichliste-print .sl-tab .sl-pb td,
+.strichliste-print .sl-tab .sl-pa td[rowspan] {
   border-bottom-width: 1.6pt;
 }
 .strichliste-print .sl-legende {
@@ -382,14 +386,11 @@ input[type="number"]::-webkit-inner-spin-button {
   font-size: 9pt;
   line-height: 1.35;
 }
-.strichliste-print .sl-legende.sl-legende-kurz {
-  font-size: 9.5pt;
-}
 
 /* Bildschirm: Spalten grob halten, damit die Vorschau lesbar bleibt. */
 .strichliste-print .sl-tab .c-nr { width: 28px; }
 .strichliste-print .sl-tab .c-name { width: 180px; }
-.strichliste-print .sl-tab .c-k { width: 30px; }
+.strichliste-print .sl-tab .c-k { width: 32px; }
 .strichliste-print .sl-tab .c-na { width: 30px; }
 .strichliste-print .sl-tab .c-sum { width: 52px; }
 
@@ -408,25 +409,22 @@ input[type="number"]::-webkit-inner-spin-button {
     overflow: visible;
     padding: 0;
   }
-  /* Seite 2 beginnt auf einer neuen A3-Seite. */
-  .strichliste-print .sl-seite2 {
-    break-before: page;
-  }
   .strichliste-print .sl-tab {
     min-width: 0;
   }
   /* Druck-Spaltenbreiten in mm - Kreuz-/Nacharbeit-Felder ~quadratisch
-     (10 mm, Zeilenhöhe ebenfalls 10 mm). Seite 1: 9+52+22·10+12·10 = 401 mm.
-     Seite 2: 9+52+20·10+10·10+3·14 = 403 mm. A3 quer ~408 mm nutzbar. */
+     (10 mm, Zeilenhöhe je Zeile 10 mm → Person 20 mm). Summe:
+     9 + 46 + 20·10 + 12·9 + 3·13 = 402 mm bei ~408 mm nutzbar auf A3 quer. */
   .strichliste-print .sl-tab .c-nr { width: 9mm; }
-  .strichliste-print .sl-tab .c-name { width: 52mm; }
+  .strichliste-print .sl-tab .c-name { width: 46mm; }
   .strichliste-print .sl-tab .c-k { width: 10mm; }
-  .strichliste-print .sl-tab .c-na { width: 10mm; }
-  .strichliste-print .sl-tab .c-sum { width: 14mm; }
+  .strichliste-print .sl-tab .c-na { width: 9mm; }
+  .strichliste-print .sl-tab .c-sum { width: 13mm; }
   .strichliste-print .sl-tab thead {
     display: table-header-group;
   }
-  .strichliste-print .sl-tab tr {
+  /* Personen-Block (2 Zeilen) beim Seitenumbruch zusammenhalten. */
+  .strichliste-print .sl-tab tbody.sl-person {
     break-inside: avoid;
   }
 }

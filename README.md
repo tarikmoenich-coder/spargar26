@@ -1128,18 +1128,19 @@ Enthalten:
   druckt sich nach dem Laden selbst. Löst die von Hand gepflegte
   A3-Papierliste ab - Namen kommen live aus dem Personalstamm (genau
   `praemien_zuckermais = true` + `aktiv = true`, kein weiterer Gruppenfilter),
-  sind also nie veraltet, ohne Pers.-Nr. Zwei A3-Querseiten mit denselben
-  Personen-Zeilen (gleiche Zeilenhöhe, fluchten nebeneinander): **Seite 1**
-  Kreuzfelder 1–22 + 12 Nacharbeit-Felder, **Seite 2** Kreuzfelder 23–42 +
-  10 Nacharbeit-Felder + „Übertrag spargar" (Σ i.O. / Σ NA / Std.). Felder
-  ~quadratisch (10 mm), dicke Linie nach jedem 5. Kreuzfeld, Nacharbeit-Block
-  grau + dick umrandet. Kopf: Datum · Arbeitszeit von…bis · Pause(n) ·
+  sind also nie veraltet, ohne Pers.-Nr. A3 quer, **zwei Tabellen-Zeilen je
+  Person** untereinander (obere = Kreuzfelder 1–20, untere = 21–40), rechts
+  je Person über beide Zeilen: 12 Nacharbeit-Felder (grau, dick umrandet) +
+  „Übertrag spargar" (Σ i.O. / Σ NA / Std.). Alles zu einer Person steht
+  zusammen (`<tbody>` je Person, `break-inside: avoid`) - kein Blättern beim
+  Zusammenaddieren; bei vielen Personen läuft die Liste nach unten auf Seite
+  2. Felder ~quadratisch (10 mm), dicke Linie nach jedem 10. Kreuzfeld
+  (Block 1–10 …). Kopf: Datum · Arbeitszeit von…bis · Pause(n) ·
   „Schichtmuster gezogen ☐  Ergebnis __/20 Kolben i.O." · Prüfer. Fehlercodes
   zentral als `FEHLER_CODES` oben in der Seite, erscheinen 1:1 in der
-  Legende. A3 quer über benannte `@page` (`strichliste-a3`) in `globals.css`,
-  Seite 2 per `break-before: page`. Rückerfassung der handschriftlichen
-  Zahlen (Wochen-Annahmequote je Person, Kopplung an „Prämie stornieren") =
-  Phase 2, noch offen.
+  Legende. A3 quer über benannte `@page` (`strichliste-a3`) in `globals.css`.
+  Rückerfassung der handschriftlichen Zahlen (Wochen-Annahmequote je Person,
+  Kopplung an „Prämie stornieren") = Phase 2, noch offen.
   **Erdbeeren**
   (Prämien → Erdbeeren,
   admin/hr/zeiterfassung/erntewirtschaft, Stand 2026-08-09) nach

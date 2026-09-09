@@ -1,17 +1,21 @@
 "use client";
 
-// Blanko-Strichliste Zuckermais zum Ausdrucken (Nutzer-Vorgabe 2026-09-09,
-// auf 2 A3-Seiten verbreitert 2026-09-09) - ersetzt die von Hand gepflegte
-// A3-Papierliste. Wird BLANKO gedruckt; die Halle trägt Datum und
-// Arbeitszeiten selbst ein. Personen: genau die für Zuckermais
-// freigegebenen, aktiven (employees.praemien_zuckermais = true, aktiv = true)
-// - kein weiterer Gruppenfilter (die Halle entliest als eine Gruppe).
+// Blanko-Strichliste Zuckermais zum Ausdrucken (Nutzer-Vorgabe 2026-09-09) -
+// ersetzt die von Hand gepflegte A3-Papierliste. Wird BLANKO gedruckt; die
+// Halle trägt Datum und Arbeitszeiten selbst ein. Personen: genau die für
+// Zuckermais freigegebenen, aktiven (employees.praemien_zuckermais = true,
+// aktiv = true) - kein weiterer Gruppenfilter (die Halle entliest als eine
+// Gruppe). Namen ohne angehängte Pers.-Nr. (spart Platz).
 //
-// Zwei A3-Querseiten mit denselben Personen-Zeilen (gleiche Zeilenhöhe, damit
-// sie nebeneinandergelegt fluchten): Seite 1 = Kreuzfelder 1-22 + 12
-// Nacharbeit-Felder, Seite 2 = Kreuzfelder 23-42 + 10 Nacharbeit-Felder +
-// "Übertrag spargar". Felder ~quadratisch (10 mm), groß genug für die Halle.
-// Reine Druckseite - keine Erfassung, keine Migration. Rückerfassung = Phase 2.
+// Aufbau (Nutzer-Vorgabe 2026-09-09): ZWEI Zeilen je Person untereinander auf
+// EINER A3-Querseite - obere Zeile Kreuzfelder 1-20, untere Zeile 21-40.
+// Dadurch wird die Liste nach unten länger (flowt bei vielen Personen auf
+// Seite 2), aber alles zu einer Person steht zusammen - kein Blättern beim
+// Zusammenaddieren. Kreuz-/Nacharbeit-Felder ~quadratisch (10 mm). Dicke
+// Linie nach jedem 10. Kreuzfeld (erster Block 1-10). Nacharbeit-Block (12
+// Felder) und "Übertrag spargar" (Σ i.O. / Σ NA / Std.) rechts, je Person
+// über beide Zeilen hoch. Reine Druckseite - keine Erfassung, keine
+// Migration. Rückerfassung = Phase 2.
 
 import { useEffect, useRef, useState } from "react";
 import { getSupabaseClient } from "@/lib/supabase/client";
@@ -35,111 +39,51 @@ const FEHLER_CODES: { code: string; text: string }[] = [
   { code: "N4", text: "Druckstelle" },
 ];
 
-// Kreuzfelder je Person, aufgeteilt auf 2 Seiten (Seite 1: 1-22, Seite 2:
-// 23-42) - Summe deckt "manche schaffen 40 in der Halbschicht" mit Reserve.
-const SEITE1_KISTEN = 22;
-const SEITE2_KISTEN = 20;
-const SEITE1_NA = 12;
-const SEITE2_NA = 10;
-const MIN_ZEILEN = 20; // mind. so viele Zeilen (Reserve zum Nachtragen)
+const KISTEN_PRO_ZEILE = 20; // obere Zeile 1-20, untere 21-40
+const NACHARBEIT_SPALTEN = 12;
+const BLOCK = 10; // dicke Linie nach jedem 10. Kreuzfeld
+const MIN_PERSONEN = 20; // mind. so viele Personen-Blöcke drucken (Reserve)
 
 type Zeile = { key: string; nr: number; name: string };
 
-// Dicke Linie an der RECHTEN Kante jedes 5. Kreuzfelds (5, 10 … 40).
-const feldKlasse = (n: number) => "sl-k" + (n % 5 === 0 ? " sl-k5" : "");
-// Dicke Umrandung um den ganzen Nacharbeit-Block.
-const naKlasse = (n: number, total: number) =>
-  "sl-na" + (n === 1 ? " sl-na-l" : "") + (n === total ? " sl-na-r" : "");
+// Dicke Linie an der rechten Kante jedes 10. Kreuzfelds (10, 20 → Blöcke
+// 1-10, 11-20 oben; darunter 21-30, 31-40).
+const feldKlasse = (spalte: number) =>
+  "sl-k" + (spalte % BLOCK === 0 ? " sl-kblock" : "");
+const naKlasse = (n: number) =>
+  "sl-na" +
+  (n === 1 ? " sl-na-l" : "") +
+  (n === NACHARBEIT_SPALTEN ? " sl-na-r" : "");
 
-function bereich(von: number, bis: number) {
-  return Array.from({ length: bis - von + 1 }, (_, i) => von + i);
-}
+const spalten = Array.from({ length: KISTEN_PRO_ZEILE }, (_, i) => i + 1);
+const na = Array.from({ length: NACHARBEIT_SPALTEN }, (_, i) => i + 1);
 
-function Tabelle({
-  zeilen,
-  kistenNummern,
-  naAnzahl,
-  mitUebertrag,
-}: {
-  zeilen: Zeile[];
-  kistenNummern: number[];
-  naAnzahl: number;
-  mitUebertrag: boolean;
-}) {
-  const na = bereich(1, naAnzahl);
+function Person({ z }: { z: Zeile }) {
   return (
-    <table className="sl-tab">
-      <colgroup>
-        <col className="c-nr" />
-        <col className="c-name" />
-        {kistenNummern.map((n) => (
-          <col key={"c" + n} className="c-k" />
+    <tbody className="sl-person">
+      <tr className="sl-pa">
+        <td className="sl-c" rowSpan={2}>
+          {z.nr}
+        </td>
+        <td className="sl-l" rowSpan={2}>
+          {z.name}
+        </td>
+        {spalten.map((n) => (
+          <td key={z.key + "a" + n} className={feldKlasse(n)}></td>
         ))}
         {na.map((n) => (
-          <col key={"cn" + n} className="c-na" />
+          <td key={z.key + "n" + n} className={naKlasse(n)} rowSpan={2}></td>
         ))}
-        {mitUebertrag && (
-          <>
-            <col className="c-sum" />
-            <col className="c-sum" />
-            <col className="c-sum" />
-          </>
-        )}
-      </colgroup>
-      <thead>
-        <tr>
-          <th rowSpan={2}>Nr</th>
-          <th rowSpan={2} className="sl-l">
-            Name
-          </th>
-          <th colSpan={kistenNummern.length}>
-            Kiste i.O. — Kreuz (X) je Kiste
-          </th>
-          <th colSpan={naAnzahl} className="sl-na sl-na-l sl-na-r">
-            Nacharbeit — Fehlercode je abgelehnter Kiste
-          </th>
-          {mitUebertrag && <th colSpan={3}>Übertrag spargar</th>}
-        </tr>
-        <tr>
-          {kistenNummern.map((n) => (
-            <th key={"h" + n} className={feldKlasse(n)}>
-              {n}
-            </th>
-          ))}
-          {na.map((n) => (
-            <th key={"hn" + n} className={naKlasse(n, naAnzahl)}></th>
-          ))}
-          {mitUebertrag && (
-            <>
-              <th>Σ i.O.</th>
-              <th>Σ NA</th>
-              <th>Std.</th>
-            </>
-          )}
-        </tr>
-      </thead>
-      <tbody>
-        {zeilen.map((z) => (
-          <tr key={z.key}>
-            <td className="sl-c">{z.nr}</td>
-            <td className="sl-l">{z.name}</td>
-            {kistenNummern.map((n) => (
-              <td key={z.key + "k" + n} className={feldKlasse(n)}></td>
-            ))}
-            {na.map((n) => (
-              <td key={z.key + "n" + n} className={naKlasse(n, naAnzahl)}></td>
-            ))}
-            {mitUebertrag && (
-              <>
-                <td></td>
-                <td></td>
-                <td></td>
-              </>
-            )}
-          </tr>
+        <td rowSpan={2}></td>
+        <td rowSpan={2}></td>
+        <td rowSpan={2}></td>
+      </tr>
+      <tr className="sl-pb">
+        {spalten.map((n) => (
+          <td key={z.key + "b" + n} className={feldKlasse(n)}></td>
         ))}
-      </tbody>
-    </table>
+      </tr>
+    </tbody>
   );
 }
 
@@ -168,22 +112,19 @@ export default function ZuckermaisStrichlistePage() {
     return () => clearTimeout(t);
   }, [loading, employees.length]);
 
-  const leerzeilen = Math.max(0, MIN_ZEILEN - employees.length);
+  const fueller = Math.max(0, MIN_PERSONEN - employees.length);
   const zeilen: Zeile[] = [
     ...employees.map((e, i) => ({
       key: e.id,
       nr: i + 1,
       name: `${e.name}, ${e.vorname}`,
     })),
-    ...Array.from({ length: leerzeilen }, (_, i) => ({
+    ...Array.from({ length: fueller }, (_, i) => ({
       key: "leer" + i,
       nr: employees.length + i + 1,
       name: "",
     })),
   ];
-
-  const kistenS1 = bereich(1, SEITE1_KISTEN);
-  const kistenS2 = bereich(SEITE1_KISTEN + 1, SEITE1_KISTEN + SEITE2_KISTEN);
 
   return (
     <div className="strichliste-print -mx-4 -my-6">
@@ -192,18 +133,15 @@ export default function ZuckermaisStrichlistePage() {
           Drucken
         </button>
         <span className="sl-hint">
-          Blanko, 2 A3-Seiten quer. Seite 1: Kisten 1–{SEITE1_KISTEN}. Seite 2:
-          Kisten {SEITE1_KISTEN + 1}–{SEITE1_KISTEN + SEITE2_KISTEN} + Übertrag.
-          Kein A3-Drucker? Im Druckdialog „An Seite anpassen" auf A4.
+          Blanko, A3 quer, 2 Zeilen je Person (obere = Kisten 1–20, untere =
+          21–40). Läuft bei vielen Personen auf Seite 2. Kein A3-Drucker? Im
+          Druckdialog „An Seite anpassen" auf A4.
         </span>
       </div>
 
-      {/* Seite 1 */}
       <div className="sl-blatt">
         <div className="sl-kopf">
-          <div className="sl-titel">
-            Zuckermais – Strichliste <span className="sl-seite">Seite 1 / 2</span>
-          </div>
+          <div className="sl-titel">Zuckermais – Strichliste</div>
           <div className="sl-felder">
             <span>
               <b>Datum:</b>
@@ -229,48 +167,63 @@ export default function ZuckermaisStrichlistePage() {
           </div>
         </div>
 
-        <Tabelle
-          zeilen={zeilen}
-          kistenNummern={kistenS1}
-          naAnzahl={SEITE1_NA}
-          mitUebertrag={false}
-        />
-
-        <div className="sl-legende sl-legende-kurz">
-          <b>X</b> = Kiste i.O. &nbsp;·&nbsp; Nacharbeit-Feld: Fehlercode
-          eintragen (Codes und Übertrag siehe Seite 2). &nbsp;·&nbsp; Weitere
-          Kisten ab Nr. {SEITE1_KISTEN + 1} auf Seite 2.
-        </div>
-      </div>
-
-      {/* Seite 2 */}
-      <div className="sl-blatt sl-seite2">
-        <div className="sl-kopf sl-kopf-kurz">
-          <div className="sl-titel">
-            Zuckermais – Strichliste <span className="sl-seite">Seite 2 / 2</span>
-          </div>
-          <div className="sl-felder">
-            <span>
-              <b>Datum:</b>
-              <span className="sl-line" />
-            </span>
-            <span>
-              <b>Prüfer:</b>
-              <span className="sl-line" />
-            </span>
-          </div>
-        </div>
-
-        <Tabelle
-          zeilen={zeilen}
-          kistenNummern={kistenS2}
-          naAnzahl={SEITE2_NA}
-          mitUebertrag
-        />
+        <table className="sl-tab">
+          <colgroup>
+            <col className="c-nr" />
+            <col className="c-name" />
+            {spalten.map((n) => (
+              <col key={"c" + n} className="c-k" />
+            ))}
+            {na.map((n) => (
+              <col key={"cn" + n} className="c-na" />
+            ))}
+            <col className="c-sum" />
+            <col className="c-sum" />
+            <col className="c-sum" />
+          </colgroup>
+          <thead>
+            <tr>
+              <th rowSpan={2}>Nr</th>
+              <th rowSpan={2} className="sl-l">
+                Name
+              </th>
+              <th colSpan={KISTEN_PRO_ZEILE}>
+                Kiste i.O. — Kreuz (X) je Kiste · obere Zeile 1–
+                {KISTEN_PRO_ZEILE}, untere Zeile {KISTEN_PRO_ZEILE + 1}–
+                {KISTEN_PRO_ZEILE * 2}
+              </th>
+              <th
+                colSpan={NACHARBEIT_SPALTEN}
+                className="sl-na sl-na-l sl-na-r"
+              >
+                Nacharbeit — Fehlercode je abgelehnter Kiste
+              </th>
+              <th colSpan={3}>Übertrag spargar</th>
+            </tr>
+            <tr>
+              {spalten.map((n) => (
+                <th key={"h" + n} className={feldKlasse(n)}>
+                  {n}
+                  <span className="sl-u">{n + KISTEN_PRO_ZEILE}</span>
+                </th>
+              ))}
+              {na.map((n) => (
+                <th key={"hn" + n} className={naKlasse(n)}></th>
+              ))}
+              <th>Σ i.O.</th>
+              <th>Σ NA</th>
+              <th>Std.</th>
+            </tr>
+          </thead>
+          {zeilen.map((z) => (
+            <Person key={z.key} z={z} />
+          ))}
+        </table>
 
         <div className="sl-legende">
-          <b>X</b> = Kiste i.O. &nbsp;·&nbsp; <b>Nacharbeit-Feld:</b>{" "}
-          Fehlercode eintragen —{" "}
+          <b>X</b> = Kiste i.O. — obere Zeile Kiste 1–{KISTEN_PRO_ZEILE}, untere
+          Zeile {KISTEN_PRO_ZEILE + 1}–{KISTEN_PRO_ZEILE * 2}. &nbsp;·&nbsp;{" "}
+          <b>Nacharbeit-Feld:</b> Fehlercode eintragen —{" "}
           {FEHLER_CODES.map((c) => `${c.code} ${c.text}`).join(" · ")}{" "}
           &nbsp;·&nbsp; nachgearbeitet &amp; i.O. = Häkchen, verworfen = Code
           einkreisen. &nbsp;·&nbsp; Unterbrechungen als Uhrzeit ins jeweilige
