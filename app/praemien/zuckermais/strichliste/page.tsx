@@ -88,14 +88,15 @@ function Inner() {
     <tr key={key}>
       <td className="sl-c">{nr}</td>
       <td className="sl-l">{name}</td>
-      <td></td>
-      <td></td>
       {kisten.map((n) => (
         <td key={key + "k" + n} className={feldKlasse(n)}></td>
       ))}
       {nacharbeit.map((n) => (
         <td key={key + "n" + n} className="sl-na"></td>
       ))}
+      <td></td>
+      <td></td>
+      <td></td>
     </tr>
   );
 
@@ -146,14 +147,15 @@ function Inner() {
           <colgroup>
             <col className="c-nr" />
             <col className="c-name" />
-            <col className="c-sum" />
-            <col className="c-sum" />
             {kisten.map((n) => (
               <col key={"c" + n} className="c-k" />
             ))}
             {nacharbeit.map((n) => (
               <col key={"cn" + n} className="c-na" />
             ))}
+            <col className="c-sum" />
+            <col className="c-sum" />
+            <col className="c-sum" />
           </colgroup>
           <thead>
             <tr>
@@ -161,15 +163,13 @@ function Inner() {
               <th rowSpan={2} className="sl-l">
                 Name
               </th>
-              <th colSpan={2}>Summen</th>
               <th colSpan={KISTEN_SPALTEN}>Kiste i.O. — Kreuz (X) je Kiste</th>
               <th colSpan={NACHARBEIT_SPALTEN}>
                 Nacharbeit — Fehlercode je abgelehnter Kiste
               </th>
+              <th colSpan={3}>Übertrag spargar</th>
             </tr>
             <tr>
-              <th>Std.</th>
-              <th>Kisten</th>
               {kisten.map((n) => (
                 <th key={"h" + n} className={feldKlasse(n)}>
                   {n}
@@ -178,6 +178,9 @@ function Inner() {
               {nacharbeit.map((n) => (
                 <th key={"hn" + n}></th>
               ))}
+              <th>Σ i.O.</th>
+              <th>Σ NA</th>
+              <th>Std.</th>
             </tr>
           </thead>
           <tbody>
@@ -196,8 +199,9 @@ function Inner() {
           {FEHLER_CODES.map((c) => `${c.code} ${c.text}`).join(" · ")}{" "}
           &nbsp;·&nbsp; nachgearbeitet &amp; i.O. = Häkchen, verworfen = Code
           einkreisen. &nbsp;·&nbsp; Unterbrechungen als Uhrzeit ins jeweilige
-          Kistenfeld schreiben. &nbsp;·&nbsp; <b>Summen:</b> je Schicht die
-          Tagessumme an Stunden und Kisten eintragen.
+          Kistenfeld schreiben. &nbsp;·&nbsp; <b>Übertrag spargar:</b> je
+          Schicht Σ i.O. (angenommene Kisten), Σ NA (Nacharbeit-Kisten) und
+          Std. (Arbeitsstunden) eintragen.
         </div>
       </div>
     </div>
