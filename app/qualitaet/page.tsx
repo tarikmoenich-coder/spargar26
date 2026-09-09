@@ -12,7 +12,8 @@ import { getSupabaseClient } from "@/lib/supabase/client";
 import { useProfile } from "@/lib/useProfile";
 import ErntewirtschaftTabs from "@/components/ErntewirtschaftTabs";
 import { formatDatumDE } from "@/lib/format";
-import type { QsKontrolle, QsSchicht } from "@/lib/types";
+import { MENUE_RECHTE } from "@/lib/rollen";
+import type { QsKontrolle, QsSchicht, UserRole } from "@/lib/types";
 
 const KULTUR = "zuckermais";
 const STANDARD_KOLBEN = 20;
@@ -78,6 +79,9 @@ function fotoVerkleinern(datei: File, maxKante = 900, qualitaet = 0.62): Promise
 
 export default function QualitaetPage() {
   const { profile } = useProfile();
+  const canSee =
+    !!profile &&
+    (MENUE_RECHTE["/qualitaet"] ?? []).includes(profile.role as UserRole);
   const canWrite =
     profile?.role === "admin" ||
     profile?.role === "hr" ||
@@ -214,6 +218,18 @@ export default function QualitaetPage() {
       schlechteste: einzel.length ? Math.min(...einzel) : null,
     };
   }, [liste]);
+
+  if (profile && !canSee) {
+    return (
+      <div className="flex flex-col gap-4">
+        <ErntewirtschaftTabs />
+        <p className="text-neutral-500">
+          Die Schichtkontrolle ist nur für admin/hr/zeiterfassung/
+          lohnabrechnung/management/erntewirtschaft.
+        </p>
+      </div>
+    );
+  }
 
   return (
     <div className="flex flex-col gap-4">
