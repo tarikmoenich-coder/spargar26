@@ -2721,6 +2721,77 @@ group by kultur, datum;
 alter view qs_kontrolle_tag set (security_invoker = true);
 grant select on qs_kontrolle_tag to authenticated;
 
+-- Digitale Strichliste / Nacharbeitsquote Zuckermais-Halle (Nutzer-Vorgabe
+-- 2026-09-10, Migration migration_2026-10-12_zuckermais_annahme.sql). Je
+-- Person und Halbschicht: wie viele Kisten i.O. angenommen, wie viele in die
+-- Nacharbeit. Papierblatt (/praemien/zuckermais/strichliste) bleibt das
+-- Live-Arbeitsblatt, hier kommt am Schichtende die Summe rein. Erstmal reine
+-- Anzeige in /statistik/zuckermais, keine Prämienwirkung.
+create table zuckermais_annahme (
+  id bigint generated always as identity primary key,
+  datum date not null default current_date,
+  schicht text not null check (schicht in ('vormittag', 'nachmittag')),
+  employee_id uuid not null references employees (id) on delete restrict,
+  kisten_io int not null default 0 check (kisten_io >= 0),
+  kisten_nacharbeit int not null default 0 check (kisten_nacharbeit >= 0),
+  notiz text,
+  erfasst_von uuid references profiles (id) default auth.uid(),
+  erfasst_am timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  constraint zuckermais_annahme_uniq unique (datum, schicht, employee_id)
+);
+
+create index idx_zuckermais_annahme_datum
+  on zuckermais_annahme (datum desc, schicht);
+
+-- Je Zeile die Nacharbeitsquote in % (Nacharbeit / alle Kisten der Person).
+create or replace view zuckermais_annahme_quote as
+select
+  a.*,
+  (a.kisten_io + a.kisten_nacharbeit) as kisten_gesamt,
+  case
+    when (a.kisten_io + a.kisten_nacharbeit) > 0
+    then round(
+      a.kisten_nacharbeit::numeric
+        / (a.kisten_io + a.kisten_nacharbeit) * 100,
+      1
+    )
+  end as nacharbeit_prozent,
+  e.name as employee_name,
+  e.vorname as employee_vorname,
+  e.personal_nr
+from zuckermais_annahme a
+join employees e on e.id = a.employee_id;
+
+alter view zuckermais_annahme_quote set (security_invoker = true);
+grant select on zuckermais_annahme_quote to authenticated;
+
+-- Tagesaggregat je Person (die Statistik summiert je Zeitraum selbst weiter).
+create or replace view zuckermais_annahme_person_tag as
+select
+  datum,
+  employee_id,
+  min(e.name) as employee_name,
+  min(e.vorname) as employee_vorname,
+  min(e.personal_nr) as personal_nr,
+  sum(kisten_io)::int as kisten_io,
+  sum(kisten_nacharbeit)::int as kisten_nacharbeit,
+  sum(kisten_io + kisten_nacharbeit)::int as kisten_gesamt,
+  case
+    when sum(kisten_io + kisten_nacharbeit) > 0
+    then round(
+      sum(kisten_nacharbeit)::numeric
+        / sum(kisten_io + kisten_nacharbeit) * 100,
+      1
+    )
+  end as nacharbeit_prozent
+from zuckermais_annahme a
+join employees e on e.id = a.employee_id
+group by datum, employee_id;
+
+alter view zuckermais_annahme_person_tag set (security_invoker = true);
+grant select on zuckermais_annahme_person_tag to authenticated;
+
 -- ---------------------------------------------------------------------------
 -- 6b. Prämien Erdbeeren (Nutzer-Vorgabe 2026-08-09) - gleiches Grundmuster
 --     wie Zuckermais (Strichliste je Mitarbeiter/Tag), aber mit einem
@@ -4016,6 +4087,9 @@ create trigger trg_audit_zuckermais_rohdaten
 create trigger trg_audit_qs_kontrolle
   after insert or update or delete on qs_kontrolle
   for each row execute function write_audit_log();
+create trigger trg_audit_zuckermais_annahme
+  after insert or update or delete on zuckermais_annahme
+  for each row execute function write_audit_log();
 create trigger trg_audit_erdbeeren_rohdaten
   after insert or update or delete on erdbeeren_rohdaten
   for each row execute function write_audit_log();
@@ -4140,6 +4214,8 @@ create trigger trg_work_entries_updated_at before update on work_entries
 create trigger trg_zuckermais_rohdaten_updated_at before update on zuckermais_rohdaten
   for each row execute function set_updated_at_and_version();
 create trigger trg_qs_kontrolle_updated_at before update on qs_kontrolle
+  for each row execute function set_updated_at();
+create trigger trg_zuckermais_annahme_updated_at before update on zuckermais_annahme
   for each row execute function set_updated_at();
 create trigger trg_erdbeeren_rohdaten_updated_at before update on erdbeeren_rohdaten
   for each row execute function set_updated_at_and_version();
@@ -5181,6 +5257,7 @@ alter table zuckermais_rohdaten enable row level security;
 alter table zuckermais_saetze enable row level security;
 alter table zuckermais_druck enable row level security;
 alter table qs_kontrolle enable row level security;
+alter table zuckermais_annahme enable row level security;
 alter table erdbeeren_parzellen enable row level security;
 alter table erdbeeren_anbau enable row level security;
 alter table erdbeeren_tunnel enable row level security;
@@ -5518,6 +5595,16 @@ create policy "qs_kontrolle_insert" on qs_kontrolle for insert
 create policy "qs_kontrolle_update" on qs_kontrolle for update
   using (current_role_name() in ('admin', 'hr', 'zeiterfassung', 'erntewirtschaft'));
 create policy "qs_kontrolle_delete" on qs_kontrolle for delete
+  using (current_role_name() in ('admin', 'hr', 'erntewirtschaft'));
+
+-- Digitale Strichliste Zuckermais-Halle: gleiches Muster wie qs_kontrolle.
+create policy "zuckermais_annahme_select" on zuckermais_annahme for select
+  using (auth.uid() is not null);
+create policy "zuckermais_annahme_insert" on zuckermais_annahme for insert
+  with check (current_role_name() in ('admin', 'hr', 'zeiterfassung', 'erntewirtschaft'));
+create policy "zuckermais_annahme_update" on zuckermais_annahme for update
+  using (current_role_name() in ('admin', 'hr', 'zeiterfassung', 'erntewirtschaft'));
+create policy "zuckermais_annahme_delete" on zuckermais_annahme for delete
   using (current_role_name() in ('admin', 'hr', 'erntewirtschaft'));
 
 -- Erdbeeren-Prämien: gleiches Muster wie Zuckermais. Parzellen-Stammdaten

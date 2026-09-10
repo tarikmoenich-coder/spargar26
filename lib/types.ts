@@ -1017,6 +1017,37 @@ export interface QsKontrolleTag {
   quote_min_prozent: number | null;
 }
 
+// Digitale Strichliste Zuckermais-Halle (Nutzer-Vorgabe 2026-09-10): je
+// Person und Halbschicht die an der Kistenannahme gefuehrten Summen -
+// angenommene Kisten (i.O.) und Kisten in die Nacharbeit. Papierblatt bleibt
+// das Arbeitsblatt, hier kommt am Schichtende die Summe rein. Erstmal reine
+// Anzeige in /statistik/zuckermais.
+export interface ZuckermaisAnnahme {
+  id: number;
+  datum: string;
+  schicht: QsSchicht;
+  employee_id: string;
+  kisten_io: number;
+  kisten_nacharbeit: number;
+  notiz: string | null;
+  erfasst_von: string | null;
+  erfasst_am: string;
+  updated_at: string;
+}
+
+// Aus der Sicht zuckermais_annahme_person_tag - Tagesaggregat je Person.
+export interface ZuckermaisAnnahmePersonTag {
+  datum: string;
+  employee_id: string;
+  employee_name: string;
+  employee_vorname: string | null;
+  personal_nr: string | null;
+  kisten_io: number;
+  kisten_nacharbeit: number;
+  kisten_gesamt: number;
+  nacharbeit_prozent: number | null;
+}
+
 // Prämien Erdbeeren (Nutzer-Vorgabe 2026-08-09) - Norm/Bonus je Parzelle
 // UND Tag statt global (anders als Zuckermais), da auf mehreren Parzellen
 // mit sehr unterschiedlichen Gegebenheiten gleichzeitig gepflückt wird.

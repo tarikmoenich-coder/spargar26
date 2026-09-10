@@ -66,7 +66,10 @@ const BEREICHE: {
     href: "/qualitaet",
     prefix: "/qualitaet",
     rechteKey: "/qualitaet",
-    unter: [],
+    unter: [
+      { href: "/qualitaet", label: "Schichtkontrolle" },
+      { href: "/qualitaet/strichliste", label: "Strichliste / Nacharbeit" },
+    ],
   },
 ];
 

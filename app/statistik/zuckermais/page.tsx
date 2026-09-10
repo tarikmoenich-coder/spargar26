@@ -27,6 +27,7 @@ import { formatDatumDE, formatMenge } from "@/lib/format";
 import type {
   Employee,
   QsKontrolle,
+  ZuckermaisAnnahmePersonTag,
   ZuckermaisDruck,
   ZuckermaisPraemieTag,
   ZuckermaisStatistikTag,
@@ -53,6 +54,13 @@ function qsUhrzeit(iso: string) {
     hour: "2-digit",
     minute: "2-digit",
   });
+}
+// Nacharbeitsquote: niedrig ist gut (umgekehrt zu qsBadge).
+function naBadge(q: number | null): string {
+  if (q === null) return "badge badge-neutral";
+  if (q <= 3) return "badge badge-ok";
+  if (q <= 8) return "badge badge-warn";
+  return "badge badge-danger";
 }
 
 // ---------------------------------------------------------------------------
@@ -142,29 +150,41 @@ export default function StatistikZuckermaisPage() {
   const [qsKontrollen, setQsKontrollen] = useState<QsKontrolle[]>([]);
   const [qsFoto, setQsFoto] = useState<string | null>(null);
 
+  // Nacharbeitsquote je Person aus der digitalen Strichliste der
+  // Kistenannahme (Tabelle zuckermais_annahme, Sicht
+  // zuckermais_annahme_person_tag). Nutzer-Vorgabe 2026-09-10: erstmal reine
+  // Anzeige, keine Prämienwirkung.
+  const [naTage, setNaTage] = useState<ZuckermaisAnnahmePersonTag[]>([]);
+
   async function load() {
     setLoading(true);
     const supabase = getSupabaseClient();
-    const [{ data, error }, { data: druck }, { data: qs }] = await Promise.all([
-      supabase
-        .from("zuckermais_statistik_tag")
-        .select("*")
-        .gte("datum", `${jahr}-01-01`)
-        .lte("datum", `${jahr}-12-31`)
-        .order("datum", { ascending: false }),
-      supabase
-        .from("zuckermais_druck")
-        .select("*")
-        .gte("datum", `${jahr}-01-01`)
-        .lte("datum", `${jahr}-12-31`),
-      supabase
-        .from("qs_kontrolle")
-        .select("*")
-        .eq("kultur", "zuckermais")
-        .gte("datum", `${jahr}-01-01`)
-        .lte("datum", `${jahr}-12-31`)
-        .order("zeitpunkt", { ascending: false }),
-    ]);
+    const [{ data, error }, { data: druck }, { data: qs }, { data: na }] =
+      await Promise.all([
+        supabase
+          .from("zuckermais_statistik_tag")
+          .select("*")
+          .gte("datum", `${jahr}-01-01`)
+          .lte("datum", `${jahr}-12-31`)
+          .order("datum", { ascending: false }),
+        supabase
+          .from("zuckermais_druck")
+          .select("*")
+          .gte("datum", `${jahr}-01-01`)
+          .lte("datum", `${jahr}-12-31`),
+        supabase
+          .from("qs_kontrolle")
+          .select("*")
+          .eq("kultur", "zuckermais")
+          .gte("datum", `${jahr}-01-01`)
+          .lte("datum", `${jahr}-12-31`)
+          .order("zeitpunkt", { ascending: false }),
+        supabase
+          .from("zuckermais_annahme_person_tag")
+          .select("*")
+          .gte("datum", `${jahr}-01-01`)
+          .lte("datum", `${jahr}-12-31`),
+      ]);
     if (!error) setZeilen((data as ZuckermaisStatistikTag[]) ?? []);
     const map: Record<string, ZuckermaisDruck> = {};
     ((druck as ZuckermaisDruck[]) ?? []).forEach((d) => {
@@ -172,6 +192,7 @@ export default function StatistikZuckermaisPage() {
     });
     setDruckByDatum(map);
     setQsKontrollen((qs as QsKontrolle[]) ?? []);
+    setNaTage((na as ZuckermaisAnnahmePersonTag[]) ?? []);
     setLoading(false);
   }
 
@@ -394,6 +415,55 @@ export default function StatistikZuckermaisPage() {
       gedeckelt: summeBonusAnspruch > summeAbzuege,
     };
   }, [qsKontrollen, zeilen]);
+
+  // Nacharbeitsquote je Person: Tageszeilen über das Jahr zusammenfassen.
+  const nacharbeitJePerson = useMemo(() => {
+    const proPerson = new Map<
+      string,
+      { name: string; io: number; nacharbeit: number; tage: Set<string> }
+    >();
+    for (const r of naTage) {
+      const v =
+        proPerson.get(r.employee_id) ??
+        {
+          name: `${r.employee_name}${
+            r.employee_vorname ? ", " + r.employee_vorname : ""
+          }`,
+          io: 0,
+          nacharbeit: 0,
+          tage: new Set<string>(),
+        };
+      v.io += r.kisten_io;
+      v.nacharbeit += r.kisten_nacharbeit;
+      v.tage.add(r.datum);
+      proPerson.set(r.employee_id, v);
+    }
+    const zeilenP = [...proPerson.entries()]
+      .map(([id, v]) => {
+        const gesamt = v.io + v.nacharbeit;
+        return {
+          id,
+          name: v.name,
+          io: v.io,
+          nacharbeit: v.nacharbeit,
+          gesamt,
+          tage: v.tage.size,
+          quote: gesamt > 0 ? Math.round((v.nacharbeit / gesamt) * 1000) / 10 : null,
+        };
+      })
+      .sort((a, b) => (b.quote ?? -1) - (a.quote ?? -1));
+    const io = zeilenP.reduce((s, z) => s + z.io, 0);
+    const nacharbeit = zeilenP.reduce((s, z) => s + z.nacharbeit, 0);
+    const gesamt = io + nacharbeit;
+    return {
+      zeilen: zeilenP,
+      gruppenQuote:
+        gesamt > 0 ? Math.round((nacharbeit / gesamt) * 1000) / 10 : null,
+      io,
+      nacharbeit,
+      gesamt,
+    };
+  }, [naTage]);
   // Mindestlohn kommt aus der Sicht selbst mit (das Frontend darf
   // verpflegungssaetze nicht direkt lesen) - alle Zeilen desselben
   // Saison-Jahrs tragen denselben Wert.
@@ -612,6 +682,73 @@ export default function StatistikZuckermaisPage() {
                 </tbody>
               </table>
             </div>
+          )}
+        </div>
+      )}
+
+      {!loading && (
+        <div className="mt-4 flex flex-col gap-3 border-t border-linie pt-6">
+          <div>
+            <h2 className="text-base font-semibold text-emerald-800">
+              Nacharbeitsquote je Person ({jahr})
+            </h2>
+            <p className="text-sm text-neutral-500">
+              Aus der Strichliste der Kistenannahme (Erntewirtschaft → Qualität
+              → Strichliste): angenommene Kisten und Kisten in die Nacharbeit,
+              je Person über das Saison-Jahr summiert. Quote = Nacharbeit /
+              alle Kisten. Über 8 % rot, über 3 % gelb.{" "}
+              <strong>Reine Anzeige, keine Prämienwirkung.</strong>
+            </p>
+          </div>
+          {nacharbeitJePerson.zeilen.length === 0 ? (
+            <p className="text-sm text-neutral-500">
+              Keine Strichlisten-Daten für {jahr} erfasst.
+            </p>
+          ) : (
+            <>
+              <div className="flex flex-wrap gap-4 rounded border border-linie bg-white p-3 text-sm">
+                <span>
+                  Gruppe gesamt: {nacharbeitJePerson.io} i.O. ·{" "}
+                  {nacharbeitJePerson.nacharbeit} Nacharbeit
+                </span>
+                <span>
+                  Gruppen-Nacharbeitsquote:{" "}
+                  <span className={naBadge(nacharbeitJePerson.gruppenQuote)}>
+                    {nacharbeitJePerson.gruppenQuote ?? "—"} %
+                  </span>
+                </span>
+              </div>
+              <div className="overflow-x-auto">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>Person</th>
+                      <th>Tage</th>
+                      <th>Kisten i.O.</th>
+                      <th>Nacharbeit</th>
+                      <th>Kisten gesamt</th>
+                      <th>Nacharbeitsquote</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {nacharbeitJePerson.zeilen.map((z) => (
+                      <tr key={z.id}>
+                        <td>{z.name}</td>
+                        <td>{z.tage}</td>
+                        <td>{z.io}</td>
+                        <td>{z.nacharbeit}</td>
+                        <td>{z.gesamt}</td>
+                        <td>
+                          <span className={naBadge(z.quote)}>
+                            {z.quote ?? "—"} %
+                          </span>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </>
           )}
         </div>
       )}
