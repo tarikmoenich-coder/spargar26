@@ -52,7 +52,9 @@ function markerStilEinmalig() {
   if (markerStilGesetzt || typeof document === "undefined") return;
   markerStilGesetzt = true;
   const s = document.createElement("style");
-  s.textContent = ".fzm-detail .fzm-foto{display:none}";
+  s.textContent =
+    ".fzm-detail .fzm-foto{display:none}" +
+    ".fzm-cluster{transition:filter .1s}.fzm-cluster:hover{filter:brightness(1.08)}";
   document.head.appendChild(s);
 }
 
@@ -144,7 +146,153 @@ export default function FahrzeugKarte({
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<maplibregl.Map | null>(null);
   const markersRef = useRef<Map<number, maplibregl.Marker>>(new Map());
+  // Cluster-Badges (mehrere Fahrzeuge dicht beieinander -> ein Kreis mit
+  // Anzahl, wie bei Traccar). Key = sortierte Mitglieder-IDs.
+  const clustersRef = useRef<Map<string, maplibregl.Marker>>(new Map());
+  const clusterInfoRef = useRef<
+    Map<string, { lnglat: [number, number][]; count: number }>
+  >(new Map());
+  // Fahrzeug-IDs, deren Einzel-Marker gerade wegen Clustering abgehängt sind.
+  const clusteredRef = useRef<Set<number>>(new Set());
+  // letzter Meldezeitpunkt (Minuten her) je Fahrzeug - für die Badge-Farbe.
+  const minByIdRef = useRef<Map<number, number | null>>(new Map());
+  const bereitRef = useRef(false);
+  const fokusIdRef = useRef<number | null>(null);
+  const clusterRafRef = useRef<number | null>(null);
   const [bereit, setBereit] = useState(false);
+
+  useEffect(() => {
+    fokusIdRef.current = fokus?.id ?? null;
+  }, [fokus]);
+
+  // Fahrzeug-Marker nach Pixel-Nähe zusammenfassen. Wird bei jeder
+  // Karten-Bewegung (throttled) und nach jeder Daten-Aktualisierung
+  // aufgerufen. Bewusst ohne Zusatz-Bibliothek: die Flotte ist klein
+  // (< ~150), ein simples Greedy-Gruppieren im Pixelraum reicht und behält
+  // die vorhandenen HTML-Marker (Kennzeichen-Plakette, Foto, Popup) bei.
+  const clustern = () => {
+    const map = mapRef.current;
+    if (!map || !bereitRef.current) return;
+    const RADIUS_PX = 46;
+    const fokusId = fokusIdRef.current;
+
+    type P = { id: number; x: number; y: number; lng: number; lat: number; frei: boolean };
+    const pts: P[] = [];
+    markersRef.current.forEach((marker, id) => {
+      const ll = marker.getLngLat();
+      const p = map.project(ll);
+      // "frei" = nie clustern: das fokussierte Fahrzeug und eines mit offenem
+      // Detail-Popup (soll beim 20-s-Refresh nicht plötzlich verschwinden).
+      const frei = id === fokusId || marker.getPopup()?.isOpen() === true;
+      pts.push({ id, x: p.x, y: p.y, lng: ll.lng, lat: ll.lat, frei });
+    });
+
+    const belegt = new Set<number>();
+    const gruppen: P[][] = [];
+    for (const a of pts) {
+      if (belegt.has(a.id)) continue;
+      belegt.add(a.id);
+      if (a.frei) {
+        gruppen.push([a]);
+        continue;
+      }
+      const g = [a];
+      for (const b of pts) {
+        if (belegt.has(b.id) || b.frei) continue;
+        if (Math.hypot(a.x - b.x, a.y - b.y) <= RADIUS_PX) {
+          belegt.add(b.id);
+          g.push(b);
+        }
+      }
+      gruppen.push(g);
+    }
+
+    const nunGeclustert = new Set<number>();
+    const gewuenscht = new Map<
+      string,
+      { cx: number; cy: number; lnglat: [number, number][]; count: number; min: number | null }
+    >();
+    for (const g of gruppen) {
+      if (g.length < 2) continue;
+      const key = g
+        .map((p) => p.id)
+        .sort((x, y) => x - y)
+        .join(",");
+      const mins = g
+        .map((p) => minByIdRef.current.get(p.id) ?? null)
+        .filter((m): m is number => m !== null);
+      gewuenscht.set(key, {
+        cx: g.reduce((s, p) => s + p.x, 0) / g.length,
+        cy: g.reduce((s, p) => s + p.y, 0) / g.length,
+        lnglat: g.map((p) => [p.lng, p.lat] as [number, number]),
+        count: g.length,
+        min: mins.length ? Math.min(...mins) : null,
+      });
+      g.forEach((p) => nunGeclustert.add(p.id));
+    }
+
+    // Einzel-Marker abhängen / wieder anhängen.
+    markersRef.current.forEach((marker, id) => {
+      const sollWeg = nunGeclustert.has(id);
+      const istWeg = clusteredRef.current.has(id);
+      if (sollWeg && !istWeg) marker.remove();
+      else if (!sollWeg && istWeg) marker.addTo(map);
+    });
+    clusteredRef.current = nunGeclustert;
+
+    // Veraltete Badges entfernen.
+    clustersRef.current.forEach((m, key) => {
+      if (!gewuenscht.has(key)) {
+        m.remove();
+        clustersRef.current.delete(key);
+        clusterInfoRef.current.delete(key);
+      }
+    });
+
+    // Badges anlegen / aktualisieren.
+    gewuenscht.forEach((info, key) => {
+      clusterInfoRef.current.set(key, {
+        lnglat: info.lnglat,
+        count: info.count,
+      });
+      let m = clustersRef.current.get(key);
+      if (!m) {
+        const el = document.createElement("div");
+        el.className = "fzm-cluster";
+        el.style.cursor = "pointer";
+        el.addEventListener("click", () => {
+          const cur = clusterInfoRef.current.get(key);
+          if (!cur) return;
+          const b = new maplibregl.LngLatBounds();
+          cur.lnglat.forEach((c) => b.extend(c));
+          if (b.getNorthEast().distanceTo(b.getSouthWest()) < 5) {
+            map.easeTo({
+              center: b.getCenter(),
+              zoom: map.getZoom() + 2,
+              duration: 400,
+            });
+          } else {
+            map.fitBounds(b, { padding: 80, maxZoom: 17, duration: 400 });
+          }
+        });
+        m = new maplibregl.Marker({ element: el, anchor: "center" });
+        m.setLngLat(map.unproject([info.cx, info.cy]));
+        m.addTo(map);
+        clustersRef.current.set(key, m);
+      } else {
+        m.setLngLat(map.unproject([info.cx, info.cy]));
+      }
+      const farbe = ampel(info.min);
+      (m.getElement() as HTMLDivElement).innerHTML = `
+        <div style="min-width:30px;height:30px;padding:0 7px;border-radius:9999px;background:${farbe};border:2px solid #fff;box-shadow:0 1px 3px rgba(0,0,0,.45);display:flex;align-items:center;justify-content:center;font:700 13px/1 system-ui;color:#fff">${info.count}</div>`;
+    });
+  };
+
+  const clusterAnstossen = () => {
+    if (clusterRafRef.current != null)
+      cancelAnimationFrame(clusterRafRef.current);
+    clusterRafRef.current = requestAnimationFrame(clustern);
+  };
 
   // Karte einmalig aufbauen.
   useEffect(() => {
@@ -251,16 +399,26 @@ export default function FahrzeugKarte({
           "circle-stroke-color": "#fff",
         },
       });
+      bereitRef.current = true;
+      map.on("move", clusterAnstossen);
       setBereit(true);
     });
 
     return () => {
+      if (clusterRafRef.current != null)
+        cancelAnimationFrame(clusterRafRef.current);
       markersRef.current.forEach((m) => m.remove());
       markersRef.current.clear();
+      clustersRef.current.forEach((m) => m.remove());
+      clustersRef.current.clear();
+      clusterInfoRef.current.clear();
+      clusteredRef.current.clear();
+      bereitRef.current = false;
       map.remove();
       mapRef.current = null;
       setBereit(false);
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Fahrzeug-Marker synchronisieren.
@@ -276,6 +434,7 @@ export default function FahrzeugKarte({
     for (const f of mitPos) {
       behalten.add(f.id);
       const min = minutenHer(f.pos_zeitpunkt);
+      minByIdRef.current.set(f.id, min);
       const farbe = ampel(min);
       // "grauer Punkt" = seit >= 60 min keine Meldung / gar keine Position.
       // Dann auf der Karte nur noch das Kennzeichen zeigen, kein Foto
@@ -367,6 +526,8 @@ export default function FahrzeugKarte({
       if (!behalten.has(id)) {
         m.remove();
         markersRef.current.delete(id);
+        minByIdRef.current.delete(id);
+        clusteredRef.current.delete(id);
       }
     });
 
@@ -378,6 +539,12 @@ export default function FahrzeugKarte({
       mitPos.forEach((f) => b.extend([f.lng!, f.lat!]));
       map.fitBounds(b, { padding: 60, maxZoom: 15, duration: 400 });
     }
+
+    // Nach jeder Daten-Aktualisierung neu clustern (die fitBounds-Animation
+    // oben stößt es über "move" ohnehin an, aber nicht, wenn sich der
+    // Ausschnitt nicht ändert).
+    clusterAnstossen();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [fahrzeuge, bereit, track, bilder, fokus]);
 
   // Karte beim Einblenden (Umschalter Karte/Liste) neu vermessen - eine im
@@ -398,9 +565,14 @@ export default function FahrzeugKarte({
       zoom: Math.max(map.getZoom(), 15),
       duration: 600,
     });
+    // Sicherstellen, dass der Einzel-Marker angehängt ist (das fokussierte
+    // Fahrzeug wird nicht geclustert) - sonst geht das Popup nicht auf.
+    fokusIdRef.current = fokus.id;
+    clustern();
     const marker = markersRef.current.get(fokus.id);
     const popup = marker?.getPopup();
     if (marker && popup && !popup.isOpen()) marker.togglePopup();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [fokus, bereit, fahrzeuge]);
 
   // Geofences (Höfe) zeichnen.
