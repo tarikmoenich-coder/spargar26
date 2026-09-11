@@ -81,6 +81,19 @@ function ampel(min: number | null): string {
 export interface Trackpunkt {
   lng: number;
   lat: number;
+  /** ISO-Zeitpunkt dieser Position - für die Hover-Info auf den Streckenpunkten. */
+  zeitpunkt: string;
+  speedKmh?: number | null;
+}
+
+// Standzeit im Streckenverlauf (Datenlücke und/oder Geschwindigkeit nahe 0 über
+// mehrere Minuten) - als Pausen-Symbol auf der Karte, Standzeit im Hover.
+export interface Stopppunkt {
+  lng: number;
+  lat: number;
+  von: string;
+  bis: string;
+  minuten: number;
 }
 
 export interface KartenGeofence {
@@ -120,9 +133,44 @@ function wktZuRing(area: string): [number, number][] | null {
   return null;
 }
 
+// Ein paar Streckenpunkte zum Hovern zwischen Start und Ende auswählen, ohne
+// bei dichten GPS-Aufzeichnungen hunderte Punkte übereinanderzumalen: der
+// erste Punkt ab jeweils MIN_ABSTAND_MIN Minuten seit dem letzten
+// übernommenen wird behalten. Start/Ende selbst lässt track-enden erledigen.
+const STRECKENPUNKTE_MIN_ABSTAND_MIN = 3;
+function streckenpunkteAusduennen(track: Trackpunkt[]): Trackpunkt[] {
+  if (track.length <= 2) return [];
+  const ausgeduennt: Trackpunkt[] = [];
+  let letzteZeit = new Date(track[0].zeitpunkt).getTime();
+  for (let i = 1; i < track.length - 1; i++) {
+    const zeit = new Date(track[i].zeitpunkt).getTime();
+    if ((zeit - letzteZeit) / 60000 >= STRECKENPUNKTE_MIN_ABSTAND_MIN) {
+      ausgeduennt.push(track[i]);
+      letzteZeit = zeit;
+    }
+  }
+  return ausgeduennt;
+}
+
+function stoppZeitraum(s: Stopppunkt): string {
+  const fmt = (iso: string) =>
+    new Date(iso).toLocaleTimeString("de-DE", { hour: "2-digit", minute: "2-digit" });
+  return `${fmt(s.von)}–${fmt(s.bis)} Uhr`;
+}
+function stoppTitel(s: Stopppunkt): string {
+  return `Stand: ${s.minuten} min (${stoppZeitraum(s)})`;
+}
+function stoppPopupHtml(s: Stopppunkt): string {
+  return `<div style="font:400 12px/1.4 system-ui">
+    <div style="font-weight:600">Standzeit: ${s.minuten} min</div>
+    <div>${stoppZeitraum(s)}</div>
+  </div>`;
+}
+
 export default function FahrzeugKarte({
   fahrzeuge,
   track,
+  stopps,
   geofences,
   bilder,
   fokus,
@@ -131,6 +179,8 @@ export default function FahrzeugKarte({
 }: {
   fahrzeuge: FahrzeugUebersicht[];
   track?: Trackpunkt[];
+  /** Standzeiten entlang des Track - Pausen-Symbol, Standzeit im Hover. */
+  stopps?: Stopppunkt[];
   geofences?: KartenGeofence[];
   /** Fahrzeug-ID -> Foto als data-URL, wird über dem Kennzeichen gezeigt. */
   bilder?: Record<number, string>;
@@ -159,6 +209,8 @@ export default function FahrzeugKarte({
   const bereitRef = useRef(false);
   const fokusIdRef = useRef<number | null>(null);
   const clusterRafRef = useRef<number | null>(null);
+  // Streckenverlauf: HTML-Marker für Standzeiten (Pausen-Symbol + Hover-Popup).
+  const stoppMarkersRef = useRef<maplibregl.Marker[]>([]);
   const [bereit, setBereit] = useState(false);
 
   useEffect(() => {
@@ -319,6 +371,14 @@ export default function FahrzeugKarte({
     map.addControl(new maplibregl.NavigationControl(), "top-right");
     map.addControl(new maplibregl.ScaleControl(), "bottom-left");
 
+    // Ein Popup für die Streckenpunkte (Hover -> Uhrzeit/Tempo), wiederverwendet statt bei jeder
+    // Mausbewegung neu erzeugt.
+    const trackPopup = new maplibregl.Popup({
+      closeButton: false,
+      closeOnClick: false,
+      offset: 10,
+    });
+
     map.on("load", () => {
       map.addSource("satellit", {
         type: "raster",
@@ -398,6 +458,48 @@ export default function FahrzeugKarte({
           "circle-stroke-width": 2,
           "circle-stroke-color": "#fff",
         },
+      });
+
+      // Ein paar Streckenpunkte zwischen Start und Ende - dünn gesät (siehe
+      // streckenpunkteAusduennen), Hover zeigt Uhrzeit + Tempo.
+      map.addSource("track-punkte", {
+        type: "geojson",
+        data: { type: "FeatureCollection", features: [] },
+      });
+      map.addLayer({
+        id: "track-punkte",
+        type: "circle",
+        source: "track-punkte",
+        paint: {
+          "circle-radius": 4,
+          "circle-color": "#2b711e",
+          "circle-opacity": 0.55,
+          "circle-stroke-width": 1.5,
+          "circle-stroke-color": "#fff",
+        },
+      });
+      map.on("mousemove", "track-punkte", (e) => {
+        const f = e.features?.[0];
+        if (!f) return;
+        map.getCanvas().style.cursor = "pointer";
+        const p = f.properties as { zeitpunkt: string; speedKmh: number | null };
+        const zeit = new Date(p.zeitpunkt).toLocaleTimeString("de-DE", {
+          hour: "2-digit",
+          minute: "2-digit",
+        });
+        const geom = f.geometry as GeoJSON.Point;
+        trackPopup
+          .setLngLat(geom.coordinates as [number, number])
+          .setHTML(
+            `<div style="font:500 12px system-ui">${zeit} Uhr${
+              p.speedKmh != null ? ` · ${Math.round(p.speedKmh)} km/h` : ""
+            }</div>`
+          )
+          .addTo(map);
+      });
+      map.on("mouseleave", "track-punkte", () => {
+        map.getCanvas().style.cursor = "";
+        trackPopup.remove();
       });
       bereitRef.current = true;
       map.on("move", clusterAnstossen);
@@ -603,7 +705,8 @@ export default function FahrzeugKarte({
     if (!map || !bereit) return;
     const linie = map.getSource("track") as maplibregl.GeoJSONSource | undefined;
     const enden = map.getSource("track-enden") as maplibregl.GeoJSONSource | undefined;
-    if (!linie || !enden) return;
+    const punkte = map.getSource("track-punkte") as maplibregl.GeoJSONSource | undefined;
+    if (!linie || !enden || !punkte) return;
 
     const pts = (track ?? []).map((p) => [p.lng, p.lat] as [number, number]);
     linie.setData({
@@ -629,6 +732,14 @@ export default function FahrzeugKarte({
             ]
           : [],
     });
+    punkte.setData({
+      type: "FeatureCollection",
+      features: streckenpunkteAusduennen(track ?? []).map((p) => ({
+        type: "Feature",
+        geometry: { type: "Point", coordinates: [p.lng, p.lat] },
+        properties: { zeitpunkt: p.zeitpunkt, speedKmh: p.speedKmh ?? null },
+      })),
+    });
 
     if (pts.length > 0) {
       const b = new maplibregl.LngLatBounds();
@@ -636,6 +747,47 @@ export default function FahrzeugKarte({
       map.fitBounds(b, { padding: 60, maxZoom: 16, duration: 400 });
     }
   }, [track, bereit]);
+
+  // Standzeiten (Stopps) entlang der Strecke: Pausen-Symbol, Hover zeigt die
+  // Standzeit. Eigene HTML-Marker (wie die Fahrzeuge) statt einer Symbol-
+  // Layer, da die Karte ohne Glyphs-Server aufgebaut ist (kein Textlayer).
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !bereit) return;
+
+    stoppMarkersRef.current.forEach((m) => m.remove());
+    stoppMarkersRef.current = (stopps ?? []).map((s) => {
+      const el = document.createElement("div");
+      el.style.cssText =
+        "width:22px;height:22px;border-radius:9999px;background:#d97706;" +
+        "border:2px solid #fff;box-shadow:0 1px 3px rgba(0,0,0,.4);" +
+        "display:flex;align-items:center;justify-content:center;" +
+        "font-size:11px;line-height:1;cursor:pointer";
+      el.textContent = "⏸";
+      el.title = stoppTitel(s);
+      const marker = new maplibregl.Marker({ element: el, anchor: "center" }).setLngLat([
+        s.lng,
+        s.lat,
+      ]);
+      const popup = new maplibregl.Popup({ closeButton: false, offset: 16 }).setHTML(
+        stoppPopupHtml(s)
+      );
+      marker.setPopup(popup);
+      el.addEventListener("mouseenter", () => {
+        if (!popup.isOpen()) marker.togglePopup();
+      });
+      el.addEventListener("mouseleave", () => {
+        if (popup.isOpen()) marker.togglePopup();
+      });
+      marker.addTo(map);
+      return marker;
+    });
+
+    return () => {
+      stoppMarkersRef.current.forEach((m) => m.remove());
+      stoppMarkersRef.current = [];
+    };
+  }, [stopps, bereit]);
 
   return (
     <div

@@ -7,7 +7,10 @@ import { getSupabaseClient } from "@/lib/supabase/client";
 import { formatDatumDE, formatMenge } from "@/lib/format";
 import type { Fahrzeug, FahrzeugPosition } from "@/lib/types";
 import FahrzeugeTabs from "@/components/FahrzeugeTabs";
-import FahrzeugKarte, { type Trackpunkt } from "@/components/FahrzeugKarte";
+import FahrzeugKarte, {
+  type Trackpunkt,
+  type Stopppunkt,
+} from "@/components/FahrzeugKarte";
 import PageHeader from "@/components/PageHeader";
 
 function heuteIso(): string {
@@ -45,7 +48,12 @@ function fahrtenAus(positionen: FahrzeugPosition[]): Fahrt[] {
       aktuell = [];
       return;
     }
-    const pk: Trackpunkt[] = aktuell.map((p) => ({ lng: p.lng, lat: p.lat }));
+    const pk: Trackpunkt[] = aktuell.map((p) => ({
+      lng: p.lng,
+      lat: p.lat,
+      zeitpunkt: p.zeitpunkt,
+      speedKmh: p.speed_kmh,
+    }));
     let km = 0;
     for (let i = 1; i < pk.length; i++) km += haversineKm(pk[i - 1], pk[i]);
     const von = aktuell[0].zeitpunkt;
@@ -74,6 +82,61 @@ function fahrtenAus(positionen: FahrzeugPosition[]): Fahrt[] {
   }
   abschliessen();
   return fahrten;
+}
+
+// Standzeiten ab STOPP_MIN_MINUTEN: entweder eine Datenlücke (Tracker meldet sich länger nicht -
+// vermutlich abgestellt) oder eine Folge von Punkten mit Tempo nahe 0 (z.B. Be-/Entladen bei
+// laufendem Motor, noch innerhalb derselben Fahrt). Beides in einem Durchlauf, ohne Doppelungen:
+// führt ein aktives Langsam-Cluster direkt in eine Datenlücke, wird beides zu einer Standzeit
+// zusammengefasst.
+const STOPP_MIN_MINUTEN = 5;
+const STOPP_MAX_KMH = 2;
+
+function stoppsAus(positionen: FahrzeugPosition[]): Stopppunkt[] {
+  const gueltig = positionen.filter((p) => p.gueltig);
+  const stopps: Stopppunkt[] = [];
+  let clusterStart: FahrzeugPosition | null = null;
+
+  const abschliessenBei = (letzterZeitpunkt: string) => {
+    if (!clusterStart) return;
+    const minuten =
+      (new Date(letzterZeitpunkt).getTime() - new Date(clusterStart.zeitpunkt).getTime()) / 60000;
+    if (minuten >= STOPP_MIN_MINUTEN) {
+      stopps.push({
+        lng: clusterStart.lng,
+        lat: clusterStart.lat,
+        von: clusterStart.zeitpunkt,
+        bis: letzterZeitpunkt,
+        minuten: Math.round(minuten),
+      });
+    }
+    clusterStart = null;
+  };
+
+  for (let i = 0; i < gueltig.length; i++) {
+    const p = gueltig[i];
+    const naechster = gueltig[i + 1];
+    // Tempo unbekannt (null) zählt NICHT als Stillstand - sonst würde eine Strecke ohne
+    // Tempo-Angabe komplett als eine große Standzeit erscheinen.
+    const steht = p.speed_kmh != null && p.speed_kmh <= STOPP_MAX_KMH;
+    if (steht) {
+      if (!clusterStart) clusterStart = p;
+    } else {
+      abschliessenBei(p.zeitpunkt);
+    }
+
+    if (naechster) {
+      const luecke =
+        (new Date(naechster.zeitpunkt).getTime() - new Date(p.zeitpunkt).getTime()) / 60000;
+      if (luecke >= STOPP_MIN_MINUTEN) {
+        if (!clusterStart) clusterStart = p;
+        abschliessenBei(naechster.zeitpunkt);
+      }
+    }
+  }
+  if (gueltig.length > 0) abschliessenBei(gueltig[gueltig.length - 1].zeitpunkt);
+
+  return stopps.sort((a, b) => a.von.localeCompare(b.von));
 }
 
 function VerlaufInner() {
@@ -125,9 +188,10 @@ function VerlaufInner() {
     () =>
       positionen
         .filter((p) => p.gueltig)
-        .map((p) => ({ lng: p.lng, lat: p.lat })),
+        .map((p) => ({ lng: p.lng, lat: p.lat, zeitpunkt: p.zeitpunkt, speedKmh: p.speed_kmh })),
     [positionen]
   );
+  const stopps = useMemo(() => stoppsAus(positionen), [positionen]);
   const gesamtKm = fahrten.reduce((s, f) => s + f.km, 0);
   const gesamtMin = fahrten.reduce((s, f) => s + f.minuten, 0);
 
@@ -174,7 +238,7 @@ function VerlaufInner() {
         </span>
       </div>
 
-      <FahrzeugKarte fahrzeuge={[]} track={track} hoehe="h-[60vh]" />
+      <FahrzeugKarte fahrzeuge={[]} track={track} stopps={stopps} hoehe="h-[60vh]" />
 
       {!loading && positionen.length === 0 && (
         <p className="text-sm text-neutral-500">
@@ -224,7 +288,9 @@ function VerlaufInner() {
       <p className="text-xs text-neutral-400">
         Strecke aus den gespeicherten GPS-Punkten ({formatDatumDE(datum)}) –
         Kilometer als Luftlinien-Summe zwischen den Punkten, daher grobe
-        Näherung.
+        Näherung. ⏸ markiert Standzeiten ab {STOPP_MIN_MINUTEN} min (Hover
+        zeigt die Dauer), die kleinen Punkte auf der Strecke zeigen beim
+        Hover Uhrzeit und Tempo.
       </p>
     </div>
   );
