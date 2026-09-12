@@ -14,7 +14,7 @@ import type { Profile } from "./types";
 // gültig. Deshalb: jeder Ladevorgang bekommt ein Zeitlimit, danach wird die
 // Seite automatisch einmal neu geladen (gedrosselt, damit ein echter
 // Netzausfall nicht in eine Reload-Schleife läuft).
-const LADE_TIMEOUT_MS = 8000;
+const LADE_TIMEOUT_MS = 5000;
 const RELOAD_SPERRE_MS = 30000;
 const RELOAD_KEY = "spargar_profil_reload_versucht";
 
