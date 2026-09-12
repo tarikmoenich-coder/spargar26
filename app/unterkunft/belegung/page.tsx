@@ -15,7 +15,7 @@ import { getSupabaseClient } from "@/lib/supabase/client";
 import { useProfile } from "@/lib/useProfile";
 import UnterkunftTabs from "@/components/UnterkunftTabs";
 import { formatDatumDE } from "@/lib/format";
-import { belegungLaeuft, heuteIso } from "@/lib/unterkunft";
+import { belegungLaeuft, gesternIso, heuteIso } from "@/lib/unterkunft";
 import type {
   UnterkunftBelegung,
   UnterkunftGebaeude,
@@ -246,7 +246,11 @@ export default function UnterkunftBelegungPage() {
   }, [belegungen, zimmer, gebaeude, employees, nurLaufend]);
 
   async function auszugEintragen(id: number, wer: string) {
-    const bis = window.prompt(`Auszugsdatum für ${wer}`, heuteIso());
+    const bis = window.prompt(
+      `Letzter Belegungstag von ${wer} (danach ist das Zimmer frei) - ` +
+        `Vorschlag: gestern, damit es ab heute frei ist.`,
+      gesternIso()
+    );
     if (!bis) return;
     setFehler(null);
     const { error } = await getSupabaseClient()

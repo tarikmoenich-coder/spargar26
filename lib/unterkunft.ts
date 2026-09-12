@@ -113,6 +113,18 @@ export function heuteIso(): string {
   return new Date().toISOString().slice(0, 10);
 }
 
+// "YYYY-MM-DD" von gestern - Standardvorschlag für das Auszugsdatum
+// (Nutzer-Vorgabe 2026-09-12): "bis" ist der LETZTE Belegungstag
+// (bis >= Stichtag zählt noch mit, siehe belegungLaeuft), ein Auszug mit
+// "bis = heute" würde die Person also noch bis Mitternacht als Bewohner
+// zeigen. Gestern als Vorschlag macht das Zimmer sofort (ab heute) frei -
+// bewusst zulasten der exakten Uhrzeit, dafür ohne Zeitstempel-Umbau.
+export function gesternIso(): string {
+  const d = new Date();
+  d.setDate(d.getDate() - 1);
+  return d.toISOString().slice(0, 10);
+}
+
 // Läuft die Belegung an diesem Stichtag (Standard: heute)?
 export function belegungLaeuft(
   von: string,

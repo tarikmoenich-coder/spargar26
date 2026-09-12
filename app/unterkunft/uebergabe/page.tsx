@@ -15,7 +15,7 @@ import { useProfile } from "@/lib/useProfile";
 import UnterkunftTabs from "@/components/UnterkunftTabs";
 import FotoAufnahme from "@/components/FotoAufnahme";
 import { formatDatumDE } from "@/lib/format";
-import { heuteIso, mangelKategorieVorschlag } from "@/lib/unterkunft";
+import { gesternIso, heuteIso, mangelKategorieVorschlag } from "@/lib/unterkunft";
 import {
   UNTERKUNFT_GESAMTZUSTAND_LABELS,
   UNTERKUNFT_MANGEL_KATEGORIE_LABELS,
@@ -562,8 +562,9 @@ export default function UnterkunftUebergabePage() {
           .map((b) => `${b.vorname} ${b.name}`)
           .join(", ");
         const datum = window.prompt(
-          `Auszugsdatum – die Belegung von ${wer} wird zu diesem Datum beendet.`,
-          heuteIso()
+          `Letzter Belegungstag von ${wer} (danach ist das Zimmer frei) - ` +
+            `Vorschlag: gestern, damit es ab heute frei ist.`,
+          gesternIso()
         );
         if (datum) {
           const { error: aErr } = await supabase
