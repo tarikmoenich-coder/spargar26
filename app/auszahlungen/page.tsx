@@ -10,6 +10,7 @@ import type {
   Kautionsuebergabe,
   SeasonSummaryRow,
   SepaExport,
+  UnterkunftBelegungPerson,
 } from "@/lib/types";
 import { formatDatumDE, formatMenge } from "@/lib/format";
 import { erzeugeSepaXml, sepaDateiHerunterladen } from "@/lib/sepa";
@@ -230,7 +231,14 @@ export default function AuszahlungenPage() {
     zahlungsart: string;
     zeilen: AuszahlungsbelegZeile[];
     kaution: Kautionsuebergabe | null;
-    kautionPersonen: { name: string; personal_nr: string; betrag: number }[];
+    kautionPersonen: {
+      name: string;
+      personal_nr: string;
+      betrag: number;
+      // Aktuelle Unterkunft, kompakt für den Beleg ("Haus A - Zimmer 8") -
+      // null, wenn gerade keine laufende Belegung erfasst ist.
+      zimmer: string | null;
+    }[];
   } | null>(null);
 
   // Kautionsübergabe an den Hausmeister (Nutzer-Vorgabe 2026-08-09) - je
@@ -497,23 +505,48 @@ export default function AuszahlungenPage() {
     const zeilen = details[beleg.id];
     if (!zeilen) return;
     const kaution = kautionen[beleg.id] ?? null;
-    let kautionPersonen: { name: string; personal_nr: string; betrag: number }[] =
-      [];
+    let kautionPersonen: {
+      name: string;
+      personal_nr: string;
+      betrag: number;
+      zimmer: string | null;
+    }[] = [];
     if (kaution) {
       const supabase = getSupabaseClient();
       const { data } = await supabase
         .from("kautionsuebergabe_personen")
         .select("employee_id, betrag")
         .eq("kautionsuebergabe_id", kaution.id);
-      kautionPersonen = ((data as { employee_id: string; betrag: number }[]) ?? [])
-        .map((p) => {
-          const z = zeilen.find((r) => r.employee_id === p.employee_id);
-          return {
-            name: z ? `${z.name}, ${z.vorname}` : "—",
-            personal_nr: z?.personal_nr ?? "—",
-            betrag: Number(p.betrag),
-          };
+      const personenRoh = (data as { employee_id: string; betrag: number }[]) ?? [];
+
+      // Aktuelles Zimmer je Person (Nutzer-Vorgabe 2026-09-12): kompakt
+      // "Haus A - Zimmer 8" auf dem Beleg, damit man die Person zum
+      // Kassieren/Zurückgeben findet - nur die AKTUELL laufende Belegung,
+      // keine Historie, damit der Beleg nicht überladen wird.
+      const heute = new Date().toISOString().slice(0, 10);
+      const { data: belegungRoh } = await supabase
+        .from("unterkunft_belegung_person")
+        .select("employee_id, von, bis, gebaeude_name, zimmer_nummer")
+        .in(
+          "employee_id",
+          personenRoh.map((p) => p.employee_id)
+        );
+      const zimmerByEmployee = new Map<string, string>();
+      ((belegungRoh as UnterkunftBelegungPerson[]) ?? [])
+        .filter((u) => u.von <= heute && (!u.bis || u.bis >= heute))
+        .forEach((u) => {
+          zimmerByEmployee.set(u.employee_id, `${u.gebaeude_name} - Zimmer ${u.zimmer_nummer}`);
         });
+
+      kautionPersonen = personenRoh.map((p) => {
+        const z = zeilen.find((r) => r.employee_id === p.employee_id);
+        return {
+          name: z ? `${z.name}, ${z.vorname}` : "—",
+          personal_nr: z?.personal_nr ?? "—",
+          betrag: Number(p.betrag),
+          zimmer: zimmerByEmployee.get(p.employee_id) ?? null,
+        };
+      });
     }
     setDruckZeilen({
       belegnummer: beleg.belegnummer,
@@ -1141,6 +1174,7 @@ export default function AuszahlungenPage() {
                   <tr>
                     <th>Pers.-Nr.</th>
                     <th>Name</th>
+                    <th>Zimmer</th>
                     <th>Betrag €</th>
                     <th>Unterschrift</th>
                   </tr>
@@ -1150,6 +1184,7 @@ export default function AuszahlungenPage() {
                     <tr key={i}>
                       <td>{p.personal_nr}</td>
                       <td>{p.name}</td>
+                      <td>{p.zimmer ?? "—"}</td>
                       <td>{fmtDruck(p.betrag)}</td>
                       <td></td>
                     </tr>
@@ -1157,7 +1192,7 @@ export default function AuszahlungenPage() {
                 </tbody>
                 <tfoot>
                   <tr>
-                    <td colSpan={2} className="text-right font-semibold">
+                    <td colSpan={3} className="text-right font-semibold">
                       Summe
                     </td>
                     <td className="font-semibold">
