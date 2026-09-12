@@ -409,6 +409,46 @@ export default function UebersichtPage() {
     if (ausgewaehlt.size === 0) return;
     const ausgewaehlteRows = rows.filter((r) => ausgewaehlt.has(r.employee_id));
     const namen = ausgewaehlteRows.map((r) => `${r.name}, ${r.vorname}`);
+
+    setAbrechnenFehler(null);
+
+    // Sperre (Nutzer-Vorgabe 2026-09-12): ein offenes Stundenkonto muss vor
+    // der Saison-Abrechnung aufgelöst sein (abgefeiert = Freizeitausgleich
+    // buchen, oder in Auszahlung umgewandelt) - sonst wird die Person
+    // deaktiviert und die offenen Stunden gehen faktisch unter. Blockiert
+    // die GANZE Aktion, nicht nur die betroffenen Personen, damit nichts
+    // versehentlich halb durchläuft.
+    const supabaseVorab = getSupabaseClient();
+    const { data: saldenRoh, error: saldenFehler } = await supabaseVorab
+      .from("employee_stundenkonto_saldo")
+      .select("employee_id, saldo")
+      .eq("saison_jahr", jahr)
+      .in("employee_id", Array.from(ausgewaehlt));
+    if (saldenFehler) {
+      setAbrechnenFehler(saldenFehler.message);
+      return;
+    }
+    const offeneKonten = (saldenRoh ?? [])
+      .filter((s) => Math.abs(Number(s.saldo)) >= 0.01)
+      .map((s) => {
+        const row = ausgewaehlteRows.find((r) => r.employee_id === s.employee_id);
+        return {
+          name: row ? `${row.name}, ${row.vorname}` : s.employee_id,
+          saldo: Number(s.saldo),
+        };
+      })
+      .sort((a, b) => a.name.localeCompare(b.name, "de"));
+    if (offeneKonten.length > 0) {
+      setAbrechnenFehler(
+        `Abrechnen gesperrt: ${offeneKonten.length} Person(en) haben noch ein ` +
+          `offenes Stundenkonto für Saison ${jahr} - erst im Stundenkonto ` +
+          `(Stundenerfassung bzw. Management → Stundenmonitoring) abfeiern ` +
+          `(Freizeitausgleich buchen) oder in Auszahlung umwandeln:\n` +
+          offeneKonten.map((o) => `${o.name}: ${formatMenge(o.saldo, 2)} Std.`).join("\n")
+      );
+      return;
+    }
+
     // Nutzer-Vorgabe 2026-08-21 (Frage: "Person abgerechnet, deaktiviert,
     // reaktiviert, Stunden nachgetragen, erneut abgerechnet - kommt dann
     // eine weitere Abrechnung?"): wer bereits ein abgerechnet_am hat, war
@@ -820,7 +860,7 @@ export default function UebersichtPage() {
           </button>
         )}
         {monatFilter === 0 && abrechnenFehler && (
-          <span className="text-sm text-red-600">{abrechnenFehler}</span>
+          <span className="whitespace-pre-line text-sm text-red-600">{abrechnenFehler}</span>
         )}
       </div>
 
