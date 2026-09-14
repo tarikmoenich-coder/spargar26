@@ -4961,15 +4961,20 @@ grant select on employee_urlaubstage to authenticated;
 
 -- ---------------------------------------------------------------------------
 -- 12e2b. View: Arbeitstage am Stück (ArbZG-Wochenruhe-Kontrolle,
---        Nutzer-Vorgabe 2026-09-01). Siehe
---        supabase/migration_2026-09-19_arbeitstage_serie.sql für die
+--        Nutzer-Vorgabe 2026-09-01, Ersatzausgleich ab 7 Tagen ergänzt
+--        2026-09-14). Siehe supabase/migration_2026-09-19_arbeitstage_serie.sql
+--        + migration_2026-10-14_arbeitstage_serie_ersatzausgleich.sql für die
 --        vollständige Herleitung der Regeln.
 --
 --        Arbeitstag = work_entries mit stunden > 0 UND markierung <> 'U'.
 --        Serie      = maximale Kette aufeinanderfolgender Kalendertage.
---        Ampel      = >=14 'rot', >=7 'gelb'.
---        Ersatzausgleich (nur ab 14 Tagen): >= 2 freie Tage in den 7
---        Kalendertagen nach serie_bis -> 'erfuellt' | 'offen' | 'fehlt'.
+--        Ampel      = >=14 'rot', >=7 'gelb' (reine Schwere-Einstufung nach
+--                     Seriendauer - ob noch Handlungsbedarf besteht, sagt
+--                     "ersatzausgleich", nicht "ampel").
+--        Ersatzausgleich (ab 7 Tagen): 7-13 Tage -> >= 1 freier Tag, 14-20
+--        Tage -> >= 2 freie Tage, jeweils in den 7 Kalendertagen nach
+--        serie_bis -> 'erfuellt' | 'offen' | 'fehlt'. Ab 21 Tagen
+--        'kein_ausgleich' (kein legaler Ausgleich mehr möglich).
 -- ---------------------------------------------------------------------------
 create or replace view arbeitstage_serie_uebersicht as
 with tage as (
@@ -5011,17 +5016,17 @@ select
     when i.serie_tage >= 7  then 'gelb'
     else 'gruen'
   end as ampel,
-  -- Ausgleichsfenster/-zähler nur im heilbaren Bereich (14..20 Tage);
-  -- ab 21 Tagen am Stück gibt es keinen legalen Ersatzausgleich mehr.
-  case when i.serie_tage between 14 and 20 then (i.serie_bis + 7) end
+  -- Ausgleichsfenster/-zähler ab 7 Tagen (bis 20; ab 21 kein legaler
+  -- Ausgleich mehr möglich).
+  case when i.serie_tage between 7 and 20 then (i.serie_bis + 7) end
     as ersatz_fenster_bis,
-  case when i.serie_tage between 14 and 20 then ea.freie_tage end
+  case when i.serie_tage between 7 and 20 then ea.freie_tage end
     as ersatz_freie_tage,
   case
-    when i.serie_tage < 14                    then null
-    when i.serie_tage >= 21                   then 'kein_ausgleich'
-    when ea.freie_tage >= 2                   then 'erfuellt'
-    when i.serie_bis + 7 >= current_date      then 'offen'
+    when i.serie_tage >= 21 then 'kein_ausgleich'
+    when ea.freie_tage >= (case when i.serie_tage >= 14 then 2 else 1 end)
+      then 'erfuellt'
+    when i.serie_bis + 7 >= current_date then 'offen'
     else 'fehlt'
   end as ersatzausgleich
 from inseln i

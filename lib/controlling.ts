@@ -140,3 +140,28 @@ export function arbeitsserieRelevant(
     s.serie_bis >= cutoffISO
   );
 }
+
+// Gesamtstatus einer Serie fürs Controlling (Nutzer-Feedback 2026-09-14:
+// "bleiben die Serien jedoch rot markiert stehen, selbst wenn der
+// Ersatzausgleich erfolgt ist" - "ampel" allein sagt nur, wie LANG die
+// Serie war, nicht ob noch Handlungsbedarf besteht):
+// - "laeuft"          Serie ist noch nicht beendet - Ampel-Farbe zeigt Schwere.
+// - "erledigt"        beendet UND Ersatzausgleich erfüllt -> kein Handlungsbedarf.
+// - "ausgleich_offen" beendet, Ausgleichsfrist läuft noch - noch kein Verstoß.
+// - "verstoss"        beendet, Ausgleich fehlt oder nicht mehr möglich.
+export type ArbeitstageGesamtstatus =
+  | "laeuft"
+  | "erledigt"
+  | "ausgleich_offen"
+  | "verstoss";
+
+export function arbeitsserieGesamtstatus(
+  s: ArbeitstageSerie
+): ArbeitstageGesamtstatus {
+  if (s.laeuft_noch) return "laeuft";
+  if (s.ersatzausgleich === "fehlt" || s.ersatzausgleich === "kein_ausgleich")
+    return "verstoss";
+  if (s.ersatzausgleich === "offen") return "ausgleich_offen";
+  // "erfuellt" oder (sollte bei serie_tage>=7 nicht mehr vorkommen) null.
+  return "erledigt";
+}

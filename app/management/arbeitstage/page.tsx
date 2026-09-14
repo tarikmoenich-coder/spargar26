@@ -1,12 +1,17 @@
 "use client";
 
-import { Fragment, useEffect, useRef, useState } from "react";
+import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { CalendarClock, Calculator } from "lucide-react";
 import { getSupabaseClient } from "@/lib/supabase/client";
 import { useProfile } from "@/lib/useProfile";
 import { formatDatumDE, formatMenge } from "@/lib/format";
-import { arbeitsserieRelevant, serieCutoffISO } from "@/lib/controlling";
+import {
+  arbeitsserieGesamtstatus,
+  arbeitsserieRelevant,
+  serieCutoffISO,
+  type ArbeitstageGesamtstatus,
+} from "@/lib/controlling";
 import {
   speichereWorkEntryFeld,
   type WorkEntryPatch,
@@ -121,12 +126,58 @@ export default function ControllingArbeitstagePage() {
 
   const cutoff = serieCutoffISO();
   const relevante = arbeitsserie.filter((s) => arbeitsserieRelevant(s, cutoff));
-  const serieRot = relevante.filter((s) => s.ampel === "rot").length;
-  const serieGelb = relevante.filter((s) => s.ampel === "gelb").length;
-  const serieErsatzFehlt = relevante.filter(
-    (s) =>
-      s.ersatzausgleich === "fehlt" || s.ersatzausgleich === "kein_ausgleich"
+  // Nutzer-Feedback 2026-09-14: "bleiben die Serien jedoch rot markiert
+  // stehen, selbst wenn der Ersatzausgleich erfolgt ist" - die Kopfzahlen
+  // zählen deshalb den Gesamtstatus (läuft/Ausgleich offen/Verstoß), nicht
+  // mehr blind die Ampel-Farbe, sonst bleiben erledigte Serien ewig mitgezählt.
+  const serieVerstoss = relevante.filter(
+    (s) => arbeitsserieGesamtstatus(s) === "verstoss"
   ).length;
+  const serieAusgleichOffen = relevante.filter(
+    (s) => arbeitsserieGesamtstatus(s) === "ausgleich_offen"
+  ).length;
+  const serieLaeuft = relevante.filter(
+    (s) => arbeitsserieGesamtstatus(s) === "laeuft"
+  ).length;
+  const serieErledigt = relevante.filter(
+    (s) => arbeitsserieGesamtstatus(s) === "erledigt"
+  ).length;
+
+  // Nutzer-Vorgabe 2026-09-14: Serien pro Person gruppieren, Personen mit
+  // dem dringendsten Status zuerst (Verstoß > Ausgleich offen > läuft noch
+  // > erledigt), sonst alphabetisch. Innerhalb einer Person neueste Serie
+  // zuerst.
+  const RANG: Record<ArbeitstageGesamtstatus, number> = {
+    verstoss: 0,
+    ausgleich_offen: 1,
+    laeuft: 2,
+    erledigt: 3,
+  };
+  const gruppen = useMemo(() => {
+    const byPerson = new Map<string, ArbeitstageSerie[]>();
+    for (const s of relevante) {
+      const arr = byPerson.get(s.employee_id) ?? [];
+      arr.push(s);
+      byPerson.set(s.employee_id, arr);
+    }
+    return [...byPerson.entries()]
+      .map(([employeeId, serien]) => {
+        const sortiert = [...serien].sort((a, b) =>
+          b.serie_bis.localeCompare(a.serie_bis)
+        );
+        const rang = Math.min(
+          ...sortiert.map((s) => RANG[arbeitsserieGesamtstatus(s)])
+        );
+        return { employeeId, serien: sortiert, rang };
+      })
+      .sort(
+        (a, b) =>
+          a.rang - b.rang ||
+          a.serien[0].name.localeCompare(b.serien[0].name, "de") ||
+          a.serien[0].vorname.localeCompare(b.serien[0].vorname, "de")
+      );
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [relevante]);
 
   // Rasterfenster: Montag der Serienstartwoche bis Sonntag der Woche NACH
   // dem Serienende (eine Woche Puffer - zeigt, ob danach Ruhetage kamen).
@@ -439,8 +490,14 @@ export default function ControllingArbeitstagePage() {
     setSaving(false);
   }
 
+  // Soll: 7-13 Tage am Stück -> 1 freier Tag, 14-20 Tage -> 2 freie Tage.
+  function ersatzausgleichSoll(s: ArbeitstageSerie): number {
+    return s.serie_tage >= 14 ? 2 : 1;
+  }
+
   function ersatzausgleichText(s: ArbeitstageSerie) {
     if (s.ersatzausgleich === null) return <>—</>;
+    const soll = ersatzausgleichSoll(s);
     if (s.ersatzausgleich === "kein_ausgleich")
       return (
         <span className="font-medium text-red-600">
@@ -451,7 +508,7 @@ export default function ControllingArbeitstagePage() {
     if (s.ersatzausgleich === "offen")
       return (
         <>
-          {`offen (${s.ersatz_freie_tage ?? 0}/2 freie Tage${
+          {`offen (${s.ersatz_freie_tage ?? 0}/${soll} freie Tage${
             s.ersatz_fenster_bis
               ? `, bis ${formatDatumDE(s.ersatz_fenster_bis)}`
               : ""
@@ -460,9 +517,38 @@ export default function ControllingArbeitstagePage() {
       );
     return (
       <span className="font-medium text-red-600">
-        fehlt ({s.ersatz_freie_tage ?? 0}/2 freie Tage)
+        fehlt ({s.ersatz_freie_tage ?? 0}/{soll} freie Tage)
       </span>
     );
+  }
+
+  // Kombinierter Status je Serie (Nutzer-Vorgabe 2026-09-14): "beendet" +
+  // "Ersatzausgleich erfüllt" wird als grünes "erledigt" abgehakt, statt
+  // wie bisher dauerhaft rot/gelb (Ampel) stehen zu bleiben.
+  function statusBadge(s: ArbeitstageSerie) {
+    const status = arbeitsserieGesamtstatus(s);
+    if (status === "laeuft")
+      return (
+        <span
+          className={
+            s.ampel === "rot"
+              ? "font-medium text-red-600"
+              : "font-medium text-amber-600"
+          }
+        >
+          läuft noch
+        </span>
+      );
+    if (status === "erledigt")
+      return <span className="font-medium text-emerald-700">✓ erledigt</span>;
+    if (status === "ausgleich_offen")
+      return (
+        <span className="font-medium text-amber-600">
+          beendet, Ausgleich bis{" "}
+          {s.ersatz_fenster_bis ? formatDatumDE(s.ersatz_fenster_bis) : "?"}
+        </span>
+      );
+    return <span className="font-medium text-red-600">⚠ Verstoß</span>;
   }
 
   const kannBearbeiten = canEditStunden && lock?.own === true;
@@ -473,7 +559,7 @@ export default function ControllingArbeitstagePage() {
       <PageHeader
         icon={CalendarClock}
         titel="Arbeitstage am Stück"
-        beschreibung="Aufeinanderfolgende Arbeitstage ohne freien Tag (Pause = 0 Std., „U“ oder kein Eintrag; „F“/Fahrer zählt als Arbeitstag). Ab 7 Tagen gelb, ab 14 Tagen rot. Nach 14 Tagen am Stück verlangt das Arbeitszeitgesetz 2 freie Tage in der Folgewoche (Ersatzausgleich); ab 21 Tagen gibt es keinen legalen Ausgleich mehr. Aktueller Stand, unabhängig vom Jahr."
+        beschreibung="Aufeinanderfolgende Arbeitstage ohne freien Tag (Pause = 0 Std., „U“ oder kein Eintrag; „F“/Fahrer zählt als Arbeitstag). Ab 7 Tagen gelb, ab 14 Tagen rot. Nach 7 Tagen am Stück verlangt das Arbeitszeitgesetz 1, nach 14 Tagen 2 freie Tage in der Folgewoche (Ersatzausgleich) - ist der erfolgt, gilt die Serie als erledigt; ab 21 Tagen gibt es keinen legalen Ausgleich mehr. Aktueller Stand, unabhängig vom Jahr."
       />
 
       <p className="text-sm text-neutral-600">
@@ -481,13 +567,19 @@ export default function ControllingArbeitstagePage() {
           "…"
         ) : (
           <>
-            <span className="font-medium text-red-600">{serieRot}</span> rot ·{" "}
-            <span className="font-medium text-amber-600">{serieGelb}</span> gelb
-            {serieErsatzFehlt > 0 && (
+            <span className="font-medium text-red-600">{serieVerstoss}</span>{" "}
+            Verstoß/Verstöße ·{" "}
+            <span className="font-medium text-amber-600">
+              {serieAusgleichOffen}
+            </span>{" "}
+            Ausgleich in der Frist ·{" "}
+            <span className="font-medium text-amber-600">{serieLaeuft}</span>{" "}
+            Serie(n) laufen noch
+            {serieErledigt > 0 && (
               <>
                 {" · "}
-                <span className="font-medium text-red-600">
-                  {serieErsatzFehlt}× Ersatzausgleich fehlt
+                <span className="font-medium text-emerald-700">
+                  ✓ {serieErledigt} erledigt
                 </span>
               </>
             )}
@@ -523,50 +615,61 @@ export default function ControllingArbeitstagePage() {
               </tr>
             </thead>
             <tbody>
-              {relevante.map((s) => {
-                const key = serieKey(s);
-                const istOffen = !!offen && serieKey(offen) === key;
-                return (
-                  <Fragment key={key}>
-                    <tr>
-                      <td>{s.personal_nr}</td>
-                      <td>
-                        {s.name}, {s.vorname}
-                      </td>
-                      <td
-                        className={
-                          s.ampel === "rot"
-                            ? "font-medium text-red-600"
-                            : "font-medium text-amber-600"
-                        }
-                      >
-                        {s.serie_tage}
-                      </td>
-                      <td className="whitespace-nowrap">
-                        {formatDatumDE(s.serie_von)} –{" "}
-                        {formatDatumDE(s.serie_bis)}
-                      </td>
-                      <td className="text-sm">
-                        {s.laeuft_noch ? "läuft noch" : "beendet"}
-                      </td>
-                      <td className="text-sm">{ersatzausgleichText(s)}</td>
-                      <td className="whitespace-nowrap">
-                        <button
-                          type="button"
-                          className="btn-secondary text-xs"
-                          onClick={() =>
-                            istOffen ? schliesseSerie() : oeffneSerie(s)
-                          }
-                        >
-                          {istOffen ? "Schließen" : "Bearbeiten"}
-                        </button>{" "}
-                        <Link
-                          href={`/erfassung?datum=${s.serie_bis}&employee=${s.employee_id}`}
-                          className="btn-secondary text-xs"
-                        >
-                          In Erfassung
-                        </Link>
-                      </td>
+              {gruppen.map((g) => (
+                <Fragment key={g.employeeId}>
+                  <tr className="bg-sand">
+                    <td colSpan={7} className="pt-3 text-sm font-semibold text-neutral-700">
+                      {g.serien[0].personal_nr} · {g.serien[0].name},{" "}
+                      {g.serien[0].vorname}
+                      {g.serien.length > 1 && (
+                        <span className="ml-1 font-normal text-neutral-500">
+                          ({g.serien.length} Serien)
+                        </span>
+                      )}
+                    </td>
+                  </tr>
+                  {g.serien.map((s) => {
+                    const key = serieKey(s);
+                    const istOffen = !!offen && serieKey(offen) === key;
+                    return (
+                      <Fragment key={key}>
+                        <tr>
+                          <td>{s.personal_nr}</td>
+                          <td>
+                            {s.name}, {s.vorname}
+                          </td>
+                          <td
+                            className={
+                              s.ampel === "rot"
+                                ? "font-medium text-red-600"
+                                : "font-medium text-amber-600"
+                            }
+                          >
+                            {s.serie_tage}
+                          </td>
+                          <td className="whitespace-nowrap">
+                            {formatDatumDE(s.serie_von)} –{" "}
+                            {formatDatumDE(s.serie_bis)}
+                          </td>
+                          <td className="text-sm">{statusBadge(s)}</td>
+                          <td className="text-sm">{ersatzausgleichText(s)}</td>
+                          <td className="whitespace-nowrap">
+                            <button
+                              type="button"
+                              className="btn-secondary text-xs"
+                              onClick={() =>
+                                istOffen ? schliesseSerie() : oeffneSerie(s)
+                              }
+                            >
+                              {istOffen ? "Schließen" : "Bearbeiten"}
+                            </button>{" "}
+                            <Link
+                              href={`/erfassung?datum=${s.serie_bis}&employee=${s.employee_id}`}
+                              className="btn-secondary text-xs"
+                            >
+                              In Erfassung
+                            </Link>
+                          </td>
                     </tr>
                     {istOffen && (
                       <tr>
@@ -811,9 +914,11 @@ export default function ControllingArbeitstagePage() {
                         </td>
                       </tr>
                     )}
-                  </Fragment>
-                );
-              })}
+                      </Fragment>
+                    );
+                  })}
+                </Fragment>
+              ))}
             </tbody>
           </table>
         </div>

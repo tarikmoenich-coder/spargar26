@@ -6,10 +6,9 @@ import { useEffect, useState } from "react";
 import { getSupabaseClient } from "@/lib/supabase/client";
 import {
   MAX_STUNDEN_PRO_TAG,
-  arbeitsserieRelevant,
+  arbeitsserieGesamtstatus,
   findeAbweichungen,
   offeneGruende,
-  serieCutoffISO,
 } from "@/lib/controlling";
 import type {
   AnreiselisteOffenArbeitend,
@@ -88,9 +87,11 @@ export function useControllingCounts(): ControllingCounts {
         (f) => f.kritisch
       ).length;
 
-      const cutoff = serieCutoffISO();
-      const serie = ((serieRes.data as ArbeitstageSerie[]) ?? []).filter((s) =>
-        arbeitsserieRelevant(s, cutoff)
+      // Nur was wirklich noch Handlungsbedarf hat (Nutzer-Feedback
+      // 2026-09-14: erledigte, per Ersatzausgleich erfüllte Serien sollen
+      // nicht dauerhaft mitgezählt werden).
+      const serie = ((serieRes.data as ArbeitstageSerie[]) ?? []).filter(
+        (s) => arbeitsserieGesamtstatus(s) !== "erledigt"
       ).length;
 
       const abweichungen = ((abwRes.data as SeasonSummaryRow[]) ?? []).filter(

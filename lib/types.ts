@@ -361,7 +361,8 @@ export interface EmployeeUrlaubstage {
 
 // arbeitstage_serie_uebersicht - eine Zeile je zusammenhängender Arbeits-
 // serie (>= 7 Tage) einer aktiven Person; siehe
-// supabase/migration_2026-09-19_arbeitstage_serie.sql.
+// supabase/migration_2026-09-19_arbeitstage_serie.sql +
+// migration_2026-10-14_arbeitstage_serie_ersatzausgleich.sql.
 export interface ArbeitstageSerie {
   employee_id: string;
   personal_nr: string;
@@ -372,12 +373,17 @@ export interface ArbeitstageSerie {
   serie_bis: string;
   serie_tage: number;
   laeuft_noch: boolean;
+  // Reine Schwere-Einstufung nach Seriendauer (>=14 'rot', sonst 'gelb') -
+  // NICHT, ob noch Handlungsbedarf besteht (siehe arbeitsserieGesamtstatus
+  // in lib/controlling.ts, das zusätzlich ersatzausgleich einbezieht).
   ampel: "gruen" | "gelb" | "rot";
-  // nur im heilbaren Bereich (serie_tage 14..20) gesetzt:
+  // ab 7 Tagen gesetzt (bis 20; ab 21 kein legaler Ausgleich mehr möglich):
   ersatz_fenster_bis: string | null;
   ersatz_freie_tage: number | null;
-  // "kein_ausgleich" = ab 21 Tagen am Stück, kein legaler Ersatzausgleich
-  // mehr möglich (nicht heilbarer Verstoß).
+  // Soll: 7-13 Tage -> >=1 freier Tag, 14-20 Tage -> >=2 freie Tage, jeweils
+  // in den 7 Kalendertagen nach serie_bis. "kein_ausgleich" = ab 21 Tagen am
+  // Stück, kein legaler Ersatzausgleich mehr möglich (nicht heilbarer
+  // Verstoß).
   ersatzausgleich:
     | "erfuellt"
     | "offen"
