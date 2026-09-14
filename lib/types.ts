@@ -1017,17 +1017,18 @@ export interface QsKontrolleTag {
   quote_min_prozent: number | null;
 }
 
-// Digitale Strichliste Zuckermais-Halle (Nutzer-Vorgabe 2026-09-10): je
-// Person und Halbschicht die an der Kistenannahme gefuehrten Summen -
-// angenommene Kisten (i.O.) und Kisten in die Nacharbeit. Papierblatt bleibt
-// das Arbeitsblatt, hier kommt am Schichtende die Summe rein. Erstmal reine
-// Anzeige in /statistik/zuckermais.
+// Digitale Strichliste Zuckermais-Halle (Nutzer-Vorgabe 2026-09-10, auf
+// Tagesebene vereinfacht 2026-09-14): je Person und Tag die an der
+// Kistenannahme in die Nacharbeit gegangenen Kisten. "i.O." wird NICHT
+// erfasst, sondern aus den Prämien-Kisten des Tages abgeleitet (siehe
+// ZuckermaisAnnahmeQuote) - vorher war das dieselbe Zahl zweimal von Hand
+// eingetippt. Papierblatt bleibt nach Vormittag/Nachmittag getrennt das
+// Arbeitsblatt, hier kommt am Tagesende nur die Nacharbeits-Summe rein.
+// Erstmal reine Anzeige in /statistik/zuckermais.
 export interface ZuckermaisAnnahme {
   id: number;
   datum: string;
-  schicht: QsSchicht;
   employee_id: string;
-  kisten_io: number;
   kisten_nacharbeit: number;
   notiz: string | null;
   erfasst_von: string | null;
@@ -1035,17 +1036,26 @@ export interface ZuckermaisAnnahme {
   updated_at: string;
 }
 
-// Aus der Sicht zuckermais_annahme_person_tag - Tagesaggregat je Person.
-export interface ZuckermaisAnnahmePersonTag {
+// Aus der Sicht zuckermais_annahme_quote - eine Zeile je Person+Tag, "i.O."/
+// "gesamt" aus den Prämien-Kisten des Tages abgeleitet. NULL, wenn für den
+// Tag noch keine Prämien-Kisten erfasst sind (nicht 0, um das nicht mit
+// "0 Kisten" oder "100 % Nacharbeit" zu verwechseln).
+export interface ZuckermaisAnnahmeQuote {
+  id: number;
   datum: string;
   employee_id: string;
+  kisten_nacharbeit: number;
+  notiz: string | null;
+  erfasst_von: string | null;
+  erfasst_am: string;
+  updated_at: string;
+  kisten_praemie: number | null;
+  kisten_io: number | null;
+  kisten_gesamt: number | null;
+  nacharbeit_prozent: number | null;
   employee_name: string;
   employee_vorname: string | null;
   personal_nr: string | null;
-  kisten_io: number;
-  kisten_nacharbeit: number;
-  kisten_gesamt: number;
-  nacharbeit_prozent: number | null;
 }
 
 // Prämien Erdbeeren (Nutzer-Vorgabe 2026-08-09) - Norm/Bonus je Parzelle

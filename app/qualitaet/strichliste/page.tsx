@@ -1,11 +1,18 @@
 "use client";
 
-// Qualität → Strichliste / Nacharbeit (Nutzer-Vorgabe 2026-09-10). Das
-// A3-Papierblatt an der Kistenannahme bleibt das Live-Arbeitsblatt; hier
-// kommt am Schichtende je Person die Summe rein: wie viele Kisten i.O.
-// angenommen und wie viele in die Nacharbeit gegangen sind. Daraus die
-// Nacharbeitsquote je Person - erstmal reine Anzeige (Statistik →
-// Zuckermais), keine Prämienwirkung. Tabelle zuckermais_annahme.
+// Qualität → Strichliste / Nacharbeit (Nutzer-Vorgabe 2026-09-10, auf
+// Tagesebene vereinfacht 2026-09-14: "Vormittag und Nachmittag kann zu
+// Tagessumme zusammengefasst werden"). Das A3-Papierblatt an der
+// Kistenannahme bleibt nach Vormittag/Nachmittag getrennt das
+// Live-Arbeitsblatt; hier kommt am Tagesende je Person nur EINE Zahl rein:
+// wie viele Kisten in die Nacharbeit gingen.
+//
+// "Kisten i.O." wird bewusst NICHT mehr erfasst - das war dieselbe Zahl wie
+// die Prämien-Kisten des Tages (zuckermais_rohdaten.kisten), nur ein
+// zweites Mal von Hand eingetippt (Nutzer-Feedback: "was mir gerade nicht
+// gefällt ist, dass ich bei Prämien die Kisten erfasse und bei
+// Strichliste/Nacharbeit nochmal"). "i.O." wird hier nur noch angezeigt,
+// berechnet aus Prämien-Kisten - Nacharbeit (Sicht zuckermais_annahme_quote).
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { getSupabaseClient } from "@/lib/supabase/client";
@@ -13,20 +20,10 @@ import { useProfile } from "@/lib/useProfile";
 import ErntewirtschaftTabs from "@/components/ErntewirtschaftTabs";
 import { formatDatumDE } from "@/lib/format";
 import { MENUE_RECHTE } from "@/lib/rollen";
-import type {
-  Employee,
-  QsSchicht,
-  UserRole,
-  ZuckermaisAnnahme,
-} from "@/lib/types";
+import type { Employee, UserRole } from "@/lib/types";
 
 function heuteIso() {
   return new Date().toISOString().slice(0, 10);
-}
-// Schicht automatisch aus der Uhrzeit: ab 14:00 Nachmittag, davor Vormittag
-// (gleiche Regel wie in der Schichtkontrolle).
-function schichtJetzt(): QsSchicht {
-  return new Date().getHours() >= 14 ? "nachmittag" : "vormittag";
 }
 function quote(nacharbeit: number, gesamt: number): number | null {
   return gesamt > 0 ? Math.round((nacharbeit / gesamt) * 1000) / 10 : null;
@@ -41,9 +38,6 @@ function name(e: Employee): string {
   return `${e.name}${e.vorname ? ", " + e.vorname : ""}`;
 }
 
-type Feld = { io: string; nacharbeit: string };
-const LEER: Feld = { io: "", nacharbeit: "" };
-
 export default function StrichlistePage() {
   const { profile } = useProfile();
   const canSee =
@@ -56,10 +50,12 @@ export default function StrichlistePage() {
     profile?.role === "erntewirtschaft";
 
   const [datum, setDatum] = useState(heuteIso());
-  const [schicht, setSchicht] = useState<QsSchicht>(schichtJetzt);
 
   const [personen, setPersonen] = useState<Employee[]>([]);
-  const [werte, setWerte] = useState<Record<string, Feld>>({});
+  // Prämien-Kisten des Tages je Person - null, solange dort noch nichts
+  // erfasst ist (siehe Hinweis in der Zeile).
+  const [praemieKisten, setPraemieKisten] = useState<Record<string, number | null>>({});
+  const [nacharbeitFelder, setNacharbeitFelder] = useState<Record<string, string>>({});
   const [laden, setLaden] = useState(true);
   const [speichert, setSpeichert] = useState(false);
   const [fehler, setFehler] = useState<string | null>(null);
@@ -69,7 +65,7 @@ export default function StrichlistePage() {
     setLaden(true);
     setFehler(null);
     const supabase = getSupabaseClient();
-    const [{ data: emp }, { data: rows }] = await Promise.all([
+    const [{ data: emp }, { data: praemien }, { data: annahme }] = await Promise.all([
       supabase
         .from("employees")
         .select("*")
@@ -78,36 +74,49 @@ export default function StrichlistePage() {
         .order("name")
         .order("vorname"),
       supabase
+        .from("zuckermais_rohdaten")
+        .select("employee_id, kisten")
+        .eq("datum", datum),
+      supabase
         .from("zuckermais_annahme")
         .select("*")
-        .eq("datum", datum)
-        .eq("schicht", schicht),
+        .eq("datum", datum),
     ]);
     const liste = (emp as Employee[]) ?? [];
     setPersonen(liste);
-    const vorhanden: Record<string, Feld> = {};
-    ((rows as ZuckermaisAnnahme[]) ?? []).forEach((r) => {
-      vorhanden[r.employee_id] = {
-        io: String(r.kisten_io),
-        nacharbeit: String(r.kisten_nacharbeit),
-      };
+
+    const praemieMap: Record<string, number | null> = {};
+    (
+      (praemien as { employee_id: string; kisten: number }[]) ?? []
+    ).forEach((p) => {
+      praemieMap[p.employee_id] = p.kisten;
     });
-    const next: Record<string, Feld> = {};
     liste.forEach((e) => {
-      next[e.id] = vorhanden[e.id] ?? { ...LEER };
+      if (!(e.id in praemieMap)) praemieMap[e.id] = null;
     });
-    setWerte(next);
+    setPraemieKisten(praemieMap);
+
+    const annahmeMap: Record<string, string> = {};
+    (
+      (annahme as { employee_id: string; kisten_nacharbeit: number }[]) ?? []
+    ).forEach((a) => {
+      annahmeMap[a.employee_id] = String(a.kisten_nacharbeit);
+    });
+    const next: Record<string, string> = {};
+    liste.forEach((e) => {
+      next[e.id] = annahmeMap[e.id] ?? "";
+    });
+    setNacharbeitFelder(next);
     setLaden(false);
-  }, [datum, schicht]);
+  }, [datum]);
 
   useEffect(() => {
     laed();
   }, [laed]);
 
-  function setzeFeld(id: string, teil: keyof Feld, roh: string) {
-    // nur ganze, nicht-negative Zahlen
+  function setzeNacharbeit(id: string, roh: string) {
     const v = roh.replace(/[^\d]/g, "");
-    setWerte((prev) => ({ ...prev, [id]: { ...(prev[id] ?? LEER), [teil]: v } }));
+    setNacharbeitFelder((prev) => ({ ...prev, [id]: v }));
     setGespeichertUm(null);
   }
 
@@ -116,38 +125,22 @@ export default function StrichlistePage() {
     setFehler(null);
     const supabase = getSupabaseClient();
 
-    const upserts: {
-      datum: string;
-      schicht: QsSchicht;
-      employee_id: string;
-      kisten_io: number;
-      kisten_nacharbeit: number;
-      erfasst_von: string | null;
-    }[] = [];
+    const upserts: { datum: string; employee_id: string; kisten_nacharbeit: number }[] = [];
     const leeren: string[] = [];
 
     for (const e of personen) {
-      const f = werte[e.id] ?? LEER;
-      const io = f.io === "" ? 0 : Number(f.io);
-      const na = f.nacharbeit === "" ? 0 : Number(f.nacharbeit);
-      if (io === 0 && na === 0) {
+      const na = nacharbeitFelder[e.id] === "" ? 0 : Number(nacharbeitFelder[e.id]);
+      if (na === 0) {
         leeren.push(e.id);
       } else {
-        upserts.push({
-          datum,
-          schicht,
-          employee_id: e.id,
-          kisten_io: io,
-          kisten_nacharbeit: na,
-          erfasst_von: profile?.id ?? null,
-        });
+        upserts.push({ datum, employee_id: e.id, kisten_nacharbeit: na });
       }
     }
 
     if (upserts.length > 0) {
       const { error } = await supabase
         .from("zuckermais_annahme")
-        .upsert(upserts, { onConflict: "datum,schicht,employee_id" });
+        .upsert(upserts, { onConflict: "datum,employee_id" });
       if (error) {
         setFehler(error.message);
         setSpeichert(false);
@@ -161,7 +154,6 @@ export default function StrichlistePage() {
         .from("zuckermais_annahme")
         .delete()
         .eq("datum", datum)
-        .eq("schicht", schicht)
         .in("employee_id", leeren);
       if (error) {
         setFehler(error.message);
@@ -171,10 +163,7 @@ export default function StrichlistePage() {
     }
     setSpeichert(false);
     setGespeichertUm(
-      new Date().toLocaleTimeString("de-DE", {
-        hour: "2-digit",
-        minute: "2-digit",
-      })
+      new Date().toLocaleTimeString("de-DE", { hour: "2-digit", minute: "2-digit" })
     );
     laed();
   }
@@ -182,17 +171,21 @@ export default function StrichlistePage() {
   const summe = useMemo(() => {
     let io = 0;
     let na = 0;
-    let personenMitDaten = 0;
+    let personenMitNacharbeit = 0;
+    let ohnePraemie = 0;
     for (const e of personen) {
-      const f = werte[e.id] ?? LEER;
-      const pIo = f.io === "" ? 0 : Number(f.io);
-      const pNa = f.nacharbeit === "" ? 0 : Number(f.nacharbeit);
-      if (pIo > 0 || pNa > 0) personenMitDaten += 1;
-      io += pIo;
-      na += pNa;
+      const naWert = nacharbeitFelder[e.id] === "" ? 0 : Number(nacharbeitFelder[e.id]);
+      if (naWert > 0) personenMitNacharbeit += 1;
+      na += naWert;
+      const kistenPraemie = praemieKisten[e.id];
+      if (kistenPraemie == null) {
+        if (naWert > 0) ohnePraemie += 1;
+      } else {
+        io += Math.max(kistenPraemie - naWert, 0);
+      }
     }
-    return { io, na, gesamt: io + na, personenMitDaten };
-  }, [personen, werte]);
+    return { io, na, gesamt: io + na, personenMitNacharbeit, ohnePraemie };
+  }, [personen, nacharbeitFelder, praemieKisten]);
 
   if (profile && !canSee) {
     return (
@@ -215,9 +208,10 @@ export default function StrichlistePage() {
           Qualität – Strichliste / Nacharbeit
         </h1>
         <p className="text-sm text-neutral-500">
-          Am Schichtende je Person die Summe vom Papierblatt der Kistenannahme
-          eintragen: angenommene Kisten (i.O.) und Kisten in die Nacharbeit.
-          Daraus die Nacharbeitsquote – erscheint in der Statistik
+          Am Tagesende je Person nur die Nacharbeit vom Papierblatt der
+          Kistenannahme eintragen. „Kisten i.O." wird nicht mehr separat
+          erfasst, sondern aus den Prämien-Kisten desselben Tages abgeleitet
+          (dort schon einmal eingetippt). Erscheint in der Statistik
           (Erntewirtschaft → Statistik → Zuckermais), ohne Prämienwirkung.
         </p>
       </div>
@@ -232,19 +226,8 @@ export default function StrichlistePage() {
             onChange={(e) => setDatum(e.target.value)}
           />
         </label>
-        <label className="text-sm">
-          Schicht
-          <select
-            className="mt-1 block"
-            value={schicht}
-            onChange={(e) => setSchicht(e.target.value as QsSchicht)}
-          >
-            <option value="vormittag">Vormittag</option>
-            <option value="nachmittag">Nachmittag</option>
-          </select>
-        </label>
         <div className="ml-auto text-sm text-neutral-500">
-          {summe.personenMitDaten} Person(en) · {summe.io} i.O. · {summe.na}{" "}
+          {summe.personenMitNacharbeit} Person(en) mit Nacharbeit · {summe.na}{" "}
           Nacharbeit{" "}
           {summe.gesamt > 0 && (
             <span className={quoteKlasse(quote(summe.na, summe.gesamt))}>
@@ -274,34 +257,34 @@ export default function StrichlistePage() {
               <thead>
                 <tr className="border-b border-linie text-left text-neutral-500">
                   <th className="px-3 py-2 font-medium">Person</th>
-                  <th className="px-3 py-2 font-medium">Kisten i.O.</th>
+                  <th className="px-3 py-2 font-medium">Kisten (Prämie)</th>
                   <th className="px-3 py-2 font-medium">Nacharbeit</th>
+                  <th className="px-3 py-2 font-medium">Kisten i.O.</th>
                   <th className="px-3 py-2 font-medium">Quote</th>
                 </tr>
               </thead>
               <tbody>
                 {personen.map((e) => {
-                  const f = werte[e.id] ?? LEER;
-                  const io = f.io === "" ? 0 : Number(f.io);
-                  const na = f.nacharbeit === "" ? 0 : Number(f.nacharbeit);
-                  const q = quote(na, io + na);
+                  const kistenPraemie = praemieKisten[e.id] ?? null;
+                  const na =
+                    nacharbeitFelder[e.id] === "" ? 0 : Number(nacharbeitFelder[e.id] || 0);
+                  const io = kistenPraemie != null ? Math.max(kistenPraemie - na, 0) : null;
+                  const gesamt = kistenPraemie ?? 0;
+                  const q = kistenPraemie != null ? quote(na, gesamt) : null;
                   return (
-                    <tr
-                      key={e.id}
-                      className="border-b border-linie last:border-0"
-                    >
+                    <tr key={e.id} className="border-b border-linie last:border-0">
                       <td className="px-3 py-1.5">{name(e)}</td>
-                      <td className="px-3 py-1.5">
-                        <input
-                          type="text"
-                          inputMode="numeric"
-                          className="w-20"
-                          disabled={!canWrite}
-                          value={f.io}
-                          onChange={(ev) =>
-                            setzeFeld(e.id, "io", ev.target.value)
-                          }
-                        />
+                      <td className="px-3 py-1.5 text-neutral-600">
+                        {kistenPraemie != null ? (
+                          kistenPraemie
+                        ) : (
+                          <span
+                            className="text-amber-700"
+                            title="Für diesen Tag noch keine Prämien-Kisten erfasst (Prämien → Zuckermais)"
+                          >
+                            fehlt noch
+                          </span>
+                        )}
                       </td>
                       <td className="px-3 py-1.5">
                         <input
@@ -309,17 +292,16 @@ export default function StrichlistePage() {
                           inputMode="numeric"
                           className="w-20"
                           disabled={!canWrite}
-                          value={f.nacharbeit}
-                          onChange={(ev) =>
-                            setzeFeld(e.id, "nacharbeit", ev.target.value)
-                          }
+                          value={nacharbeitFelder[e.id] ?? ""}
+                          onChange={(ev) => setzeNacharbeit(e.id, ev.target.value)}
                         />
                       </td>
+                      <td className="px-3 py-1.5">{io ?? "—"}</td>
                       <td className="px-3 py-1.5">
-                        {io + na > 0 ? (
+                        {q !== null ? (
                           <span className={quoteKlasse(q)}>{q} %</span>
                         ) : (
-                          <span className="text-neutral-300">–</span>
+                          <span className="text-neutral-300">—</span>
                         )}
                       </td>
                     </tr>
@@ -341,8 +323,14 @@ export default function StrichlistePage() {
               </button>
               {gespeichertUm && (
                 <span className="text-sm text-emerald-700">
-                  Gespeichert um {gespeichertUm} Uhr ({formatDatumDE(datum)},{" "}
-                  {schicht === "vormittag" ? "Vormittag" : "Nachmittag"}).
+                  Gespeichert um {gespeichertUm} Uhr ({formatDatumDE(datum)}).
+                </span>
+              )}
+              {summe.ohnePraemie > 0 && (
+                <span className="text-sm text-amber-700">
+                  ⚠ {summe.ohnePraemie} Person(en) mit Nacharbeit, aber ohne
+                  Prämien-Kisten für diesen Tag - „i.O." kann erst berechnet
+                  werden, wenn die Prämie erfasst ist.
                 </span>
               )}
             </div>

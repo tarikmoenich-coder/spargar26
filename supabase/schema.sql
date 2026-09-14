@@ -2722,75 +2722,66 @@ alter view qs_kontrolle_tag set (security_invoker = true);
 grant select on qs_kontrolle_tag to authenticated;
 
 -- Digitale Strichliste / Nacharbeitsquote Zuckermais-Halle (Nutzer-Vorgabe
--- 2026-09-10, Migration migration_2026-10-12_zuckermais_annahme.sql). Je
--- Person und Halbschicht: wie viele Kisten i.O. angenommen, wie viele in die
--- Nacharbeit. Papierblatt (/praemien/zuckermais/strichliste) bleibt das
--- Live-Arbeitsblatt, hier kommt am Schichtende die Summe rein. Erstmal reine
--- Anzeige in /statistik/zuckermais, keine Prämienwirkung.
+-- 2026-09-10, Migrationen migration_2026-10-12_zuckermais_annahme.sql und
+-- migration_2026-10-13_zuckermais_annahme_tagessumme.sql). Je Person und
+-- TAG (bis 2026-10-13 je Halbschicht, per Nutzer-Feedback auf Tagesebene
+-- vereinfacht - Prämien kennt ohnehin keine Halbschicht): wie viele Kisten
+-- in die Nacharbeit gingen. "i.O." wird NICHT mehr separat erfasst, sondern
+-- aus den ohnehin erfassten Prämien-Kisten des Tages abgeleitet
+-- (zuckermais_rohdaten.kisten - kisten_nacharbeit, siehe
+-- zuckermais_annahme_quote) - vorher war das dieselbe Zahl zweimal von Hand
+-- eingetippt. Papierblatt (/praemien/zuckermais/strichliste) bleibt nach
+-- Vormittag/Nachmittag getrennt das Live-Arbeitsblatt, hier kommt am
+-- Tagesende nur die Nacharbeits-Summe rein. Erstmal reine Anzeige in
+-- /statistik/zuckermais, keine Prämienwirkung.
 create table zuckermais_annahme (
   id bigint generated always as identity primary key,
   datum date not null default current_date,
-  schicht text not null check (schicht in ('vormittag', 'nachmittag')),
   employee_id uuid not null references employees (id) on delete restrict,
-  kisten_io int not null default 0 check (kisten_io >= 0),
   kisten_nacharbeit int not null default 0 check (kisten_nacharbeit >= 0),
   notiz text,
   erfasst_von uuid references profiles (id) default auth.uid(),
   erfasst_am timestamptz not null default now(),
   updated_at timestamptz not null default now(),
-  constraint zuckermais_annahme_uniq unique (datum, schicht, employee_id)
+  constraint zuckermais_annahme_uniq unique (datum, employee_id)
 );
 
 create index idx_zuckermais_annahme_datum
-  on zuckermais_annahme (datum desc, schicht);
+  on zuckermais_annahme (datum desc);
 
--- Je Zeile die Nacharbeitsquote in % (Nacharbeit / alle Kisten der Person).
+-- Je Zeile: "i.O."/"gesamt" kommen aus den Prämien-Kisten des Tages
+-- (zuckermais_rohdaten), nicht aus einer eigenen Spalte. Fehlt der
+-- Prämien-Eintrag noch, bleiben i.O./gesamt/Quote bewusst NULL statt
+-- fälschlich 0 bzw. 100 % Nacharbeit zu suggerieren.
 create or replace view zuckermais_annahme_quote as
 select
-  a.*,
-  (a.kisten_io + a.kisten_nacharbeit) as kisten_gesamt,
+  a.id,
+  a.datum,
+  a.employee_id,
+  a.kisten_nacharbeit,
+  a.notiz,
+  a.erfasst_von,
+  a.erfasst_am,
+  a.updated_at,
+  r.kisten as kisten_praemie,
   case
-    when (a.kisten_io + a.kisten_nacharbeit) > 0
-    then round(
-      a.kisten_nacharbeit::numeric
-        / (a.kisten_io + a.kisten_nacharbeit) * 100,
-      1
-    )
+    when r.kisten is not null then greatest(r.kisten - a.kisten_nacharbeit, 0)
+  end as kisten_io,
+  r.kisten as kisten_gesamt,
+  case
+    when r.kisten is not null and r.kisten > 0
+    then round(a.kisten_nacharbeit::numeric / r.kisten * 100, 1)
   end as nacharbeit_prozent,
   e.name as employee_name,
   e.vorname as employee_vorname,
   e.personal_nr
 from zuckermais_annahme a
-join employees e on e.id = a.employee_id;
+join employees e on e.id = a.employee_id
+left join zuckermais_rohdaten r
+  on r.employee_id = a.employee_id and r.datum = a.datum;
 
 alter view zuckermais_annahme_quote set (security_invoker = true);
 grant select on zuckermais_annahme_quote to authenticated;
-
--- Tagesaggregat je Person (die Statistik summiert je Zeitraum selbst weiter).
-create or replace view zuckermais_annahme_person_tag as
-select
-  datum,
-  employee_id,
-  min(e.name) as employee_name,
-  min(e.vorname) as employee_vorname,
-  min(e.personal_nr) as personal_nr,
-  sum(kisten_io)::int as kisten_io,
-  sum(kisten_nacharbeit)::int as kisten_nacharbeit,
-  sum(kisten_io + kisten_nacharbeit)::int as kisten_gesamt,
-  case
-    when sum(kisten_io + kisten_nacharbeit) > 0
-    then round(
-      sum(kisten_nacharbeit)::numeric
-        / sum(kisten_io + kisten_nacharbeit) * 100,
-      1
-    )
-  end as nacharbeit_prozent
-from zuckermais_annahme a
-join employees e on e.id = a.employee_id
-group by datum, employee_id;
-
-alter view zuckermais_annahme_person_tag set (security_invoker = true);
-grant select on zuckermais_annahme_person_tag to authenticated;
 
 -- ---------------------------------------------------------------------------
 -- 6b. Prämien Erdbeeren (Nutzer-Vorgabe 2026-08-09) - gleiches Grundmuster

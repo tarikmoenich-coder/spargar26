@@ -27,7 +27,7 @@ import { formatDatumDE, formatMenge } from "@/lib/format";
 import type {
   Employee,
   QsKontrolle,
-  ZuckermaisAnnahmePersonTag,
+  ZuckermaisAnnahmeQuote,
   ZuckermaisDruck,
   ZuckermaisPraemieTag,
   ZuckermaisStatistikTag,
@@ -152,9 +152,10 @@ export default function StatistikZuckermaisPage() {
 
   // Nacharbeitsquote je Person aus der digitalen Strichliste der
   // Kistenannahme (Tabelle zuckermais_annahme, Sicht
-  // zuckermais_annahme_person_tag). Nutzer-Vorgabe 2026-09-10: erstmal reine
-  // Anzeige, keine Prämienwirkung.
-  const [naTage, setNaTage] = useState<ZuckermaisAnnahmePersonTag[]>([]);
+  // zuckermais_annahme_quote - seit 2026-09-14 eine Zeile je Person+Tag,
+  // "i.O." aus den Prämien-Kisten des Tages abgeleitet). Nutzer-Vorgabe
+  // 2026-09-10: erstmal reine Anzeige, keine Prämienwirkung.
+  const [naTage, setNaTage] = useState<ZuckermaisAnnahmeQuote[]>([]);
 
   async function load() {
     setLoading(true);
@@ -180,7 +181,7 @@ export default function StatistikZuckermaisPage() {
           .lte("datum", `${jahr}-12-31`)
           .order("zeitpunkt", { ascending: false }),
         supabase
-          .from("zuckermais_annahme_person_tag")
+          .from("zuckermais_annahme_quote")
           .select("*")
           .gte("datum", `${jahr}-01-01`)
           .lte("datum", `${jahr}-12-31`),
@@ -192,7 +193,7 @@ export default function StatistikZuckermaisPage() {
     });
     setDruckByDatum(map);
     setQsKontrollen((qs as QsKontrolle[]) ?? []);
-    setNaTage((na as ZuckermaisAnnahmePersonTag[]) ?? []);
+    setNaTage((na as ZuckermaisAnnahmeQuote[]) ?? []);
     setLoading(false);
   }
 
@@ -417,10 +418,20 @@ export default function StatistikZuckermaisPage() {
   }, [qsKontrollen, zeilen]);
 
   // Nacharbeitsquote je Person: Tageszeilen über das Jahr zusammenfassen.
+  // "i.O." kommt aus den Prämien-Kisten des Tages (zuckermais_annahme_quote)
+  // - fehlt der Prämien-Eintrag noch, zählt der Tag NICHT in io/gesamt/Quote
+  // mit (sonst würde eine fehlende Prämie fälschlich wie 100 % Nacharbeit
+  // aussehen), taucht aber in "ohneP raemie" auf, damit das nicht untergeht.
   const nacharbeitJePerson = useMemo(() => {
     const proPerson = new Map<
       string,
-      { name: string; io: number; nacharbeit: number; tage: Set<string> }
+      {
+        name: string;
+        io: number;
+        nacharbeit: number;
+        tage: Set<string>;
+        ohnePraemie: number;
+      }
     >();
     for (const r of naTage) {
       const v =
@@ -432,8 +443,10 @@ export default function StatistikZuckermaisPage() {
           io: 0,
           nacharbeit: 0,
           tage: new Set<string>(),
+          ohnePraemie: 0,
         };
-      v.io += r.kisten_io;
+      if (r.kisten_io !== null) v.io += r.kisten_io;
+      else v.ohnePraemie += 1;
       v.nacharbeit += r.kisten_nacharbeit;
       v.tage.add(r.datum);
       proPerson.set(r.employee_id, v);
@@ -448,6 +461,7 @@ export default function StatistikZuckermaisPage() {
           nacharbeit: v.nacharbeit,
           gesamt,
           tage: v.tage.size,
+          ohnePraemie: v.ohnePraemie,
           quote: gesamt > 0 ? Math.round((v.nacharbeit / gesamt) * 1000) / 10 : null,
         };
       })
@@ -455,6 +469,7 @@ export default function StatistikZuckermaisPage() {
     const io = zeilenP.reduce((s, z) => s + z.io, 0);
     const nacharbeit = zeilenP.reduce((s, z) => s + z.nacharbeit, 0);
     const gesamt = io + nacharbeit;
+    const ohnePraemie = zeilenP.reduce((s, z) => s + z.ohnePraemie, 0);
     return {
       zeilen: zeilenP,
       gruppenQuote:
@@ -462,6 +477,7 @@ export default function StatistikZuckermaisPage() {
       io,
       nacharbeit,
       gesamt,
+      ohnePraemie,
     };
   }, [naTage]);
   // Mindestlohn kommt aus der Sicht selbst mit (das Frontend darf
@@ -694,10 +710,11 @@ export default function StatistikZuckermaisPage() {
             </h2>
             <p className="text-sm text-neutral-500">
               Aus der Strichliste der Kistenannahme (Erntewirtschaft → Qualität
-              → Strichliste): angenommene Kisten und Kisten in die Nacharbeit,
-              je Person über das Saison-Jahr summiert. Quote = Nacharbeit /
-              alle Kisten. Über 8 % rot, über 3 % gelb.{" "}
-              <strong>Reine Anzeige, keine Prämienwirkung.</strong>
+              → Strichliste): Kisten in die Nacharbeit je Person und Tag.
+              „Kisten i.O." kommt aus den Prämien-Kisten desselben Tages (dort
+              einmal erfasst, hier nicht nochmal) und wird auf das Saison-Jahr
+              summiert. Quote = Nacharbeit / alle Kisten. Über 8 % rot, über
+              3 % gelb. <strong>Reine Anzeige, keine Prämienwirkung.</strong>
             </p>
           </div>
           {nacharbeitJePerson.zeilen.length === 0 ? (
@@ -717,6 +734,12 @@ export default function StatistikZuckermaisPage() {
                     {nacharbeitJePerson.gruppenQuote ?? "—"} %
                   </span>
                 </span>
+                {nacharbeitJePerson.ohnePraemie > 0 && (
+                  <span className="text-amber-700">
+                    ⚠ {nacharbeitJePerson.ohnePraemie} Tag(e) ohne Prämien-Kisten
+                    - dort noch nicht in i.O./Quote berücksichtigt
+                  </span>
+                )}
               </div>
               <div className="overflow-x-auto">
                 <table>
@@ -734,7 +757,17 @@ export default function StatistikZuckermaisPage() {
                     {nacharbeitJePerson.zeilen.map((z) => (
                       <tr key={z.id}>
                         <td>{z.name}</td>
-                        <td>{z.tage}</td>
+                        <td>
+                          {z.tage}
+                          {z.ohnePraemie > 0 && (
+                            <span
+                              className="ml-1 text-amber-700"
+                              title={`${z.ohnePraemie} Tag(e) ohne Prämien-Kisten - dort noch nicht berücksichtigt`}
+                            >
+                              ⚠
+                            </span>
+                          )}
+                        </td>
                         <td>{z.io}</td>
                         <td>{z.nacharbeit}</td>
                         <td>{z.gesamt}</td>
