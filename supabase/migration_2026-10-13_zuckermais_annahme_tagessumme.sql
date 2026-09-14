@@ -14,6 +14,13 @@
 --
 -- Re-runnable: drop/add constraint + drop column if exists.
 
+-- Beide Sichten hängen (über a.* bzw. explizite Spalten) an schicht/
+-- kisten_io - müssen VOR dem Löschen der Spalten weg, sonst verweigert
+-- Postgres das ALTER TABLE ("other objects depend on it"). Werden unten
+-- neu angelegt (zuckermais_annahme_person_tag ersatzlos).
+drop view if exists zuckermais_annahme_person_tag;
+drop view if exists zuckermais_annahme_quote;
+
 alter table zuckermais_annahme drop constraint if exists zuckermais_annahme_uniq;
 alter table zuckermais_annahme drop column if exists schicht;
 alter table zuckermais_annahme drop column if exists kisten_io;
@@ -59,7 +66,7 @@ left join zuckermais_rohdaten r
 alter view zuckermais_annahme_quote set (security_invoker = true);
 grant select on zuckermais_annahme_quote to authenticated;
 
--- Ersatzlos entfallen: bei Tagesgranularität ist zuckermais_annahme_quote
--- bereits die "je Tag"-Zeile, eine eigene Aggregat-Sicht braucht es nicht
--- mehr (die Statistik summiert die Jahres-Zeilen wie gehabt clientseitig).
-drop view if exists zuckermais_annahme_person_tag;
+-- zuckermais_annahme_person_tag entfällt ersatzlos (oben schon gedroppt):
+-- bei Tagesgranularität ist zuckermais_annahme_quote bereits die "je Tag"-
+-- Zeile, eine eigene Aggregat-Sicht braucht es nicht mehr (die Statistik
+-- summiert die Jahres-Zeilen wie gehabt clientseitig).
