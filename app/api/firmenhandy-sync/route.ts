@@ -37,11 +37,18 @@ function vcardEscape(text: string): string {
   return text.replace(/([,;\\])/g, "\\$1");
 }
 
+// Kurzes, eindeutiges Suffix statt der Telefonnummer in Klammern (Nutzer-
+// Vorgabe 2026-09-18: "Die Telefonnummer in Klammern ist zuviel ... sowas
+// wie Firma im Präfix oder Suffix") - die Nummer steht ja schon im
+// Telefonfeld des Kontakts selbst. Als Suffix statt Präfix, damit die
+// alphabetische Sortierung nach Namen erhalten bleibt.
+const FIRMEN_SUFFIX = "Mömmel";
+
 function vcard(nummer: string, name: string | null, funktion?: string | null): string {
   const uid = vcardUid(nummer);
   const anzeigename = name
-    ? `${vcardEscape(name)} (${nummer})`
-    : `Firmenhandy frei (${nummer})`;
+    ? `${vcardEscape(name)} (${FIRMEN_SUFFIX})`
+    : `Firmenhandy frei (${FIRMEN_SUFFIX})`;
   const zeilen = [
     "BEGIN:VCARD",
     "VERSION:3.0",
