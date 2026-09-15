@@ -16,7 +16,10 @@ import { MENUE_RECHTE } from "@/lib/rollen";
 import type { QsKontrolle, QsSchicht, UserRole } from "@/lib/types";
 
 const KULTUR = "zuckermais";
-const STANDARD_KOLBEN = 20;
+// Nutzer-Vorgabe 2026-09-15: Stichprobe von 20 auf 50 Kolben erhöht - eine
+// fertige Kiste hat im Schnitt 55 Kolben (zuckermais_saetze.kolben_pro_kiste),
+// bei 50 geprüften Kolben wird also praktisch die ganze Kiste kontrolliert.
+const STANDARD_KOLBEN = 50;
 
 function heuteIso() {
   return new Date().toISOString().slice(0, 10);
@@ -331,7 +334,7 @@ export default function QualitaetPage() {
             <span className="text-xs text-neutral-400">
               (Start = alle i.O., mit „−" runterkorrigieren)
             </span>
-            <div className="mt-1 flex items-center gap-3">
+            <div className="mt-1 flex flex-wrap items-center gap-3">
               <button
                 type="button"
                 aria-label="einen weniger"
@@ -364,23 +367,43 @@ export default function QualitaetPage() {
               >
                 +
               </button>
-              <span className="text-neutral-500">
-                von{" "}
-                <input
-                  type="number"
-                  inputMode="numeric"
-                  min={1}
-                  max={200}
-                  className="w-16 text-center"
-                  value={kolbenGesamt}
-                  onChange={(e) => {
-                    const g = Math.max(1, Number(e.target.value) || 1);
-                    setKolbenGesamt(g);
-                    setKolbenIo((v) => Math.min(v, g));
-                  }}
-                />{" "}
-                Kolben
-              </span>
+              <span className="text-neutral-500">von</span>
+              <button
+                type="button"
+                aria-label="geprüfte Kolben insgesamt: einen weniger"
+                className="btn-secondary h-11 w-11 text-xl"
+                onClick={() =>
+                  setKolbenGesamt((g) => {
+                    const neu = Math.max(1, g - 1);
+                    setKolbenIo((v) => Math.min(v, neu));
+                    return neu;
+                  })
+                }
+              >
+                −
+              </button>
+              <input
+                type="number"
+                inputMode="numeric"
+                min={1}
+                max={200}
+                className="w-16 text-center text-lg"
+                value={kolbenGesamt}
+                onChange={(e) => {
+                  const g = Math.max(1, Number(e.target.value) || 1);
+                  setKolbenGesamt(g);
+                  setKolbenIo((v) => Math.min(v, g));
+                }}
+              />
+              <button
+                type="button"
+                aria-label="geprüfte Kolben insgesamt: einen mehr"
+                className="btn-secondary h-11 w-11 text-xl"
+                onClick={() => setKolbenGesamt((g) => Math.min(200, g + 1))}
+              >
+                +
+              </button>
+              <span className="text-neutral-500">Kolben</span>
               {vorschau !== null && (
                 <span className={quoteKlasse(vorschau)}>{vorschau} %</span>
               )}
