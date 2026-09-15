@@ -11,15 +11,24 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { getSupabaseClient } from "@/lib/supabase/client";
 import { useProfile } from "@/lib/useProfile";
 import ErntewirtschaftTabs from "@/components/ErntewirtschaftTabs";
-import { formatDatumDE } from "@/lib/format";
+import { formatDatumDE, formatMenge } from "@/lib/format";
 import { MENUE_RECHTE } from "@/lib/rollen";
-import type { QsKontrolle, QsSchicht, UserRole } from "@/lib/types";
+import type { QsKontrolle, QsSchicht, UserRole, ZuckermaisSatz } from "@/lib/types";
 
 const KULTUR = "zuckermais";
 // Nutzer-Vorgabe 2026-09-15: Stichprobe von 20 auf 50 Kolben erhöht - eine
 // fertige Kiste hat im Schnitt 55 Kolben (zuckermais_saetze.kolben_pro_kiste),
 // bei 50 geprüften Kolben wird also praktisch die ganze Kiste kontrolliert.
 const STANDARD_KOLBEN = 50;
+// Ab dieser Anzahl Kontrollen am Tag wird der gemessene Kolben/Kiste-
+// Durchschnitt als Grundlage für einen Satz-Anpassungsvorschlag genommen -
+// eine einzelne Kiste wäre zu wackelig (Nutzer-Vorgabe 2026-09-15: "eine
+// ideale Grundlage, um die Standardanzahl an Kolben pro Kiste für diesen
+// Tag zu ermitteln").
+const MINDEST_KONTROLLEN_FUER_SATZVORSCHLAG = 2;
+// Ab dieser Abweichung vom aktuell hinterlegten Satz wird der Hinweis
+// überhaupt gezeigt (kleine Schwankungen sind normal).
+const SATZ_ABWEICHUNG_SCHWELLE_PROZENT = 10;
 
 function heuteIso() {
   return new Date().toISOString().slice(0, 10);
@@ -99,6 +108,9 @@ export default function QualitaetPage() {
     profile?.role === "admin" ||
     profile?.role === "hr" ||
     profile?.role === "erntewirtschaft";
+  // Den Satz (zuckermais_saetze) darf nur admin ändern (RLS), siehe
+  // app/praemien/zuckermais/page.tsx.
+  const canSatzAendern = profile?.role === "admin";
 
   // --- Formular ---
   const [datum, setDatum] = useState(heuteIso());
@@ -123,6 +135,12 @@ export default function QualitaetPage() {
   const [listeLaeuft, setListeLaeuft] = useState(true);
   const [grossesFoto, setGrossesFoto] = useState<string | null>(null);
 
+  // Aktuell gültiger Kolben/Kiste-Satz (für den Satz-Anpassungsvorschlag
+  // unten, Nutzer-Vorgabe 2026-09-15).
+  const [satzHeute, setSatzHeute] = useState<ZuckermaisSatz | null>(null);
+  const [satzUebernehmenLaeuft, setSatzUebernehmenLaeuft] = useState(false);
+  const [satzUebernommenUm, setSatzUebernommenUm] = useState<string | null>(null);
+
   async function ladeListe() {
     setListeLaeuft(true);
     const { data } = await getSupabaseClient()
@@ -139,6 +157,21 @@ export default function QualitaetPage() {
     ladeListe();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ab]);
+
+  async function ladeSatz() {
+    const { data } = await getSupabaseClient()
+      .from("zuckermais_saetze")
+      .select("*")
+      .lte("gueltig_ab", heuteIso())
+      .order("gueltig_ab", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    setSatzHeute((data as ZuckermaisSatz) ?? null);
+  }
+
+  useEffect(() => {
+    ladeSatz();
+  }, []);
 
   async function fotoGewaehlt(e: React.ChangeEvent<HTMLInputElement>) {
     const datei = e.target.files?.[0];
@@ -228,8 +261,75 @@ export default function QualitaetPage() {
       anzahl: heute.length,
       quote: quote(io, g),
       schlechteste: einzel.length ? Math.min(...einzel) : null,
+      // Ø geprüfte Kolben je Kontrolle heute - bei Standard 50 (nahe an
+      // einer vollen Kiste) eine brauchbare Grundlage, um den hinterlegten
+      // Kolben/Kiste-Satz zu überprüfen (Nutzer-Vorgabe 2026-09-15).
+      kolbenGesamtDurchschnitt: g / heute.length,
     };
   }, [liste]);
+
+  // Satz-Anpassungsvorschlag: nur ab ein paar Kontrollen (sonst zu wackelig)
+  // und nur bei spürbarer Abweichung vom aktuell hinterlegten Satz.
+  const satzVorschlag = useMemo(() => {
+    if (
+      !heuteZusammenfassung ||
+      !satzHeute ||
+      heuteZusammenfassung.anzahl < MINDEST_KONTROLLEN_FUER_SATZVORSCHLAG ||
+      satzHeute.kolben_pro_kiste <= 0
+    )
+      return null;
+    const gemessen = heuteZusammenfassung.kolbenGesamtDurchschnitt;
+    const abweichungProzent =
+      ((gemessen - satzHeute.kolben_pro_kiste) / satzHeute.kolben_pro_kiste) * 100;
+    if (Math.abs(abweichungProzent) < SATZ_ABWEICHUNG_SCHWELLE_PROZENT) return null;
+    return {
+      gemessen: Math.round(gemessen * 100) / 100,
+      abweichungProzent: Math.round(abweichungProzent * 10) / 10,
+    };
+  }, [heuteZusammenfassung, satzHeute]);
+
+  async function satzUebernehmen() {
+    if (!satzVorschlag || !satzHeute || !canSatzAendern) return;
+    if (
+      !window.confirm(
+        `Kolben/Kiste-Satz ab heute (${formatDatumDE(heuteIso())}) von ` +
+          `${satzHeute.kolben_pro_kiste} auf ${satzVorschlag.gemessen} setzen? ` +
+          `Norm (${satzHeute.norm_kolben_pro_stunde}) und Satz/Kolben ` +
+          `(${satzHeute.satz_pro_kolben}) bleiben unverändert. Wirkt sich auf ` +
+          `die Prämienberechnung ab heute aus.`
+      )
+    )
+      return;
+    setSatzUebernehmenLaeuft(true);
+    setFehler(null);
+    const supabase = getSupabaseClient();
+    const werte = {
+      gueltig_ab: heuteIso(),
+      norm_kolben_pro_stunde: satzHeute.norm_kolben_pro_stunde,
+      kolben_pro_kiste: satzVorschlag.gemessen,
+      satz_pro_kolben: satzHeute.satz_pro_kolben,
+    };
+    // Gibt es für heute schon einen Satz (gueltig_ab = heute), wird der
+    // korrigiert statt ein zweiter mit demselben Datum angelegt (Unique-
+    // Constraint zuckermais_saetze_gueltig_ab_key).
+    const { data: bestehend } = await supabase
+      .from("zuckermais_saetze")
+      .select("id")
+      .eq("gueltig_ab", heuteIso())
+      .maybeSingle();
+    const { error } = bestehend
+      ? await supabase.from("zuckermais_saetze").update(werte).eq("id", bestehend.id)
+      : await supabase.from("zuckermais_saetze").insert(werte);
+    setSatzUebernehmenLaeuft(false);
+    if (error) {
+      setFehler(error.message);
+      return;
+    }
+    setSatzUebernommenUm(
+      new Date().toLocaleTimeString("de-DE", { hour: "2-digit", minute: "2-digit" })
+    );
+    ladeSatz();
+  }
 
   if (profile && !canSee) {
     return (
@@ -268,6 +368,45 @@ export default function QualitaetPage() {
           {heuteZusammenfassung.schlechteste !== null && (
             <span className="text-neutral-500">
               schlechteste {heuteZusammenfassung.schlechteste} %
+            </span>
+          )}
+          <span className="text-neutral-400">
+            · Ø {formatMenge(heuteZusammenfassung.kolbenGesamtDurchschnitt, 1)}{" "}
+            geprüfte Kolben/Kontrolle
+          </span>
+        </div>
+      )}
+
+      {satzVorschlag && satzHeute && (
+        <div className="flex flex-wrap items-center gap-3 rounded border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-900">
+          <span>
+            ⚠ Gemessener Kolben/Kiste-Schnitt heute:{" "}
+            <strong>{satzVorschlag.gemessen}</strong> - hinterlegter Satz:{" "}
+            {satzHeute.kolben_pro_kiste} (
+            {satzVorschlag.abweichungProzent > 0 ? "+" : ""}
+            {satzVorschlag.abweichungProzent} %).
+          </span>
+          {canSatzAendern ? (
+            <>
+              <button
+                type="button"
+                className="btn-secondary text-xs"
+                disabled={satzUebernehmenLaeuft}
+                onClick={satzUebernehmen}
+              >
+                {satzUebernehmenLaeuft
+                  ? "Übernimmt…"
+                  : `Satz auf ${satzVorschlag.gemessen} setzen (ab heute)`}
+              </button>
+              {satzUebernommenUm && (
+                <span className="text-emerald-700">
+                  Übernommen um {satzUebernommenUm} Uhr.
+                </span>
+              )}
+            </>
+          ) : (
+            <span className="text-amber-700">
+              Nur admin kann den Satz anpassen (Prämien → Zuckermais → Sätze).
             </span>
           )}
         </div>
