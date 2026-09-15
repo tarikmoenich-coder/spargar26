@@ -329,31 +329,42 @@ export default function FirmenhandyPage() {
               zu berühren.
             </p>
             <div>
-              <p className="font-medium">1. DAVx⁵ installieren</p>
-              <p className="text-neutral-600">
-                Kostenlos über{" "}
-                <a
-                  href="https://f-droid.org/packages/at.bitfire.davdroid/"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-emerald-700 underline"
-                >
-                  F-Droid
-                </a>{" "}
-                (offizielle Quelle, immer aktuell) oder für ca. 4 € im{" "}
-                <a
-                  href="https://play.google.com/store/apps/details?id=at.bitfire.davdroid"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-emerald-700 underline"
-                >
-                  Google Play Store
-                </a>
-                . Über F-Droid muss zuerst einmalig die F-Droid-App installiert
-                werden (Android fragt dabei nach Erlaubnis für „Installation
-                aus unbekannten Quellen" - normal, da F-Droid nicht im Play
-                Store ist).
-              </p>
+              <p className="font-medium">1. DAVx⁵ installieren - zwei Wege, jede Person entscheidet selbst</p>
+              <ul className="ml-4 list-disc text-neutral-600">
+                <li className="mb-1">
+                  <strong>
+                    <a
+                      href="https://play.google.com/store/apps/details?id=at.bitfire.davdroid"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-emerald-700 underline"
+                    >
+                      Google Play Store
+                    </a>
+                  </strong>{" "}
+                  - kostet ca. 4 € einmalig, dafür der unkompliziertere,
+                  langfristig sicherere Weg (unabhängig von Googles ab
+                  2026/2027 geplanter „Android Developer Verification", die
+                  Installationen außerhalb des Play Stores erschweren könnte).
+                </li>
+                <li>
+                  <strong>
+                    <a
+                      href="https://f-droid.org/packages/at.bitfire.davdroid/"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-emerald-700 underline"
+                    >
+                      F-Droid
+                    </a>
+                  </strong>{" "}
+                  - kostenlos, dafür muss zuerst einmalig die F-Droid-App
+                  installiert werden (Android fragt dabei nach Erlaubnis für
+                  „Installation aus unbekannten Quellen" - normal, da F-Droid
+                  nicht im Play Store ist). Ob dieser Weg ab 2026/2027 weiter
+                  ohne Zusatzschritte funktioniert, ist noch offen.
+                </li>
+              </ul>
             </div>
             <div>
               <p className="font-medium">2. Konto hinzufügen</p>
