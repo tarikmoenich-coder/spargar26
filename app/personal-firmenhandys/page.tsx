@@ -20,14 +20,27 @@ type EmpOpt = {
   personal_nr: string;
   name: string;
   vorname: string;
+  funktion: string | null;
 };
 
 function anzeigeName(m: EmpOpt | undefined): string | null {
   return m ? `${m.name}, ${m.vorname}` : null;
 }
 
-// Inhaber-Zuweisung direkt in der Liste - freie Suche nach Name/Personalnr.,
-// gleiches Muster wie FahrerZelle bei den Fahrzeug-Stammdaten.
+// Effektiver Inhaber-Name: aus dem Spargar-Personalstamm (employee_id) oder,
+// für Personen ohne Personalstammdatensatz (z.B. Festangestellte,
+// Nutzer-Vorgabe 2026-09-18), der manuell eingetragene inhaber_name.
+function inhaberAnzeige(
+  f: Firmenhandy,
+  mitarbeiterMap: Map<string, EmpOpt>
+): string | null {
+  if (f.employee_id) return anzeigeName(mitarbeiterMap.get(f.employee_id));
+  return f.inhaber_name;
+}
+
+// Inhaber-Zuweisung direkt in der Liste - freie Suche nach Name/Personalnr.
+// wie FahrerZelle bei den Fahrzeug-Stammdaten, plus manuelle Namenseingabe
+// für Personen ohne Spargar-Personalstammdatensatz.
 function InhaberZelle({
   firmenhandy,
   mitarbeiter,
@@ -58,11 +71,11 @@ function InhaberZelle({
     return liste.slice(0, 8);
   }, [suche, mitarbeiter]);
 
-  async function setze(id: string | null) {
+  async function speichere(patch: { employee_id: string | null; inhaber_name: string | null }) {
     setSpeichert(true);
     const { error } = await getSupabaseClient()
       .from("firmenhandy")
-      .update({ employee_id: id, sync_status: "ausstehend" })
+      .update({ ...patch, sync_status: "ausstehend" })
       .eq("id", firmenhandy.id);
     setSpeichert(false);
     if (!error) {
@@ -72,28 +85,49 @@ function InhaberZelle({
     }
   }
 
+  function uebernehmenAlsText() {
+    const name = suche.trim();
+    if (!name) return;
+    speichere({ employee_id: null, inhaber_name: name });
+  }
+
   if (!canEdit) {
-    return <>{anzeigeName(aktuell) ?? "—"}</>;
+    return <>{anzeigeName(aktuell) ?? firmenhandy.inhaber_name ?? "—"}</>;
   }
 
   if (!offen) {
+    const angezeigt = anzeigeName(aktuell) ?? firmenhandy.inhaber_name;
     return (
       <button
         type="button"
         className="text-left hover:underline"
         onClick={() => setOffen(true)}
       >
-        {anzeigeName(aktuell) ?? <span className="text-emerald-700">+ Inhaber</span>}
+        {angezeigt ? (
+          <>
+            {angezeigt}
+            {!aktuell && firmenhandy.inhaber_name && (
+              <span
+                className="ml-1 text-xs text-amber-700"
+                title="Manuell eingetragen, nicht im Spargar-Personalstamm"
+              >
+                (manuell)
+              </span>
+            )}
+          </>
+        ) : (
+          <span className="text-emerald-700">+ Inhaber</span>
+        )}
       </button>
     );
   }
 
   return (
-    <div className="flex min-w-[13rem] flex-col gap-1">
+    <div className="flex min-w-[15rem] flex-col gap-1">
       <input
         autoFocus
         className="w-full text-sm"
-        placeholder="Name oder Personalnr."
+        placeholder="Name oder Personalnr. suchen …"
         value={suche}
         onChange={(e) => setSuche(e.target.value)}
       />
@@ -104,7 +138,7 @@ function InhaberZelle({
             type="button"
             disabled={speichert}
             className="block w-full px-2 py-1 text-left text-sm hover:bg-sand disabled:opacity-50"
-            onClick={() => setze(m.id)}
+            onClick={() => speichere({ employee_id: m.id, inhaber_name: null })}
           >
             {m.name}, {m.vorname}{" "}
             <span className="text-neutral-400">({m.personal_nr})</span>
@@ -114,13 +148,24 @@ function InhaberZelle({
           <p className="px-2 py-1 text-sm text-neutral-400">nichts gefunden</p>
         )}
       </div>
+      {suche.trim() !== "" && (
+        <button
+          type="button"
+          className="text-left text-xs text-emerald-700 hover:underline"
+          disabled={speichert}
+          onClick={uebernehmenAlsText}
+        >
+          → „{suche.trim()}" als Namen übernehmen (nicht im Spargar-Personalstamm,
+          z. B. Festangestellte)
+        </button>
+      )}
       <div className="flex gap-3 text-xs">
-        {firmenhandy.employee_id && (
+        {(firmenhandy.employee_id || firmenhandy.inhaber_name) && (
           <button
             type="button"
             className="text-red-600"
             disabled={speichert}
-            onClick={() => setze(null)}
+            onClick={() => speichere({ employee_id: null, inhaber_name: null })}
           >
             Inhaber entfernen
           </button>
@@ -170,7 +215,7 @@ export default function FirmenhandyPage() {
       supabase.from("firmenhandy").select("*").order("nummer"),
       supabase
         .from("employees")
-        .select("id, personal_nr, name, vorname")
+        .select("id, personal_nr, name, vorname, funktion")
         .eq("aktiv", true)
         .order("name"),
     ]);
@@ -192,7 +237,7 @@ export default function FirmenhandyPage() {
     const q = suche.trim().toLowerCase();
     if (!q) return firmenhandys;
     return firmenhandys.filter((f) => {
-      const inhaber = anzeigeName(mitarbeiterMap.get(f.employee_id ?? ""));
+      const inhaber = inhaberAnzeige(f, mitarbeiterMap);
       return (
         f.nummer.toLowerCase().includes(q) ||
         (inhaber ?? "").toLowerCase().includes(q) ||
@@ -248,7 +293,10 @@ export default function FirmenhandyPage() {
         body: JSON.stringify({
           eintraege: ziel.map((f) => ({
             nummer: f.nummer,
-            name: anzeigeName(mitarbeiterMap.get(f.employee_id ?? "")),
+            name: inhaberAnzeige(f, mitarbeiterMap),
+            funktion: f.employee_id
+              ? mitarbeiterMap.get(f.employee_id)?.funktion ?? null
+              : null,
           })),
         }),
       });

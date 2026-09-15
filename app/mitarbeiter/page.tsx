@@ -43,6 +43,9 @@ const emptyForm = {
   geburtsdatum: "",
   ort: "",
   land: "",
+  funktion: "",
+  telefon_privat: "",
+  email_privat: "",
   stundenlohn: "",
   abrechnungsart: "sozialversicherungspflichtig" as Abrechnungsart,
   sozialversicherungsnummer: "",
@@ -342,6 +345,9 @@ export default function MitarbeiterPage() {
       geburtsdatum: emp.geburtsdatum ?? "",
       ort: emp.ort ?? "",
       land: emp.land ?? "",
+      funktion: emp.funktion ?? "",
+      telefon_privat: emp.telefon_privat ?? "",
+      email_privat: emp.email_privat ?? "",
       stundenlohn: emp.stundenlohn?.toString() ?? "",
       abrechnungsart: emp.abrechnungsart ?? "sozialversicherungspflichtig",
       sozialversicherungsnummer: emp.sozialversicherungsnummer ?? "",
@@ -373,6 +379,9 @@ export default function MitarbeiterPage() {
       geburtsdatum: form.geburtsdatum || null,
       ort: form.ort || null,
       land: form.land || null,
+      funktion: form.funktion || null,
+      telefon_privat: form.telefon_privat || null,
+      email_privat: form.email_privat || null,
       stundenlohn: form.stundenlohn ? Number(form.stundenlohn) : null,
       abrechnungsart: form.abrechnungsart,
       sozialversicherungsnummer: form.sozialversicherungsnummer || null,
@@ -832,6 +841,26 @@ export default function MitarbeiterPage() {
             placeholder="Land"
             value={form.land}
             onChange={(e) => setForm({ ...form, land: e.target.value })}
+          />
+          <input
+            placeholder="Funktion/Abteilung (z. B. Vorarbeiter)"
+            value={form.funktion}
+            onChange={(e) => setForm({ ...form, funktion: e.target.value })}
+          />
+          <input
+            placeholder="Telefon (privat)"
+            value={form.telefon_privat}
+            onChange={(e) =>
+              setForm({ ...form, telefon_privat: e.target.value })
+            }
+          />
+          <input
+            type="email"
+            placeholder="E-Mail (privat)"
+            value={form.email_privat}
+            onChange={(e) =>
+              setForm({ ...form, email_privat: e.target.value })
+            }
           />
           <input
             type="number"

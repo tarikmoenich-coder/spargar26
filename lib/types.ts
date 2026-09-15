@@ -140,6 +140,12 @@ export interface Employee {
   // (alte Personalnummer), aus der diese Zeile entstanden ist.
   vorgaenger_employee_id?: string | null;
   version?: number;
+  // Migration 2026-09-18: private Kontaktdaten + Funktion/Abteilung.
+  // "funktion" fließt zusätzlich in den Firmenhandy-Kontakt-Sync ein (vCard
+  // TITLE), damit sich ein Kontakt auf dem Handy leichter finden lässt.
+  telefon_privat?: string | null;
+  email_privat?: string | null;
+  funktion?: string | null;
 }
 
 // Jahreshistorie ohne Details: eine Zeile je (Person, Saison-Jahr), gesetzt
@@ -2110,6 +2116,10 @@ export interface Firmenhandy {
   id: number;
   nummer: string;
   employee_id: string | null;
+  // Manuell eingetragener Inhaber-Name für Personen ohne Spargar-
+  // Personalstammdatensatz (z.B. Festangestellte) - nur relevant, wenn
+  // employee_id leer ist.
+  inhaber_name: string | null;
   notiz: string | null;
   aktiv: boolean;
   sync_status: FirmenhandySyncStatus | null;

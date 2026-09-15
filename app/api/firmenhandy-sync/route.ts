@@ -17,6 +17,10 @@ const PASSWORD = process.env.NEXTCLOUD_CARDDAV_PASSWORD;
 interface SyncEintrag {
   nummer: string;
   name: string | null;
+  // Funktion/Abteilung (Nutzer-Vorgabe 2026-09-18: "ein Feld ... mit dem
+  // sich ein Kontakt schneller im Telefon finden lässt") - landet als vCard
+  // TITLE, damit z.B. nach "Vorarbeiter" gesucht werden kann.
+  funktion?: string | null;
 }
 
 interface SyncErgebnis {
@@ -33,20 +37,23 @@ function vcardEscape(text: string): string {
   return text.replace(/([,;\\])/g, "\\$1");
 }
 
-function vcard(nummer: string, name: string | null): string {
+function vcard(nummer: string, name: string | null, funktion?: string | null): string {
   const uid = vcardUid(nummer);
   const anzeigename = name
     ? `${vcardEscape(name)} (${nummer})`
     : `Firmenhandy frei (${nummer})`;
-  return [
+  const zeilen = [
     "BEGIN:VCARD",
     "VERSION:3.0",
     `UID:${uid}`,
     `FN:${anzeigename}`,
     `TEL;TYPE=CELL:${nummer}`,
-    "END:VCARD",
-    "",
-  ].join("\r\n");
+  ];
+  if (funktion && funktion.trim() !== "") {
+    zeilen.push(`TITLE:${vcardEscape(funktion.trim())}`);
+  }
+  zeilen.push("END:VCARD", "");
+  return zeilen.join("\r\n");
 }
 
 async function syncEintrag(eintrag: SyncEintrag): Promise<SyncErgebnis> {
@@ -59,7 +66,7 @@ async function syncEintrag(eintrag: SyncEintrag): Promise<SyncErgebnis> {
         Authorization: `Basic ${auth}`,
         "Content-Type": "text/vcard; charset=utf-8",
       },
-      body: vcard(eintrag.nummer, eintrag.name),
+      body: vcard(eintrag.nummer, eintrag.name, eintrag.funktion),
     });
     if (!res.ok) {
       return {

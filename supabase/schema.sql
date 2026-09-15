@@ -230,6 +230,13 @@ create table employees (
   praemien_zuckermais boolean not null default false,
   praemien_erdbeeren boolean not null default false,
   praemien_spargel boolean not null default false,
+  -- Migration 2026-09-18 (Nutzer-Vorgabe): private Kontaktdaten + Funktion/
+  -- Abteilung. "funktion" ist zusätzlich Teil des Firmenhandy-Kontakt-Syncs
+  -- (app/api/firmenhandy-sync, als vCard TITLE), damit sich ein Kontakt auf
+  -- dem Handy leichter finden lässt (z.B. Suche nach "Vorarbeiter").
+  telefon_privat text,
+  email_privat text,
+  funktion text,
   -- Optimistische Nebenläufigkeit (ADR-010): Version wird bei jedem Update
   -- hochgezählt; das Frontend muss die zuletzt gelesene Version mitschicken.
   version int not null default 1,
@@ -6759,6 +6766,13 @@ create table firmenhandy (
   id bigint generated always as identity primary key,
   nummer text not null unique,
   employee_id uuid references employees (id) on delete set null,
+  -- Manuell eingetragener Inhaber-Name für Personen, die keinen Spargar-
+  -- Personalstammdatensatz haben (Migration 2026-09-18, Nutzer-Vorgabe:
+  -- "wir haben aber Festangestellte, die müssen da auch in diesen
+  -- Nummernpool"). Wird nur genutzt/angezeigt, wenn employee_id leer ist -
+  -- eine Auswahl aus der Personensuche setzt employee_id und löscht
+  -- inhaber_name wieder.
+  inhaber_name text,
   notiz text,
   aktiv boolean not null default true,
   -- Sync-Status Richtung Nextcloud-Adressbuch (Spargar -> Nextcloud, nur
