@@ -159,6 +159,9 @@ export default function FirmenhandyPage() {
   const [anlegen, setAnlegen] = useState(false);
   const [syncLaeuft, setSyncLaeuft] = useState(false);
   const [syncHinweis, setSyncHinweis] = useState<string | null>(null);
+  // Einklappbar wie "Sätze verwalten" bei Prämien Zuckermais - wird nur
+  // selten gebraucht (einmal pro Handy), soll die Liste nicht überladen.
+  const [anleitungOffen, setAnleitungOffen] = useState(false);
 
   const laden = useCallback(async () => {
     setLoading(true);
@@ -307,6 +310,100 @@ export default function FirmenhandyPage() {
           ⚠ {fehler}
         </p>
       )}
+
+      <div className="rounded border border-linie bg-white">
+        <button
+          type="button"
+          className="flex w-full items-center justify-between px-3 py-2 text-left text-sm font-semibold text-emerald-800"
+          onClick={() => setAnleitungOffen((v) => !v)}
+        >
+          Einrichtung auf dem Handy (einmalig, ca. 2–3 Minuten)
+          <span className="text-neutral-400">{anleitungOffen ? "▲" : "▼"}</span>
+        </button>
+        {anleitungOffen && (
+          <div className="flex flex-col gap-3 border-t border-linie px-3 py-3 text-sm text-neutral-700">
+            <p>
+              Die App <strong>DAVx⁵</strong> holt sich die aktuellen
+              Namen/Nummern automatisch auf das Handy - in ein eigenes,
+              zusätzliches Adressbuch, ohne die privaten Kontakte der Person
+              zu berühren.
+            </p>
+            <div>
+              <p className="font-medium">1. DAVx⁵ installieren</p>
+              <p className="text-neutral-600">
+                Kostenlos über{" "}
+                <a
+                  href="https://f-droid.org/packages/at.bitfire.davdroid/"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-emerald-700 underline"
+                >
+                  F-Droid
+                </a>{" "}
+                (offizielle Quelle, immer aktuell) oder für ca. 4 € im{" "}
+                <a
+                  href="https://play.google.com/store/apps/details?id=at.bitfire.davdroid"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-emerald-700 underline"
+                >
+                  Google Play Store
+                </a>
+                . Über F-Droid muss zuerst einmalig die F-Droid-App installiert
+                werden (Android fragt dabei nach Erlaubnis für „Installation
+                aus unbekannten Quellen" - normal, da F-Droid nicht im Play
+                Store ist).
+              </p>
+            </div>
+            <div>
+              <p className="font-medium">2. Konto hinzufügen</p>
+              <p className="text-neutral-600">
+                DAVx⁵ öffnen → „+" → „Anmelden mit URL und Benutzername":
+              </p>
+              <table className="mt-1">
+                <tbody>
+                  <tr>
+                    <td className="pr-3 text-neutral-500">Basis-URL</td>
+                    <td className="font-mono">
+                      https://kontakte.spargelhof-moenich.de
+                    </td>
+                  </tr>
+                  <tr>
+                    <td className="pr-3 text-neutral-500">Benutzername</td>
+                    <td className="font-mono">
+                      firmenkontakte@spargelhof-moenich.de
+                    </td>
+                  </tr>
+                  <tr>
+                    <td className="pr-3 text-neutral-500">Passwort</td>
+                    <td>vom Admin erfragen (App-Passwort)</td>
+                  </tr>
+                </tbody>
+              </table>
+              <p className="mt-1 text-neutral-600">
+                Bei „Kontaktgruppen-Methode" die Option{" "}
+                <strong>„Als Kategorien"</strong> wählen.
+              </p>
+            </div>
+            <div>
+              <p className="font-medium">3. Nur das richtige Adressbuch aktivieren</p>
+              <p className="text-neutral-600">
+                DAVx⁵ zeigt jetzt mehrere Adressbücher - nur bei{" "}
+                <strong>„Firmenhandys"</strong> den Haken setzen, die anderen
+                abwählen.
+              </p>
+            </div>
+            <div>
+              <p className="font-medium">4. Fertig</p>
+              <p className="text-neutral-600">
+                Nach kurzer Zeit (oder in DAVx⁵ manuell antippen → „Jetzt
+                synchronisieren") erscheinen die Firmenhandy-Kontakte in der
+                normalen Telefon-/Kontakte-App, als eigene Gruppe.
+              </p>
+            </div>
+          </div>
+        )}
+      </div>
 
       <div className="flex flex-wrap items-center gap-2">
         <input
