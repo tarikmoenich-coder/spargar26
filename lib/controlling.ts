@@ -6,6 +6,7 @@
 import type {
   AnreiselisteOffenArbeitend,
   ArbeitstageSerie,
+  EmployeeUrlaubstage,
   SeasonSummaryRow,
 } from "@/lib/types";
 import { formatEuro } from "@/lib/format";
@@ -164,4 +165,25 @@ export function arbeitsserieGesamtstatus(
   if (s.ersatzausgleich === "offen") return "ausgleich_offen";
   // "erfuellt" oder (sollte bei serie_tage>=7 nicht mehr vorkommen) null.
   return "erledigt";
+}
+
+// Gesamtstatus je Person/Saisonjahr fürs Urlaubs-Controlling (Nutzer-Vorgabe
+// 2026-09-16: "einen ähnlichen Aufbau wie beim Arbeitstage am Stück
+// Monitoring") - derselbe Gedanke wie arbeitsserieGesamtstatus oben: EIN
+// kombinierter Status statt mehrerer Einzel-Flags/Tabellen.
+// - "ok"                genommen entspricht dem Anspruch.
+// - "laeuft"             aktiv, Resturlaub offen - kann noch genommen
+//                        werden, (noch) kein Verstoß.
+// - "abgeltung_faellig"  inaktiv, Resturlaub offen - muss ausgezahlt werden.
+// - "ueberzogen"         mehr „U"-Tage erfasst als der Anspruch hergibt.
+export type UrlaubGesamtstatus =
+  | "ok"
+  | "laeuft"
+  | "abgeltung_faellig"
+  | "ueberzogen";
+
+export function urlaubGesamtstatus(u: EmployeeUrlaubstage): UrlaubGesamtstatus {
+  if (u.ueberzogen) return "ueberzogen";
+  if (u.zu_wenig_genommen) return u.aktiv ? "laeuft" : "abgeltung_faellig";
+  return "ok";
 }

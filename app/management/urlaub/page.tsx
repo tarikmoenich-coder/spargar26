@@ -1,55 +1,103 @@
 "use client";
 
-import { useEffect, useState } from "react";
+// Controlling → Urlaub (Nutzer-Vorgabe 2026-09-16: "einen ähnlichen Aufbau
+// wie beim Arbeitstage am Stück Monitoring"). Wie dort: EIN kombinierter
+// Gesamtstatus (urlaubGesamtstatus, lib/controlling.ts) statt der früheren
+// drei nebeneinander stehenden Tabellen (überzogen / Resturlaub inaktiv /
+// Resturlaub aktiv) - EINE Tabelle mit ALLEN Personen des Saisonjahrs
+// (employee_urlaubstage enthält ohnehin jede Person, nicht nur Problemfälle),
+// nach Dringlichkeit sortiert. Kopfzeile zählt nur echten Handlungsbedarf
+// (überzogen/Abgeltung fällig), "läuft" (aktiv, kann noch genommen werden)
+// separat, "ok" nur als Referenz mitgezählt.
+
+import { useEffect, useMemo, useState } from "react";
 import { Palmtree } from "lucide-react";
 import { getSupabaseClient } from "@/lib/supabase/client";
 import { formatDatumDE } from "@/lib/format";
+import { urlaubGesamtstatus, type UrlaubGesamtstatus } from "@/lib/controlling";
 import type { EmployeeUrlaubstage } from "@/lib/types";
 import PageHeader from "@/components/PageHeader";
 import ControllingTabs from "@/components/ControllingTabs";
 
 const CURRENT_YEAR = new Date().getFullYear();
 
+// Sortier-Rang je Gesamtstatus - dringendster Fall zuerst, wie bei
+// arbeitsserieGesamtstatus/RANG in app/management/arbeitstage/page.tsx.
+const RANG: Record<UrlaubGesamtstatus, number> = {
+  ueberzogen: 0,
+  abgeltung_faellig: 0,
+  laeuft: 1,
+  ok: 2,
+};
+
+function statusBadge(status: UrlaubGesamtstatus) {
+  switch (status) {
+    case "ueberzogen":
+      return <span className="badge badge-danger">⚠ überzogen</span>;
+    case "abgeltung_faellig":
+      return <span className="badge badge-danger">⚠ Abgeltung fällig</span>;
+    case "laeuft":
+      return <span className="badge badge-warn">Resturlaub offen</span>;
+    case "ok":
+      return <span className="badge badge-ok">✓ ok</span>;
+  }
+}
+
 export default function ControllingUrlaubPage() {
   const [jahr, setJahr] = useState(CURRENT_YEAR);
-  const [urlaubUeberzogen, setUrlaubUeberzogen] = useState<
-    EmployeeUrlaubstage[]
-  >([]);
-  const [loadingUrlaub, setLoadingUrlaub] = useState(true);
-  const [resturlaub, setResturlaub] = useState<EmployeeUrlaubstage[]>([]);
-  const [loadingResturlaub, setLoadingResturlaub] = useState(true);
+  const [zeilen, setZeilen] = useState<EmployeeUrlaubstage[]>([]);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    async function loadUrlaub() {
-      setLoadingUrlaub(true);
+    async function laden() {
+      setLoading(true);
       const supabase = getSupabaseClient();
       const { data, error } = await supabase
         .from("employee_urlaubstage")
         .select("*")
         .eq("saison_jahr", jahr)
-        .eq("ueberzogen", true)
-        .order("u_tage", { ascending: false });
-      if (!error) setUrlaubUeberzogen((data as EmployeeUrlaubstage[]) ?? []);
-      setLoadingUrlaub(false);
+        .order("name");
+      if (!error) setZeilen((data as EmployeeUrlaubstage[]) ?? []);
+      setLoading(false);
     }
-    loadUrlaub();
+    laden();
   }, [jahr]);
 
-  useEffect(() => {
-    async function loadResturlaub() {
-      setLoadingResturlaub(true);
-      const supabase = getSupabaseClient();
-      const { data, error } = await supabase
-        .from("employee_urlaubstage")
-        .select("*")
-        .eq("saison_jahr", jahr)
-        .eq("zu_wenig_genommen", true)
-        .order("resturlaub_tage", { ascending: false });
-      if (!error) setResturlaub((data as EmployeeUrlaubstage[]) ?? []);
-      setLoadingResturlaub(false);
+  const sortiert = useMemo(() => {
+    return [...zeilen].sort((a, b) => {
+      const rangA = RANG[urlaubGesamtstatus(a)];
+      const rangB = RANG[urlaubGesamtstatus(b)];
+      if (rangA !== rangB) return rangA - rangB;
+      return `${a.name}, ${a.vorname}`.localeCompare(
+        `${b.name}, ${b.vorname}`,
+        "de"
+      );
+    });
+  }, [zeilen]);
+
+  const counts = useMemo(() => {
+    let ueberzogen = 0;
+    let abgeltungFaellig = 0;
+    let laeuft = 0;
+    let ok = 0;
+    for (const z of zeilen) {
+      switch (urlaubGesamtstatus(z)) {
+        case "ueberzogen":
+          ueberzogen += 1;
+          break;
+        case "abgeltung_faellig":
+          abgeltungFaellig += 1;
+          break;
+        case "laeuft":
+          laeuft += 1;
+          break;
+        case "ok":
+          ok += 1;
+          break;
+      }
     }
-    loadResturlaub();
-  }, [jahr]);
+    return { ueberzogen, abgeltungFaellig, laeuft, ok };
+  }, [zeilen]);
 
   return (
     <div className="flex flex-col gap-4">
@@ -57,22 +105,23 @@ export default function ControllingUrlaubPage() {
       <PageHeader
         icon={Palmtree}
         titel="Urlaub"
-        beschreibung="Anspruch: 2 Urlaubstage je vollem Kalendermonat der Beschäftigung (1. bis letzter Tag mit Stunden oder Markierung). Überzogene „U“-Tage und offener Resturlaub – bei Inaktiven eine Abgeltungspflicht."
+        beschreibung="Anspruch: 2 Urlaubstage je vollem Kalendermonat der Beschäftigung (1. bis letzter Tag mit Stunden oder Markierung). Alle Personen des Saisonjahrs mit kombiniertem Status - überzogene „U“-Tage und offener Resturlaub (bei Inaktiven eine Abgeltungspflicht)."
       />
 
       <p className="text-sm text-neutral-600">
-        {loadingUrlaub || loadingResturlaub ? (
+        {loading ? (
           "…"
         ) : (
           <>
             <span className="font-medium text-red-600">
-              {urlaubUeberzogen.length}
+              {counts.ueberzogen + counts.abgeltungFaellig}
             </span>{" "}
-            überzogen ·{" "}
-            <span className="font-medium text-amber-600">
-              {resturlaub.length}
-            </span>{" "}
-            Resturlaub offen
+            Handlungsbedarf ({counts.ueberzogen} überzogen ·{" "}
+            {counts.abgeltungFaellig} Abgeltung fällig) ·{" "}
+            <span className="font-medium text-amber-600">{counts.laeuft}</span>{" "}
+            Resturlaub offen (läuft noch) ·{" "}
+            <span className="font-medium text-emerald-700">{counts.ok}</span>{" "}
+            ✓ ok
           </>
         )}
       </p>
@@ -87,38 +136,34 @@ export default function ControllingUrlaubPage() {
         />
       </label>
 
-      <div>
-        <h3 className="mb-2 text-sm font-semibold text-emerald-800">
-          Urlaubstage überzogen
-        </h3>
-        <p className="mb-2 text-sm text-neutral-500">
-          Personen, bei denen mehr Tage mit Markierung „U“ erfasst wurden als
-          der Anspruch (2 Tage je vollem Kalendermonat) hergibt.
-        </p>
-        {loadingUrlaub ? (
-          <p className="text-neutral-500">Lädt…</p>
-        ) : urlaubUeberzogen.length === 0 ? (
-          <p className="text-neutral-500">
-            Keine überzogenen Urlaubstage für {jahr}.
-          </p>
-        ) : (
-          <div className="overflow-x-auto">
-            <table>
-              <thead>
-                <tr>
-                  <th>Pers.-Nr.</th>
-                  <th>Name</th>
-                  <th>1. Eintrag</th>
-                  <th>Letzter Eintrag</th>
-                  <th>Volle Kalendermonate</th>
-                  <th>Anspruch (Tage)</th>
-                  <th>Genommen („U“, Tage)</th>
-                  <th>Status</th>
-                </tr>
-              </thead>
-              <tbody>
-                {urlaubUeberzogen.map((u) => (
-                  <tr key={u.employee_id}>
+      {loading ? (
+        <p className="text-neutral-500">Lädt…</p>
+      ) : sortiert.length === 0 ? (
+        <p className="text-neutral-500">Keine Daten für {jahr}.</p>
+      ) : (
+        <div className="overflow-x-auto">
+          <table>
+            <thead>
+              <tr>
+                <th>Pers.-Nr.</th>
+                <th>Name</th>
+                <th>1. Eintrag</th>
+                <th>Letzter Eintrag</th>
+                <th>Volle Kalendermonate</th>
+                <th>Anspruch (Tage)</th>
+                <th>Genommen („U“, Tage)</th>
+                <th>Resturlaub/Überzogen</th>
+                <th>Status</th>
+              </tr>
+            </thead>
+            <tbody>
+              {sortiert.map((u) => {
+                const status = urlaubGesamtstatus(u);
+                return (
+                  <tr
+                    key={u.employee_id}
+                    className={status === "ok" ? "opacity-70" : ""}
+                  >
                     <td>{u.personal_nr}</td>
                     <td>
                       {u.name}, {u.vorname}
@@ -133,118 +178,29 @@ export default function ControllingUrlaubPage() {
                     <td>{u.volle_kalendermonate}</td>
                     <td>{u.urlaubsanspruch_tage}</td>
                     <td>{u.u_tage}</td>
-                    <td className="font-medium text-red-600">
-                      ⚠ {u.u_tage - u.urlaubsanspruch_tage} Tag(e) zu viel
+                    <td
+                      className={
+                        status === "ueberzogen" || status === "abgeltung_faellig"
+                          ? "font-medium text-red-600"
+                          : status === "laeuft"
+                            ? "text-amber-600"
+                            : "text-neutral-500"
+                      }
+                    >
+                      {u.ueberzogen
+                        ? `⚠ ${u.u_tage - u.urlaubsanspruch_tage} Tag(e) zu viel`
+                        : u.resturlaub_tage > 0
+                          ? `${u.resturlaub_tage} Tag(e) offen`
+                          : "—"}
                     </td>
+                    <td>{statusBadge(status)}</td>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </div>
-
-      <div>
-        <h3 className="mb-2 text-sm font-semibold text-emerald-800">
-          Resturlaub (zu wenig genommen)
-        </h3>
-        <p className="mb-2 text-sm text-neutral-500">
-          Gleicher Anspruch wie oben - hier Personen, bei denen weniger
-          „U“-Tage erfasst wurden als der Anspruch hergibt. Bei bereits
-          inaktiven Personen bedeutet das in der Regel eine Abgeltungspflicht
-          (Auszahlung des Resturlaubs), nicht nur eine Erinnerung.
-        </p>
-        {loadingResturlaub ? (
-          <p className="text-neutral-500">Lädt…</p>
-        ) : resturlaub.length === 0 ? (
-          <p className="text-neutral-500">Kein offener Resturlaub für {jahr}.</p>
-        ) : (
-          <div className="flex flex-col gap-4">
-            {resturlaub.some((u) => !u.aktiv) && (
-              <div className="overflow-x-auto">
-                <h4 className="mb-1 text-sm font-semibold text-red-700">
-                  ⚠ Inaktiv - Abgeltung fällig
-                </h4>
-                <table>
-                  <thead>
-                    <tr>
-                      <th>Pers.-Nr.</th>
-                      <th>Name</th>
-                      <th>1. Eintrag</th>
-                      <th>Letzter Eintrag</th>
-                      <th>Volle Kalendermonate</th>
-                      <th>Anspruch (Tage)</th>
-                      <th>Genommen („U“, Tage)</th>
-                      <th>Resturlaub</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {resturlaub
-                      .filter((u) => !u.aktiv)
-                      .map((u) => (
-                        <tr key={u.employee_id} className="bg-red-50">
-                          <td>{u.personal_nr}</td>
-                          <td>
-                            {u.name}, {u.vorname}
-                          </td>
-                          <td>{formatDatumDE(u.erster_eintrag)}</td>
-                          <td>{formatDatumDE(u.letzter_eintrag)}</td>
-                          <td>{u.volle_kalendermonate}</td>
-                          <td>{u.urlaubsanspruch_tage}</td>
-                          <td>{u.u_tage}</td>
-                          <td className="font-medium text-red-600">
-                            ⚠ {u.resturlaub_tage} Tag(e) - Abgeltung fällig
-                          </td>
-                        </tr>
-                      ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
-            {resturlaub.some((u) => u.aktiv) && (
-              <div className="overflow-x-auto">
-                <h4 className="mb-1 text-sm font-semibold text-neutral-700">
-                  Aktiv - kann noch genommen werden
-                </h4>
-                <table>
-                  <thead>
-                    <tr>
-                      <th>Pers.-Nr.</th>
-                      <th>Name</th>
-                      <th>1. Eintrag</th>
-                      <th>Letzter Eintrag</th>
-                      <th>Volle Kalendermonate</th>
-                      <th>Anspruch (Tage)</th>
-                      <th>Genommen („U“, Tage)</th>
-                      <th>Resturlaub</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {resturlaub
-                      .filter((u) => u.aktiv)
-                      .map((u) => (
-                        <tr key={u.employee_id}>
-                          <td>{u.personal_nr}</td>
-                          <td>
-                            {u.name}, {u.vorname}
-                          </td>
-                          <td>{formatDatumDE(u.erster_eintrag)}</td>
-                          <td>{formatDatumDE(u.letzter_eintrag)}</td>
-                          <td>{u.volle_kalendermonate}</td>
-                          <td>{u.urlaubsanspruch_tage}</td>
-                          <td>{u.u_tage}</td>
-                          <td className="font-medium text-amber-600">
-                            {u.resturlaub_tage} Tag(e) offen
-                          </td>
-                        </tr>
-                      ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
-          </div>
-        )}
-      </div>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
     </div>
   );
 }
