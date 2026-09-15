@@ -14,6 +14,7 @@ const tabs = [
   { href: "/personalnummern", label: "Personalnummern" },
   { href: "/personal-import", label: "Import" },
   { href: "/personal-import-historie", label: "Historie-Import" },
+  { href: "/personal-firmenhandys", label: "Firmenhandys" },
 ];
 
 export default function PersonalTabs() {

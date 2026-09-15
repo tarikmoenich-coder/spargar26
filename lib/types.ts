@@ -2101,3 +2101,21 @@ export interface FahrzeugHofzeitTag {
   ausfahrten: number;
   auffaellig: boolean | null;
 }
+
+// Firmenhandy-Nummernpool (Migration 2026-09-17) - Nummer + aktueller
+// Inhaber, wird per CardDAV in ein Nextcloud-Adressbuch gespiegelt (siehe
+// app/api/firmenhandy-sync).
+export type FirmenhandySyncStatus = "ok" | "fehler" | "ausstehend";
+export interface Firmenhandy {
+  id: number;
+  nummer: string;
+  employee_id: string | null;
+  notiz: string | null;
+  aktiv: boolean;
+  sync_status: FirmenhandySyncStatus | null;
+  sync_am: string | null;
+  sync_fehler: string | null;
+  erstellt_von: string | null;
+  erstellt_am: string;
+  updated_at: string;
+}
