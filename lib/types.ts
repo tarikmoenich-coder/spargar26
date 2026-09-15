@@ -1947,6 +1947,13 @@ export interface Fahrzeug {
   // Einbauort des GPS-Trackers im Fahrzeug (Freitext).
   tracker_position: string | null;
   aktiv: boolean;
+  // An-/Abmeldung (Zulassung) - Migration 2026-09-16, Nutzer-Vorgabe: bei
+  // wachsender Flotte (Richtung 150 Fahrzeuge) reicht ein reines an/aus
+  // nicht mehr, es soll auch nachvollziehbar sein SEIT WANN. "aktiv" wird
+  // beim An-/Abmelden (Bulk-Aktion oder Formular) automatisch mitgeführt:
+  // angemeldet -> aktiv=true, abgemeldet_am=null; abgemeldet -> aktiv=false.
+  angemeldet_seit: string | null;
+  abgemeldet_am: string | null;
   erstellt_von: string | null;
   erstellt_am: string;
   updated_at: string;
@@ -2019,6 +2026,8 @@ export interface FahrzeugUebersicht {
   bewegung: boolean | null;
   batterie_prozent: number | null;
   gesamt_km: number | null;
+  angemeldet_seit: string | null;
+  abgemeldet_am: string | null;
 }
 
 // Fahrzeugtypen (fahrzeug.typ, freies text-Feld). Reihenfolge = Anzeige in

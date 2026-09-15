@@ -45,6 +45,13 @@ export default function FahrzeugeUebersichtPage() {
   const [zeige, setZeige] = useState<"karte" | "liste">("karte");
   // Kartenfilter nach Fahrzeugtyp ("" = alle). Wirkt auf Karte UND Liste.
   const [typFilter, setTypFilter] = useState("");
+  // Freitextsuche (Nutzer-Vorgabe 2026-09-16: bei ~150 Fahrzeugen reicht der
+  // Typ-Filter allein nicht mehr). Wirkt wie der Typ-Filter auf Karte UND
+  // Liste.
+  const [suche, setSuche] = useState("");
+  // Abgemeldete Fahrzeuge sind standardmäßig aus - sie haben in der Regel
+  // keinen aktuellen Standort und würden nur die Übersicht überladen.
+  const [zeigeAbgemeldete, setZeigeAbgemeldete] = useState(false);
   // "Auf Karte zeigen" aus der Liste: neues Objekt je Klick.
   const [fokus, setFokus] = useState<{ id: number; ts: number } | null>(null);
 
@@ -107,9 +114,19 @@ export default function FahrzeugeUebersichtPage() {
   const typOptionen = FAHRZEUG_TYPEN.filter(
     (t) => vorhandeneTypen.has(t) || t === typFilter
   );
-  const sichtbar = typFilter
-    ? fahrzeuge.filter((f) => f.typ === typFilter)
-    : fahrzeuge;
+  const abgemeldeteAnzahl = fahrzeuge.filter((f) => !f.aktiv).length;
+  const sucheNorm = suche.trim().toLowerCase();
+  const sichtbar = fahrzeuge.filter((f) => {
+    if (!zeigeAbgemeldete && !f.aktiv) return false;
+    if (typFilter && f.typ !== typFilter) return false;
+    if (!sucheNorm) return true;
+    return (
+      f.bezeichnung.toLowerCase().includes(sucheNorm) ||
+      (f.kennzeichen ?? "").toLowerCase().includes(sucheNorm) ||
+      (f.fahrer_name ?? "").toLowerCase().includes(sucheNorm) ||
+      (f.fahrer_vorname ?? "").toLowerCase().includes(sucheNorm)
+    );
+  });
 
   return (
     <div className="flex flex-col gap-4">
@@ -138,6 +155,16 @@ export default function FahrzeugeUebersichtPage() {
               </button>
             ))}
           </div>
+          <input
+            type="search"
+            placeholder="Suche: Bezeichnung, Kennzeichen, Fahrer …"
+            className="w-56 text-sm"
+            value={suche}
+            onChange={(e) => {
+              setSuche(e.target.value);
+              setFokus(null);
+            }}
+          />
           <select
             className="text-sm"
             value={typFilter}
@@ -154,11 +181,21 @@ export default function FahrzeugeUebersichtPage() {
               </option>
             ))}
           </select>
-          {typFilter && (
-            <span className="text-xs text-neutral-500">
-              {sichtbar.length} von {fahrzeuge.length}
-            </span>
-          )}
+          <label className="flex items-center gap-1.5 text-sm text-neutral-600">
+            <input
+              type="checkbox"
+              checked={zeigeAbgemeldete}
+              onChange={(e) => {
+                setZeigeAbgemeldete(e.target.checked);
+                setFokus(null);
+              }}
+            />
+            abgemeldete Fahrzeuge anzeigen
+            {abgemeldeteAnzahl > 0 && ` (${abgemeldeteAnzahl})`}
+          </label>
+          <span className="text-xs text-neutral-500">
+            {sichtbar.length} von {fahrzeuge.length}
+          </span>
         </div>
         <div className="flex items-center gap-2">
           {alarmHeute > 0 && (
@@ -197,11 +234,7 @@ export default function FahrzeugeUebersichtPage() {
             />
           </div>
 
-          <div
-            className={`flex flex-col gap-2 ${
-              zeige === "liste" ? "" : "hidden"
-            }`}
-          >
+          <div className={zeige === "liste" ? "" : "hidden"}>
             {fahrzeuge.length === 0 ? (
               <p className="text-sm text-neutral-500">
                 Noch keine Fahrzeuge angelegt –{" "}
@@ -213,131 +246,173 @@ export default function FahrzeugeUebersichtPage() {
                 </Link>{" "}
                 anlegen und einen Tracker zuordnen.
               </p>
+            ) : sichtbar.length === 0 ? (
+              <p className="text-sm text-neutral-500">
+                Kein Fahrzeug entspricht Suche/Filter.
+              </p>
             ) : (
-              sichtbar.length === 0 && (
-                <p className="text-sm text-neutral-500">
-                  Kein Fahrzeug vom Typ „{fahrzeugTypLabel(typFilter)}".
-                </p>
-              )
+              <div className="overflow-x-auto rounded-lg border border-linie bg-white">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b border-linie text-left text-neutral-500">
+                      <th className="px-3 py-2 font-medium"></th>
+                      <th className="px-3 py-2 font-medium">Fahrzeug</th>
+                      <th className="px-3 py-2 font-medium">Fahrer</th>
+                      <th className="px-3 py-2 font-medium">Zustand</th>
+                      <th className="px-3 py-2 font-medium">Batterie</th>
+                      <th className="px-3 py-2 font-medium">Typ</th>
+                      <th className="px-3 py-2 font-medium">km-Stand</th>
+                      <th className="px-3 py-2 font-medium">HU fällig</th>
+                      <th className="px-3 py-2 font-medium">Angemeldet seit</th>
+                      <th className="px-3 py-2 font-medium">Abgemeldet am</th>
+                      <th className="px-3 py-2 font-medium"></th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {sichtbar.map((f) => {
+                      const min = minutenHer(f.pos_zeitpunkt);
+                      const farbe =
+                        min === null || min >= 60
+                          ? "bg-neutral-400"
+                          : min >= 10
+                            ? "bg-amber-500"
+                            : "bg-emerald-500";
+                      const huTage = tageBis(f.hu_faellig);
+                      const foto = bilder[f.id];
+                      return (
+                        <tr
+                          key={f.id}
+                          className={`border-b border-linie last:border-0 ${
+                            f.aktiv ? "" : "opacity-50"
+                          }`}
+                        >
+                          <td className="px-3 py-1.5">
+                            {foto ? (
+                              // eslint-disable-next-line @next/next/no-img-element
+                              <img
+                                src={foto}
+                                alt=""
+                                className="h-8 w-12 rounded border border-linie object-cover"
+                              />
+                            ) : (
+                              <span
+                                className={`ml-1.5 inline-block h-2.5 w-2.5 rounded-full ${farbe}`}
+                                title={vorText(min)}
+                              />
+                            )}
+                          </td>
+                          <td className="px-3 py-1.5">
+                            <Link
+                              href={`/fahrzeuge/verlauf?fahrzeug=${f.id}`}
+                              className="font-medium text-emerald-900 hover:underline"
+                            >
+                              {f.bezeichnung}
+                            </Link>
+                            {f.kennzeichen && (
+                              <span className="ml-1.5 text-neutral-500">
+                                {f.kennzeichen}
+                              </span>
+                            )}
+                            {!f.aktiv && (
+                              <span className="badge badge-neutral ml-1.5">
+                                abgemeldet
+                              </span>
+                            )}
+                            {huTage !== null && huTage < 30 && (
+                              <span
+                                className={`ml-1.5 ${
+                                  huTage < 0
+                                    ? "badge badge-danger"
+                                    : "badge badge-warn"
+                                }`}
+                              >
+                                {huTage < 0
+                                  ? "HU überfällig"
+                                  : `HU in ${huTage} T.`}
+                              </span>
+                            )}
+                          </td>
+                          <td className="px-3 py-1.5 text-neutral-600">
+                            {f.fahrer_name
+                              ? `${f.fahrer_name}, ${f.fahrer_vorname ?? ""}`
+                              : "—"}
+                          </td>
+                          <td className="px-3 py-1.5 text-neutral-600">
+                            {f.speed_kmh != null
+                              ? `${Math.round(f.speed_kmh)} km/h`
+                              : "steht"}{" "}
+                            · Zündung{" "}
+                            {f.zuendung == null
+                              ? "—"
+                              : f.zuendung
+                                ? "an"
+                                : "aus"}{" "}
+                            · {vorText(min)}
+                          </td>
+                          <td className="px-3 py-1.5">
+                            {f.batterie_prozent != null ? (
+                              <span
+                                className={
+                                  f.batterie_prozent < 20
+                                    ? "font-medium text-red-600"
+                                    : f.batterie_prozent < 40
+                                      ? "text-amber-600"
+                                      : "text-neutral-600"
+                                }
+                              >
+                                🔋 {Math.round(f.batterie_prozent)} %
+                              </span>
+                            ) : (
+                              <span className="text-neutral-300">—</span>
+                            )}
+                          </td>
+                          <td className="px-3 py-1.5 text-neutral-600">
+                            {fahrzeugTypLabel(f.typ)}
+                          </td>
+                          <td className="px-3 py-1.5 text-neutral-600">
+                            {f.km_stand != null
+                              ? `${f.km_stand.toLocaleString("de-DE")} km`
+                              : "—"}
+                          </td>
+                          <td className="px-3 py-1.5 text-neutral-600">
+                            {f.hu_faellig ? formatDatumDE(f.hu_faellig) : "—"}
+                          </td>
+                          <td className="px-3 py-1.5 text-neutral-600">
+                            {f.angemeldet_seit
+                              ? formatDatumDE(f.angemeldet_seit)
+                              : "—"}
+                          </td>
+                          <td className="px-3 py-1.5">
+                            {f.abgemeldet_am ? (
+                              <span className="text-red-600">
+                                {formatDatumDE(f.abgemeldet_am)}
+                              </span>
+                            ) : (
+                              <span className="text-neutral-300">—</span>
+                            )}
+                          </td>
+                          <td className="px-3 py-1.5">
+                            <button
+                              type="button"
+                              className="btn-secondary text-xs"
+                              disabled={f.lat == null || f.lng == null}
+                              title={
+                                f.lat == null || f.lng == null
+                                  ? "Keine Position bekannt"
+                                  : "Auf der Karte anzeigen"
+                              }
+                              onClick={() => aufKarteZeigen(f.id)}
+                            >
+                              Karte
+                            </button>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
             )}
-            {sichtbar.map((f) => {
-              const min = minutenHer(f.pos_zeitpunkt);
-              const farbe =
-                min === null || min >= 60
-                  ? "bg-neutral-400"
-                  : min >= 10
-                    ? "bg-amber-500"
-                    : "bg-emerald-500";
-              const huTage = tageBis(f.hu_faellig);
-              const foto = bilder[f.id];
-              return (
-                <div key={f.id} className="card flex gap-3">
-                  {foto ? (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img
-                      src={foto}
-                      alt=""
-                      className="h-16 w-24 shrink-0 rounded border border-linie object-cover"
-                    />
-                  ) : (
-                    <div className="flex h-16 w-24 shrink-0 items-center justify-center rounded border border-dashed border-linie text-[10px] text-neutral-300">
-                      kein Foto
-                    </div>
-                  )}
-                  <div className="flex min-w-0 flex-1 flex-col gap-1">
-                    <div className="flex flex-wrap items-center justify-between gap-2">
-                      <div className="flex items-center gap-2">
-                        <span
-                          className={`h-2.5 w-2.5 shrink-0 rounded-full ${farbe}`}
-                        />
-                        <Link
-                          href={`/fahrzeuge/verlauf?fahrzeug=${f.id}`}
-                          className="font-semibold text-emerald-900 hover:underline"
-                        >
-                          {f.bezeichnung}
-                        </Link>
-                        {f.kennzeichen && (
-                          <span className="text-sm text-neutral-500">
-                            {f.kennzeichen}
-                          </span>
-                        )}
-                      </div>
-                      {huTage !== null && huTage < 30 && (
-                        <span
-                          className={
-                            huTage < 0
-                              ? "badge badge-danger"
-                              : "badge badge-warn"
-                          }
-                        >
-                          {huTage < 0
-                            ? `HU überfällig (${formatDatumDE(f.hu_faellig)})`
-                            : `HU in ${huTage} Tagen`}
-                        </span>
-                      )}
-                    </div>
-                    <div className="text-sm text-neutral-600">
-                      Fahrer:{" "}
-                      {f.fahrer_name
-                        ? `${f.fahrer_name}, ${f.fahrer_vorname ?? ""}`
-                        : "—"}
-                    </div>
-                    <div className="text-sm text-neutral-600">
-                      {f.speed_kmh != null
-                        ? `${Math.round(f.speed_kmh)} km/h`
-                        : "steht"}{" "}
-                      · Zündung{" "}
-                      {f.zuendung == null ? "—" : f.zuendung ? "an" : "aus"} ·
-                      zuletzt {vorText(min)}
-                      {f.batterie_prozent != null && (
-                        <>
-                          {" · "}
-                          <span
-                            className={
-                              f.batterie_prozent < 20
-                                ? "font-medium text-red-600"
-                                : f.batterie_prozent < 40
-                                  ? "text-amber-600"
-                                  : ""
-                            }
-                          >
-                            🔋 {Math.round(f.batterie_prozent)} %
-                          </span>
-                        </>
-                      )}
-                    </div>
-                    <div className="text-xs text-neutral-400">
-                      {f.typ ? `${fahrzeugTypLabel(f.typ)} · ` : ""}
-                      {f.km_stand != null
-                        ? `${f.km_stand.toLocaleString("de-DE")} km`
-                        : "km —"}
-                      {f.geraetetyp ? ` · Tracker: ${f.geraetetyp}` : ""}
-                      {f.traccar_unique_id ? "" : " · kein Tracker zugeordnet"}
-                    </div>
-                    {f.tracker_position && (
-                      <div className="text-xs text-neutral-400">
-                        📍 Tracker verbaut: {f.tracker_position}
-                      </div>
-                    )}
-                    <div className="mt-1">
-                      <button
-                        type="button"
-                        className="btn-secondary text-xs"
-                        disabled={f.lat == null || f.lng == null}
-                        title={
-                          f.lat == null || f.lng == null
-                            ? "Keine Position bekannt"
-                            : "Auf der Karte anzeigen"
-                        }
-                        onClick={() => aufKarteZeigen(f.id)}
-                      >
-                        Auf Karte zeigen
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              );
-            })}
           </div>
         </>
       )}

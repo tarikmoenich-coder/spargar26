@@ -6512,6 +6512,13 @@ create table fahrzeug (
   -- wiederfindet.
   tracker_position text,
   aktiv boolean not null default true,
+  -- An-/Abmeldung mit Datum (Migration 2026-09-16, Nutzer-Vorgabe: bei
+  -- wachsender Flotte reicht reines "aktiv" an/aus nicht mehr). "aktiv"
+  -- bleibt das Filter-Feld, wird aber zusammen mit diesen beiden Daten
+  -- gepflegt: An-/Abmelden (Formular oder Bulk-Aktion in Stammdaten) setzt
+  -- automatisch angemeldet_seit bzw. abgemeldet_am.
+  angemeldet_seit date,
+  abgemeldet_am date,
   erstellt_von uuid references profiles (id) default auth.uid(),
   erstellt_am timestamptz not null default now(),
   updated_at timestamptz not null default now()
@@ -6579,7 +6586,10 @@ select
   t.traccar_unique_id, t.geraetetyp, t.status as tracker_status,
   t.zuletzt_gesehen as tracker_zuletzt_gesehen,
   p.zeitpunkt as pos_zeitpunkt, p.lat, p.lng, p.speed_kmh, p.kurs,
-  p.zuendung, p.bewegung, p.batterie_prozent, p.gesamt_km
+  p.zuendung, p.bewegung, p.batterie_prozent, p.gesamt_km,
+  -- Neu ans Ende angehängt (42P16: "create or replace view" verbietet
+  -- Positionswechsel bestehender Spalten).
+  f.angemeldet_seit, f.abgemeldet_am
 from fahrzeug f
 left join employees e on e.id = f.fahrer_employee_id
 left join fahrzeug_tracker t on t.fahrzeug_id = f.id

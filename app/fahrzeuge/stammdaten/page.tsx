@@ -70,6 +70,12 @@ interface FahrzeugForm {
   bild: string;
   tracker_position: string;
   aktiv: boolean;
+  angemeldet_seit: string;
+  abgemeldet_am: string;
+}
+
+function heuteIso() {
+  return new Date().toISOString().slice(0, 10);
 }
 
 function leereForm(): FahrzeugForm {
@@ -87,6 +93,8 @@ function leereForm(): FahrzeugForm {
     bild: "",
     tracker_position: "",
     aktiv: true,
+    angemeldet_seit: heuteIso(),
+    abgemeldet_am: "",
   };
 }
 
@@ -105,6 +113,8 @@ function ausFahrzeug(f: Fahrzeug): FahrzeugForm {
     bild: f.bild ?? "",
     tracker_position: f.tracker_position ?? "",
     aktiv: f.aktiv,
+    angemeldet_seit: f.angemeldet_seit ?? "",
+    abgemeldet_am: f.abgemeldet_am ?? "",
   };
 }
 
@@ -239,6 +249,16 @@ export default function FahrzeugeStammdatenPage() {
   const [form, setForm] = useState<FahrzeugForm>(leereForm());
   const [speichert, setSpeichert] = useState(false);
 
+  // Suche + Mehrfachauswahl (Nutzer-Vorgabe 2026-09-16: "es werden eben
+  // jetzt viel mehr Fahrzeuge" - ein Dropdown allein reicht bei ~150
+  // Fahrzeugen nicht mehr, um gezielt an-/abzumelden).
+  const [suche, setSuche] = useState("");
+  const [statusFilter, setStatusFilter] = useState<"alle" | "angemeldet" | "abgemeldet">(
+    "alle"
+  );
+  const [ausgewaehlt, setAusgewaehlt] = useState<Set<number>>(new Set());
+  const [bulkLaeuft, setBulkLaeuft] = useState(false);
+
   const laden = useCallback(async () => {
     const supabase = getSupabaseClient();
     const [f, t, m] = await Promise.all([
@@ -290,7 +310,13 @@ export default function FahrzeugeStammdatenPage() {
       notiz: form.notiz.trim() || null,
       bild: form.bild || null,
       tracker_position: form.tracker_position.trim() || null,
-      aktiv: form.aktiv,
+      // "aktiv" wird aus dem Abmelde-Datum abgeleitet, statt als eigene
+      // Checkbox unabhängig davon gepflegt zu werden (Nutzer-Vorgabe
+      // 2026-09-16: "Angemeldet seit/Abgemeldet am" sind die eigentliche
+      // Quelle - dieselbe Logik wie bei den Bulk-Aktionen unten).
+      aktiv: !form.abgemeldet_am,
+      angemeldet_seit: form.angemeldet_seit || null,
+      abgemeldet_am: form.abgemeldet_am || null,
     };
     const { error } =
       bearbeiten === "neu"
@@ -353,6 +379,74 @@ export default function FahrzeugeStammdatenPage() {
     tracker.filter((t) => t.fahrzeug_id != null).map((t) => t.fahrzeug_id)
   );
 
+  const sucheNorm = suche.trim().toLowerCase();
+  const fahrzeugeGefiltert = fahrzeuge.filter((f) => {
+    if (statusFilter === "angemeldet" && !f.aktiv) return false;
+    if (statusFilter === "abgemeldet" && f.aktiv) return false;
+    if (!sucheNorm) return true;
+    return (
+      f.bezeichnung.toLowerCase().includes(sucheNorm) ||
+      (f.kennzeichen ?? "").toLowerCase().includes(sucheNorm) ||
+      fahrzeugTypLabel(f.typ).toLowerCase().includes(sucheNorm)
+    );
+  });
+
+  function auswahlUmschalten(id: number) {
+    setAusgewaehlt((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+
+  const alleSichtbarenAusgewaehlt =
+    fahrzeugeGefiltert.length > 0 &&
+    fahrzeugeGefiltert.every((f) => ausgewaehlt.has(f.id));
+
+  function alleSichtbarenUmschalten() {
+    setAusgewaehlt((prev) => {
+      if (alleSichtbarenAusgewaehlt) {
+        const next = new Set(prev);
+        fahrzeugeGefiltert.forEach((f) => next.delete(f.id));
+        return next;
+      }
+      const next = new Set(prev);
+      fahrzeugeGefiltert.forEach((f) => next.add(f.id));
+      return next;
+    });
+  }
+
+  // Bulk An-/Abmelden (Nutzer-Vorgabe 2026-09-16): dieselbe Logik wie beim
+  // einzelnen Formular - "aktiv" folgt automatisch aus dem Datum.
+  async function bulkAnAbmelden(anmelden: boolean) {
+    const ids = [...ausgewaehlt];
+    if (ids.length === 0) return;
+    if (
+      !window.confirm(
+        `${ids.length} Fahrzeug(e) ${anmelden ? "anmelden" : "abmelden"}?`
+      )
+    )
+      return;
+    setBulkLaeuft(true);
+    setFehler(null);
+    const heute = heuteIso();
+    const werte = anmelden
+      ? { aktiv: true, angemeldet_seit: heute, abgemeldet_am: null }
+      : { aktiv: false, abgemeldet_am: heute };
+    const { error } = await getSupabaseClient()
+      .from("fahrzeug")
+      .update(werte)
+      .in("id", ids);
+    setBulkLaeuft(false);
+    if (error) {
+      setFehler(error.message);
+      return;
+    }
+    setAusgewaehlt(new Set());
+    laden();
+  }
+
   return (
     <div className="flex flex-col gap-4">
       <FahrzeugeTabs />
@@ -376,9 +470,9 @@ export default function FahrzeugeStammdatenPage() {
       ) : (
         <>
           {/* ---- Fahrzeuge ---- */}
-          <div className="flex items-center justify-between">
+          <div className="flex flex-wrap items-center justify-between gap-2">
             <h2 className="text-base font-semibold text-emerald-800">
-              Fahrzeuge ({fahrzeuge.length})
+              Fahrzeuge ({fahrzeugeGefiltert.length} von {fahrzeuge.length})
             </h2>
             {canEdit && bearbeiten === null && (
               <button
@@ -388,6 +482,57 @@ export default function FahrzeugeStammdatenPage() {
               >
                 + Neues Fahrzeug
               </button>
+            )}
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2">
+            <input
+              type="search"
+              placeholder="Suche: Bezeichnung, Kennzeichen, Typ …"
+              className="w-64 text-sm"
+              value={suche}
+              onChange={(e) => setSuche(e.target.value)}
+            />
+            <select
+              className="text-sm"
+              value={statusFilter}
+              onChange={(e) =>
+                setStatusFilter(e.target.value as typeof statusFilter)
+              }
+            >
+              <option value="alle">Alle Status</option>
+              <option value="angemeldet">Nur angemeldete</option>
+              <option value="abgemeldet">Nur abgemeldete</option>
+            </select>
+            {canEdit && ausgewaehlt.size > 0 && (
+              <div className="flex items-center gap-2 rounded border border-linie bg-sand px-2 py-1">
+                <span className="text-sm text-neutral-600">
+                  {ausgewaehlt.size} ausgewählt
+                </span>
+                <button
+                  type="button"
+                  className="btn-secondary text-xs"
+                  disabled={bulkLaeuft}
+                  onClick={() => bulkAnAbmelden(true)}
+                >
+                  Anmelden
+                </button>
+                <button
+                  type="button"
+                  className="btn-secondary text-xs"
+                  disabled={bulkLaeuft}
+                  onClick={() => bulkAnAbmelden(false)}
+                >
+                  Abmelden
+                </button>
+                <button
+                  type="button"
+                  className="text-xs text-neutral-500 underline"
+                  onClick={() => setAusgewaehlt(new Set())}
+                >
+                  Auswahl aufheben
+                </button>
+              </div>
             )}
           </div>
 
@@ -574,15 +719,30 @@ export default function FahrzeugeStammdatenPage() {
                     </div>
                   </div>
                 </div>
-                <label className="flex items-center gap-2 text-sm">
+                <label className="text-sm">
+                  Angemeldet seit
                   <input
-                    type="checkbox"
-                    checked={form.aktiv}
+                    type="date"
+                    className="mt-1 w-full"
+                    value={form.angemeldet_seit}
                     onChange={(e) =>
-                      setForm({ ...form, aktiv: e.target.checked })
+                      setForm({ ...form, angemeldet_seit: e.target.value })
                     }
                   />
-                  aktiv
+                </label>
+                <label className="text-sm">
+                  Abgemeldet am{" "}
+                  <span className="text-xs text-neutral-400">
+                    (leer = angemeldet)
+                  </span>
+                  <input
+                    type="date"
+                    className="mt-1 w-full"
+                    value={form.abgemeldet_am}
+                    onChange={(e) =>
+                      setForm({ ...form, abgemeldet_am: e.target.value })
+                    }
+                  />
                 </label>
               </div>
               <div className="flex gap-2">
@@ -609,6 +769,16 @@ export default function FahrzeugeStammdatenPage() {
             <table>
               <thead>
                 <tr>
+                  {canEdit && (
+                    <th>
+                      <input
+                        type="checkbox"
+                        checked={alleSichtbarenAusgewaehlt}
+                        onChange={alleSichtbarenUmschalten}
+                        aria-label="Alle sichtbaren auswählen"
+                      />
+                    </th>
+                  )}
                   <th>Foto</th>
                   <th>Bezeichnung</th>
                   <th>Kennzeichen</th>
@@ -616,15 +786,27 @@ export default function FahrzeugeStammdatenPage() {
                   <th>Fahrer</th>
                   <th>km</th>
                   <th>Nächste HU</th>
+                  <th>Angemeldet seit</th>
+                  <th>Abgemeldet am</th>
                   <th>Tracker</th>
                   <th></th>
                 </tr>
               </thead>
               <tbody>
-                {fahrzeuge.map((f) => {
+                {fahrzeugeGefiltert.map((f) => {
                   const t = tracker.find((x) => x.fahrzeug_id === f.id);
                   return (
                     <tr key={f.id} className={f.aktiv ? "" : "opacity-50"}>
+                      {canEdit && (
+                        <td>
+                          <input
+                            type="checkbox"
+                            checked={ausgewaehlt.has(f.id)}
+                            onChange={() => auswahlUmschalten(f.id)}
+                            aria-label={`${f.bezeichnung} auswählen`}
+                          />
+                        </td>
+                      )}
                       <td>
                         {f.bild ? (
                           // eslint-disable-next-line @next/next/no-img-element
@@ -656,6 +838,18 @@ export default function FahrzeugeStammdatenPage() {
                       <td>
                         {f.hu_faellig ? formatDatumDE(f.hu_faellig) : "—"}
                       </td>
+                      <td>
+                        {f.angemeldet_seit ? formatDatumDE(f.angemeldet_seit) : "—"}
+                      </td>
+                      <td>
+                        {f.abgemeldet_am ? (
+                          <span className="text-red-600">
+                            {formatDatumDE(f.abgemeldet_am)}
+                          </span>
+                        ) : (
+                          "—"
+                        )}
+                      </td>
                       <td className="text-sm">
                         {t
                           ? `${t.traccar_unique_id}${
@@ -682,10 +876,15 @@ export default function FahrzeugeStammdatenPage() {
                     </tr>
                   );
                 })}
-                {fahrzeuge.length === 0 && (
+                {fahrzeugeGefiltert.length === 0 && (
                   <tr>
-                    <td colSpan={9} className="text-neutral-500">
-                      Noch keine Fahrzeuge.
+                    <td
+                      colSpan={canEdit ? 12 : 11}
+                      className="text-neutral-500"
+                    >
+                      {fahrzeuge.length === 0
+                        ? "Noch keine Fahrzeuge."
+                        : "Kein Fahrzeug entspricht der Suche/dem Filter."}
                     </td>
                   </tr>
                 )}
