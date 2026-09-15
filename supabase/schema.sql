@@ -3708,7 +3708,13 @@ on conflict (bezeichnung) do nothing;
 create table kassenbuch_buchung (
   id bigint generated always as identity primary key,
   kassenbuch_id bigint not null references kassenbuch (id) on delete restrict,
-  belegnummer text not null unique,
+  -- Nur je Kassenbuch eindeutig, nicht global (Migration 2026-09-17): eine
+  -- Umbuchung bekommt auf beiden Seiten (Quell- UND Zielbuch) bewusst
+  -- dieselbe Belegnummer (eigenes Präfix "UB-", siehe kassenbuch_umbuchen),
+  -- damit die Gegenbuchung in beiden Journalen auf einen Blick erkennbar
+  -- ist. Normale Ein-/Ausgabe-Buchungen bleiben je Buch mit Kürzel-Präfix
+  -- eindeutig durchnummeriert (kassenbuch_naechste_belegnummer).
+  belegnummer text not null,
   datum timestamptz not null default now(),
   datum_kassenbuch date not null default current_date,
   betrag numeric(12, 2) not null check (betrag > 0),
@@ -3724,7 +3730,9 @@ create table kassenbuch_buchung (
   storniert_am timestamptz,
   storniert_von uuid references profiles (id),
   storno_grund text,
-  erstellt_am timestamptz not null default now()
+  erstellt_am timestamptz not null default now(),
+  constraint kassenbuch_buchung_kassenbuch_id_belegnummer_key
+    unique (kassenbuch_id, belegnummer)
 );
 create index idx_kassenbuch_buchung_buch on kassenbuch_buchung (kassenbuch_id, datum);
 create index idx_kassenbuch_buchung_umbuchung
@@ -3819,7 +3827,11 @@ grant execute on function kassenbuch_buchen(bigint, text, numeric, date, text, t
   to authenticated;
 
 -- Umbuchung zwischen zwei Büchern: legt atomar zwei verknüpfte Zeilen an
--- (Ausgang im Quellbuch, Eingang im Zielbuch).
+-- (Ausgang im Quellbuch, Eingang im Zielbuch). Beide Zeilen bekommen
+-- dieselbe Belegnummer (Migration 2026-09-17, eigenes Präfix "UB-" mit
+-- eigenem Monats-Zähler statt der je Buch eigenständigen
+-- kassenbuch_naechste_belegnummer) - damit ist die Gegenbuchung in beiden
+-- Journalen auf einen Blick als zusammengehörig erkennbar.
 create or replace function kassenbuch_umbuchen(
   p_quelle_id bigint,
   p_ziel_id bigint,
@@ -3836,6 +3848,7 @@ declare
   v_hinweis text := nullif(btrim(p_hinweis), '');
   v_quelle_name text;
   v_ziel_name text;
+  v_beleg text;
   v_aus_id bigint;
   v_ein_id bigint;
 begin
@@ -3857,11 +3870,14 @@ begin
      or ist_kassenbuch_pruefung_gesperrt(v_datum, p_ziel_id) then
     raise exception 'Für dieses Datum ist eines der beiden Kassenbücher durch eine freigegebene Kassenprüfung gesperrt.';
   end if;
+  v_beleg := naechste_belegnummer(
+    'UB-' || to_char(now() at time zone 'Europe/Berlin', 'YYMM')
+  );
   insert into kassenbuch_buchung (
     kassenbuch_id, belegnummer, datum_kassenbuch, betrag, richtung,
     verwendungszweck, hinweis, umbuchung_id
   ) values (
-    p_quelle_id, kassenbuch_naechste_belegnummer(p_quelle_id), v_datum,
+    p_quelle_id, v_beleg, v_datum,
     p_betrag, 'ausgang',
     coalesce(v_zweck, 'Umbuchung an ' || v_ziel_name), v_hinweis, v_umb
   )
@@ -3870,7 +3886,7 @@ begin
     kassenbuch_id, belegnummer, datum_kassenbuch, betrag, richtung,
     verwendungszweck, hinweis, umbuchung_id, gegenbuchung_id
   ) values (
-    p_ziel_id, kassenbuch_naechste_belegnummer(p_ziel_id), v_datum,
+    p_ziel_id, v_beleg, v_datum,
     p_betrag, 'eingang',
     coalesce(v_zweck, 'Umbuchung von ' || v_quelle_name), v_hinweis, v_umb, v_aus_id
   )
