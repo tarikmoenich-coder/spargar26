@@ -25,6 +25,14 @@ import type { Employee, UserRole } from "@/lib/types";
 function heuteIso() {
   return new Date().toISOString().slice(0, 10);
 }
+// Standardvorschlag für die Strichliste (Nutzer-Vorgabe 2026-09-16): wird
+// meist am Folgetag für den Vortag nachgetragen, "gestern" spart das
+// Umstellen.
+function gesternIso() {
+  const d = new Date();
+  d.setDate(d.getDate() - 1);
+  return d.toISOString().slice(0, 10);
+}
 function quote(nacharbeit: number, gesamt: number): number | null {
   return gesamt > 0 ? Math.round((nacharbeit / gesamt) * 1000) / 10 : null;
 }
@@ -49,7 +57,7 @@ export default function StrichlistePage() {
     profile?.role === "zeiterfassung" ||
     profile?.role === "erntewirtschaft";
 
-  const [datum, setDatum] = useState(heuteIso());
+  const [datum, setDatum] = useState(gesternIso());
 
   const [personen, setPersonen] = useState<Employee[]>([]);
   // Prämien-Kisten des Tages je Person - null, solange dort noch nichts

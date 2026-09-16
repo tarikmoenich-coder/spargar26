@@ -31,6 +31,13 @@ import type {
 function heuteIso() {
   return new Date().toISOString().slice(0, 10);
 }
+// Standardvorschlag für die Tageserfassung (Nutzer-Vorgabe 2026-09-16): am
+// Folgetag wird meist der Vortag nacherfasst, "gestern" spart das Umstellen.
+function gesternIso() {
+  const d = new Date();
+  d.setDate(d.getDate() - 1);
+  return d.toISOString().slice(0, 10);
+}
 
 function fmt(n: number | null | undefined) {
   return formatMenge(n, 2);
@@ -59,7 +66,7 @@ export default function PraemienZuckermaisPage() {
     profile?.role === "erntewirtschaft";
   const isAdmin = profile?.role === "admin";
 
-  const [datum, setDatum] = useState(heuteIso());
+  const [datum, setDatum] = useState(gesternIso());
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [gruppen, setGruppen] = useState<Arbeitsgruppe[]>([]);
   const [gruppeFilter, setGruppeFilter] = useState("");
