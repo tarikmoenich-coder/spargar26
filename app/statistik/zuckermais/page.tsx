@@ -383,13 +383,48 @@ export default function StatistikZuckermaisPage() {
       v.gesamt += k.kolben_gesamt;
       proTag.set(k.datum, v);
     }
-    const tage = [...proTag.entries()]
-      .map(([datum, v]) => {
-        const quote = v.gesamt > 0 ? (v.io / v.gesamt) * 100 : 0;
+    // Nacharbeitsquote je Tag (Nutzer-Vorgabe 2026-09-16: "Ich habe jetzt
+    // eine Nacharbeitsquote. Die wird aber noch nirgendwo berücksichtigt")
+    // - über alle Personen des Tages aufsummiert, dieselbe Grundlage wie
+    // die Strichliste (zuckermais_annahme_quote). Nur Tage mit bereits
+    // erfassten Prämien-Kisten zählen (kisten_io sonst null, siehe
+    // Kommentar bei nacharbeitJePerson oben).
+    const nacharbeitProTag = new Map<string, { nacharbeit: number; gesamt: number }>();
+    for (const r of naTage) {
+      if (r.kisten_io === null) continue;
+      const v = nacharbeitProTag.get(r.datum) ?? { nacharbeit: 0, gesamt: 0 };
+      v.nacharbeit += r.kisten_nacharbeit;
+      v.gesamt += r.kisten_io + r.kisten_nacharbeit;
+      nacharbeitProTag.set(r.datum, v);
+    }
+    const alleTage = new Set([...proTag.keys(), ...nacharbeitProTag.keys()]);
+    const tage = [...alleTage]
+      .map((datum) => {
+        const s = proTag.get(datum);
+        const schichtQuote = s && s.gesamt > 0 ? (s.io / s.gesamt) * 100 : null;
+        const n = nacharbeitProTag.get(datum);
+        // In dieselbe Richtung wie schichtQuote gedreht (hoch = gut) -
+        // Nacharbeitsquote selbst ist "Anteil schlecht", also umgekehrt.
+        const nacharbeitQualitaet =
+          n && n.gesamt > 0 ? 100 - (n.nacharbeit / n.gesamt) * 100 : null;
+        // Gleichwertig kombiniert (Nutzer-Vorgabe): Mittelwert, wenn beide
+        // Quellen für den Tag vorliegen - sonst die vorhandene allein.
+        const quote =
+          schichtQuote !== null && nacharbeitQualitaet !== null
+            ? (schichtQuote + nacharbeitQualitaet) / 2
+            : schichtQuote ?? nacharbeitQualitaet ?? 0;
         const stufe = qsStufe(quote);
         const praemie = praemieByDatum.get(datum) ?? 0;
         const wertung = Math.round(stufe.rate * praemie * 100) / 100;
-        return { datum, quote, stufe, praemie, wertung };
+        return {
+          datum,
+          schichtQuote,
+          nacharbeitQuote: n ? (n.nacharbeit / n.gesamt) * 100 : null,
+          quote,
+          stufe,
+          praemie,
+          wertung,
+        };
       })
       .sort((a, b) => b.datum.localeCompare(a.datum));
 
@@ -794,8 +829,11 @@ export default function StatistikZuckermaisPage() {
             </h2>
             <p className="text-sm text-neutral-500">
               Reine Vorschlagsrechnung, <strong>wird nicht automatisch
-              gebucht.</strong> Je Kontrolltag wird aus dem Tages-Durchschnitt
-              der Schichtkontrollen eine Wertung als Anteil der
+              gebucht.</strong> Je Tag fließen zwei gleichwertige
+              Qualitäts-Kennzahlen ein - Ø-Quote der Schichtkontrollen UND die
+              aus der Nacharbeitsquote abgeleitete Quote (100 % − Nacharbeit) -
+              als Mittelwert, wenn beide für den Tag vorliegen, sonst die
+              vorhandene allein. Daraus wird eine Wertung als Anteil der
               Zuckermais-Gruppenprämie dieses Tages gebildet: schlechte Tage →
               Abzug, sehr gute Tage → Bonus-Anspruch. Der ausgezahlte Bonus
               ist auf die Summe der Abzüge gedeckelt (Umverteilung – kostet die
@@ -844,7 +882,9 @@ export default function StatistikZuckermaisPage() {
               <thead>
                 <tr>
                   <th>Datum</th>
-                  <th>Ø-Quote Tag</th>
+                  <th>Schichtkontrolle Ø</th>
+                  <th>Nacharbeitsquote</th>
+                  <th>Kombinierte Quote</th>
                   <th>Gruppen-Prämie Tag €</th>
                   <th>Stufe</th>
                   <th>Wertung €</th>
@@ -854,6 +894,24 @@ export default function StatistikZuckermaisPage() {
                 {qsVerrechnung.tage.map((t) => (
                   <tr key={t.datum}>
                     <td>{formatDatumDE(t.datum)}</td>
+                    <td>
+                      {t.schichtQuote !== null ? (
+                        <span className={qsBadge(Math.round(t.schichtQuote * 10) / 10)}>
+                          {fmt(t.schichtQuote, 1)} %
+                        </span>
+                      ) : (
+                        <span className="text-neutral-300">—</span>
+                      )}
+                    </td>
+                    <td>
+                      {t.nacharbeitQuote !== null ? (
+                        <span className={naBadge(Math.round(t.nacharbeitQuote * 10) / 10)}>
+                          {fmt(t.nacharbeitQuote, 1)} %
+                        </span>
+                      ) : (
+                        <span className="text-neutral-300">—</span>
+                      )}
+                    </td>
                     <td>
                       <span className={qsBadge(Math.round(t.quote * 10) / 10)}>
                         {fmt(t.quote, 1)} %

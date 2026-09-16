@@ -107,11 +107,15 @@ export default function PraemienZuckermaisPage() {
   // Saison), soll die tägliche Erfassung nicht überladen. Standardmäßig
   // eingeklappt.
   const [saetzeOffen, setSaetzeOffen] = useState(false);
+  // Nacharbeit je Person für den gewählten Tag (Nutzer-Vorgabe 2026-09-16:
+  // "Ich habe jetzt eine Nacharbeitsquote ... nicht auf der Prämienliste
+  // abgedruckt") - aus der digitalen Strichliste (zuckermais_annahme).
+  const [nacharbeit, setNacharbeit] = useState<Record<string, number>>({});
 
   async function load() {
     setLoading(true);
     const supabase = getSupabaseClient();
-    const [{ data: emp }, { data: gr }, { data: eintr }, { data: satzAktuell }, { data: druck }] =
+    const [{ data: emp }, { data: gr }, { data: eintr }, { data: satzAktuell }, { data: druck }, { data: na }] =
       await Promise.all([
         supabase
           .from("employees")
@@ -143,6 +147,10 @@ export default function PraemienZuckermaisPage() {
           .select("*")
           .eq("datum", datum)
           .maybeSingle(),
+        supabase
+          .from("zuckermais_annahme")
+          .select("employee_id, kisten_nacharbeit")
+          .eq("datum", datum),
       ]);
     setEmployees((emp as Employee[]) ?? []);
     setGruppen((gr as Arbeitsgruppe[]) ?? []);
@@ -153,6 +161,13 @@ export default function PraemienZuckermaisPage() {
     setEintraege(map);
     setAktuellerSatz((satzAktuell as ZuckermaisSatz) ?? null);
     setDruckVermerk((druck as ZuckermaisDruck) ?? null);
+    const naMap: Record<string, number> = {};
+    (
+      (na as { employee_id: string; kisten_nacharbeit: number }[]) ?? []
+    ).forEach((n) => {
+      naMap[n.employee_id] = n.kisten_nacharbeit;
+    });
+    setNacharbeit(naMap);
     setLoading(false);
   }
 
@@ -474,7 +489,18 @@ export default function PraemienZuckermaisPage() {
         ? Math.max(((kolben ?? 0) - (kolbenNorm ?? 0)) * aktuellerSatz.satz_pro_kolben, 0)
         : null;
       const praemie = e.praemie_storniert ? 0 : praemieBrutto;
-      return { emp, e, kolben, kolbenNorm, praemie, storniert: e.praemie_storniert };
+      const naKisten = nacharbeit[emp.id] ?? 0;
+      const naQuote = e.kisten > 0 ? Math.round((naKisten / e.kisten) * 1000) / 10 : null;
+      return {
+        emp,
+        e,
+        kolben,
+        kolbenNorm,
+        praemie,
+        storniert: e.praemie_storniert,
+        naKisten,
+        naQuote,
+      };
     })
     .filter((z): z is NonNullable<typeof z> => z !== null);
 
@@ -917,27 +943,35 @@ export default function PraemienZuckermaisPage() {
                 <th>Stunden</th>
                 <th>Kolben</th>
                 <th>Kolben Norm</th>
+                <th>Nacharbeit</th>
                 <th>Prämie €</th>
               </tr>
             </thead>
             <tbody>
-              {druckZeilen.map(({ emp, e, kolben, kolbenNorm, praemie, storniert }) => (
-                <tr key={emp.id}>
-                  <td>{emp.personal_nr}</td>
-                  <td>
-                    {emp.name}, {emp.vorname}
-                  </td>
-                  <td>{e.kisten}</td>
-                  <td>{e.stunden}</td>
-                  <td>{fmt(kolben)}</td>
-                  <td>{fmt(kolbenNorm)}</td>
-                  <td>{storniert ? "0,00 (storniert)" : fmt(praemie)}</td>
-                </tr>
-              ))}
+              {druckZeilen.map(
+                ({ emp, e, kolben, kolbenNorm, praemie, storniert, naKisten, naQuote }) => (
+                  <tr key={emp.id}>
+                    <td>{emp.personal_nr}</td>
+                    <td>
+                      {emp.name}, {emp.vorname}
+                    </td>
+                    <td>{e.kisten}</td>
+                    <td>{e.stunden}</td>
+                    <td>{fmt(kolben)}</td>
+                    <td>{fmt(kolbenNorm)}</td>
+                    <td>
+                      {naKisten > 0
+                        ? `${naKisten} (${formatMenge(naQuote, 1)} %)`
+                        : "—"}
+                    </td>
+                    <td>{storniert ? "0,00 (storniert)" : fmt(praemie)}</td>
+                  </tr>
+                )
+              )}
             </tbody>
             <tfoot>
               <tr>
-                <td colSpan={6} className="text-right font-semibold">
+                <td colSpan={7} className="text-right font-semibold">
                   Summe Prämie
                 </td>
                 <td className="font-semibold">
