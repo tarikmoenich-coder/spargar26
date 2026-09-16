@@ -250,13 +250,21 @@ input[type="number"]::-webkit-inner-spin-button {
 }
 
 /* Personalstammkarte (Deckblatt der Personalkartei) - ein Blatt A4 hoch,
-   ohne Bildschirm-Chrome. */
+   ohne Bildschirm-Chrome.
+   WICHTIG (Bugfix 2026-09-16, Nutzer-Meldung "kann auf einmal nicht mehr in
+   A3 drucken"): eine UNBENANNTE @page-Regel gilt für den GESAMTEN Druckauftrag
+   der App, nicht nur für diese Seite - sie hatte seit 2026-09-04 jeden Druck
+   (z.B. die Zuckermais-Tagesliste) unbemerkt auf A4 gezwungen, egal was im
+   Druckdialog gewählt wurde. Jetzt wie bei der Strichliste (siehe unten,
+   "strichliste-a3") eine BENANNTE Page, nur über "page: stammkarte-a4" auf
+   .stammkarte selbst gebunden. */
 @media print {
-  @page {
+  @page stammkarte-a4 {
     size: A4 portrait;
     margin: 14mm;
   }
   .stammkarte {
+    page: stammkarte-a4;
     max-width: none;
     padding: 0;
     font-size: 10.5pt;
