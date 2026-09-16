@@ -490,7 +490,6 @@ export default function PraemienZuckermaisPage() {
         : null;
       const praemie = e.praemie_storniert ? 0 : praemieBrutto;
       const naKisten = nacharbeit[emp.id] ?? 0;
-      const naQuote = e.kisten > 0 ? Math.round((naKisten / e.kisten) * 1000) / 10 : null;
       return {
         emp,
         e,
@@ -499,7 +498,6 @@ export default function PraemienZuckermaisPage() {
         praemie,
         storniert: e.praemie_storniert,
         naKisten,
-        naQuote,
       };
     })
     .filter((z): z is NonNullable<typeof z> => z !== null);
@@ -949,7 +947,7 @@ export default function PraemienZuckermaisPage() {
             </thead>
             <tbody>
               {druckZeilen.map(
-                ({ emp, e, kolben, kolbenNorm, praemie, storniert, naKisten, naQuote }) => (
+                ({ emp, e, kolben, kolbenNorm, praemie, storniert, naKisten }) => (
                   <tr key={emp.id}>
                     <td>{emp.personal_nr}</td>
                     <td>
@@ -961,7 +959,7 @@ export default function PraemienZuckermaisPage() {
                     <td>{fmt(kolbenNorm)}</td>
                     <td>
                       {naKisten > 0
-                        ? `${naKisten} (${formatMenge(naQuote, 1)} %)`
+                        ? `${naKisten} ${naKisten === 1 ? "Kiste" : "Kisten"}`
                         : "—"}
                     </td>
                     <td>{storniert ? "0,00 (storniert)" : fmt(praemie)}</td>
