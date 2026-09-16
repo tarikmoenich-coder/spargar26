@@ -1,6 +1,6 @@
 "use client";
 
-import { Fragment, useEffect, useState } from "react";
+import { Fragment, useEffect, useRef, useState } from "react";
 import { getSupabaseClient } from "@/lib/supabase/client";
 import { ladeAlleSeiten } from "@/lib/ladeAlle";
 import { useProfile } from "@/lib/useProfile";
@@ -36,10 +36,10 @@ function todayIso() {
 
 const emptyForm = {
   personal_nr: "",
-  gruppe_nr: "",
   herkunft: "",
   name: "",
   vorname: "",
+  geschlecht: "" as "" | "M" | "F",
   geburtsdatum: "",
   ort: "",
   land: "",
@@ -56,6 +56,124 @@ const emptyForm = {
   schwarze_liste: false,
   schwarze_liste_grund: "",
 };
+
+// Kompaktes Aktionen-Menü statt einer langen Knopfreihe (Nutzer-Vorgabe
+// 2026-09-16: "geht über den Anzeigerand eines normalen Monitors hinaus") -
+// "Bearbeiten" bleibt als häufigste Aktion direkt sichtbar, der Rest steckt
+// in einem kleinen Aufklapp-Menü ("⋮").
+// Abschnitt im Personalstamm-Formular (Nutzer-Vorgabe 2026-09-16: "sehr
+// viele Felder einfach nebeneinander" - gruppiert statt einem einzigen
+// flachen Raster). Erster Abschnitt ohne Trennlinie/Abstand nach oben.
+function Abschnitt({
+  titel,
+  children,
+}: {
+  titel: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="flex flex-col gap-2 border-t border-linie pt-4 first:border-0 first:pt-0">
+      <h3 className="text-xs font-semibold uppercase tracking-wide text-neutral-500">
+        {titel}
+      </h3>
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">{children}</div>
+    </div>
+  );
+}
+
+function ZeilenAktionen({
+  emp,
+  onBearbeiten,
+  onToggleAktiv,
+  onStatuswechsel,
+  onDokumente,
+  zeigeStatuswechsel,
+}: {
+  emp: Employee;
+  onBearbeiten: () => void;
+  onToggleAktiv: () => void;
+  onStatuswechsel: () => void;
+  onDokumente: () => void;
+  zeigeStatuswechsel: boolean;
+}) {
+  const [offen, setOffen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!offen) return;
+    function aussenKlick(e: MouseEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node)) {
+        setOffen(false);
+      }
+    }
+    document.addEventListener("mousedown", aussenKlick);
+    return () => document.removeEventListener("mousedown", aussenKlick);
+  }, [offen]);
+
+  return (
+    <div ref={ref} className="relative flex items-center gap-1">
+      <button
+        type="button"
+        className="btn-secondary text-xs"
+        onClick={onBearbeiten}
+      >
+        Bearbeiten
+      </button>
+      <button
+        type="button"
+        className="btn-secondary px-2 text-xs"
+        aria-label="Weitere Aktionen"
+        onClick={() => setOffen((v) => !v)}
+      >
+        ⋮
+      </button>
+      {offen && (
+        <div className="absolute right-0 top-full z-20 mt-1 flex w-48 flex-col overflow-hidden rounded border border-linie bg-white py-1 shadow-md">
+          <button
+            type="button"
+            className="px-3 py-1.5 text-left text-sm hover:bg-sand"
+            onClick={() => {
+              setOffen(false);
+              onToggleAktiv();
+            }}
+          >
+            {emp.aktiv ? "Deaktivieren" : "Reaktivieren"}
+          </button>
+          {zeigeStatuswechsel && (
+            <button
+              type="button"
+              className="px-3 py-1.5 text-left text-sm hover:bg-sand"
+              onClick={() => {
+                setOffen(false);
+                onStatuswechsel();
+              }}
+            >
+              Statuswechsel
+            </button>
+          )}
+          <button
+            type="button"
+            className="px-3 py-1.5 text-left text-sm hover:bg-sand"
+            onClick={() => {
+              setOffen(false);
+              onDokumente();
+            }}
+          >
+            Dokumente
+          </button>
+          <a
+            className="px-3 py-1.5 text-left text-sm hover:bg-sand"
+            href={`/personalstammkarte?id=${emp.id}`}
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            Stammkarte
+          </a>
+        </div>
+      )}
+    </div>
+  );
+}
 
 export default function MitarbeiterPage() {
   const { profile } = useProfile();
@@ -338,10 +456,10 @@ export default function MitarbeiterPage() {
     setEditingId(emp.id);
     setForm({
       personal_nr: emp.personal_nr,
-      gruppe_nr: emp.gruppe_nr ?? "",
       herkunft: emp.herkunft ?? "",
       name: emp.name,
       vorname: emp.vorname,
+      geschlecht: emp.geschlecht ?? "",
       geburtsdatum: emp.geburtsdatum ?? "",
       ort: emp.ort ?? "",
       land: emp.land ?? "",
@@ -372,10 +490,10 @@ export default function MitarbeiterPage() {
     const supabase = getSupabaseClient();
     const payload = {
       personal_nr: form.personal_nr,
-      gruppe_nr: form.gruppe_nr || null,
       herkunft: form.herkunft || null,
       name: form.name,
       vorname: form.vorname,
+      geschlecht: form.geschlecht || null,
       geburtsdatum: form.geburtsdatum || null,
       ort: form.ort || null,
       land: form.land || null,
@@ -743,46 +861,49 @@ export default function MitarbeiterPage() {
     return (
       <form
         onSubmit={handleSubmit}
-        className="grid grid-cols-2 gap-3 rounded border border-linie bg-white p-4 sm:grid-cols-4"
+        className="flex flex-col gap-4 rounded border border-linie bg-white p-4"
       >
+        <Abschnitt titel="Person">
           <div className="col-span-2 flex flex-col gap-1">
-            <div className="flex gap-2">
-              <input
-                placeholder="Personalnummer"
-                required
-                value={form.personal_nr}
-                onChange={(e) =>
-                  setForm({ ...form, personal_nr: e.target.value })
-                }
-              />
-              {!editingId && (
-                <>
-                  <select
-                    value={naechsteKreis}
-                    onChange={(e) => setNaechsteKreis(e.target.value)}
-                  >
-                    {Array.from(
-                      { length: ANZAHL_PERSONALNUMMERN_KREISE },
-                      (_, i) => i + 1
-                    ).map((k) => {
-                      const [von, bis] = kreisBereich(k);
-                      return (
-                        <option key={k} value={k}>
-                          Kreis {k} ({von}-{bis})
-                        </option>
-                      );
-                    })}
-                  </select>
-                  <button
-                    type="button"
-                    className="btn-secondary whitespace-nowrap text-xs"
-                    onClick={naechsteFreieUebernehmen}
-                  >
-                    Nächste freie Nr.
-                  </button>
-                </>
-              )}
-            </div>
+            <label className="flex flex-col gap-0.5 text-xs text-neutral-500">
+              Personalnummer
+              <div className="flex gap-2">
+                <input
+                  required
+                  value={form.personal_nr}
+                  onChange={(e) =>
+                    setForm({ ...form, personal_nr: e.target.value })
+                  }
+                />
+                {!editingId && (
+                  <>
+                    <select
+                      value={naechsteKreis}
+                      onChange={(e) => setNaechsteKreis(e.target.value)}
+                    >
+                      {Array.from(
+                        { length: ANZAHL_PERSONALNUMMERN_KREISE },
+                        (_, i) => i + 1
+                      ).map((k) => {
+                        const [von, bis] = kreisBereich(k);
+                        return (
+                          <option key={k} value={k}>
+                            Kreis {k} ({von}-{bis})
+                          </option>
+                        );
+                      })}
+                    </select>
+                    <button
+                      type="button"
+                      className="btn-secondary whitespace-nowrap text-xs"
+                      onClick={naechsteFreieUebernehmen}
+                    >
+                      Nächste freie Nr.
+                    </button>
+                  </>
+                )}
+              </div>
+            </label>
             {personalNrKonflikt && (
               <span className="text-xs text-red-600">
                 Bereits vergeben an {personalNrKonflikt.name},{" "}
@@ -790,171 +911,234 @@ export default function MitarbeiterPage() {
               </span>
             )}
           </div>
-          <select
-            value={form.gruppe_nr}
-            onChange={(e) => setForm({ ...form, gruppe_nr: e.target.value })}
-          >
-            <option value="">— keine Gruppe —</option>
-            {gruppen.map((g) => (
-              <option key={g.gruppe_nr} value={g.gruppe_nr}>
-                {g.gruppe_nr} – {g.bezeichnung}
-              </option>
-            ))}
-          </select>
-          <select
-            value={form.herkunft}
-            onChange={(e) => setForm({ ...form, herkunft: e.target.value })}
-          >
-            <option value="">— keine Herkunft —</option>
-            {herkuenfte.map((h) => (
-              <option key={h.wert} value={h.wert}>
-                {h.wert}
-              </option>
-            ))}
-          </select>
-          <input
-            placeholder="Name"
-            required
-            value={form.name}
-            onChange={(e) => setForm({ ...form, name: e.target.value })}
-          />
-          <input
-            placeholder="Vorname"
-            required
-            value={form.vorname}
-            onChange={(e) => setForm({ ...form, vorname: e.target.value })}
-          />
-          <input
-            type="date"
-            placeholder="Geburtsdatum"
-            value={form.geburtsdatum}
-            onChange={(e) =>
-              setForm({ ...form, geburtsdatum: e.target.value })
-            }
-          />
-          <input
-            placeholder="Ort"
-            value={form.ort}
-            onChange={(e) => setForm({ ...form, ort: e.target.value })}
-          />
-          <input
-            placeholder="Land"
-            value={form.land}
-            onChange={(e) => setForm({ ...form, land: e.target.value })}
-          />
-          <input
-            placeholder="Funktion/Abteilung (z. B. Vorarbeiter)"
-            value={form.funktion}
-            onChange={(e) => setForm({ ...form, funktion: e.target.value })}
-          />
-          <input
-            placeholder="Telefon (privat)"
-            value={form.telefon_privat}
-            onChange={(e) =>
-              setForm({ ...form, telefon_privat: e.target.value })
-            }
-          />
-          <input
-            type="email"
-            placeholder="E-Mail (privat)"
-            value={form.email_privat}
-            onChange={(e) =>
-              setForm({ ...form, email_privat: e.target.value })
-            }
-          />
-          <input
-            type="number"
-            step="0.01"
-            placeholder="Stundenlohn €"
-            value={form.stundenlohn}
-            onChange={(e) =>
-              setForm({ ...form, stundenlohn: e.target.value })
-            }
-          />
-          <select
-            value={form.abrechnungsart}
-            onChange={(e) =>
-              setForm({
-                ...form,
-                abrechnungsart: e.target.value as Abrechnungsart,
-              })
-            }
-          >
-            {Object.entries(ABRECHNUNGSART_LABELS).map(([value, label]) => (
-              <option key={value} value={value}>
-                {label}
-              </option>
-            ))}
-          </select>
-          <input
-            placeholder="Sozialversicherungsnummer"
-            value={form.sozialversicherungsnummer}
-            onChange={(e) =>
-              setForm({ ...form, sozialversicherungsnummer: e.target.value })
-            }
-          />
-          <input
-            placeholder="Steuer-ID"
-            value={form.steuer_id}
-            onChange={(e) => setForm({ ...form, steuer_id: e.target.value })}
-          />
-          <input
-            placeholder="IBAN"
-            value={form.iban}
-            onChange={(e) => setForm({ ...form, iban: e.target.value })}
-          />
-          <input
-            placeholder="BIC"
-            value={form.bic}
-            onChange={(e) => setForm({ ...form, bic: e.target.value })}
-          />
-          <input
-            placeholder="Zahlungsempfänger"
-            value={form.zahlungsempfaenger}
-            onChange={(e) =>
-              setForm({ ...form, zahlungsempfaenger: e.target.value })
-            }
-          />
-          <div className="col-span-full flex flex-col gap-1 rounded border border-red-200 bg-red-50 p-2">
-            <label className="flex items-center gap-2 text-sm font-medium text-red-800">
-              <input
-                type="checkbox"
-                checked={form.schwarze_liste}
-                onChange={(e) =>
-                  setForm({ ...form, schwarze_liste: e.target.checked })
-                }
-              />
-              Schwarze Liste – nicht mehr erwünscht
-            </label>
-            {form.schwarze_liste && (
-              <input
-                placeholder="Grund (wird bei Verknüpfung in der Personalplanung angezeigt)"
-                value={form.schwarze_liste_grund}
-                onChange={(e) =>
-                  setForm({ ...form, schwarze_liste_grund: e.target.value })
-                }
-              />
-            )}
+          <label className="flex flex-col gap-0.5 text-xs text-neutral-500">
+            Name
+            <input
+              required
+              value={form.name}
+              onChange={(e) => setForm({ ...form, name: e.target.value })}
+            />
+          </label>
+          <label className="flex flex-col gap-0.5 text-xs text-neutral-500">
+            Vorname
+            <input
+              required
+              value={form.vorname}
+              onChange={(e) => setForm({ ...form, vorname: e.target.value })}
+            />
+          </label>
+          <div className="flex flex-col gap-0.5 text-xs text-neutral-500">
+            Geschlecht
+            <div className="mt-0.5 flex gap-2">
+              {(
+                [
+                  ["M", "Männlich"],
+                  ["F", "Weiblich"],
+                ] as const
+              ).map(([wert, label]) => (
+                <button
+                  key={wert}
+                  type="button"
+                  onClick={() => setForm({ ...form, geschlecht: wert })}
+                  className={
+                    form.geschlecht === wert
+                      ? "rounded border border-emerald-700 bg-emerald-700 px-3 py-1.5 text-sm text-white"
+                      : "rounded border border-linie bg-white px-3 py-1.5 text-sm text-neutral-700"
+                  }
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
           </div>
-          <div className="col-span-full flex gap-2">
-            <button
-              type="submit"
-              className="btn"
-              disabled={saving || !!personalNrKonflikt}
+          <label className="flex flex-col gap-0.5 text-xs text-neutral-500">
+            Geburtsdatum
+            <input
+              type="date"
+              value={form.geburtsdatum}
+              onChange={(e) =>
+                setForm({ ...form, geburtsdatum: e.target.value })
+              }
+            />
+          </label>
+          <label className="flex flex-col gap-0.5 text-xs text-neutral-500">
+            Herkunft
+            <select
+              value={form.herkunft}
+              onChange={(e) => setForm({ ...form, herkunft: e.target.value })}
             >
-              {editingId ? "Speichern" : "Anlegen"}
+              <option value="">— keine Herkunft —</option>
+              {herkuenfte.map((h) => (
+                <option key={h.wert} value={h.wert}>
+                  {h.wert}
+                </option>
+              ))}
+            </select>
+          </label>
+        </Abschnitt>
+
+        <Abschnitt titel="Kontakt & Wohnort">
+          <label className="flex flex-col gap-0.5 text-xs text-neutral-500">
+            Wohnort
+            <input
+              value={form.ort}
+              onChange={(e) => setForm({ ...form, ort: e.target.value })}
+            />
+          </label>
+          <label className="flex flex-col gap-0.5 text-xs text-neutral-500">
+            Land
+            <input
+              value={form.land}
+              onChange={(e) => setForm({ ...form, land: e.target.value })}
+            />
+          </label>
+          <label className="flex flex-col gap-0.5 text-xs text-neutral-500">
+            Telefon (privat)
+            <input
+              value={form.telefon_privat}
+              onChange={(e) =>
+                setForm({ ...form, telefon_privat: e.target.value })
+              }
+            />
+          </label>
+          <label className="flex flex-col gap-0.5 text-xs text-neutral-500">
+            E-Mail (privat)
+            <input
+              type="email"
+              value={form.email_privat}
+              onChange={(e) =>
+                setForm({ ...form, email_privat: e.target.value })
+              }
+            />
+          </label>
+        </Abschnitt>
+
+        <Abschnitt titel="Beschäftigung">
+          <label className="flex flex-col gap-0.5 text-xs text-neutral-500">
+            Funktion/Abteilung
+            <input
+              placeholder="z. B. Vorarbeiter"
+              value={form.funktion}
+              onChange={(e) => setForm({ ...form, funktion: e.target.value })}
+            />
+          </label>
+          <label className="flex flex-col gap-0.5 text-xs text-neutral-500">
+            Stundenlohn €
+            <input
+              type="number"
+              step="0.01"
+              value={form.stundenlohn}
+              onChange={(e) =>
+                setForm({ ...form, stundenlohn: e.target.value })
+              }
+            />
+          </label>
+          <label className="flex flex-col gap-0.5 text-xs text-neutral-500">
+            Abrechnungsart
+            <select
+              value={form.abrechnungsart}
+              onChange={(e) =>
+                setForm({
+                  ...form,
+                  abrechnungsart: e.target.value as Abrechnungsart,
+                })
+              }
+            >
+              {Object.entries(ABRECHNUNGSART_LABELS).map(([value, label]) => (
+                <option key={value} value={value}>
+                  {label}
+                </option>
+              ))}
+            </select>
+          </label>
+        </Abschnitt>
+
+        <Abschnitt titel="Zahlung">
+          <label className="flex flex-col gap-0.5 text-xs text-neutral-500">
+            IBAN
+            <input
+              value={form.iban}
+              onChange={(e) => setForm({ ...form, iban: e.target.value })}
+            />
+          </label>
+          <label className="flex flex-col gap-0.5 text-xs text-neutral-500">
+            BIC
+            <input
+              value={form.bic}
+              onChange={(e) => setForm({ ...form, bic: e.target.value })}
+            />
+          </label>
+          <label className="col-span-2 flex flex-col gap-0.5 text-xs text-neutral-500">
+            Zahlungsempfänger
+            <input
+              value={form.zahlungsempfaenger}
+              onChange={(e) =>
+                setForm({ ...form, zahlungsempfaenger: e.target.value })
+              }
+            />
+          </label>
+        </Abschnitt>
+
+        <Abschnitt titel="Sozialversicherung">
+          <label className="flex flex-col gap-0.5 text-xs text-neutral-500">
+            Sozialversicherungsnummer
+            <input
+              value={form.sozialversicherungsnummer}
+              onChange={(e) =>
+                setForm({
+                  ...form,
+                  sozialversicherungsnummer: e.target.value,
+                })
+              }
+            />
+          </label>
+          <label className="flex flex-col gap-0.5 text-xs text-neutral-500">
+            Steuer-ID
+            <input
+              value={form.steuer_id}
+              onChange={(e) =>
+                setForm({ ...form, steuer_id: e.target.value })
+              }
+            />
+          </label>
+        </Abschnitt>
+
+        <div className="flex flex-col gap-1 rounded border border-red-200 bg-red-50 p-2">
+          <label className="flex items-center gap-2 text-sm font-medium text-red-800">
+            <input
+              type="checkbox"
+              checked={form.schwarze_liste}
+              onChange={(e) =>
+                setForm({ ...form, schwarze_liste: e.target.checked })
+              }
+            />
+            Schwarze Liste – nicht mehr erwünscht
+          </label>
+          {form.schwarze_liste && (
+            <input
+              placeholder="Grund (wird bei Verknüpfung in der Personalplanung angezeigt)"
+              value={form.schwarze_liste_grund}
+              onChange={(e) =>
+                setForm({ ...form, schwarze_liste_grund: e.target.value })
+              }
+            />
+          )}
+        </div>
+        <div className="flex gap-2 border-t border-linie pt-3">
+          <button
+            type="submit"
+            className="btn"
+            disabled={saving || !!personalNrKonflikt}
+          >
+            {editingId ? "Speichern" : "Anlegen"}
+          </button>
+          {editingId && (
+            <button type="button" className="btn-secondary" onClick={resetForm}>
+              Abbrechen
             </button>
-            {editingId && (
-              <button
-                type="button"
-                className="btn-secondary"
-                onClick={resetForm}
-              >
-                Abbrechen
-              </button>
-            )}
-            {error && <span className="text-sm text-red-600">{error}</span>}
-          </div>
+          )}
+          {error && <span className="text-sm text-red-600">{error}</span>}
+        </div>
       </form>
     );
   }
@@ -1257,7 +1441,7 @@ export default function MitarbeiterPage() {
               <th>Herkunft</th>
               <th>Name</th>
               <th>Vorname</th>
-              <th>Ort</th>
+              <th>Wohnort</th>
               <th>€/Std.</th>
               <th>Abrechnungsart</th>
               <th title="Allererster erfasster Arbeitstag dieser Person - folgt bei einem Statuswechsel (neue Personalnummer) der Vorgänger-Kette zurück, springt also nicht künstlich auf den Wechsel-Stichtag">
@@ -1274,15 +1458,6 @@ export default function MitarbeiterPage() {
               </th>
               <th>SV-Status</th>
               <th>Führerschein</th>
-              <th>Status</th>
-              <th>Dokumente</th>
-              <th>Verknüpfung</th>
-              <th>Schwarze Liste</th>
-              {istAdmin && (
-                <th title="Letzte Änderung am Stammdatensatz dieser Person - vollständige Historie unter „Protokoll“">
-                  Zuletzt geändert
-                </th>
-              )}
               {canEdit && <th></th>}
             </tr>
           </thead>
@@ -1311,7 +1486,19 @@ export default function MitarbeiterPage() {
                     : "—"}
                 </td>
                 <td>{emp.herkunft ?? "—"}</td>
-                <td>{emp.name}</td>
+                <td>
+                  {emp.name}
+                  {emp.schwarze_liste && (
+                    <span
+                      className="ml-1 font-bold text-neutral-900"
+                      title={`Schwarze Liste${
+                        emp.schwarze_liste_grund ? ` – ${emp.schwarze_liste_grund}` : ""
+                      }`}
+                    >
+                      !
+                    </span>
+                  )}
+                </td>
                 <td>{emp.vorname}</td>
                 <td>{emp.ort}</td>
                 <td>{emp.stundenlohn != null ? formatMenge(emp.stundenlohn, 2) : ""}</td>
@@ -1354,109 +1541,35 @@ export default function MitarbeiterPage() {
                     "—"
                   )}
                 </td>
-                <td>{emp.aktiv ? "aktiv" : "inaktiv"}</td>
-                <td>
-                  {anreiselisteStatus[emp.id] === "vollstaendig" ? (
-                    <span className="font-medium text-emerald-700">
-                      Vollständig
-                    </span>
-                  ) : anreiselisteStatus[emp.id] === "offen" ? (
-                    <span className="font-medium text-amber-700">Offen</span>
-                  ) : (
-                    "—"
-                  )}
-                </td>
-                <td className="text-xs">
-                  {emp.vorgaenger_employee_id &&
-                    alleEmployeesById[emp.vorgaenger_employee_id] && (
-                      <div>
-                        ← {alleEmployeesById[emp.vorgaenger_employee_id].personal_nr}
-                      </div>
-                    )}
-                  {nachfolgerMap[emp.id] && (
-                    <div>→ {nachfolgerMap[emp.id].personal_nr}</div>
-                  )}
-                  {!emp.vorgaenger_employee_id && !nachfolgerMap[emp.id] && "—"}
-                </td>
-                <td>
-                  {emp.schwarze_liste ? (
-                    <span
-                      className="font-medium text-red-600"
-                      title={emp.schwarze_liste_grund ?? undefined}
-                    >
-                      ⚠ Ja
-                    </span>
-                  ) : (
-                    "—"
-                  )}
-                </td>
-                {istAdmin && (
-                  <td className="text-xs">
-                    {letzteAenderung[emp.id] ? (
-                      <>
-                        {formatDatumDE(letzteAenderung[emp.id].occurred_at)}
-                        <div className="text-neutral-500">
-                          {letzteAenderung[emp.id].actor_name ?? "System"}
-                        </div>
-                      </>
-                    ) : (
-                      <span className="text-neutral-400">—</span>
-                    )}
-                  </td>
-                )}
                 {canEdit && (
-                  <td className="flex gap-2">
-                    <button
-                      className="btn-secondary"
-                      onClick={() => startEdit(emp)}
-                    >
-                      Bearbeiten
-                    </button>
-                    <button
-                      className={emp.aktiv ? "btn-danger" : "btn-secondary"}
-                      onClick={() => toggleActive(emp)}
-                    >
-                      {emp.aktiv ? "Deaktivieren" : "Reaktivieren"}
-                    </button>
-                    {emp.aktiv &&
-                      emp.abrechnungsart !== "sozialversicherungspflichtig" && (
-                        <button
-                          className="btn-secondary"
-                          onClick={() => statuswechselStarten(emp)}
-                        >
-                          Statuswechsel
-                        </button>
-                      )}
-                    <button
-                      className="btn-secondary"
-                      onClick={() => dokumenteStarten(emp)}
-                    >
-                      Dokumente
-                    </button>
-                    <a
-                      className="btn-secondary"
-                      href={`/personalstammkarte?id=${emp.id}`}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                    >
-                      Stammkarte
-                    </a>
+                  <td>
+                    <ZeilenAktionen
+                      emp={emp}
+                      onBearbeiten={() => startEdit(emp)}
+                      onToggleAktiv={() => toggleActive(emp)}
+                      onStatuswechsel={() => statuswechselStarten(emp)}
+                      onDokumente={() => dokumenteStarten(emp)}
+                      zeigeStatuswechsel={
+                        emp.aktiv &&
+                        emp.abrechnungsart !== "sozialversicherungspflichtig"
+                      }
+                    />
                   </td>
                 )}
               </tr>
               {editingId === emp.id && (
                 <tr>
-                  <td colSpan={istAdmin ? 23 : 22}>{mitarbeiterFormular()}</td>
+                  <td colSpan={16}>{mitarbeiterFormular()}</td>
                 </tr>
               )}
               {statuswechselId === emp.id && (
                 <tr>
-                  <td colSpan={istAdmin ? 23 : 22}>{statuswechselFormular(emp)}</td>
+                  <td colSpan={16}>{statuswechselFormular(emp)}</td>
                 </tr>
               )}
               {dokumenteId === emp.id && (
                 <tr>
-                  <td colSpan={istAdmin ? 23 : 22}>{dokumenteFormular(emp)}</td>
+                  <td colSpan={16}>{dokumenteFormular(emp)}</td>
                 </tr>
               )}
               </Fragment>

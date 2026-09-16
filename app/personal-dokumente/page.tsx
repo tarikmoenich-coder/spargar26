@@ -243,7 +243,7 @@ export default function PersonalDokumentePage() {
                 <th>Herkunft</th>
                 <th>Name</th>
                 <th>Vorname</th>
-                <th>Ort</th>
+                <th>Wohnort</th>
                 {SICHTBARE_KATEGORIEN.map((k) => (
                   <th key={k}>{k}</th>
                 ))}
