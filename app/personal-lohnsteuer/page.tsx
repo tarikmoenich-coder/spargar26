@@ -10,6 +10,7 @@
 // Diese Themen standen vorher verstreut auf der allgemeinen Dokumente-Seite.
 
 import { Fragment, useEffect, useState } from "react";
+import Link from "next/link";
 import { getSupabaseClient } from "@/lib/supabase/client";
 import { ladeAlleSeiten } from "@/lib/ladeAlle";
 import { useProfile } from "@/lib/useProfile";
@@ -142,16 +143,21 @@ export default function LohnsteuerPage() {
   return (
     <div className="flex flex-col gap-4">
       <PersonalTabs />
-      <div>
-        <h1 className="text-lg font-semibold text-emerald-800">Lohnsteuer</h1>
-        <p className="text-sm text-neutral-500">
-          Antrag auf Lohnsteuerabzug (doppelte Haushaltsführung): Angaben aus
-          der „Bestätigung für den Nachweis der doppelten Haushaltsführung"
-          (manuell vom gestempelten Papierformular abgetippt, ein Datensatz je
-          Person und Saison-Jahr) sowie der Verfahrensstand beim Finanzamt.
-          Wichtig: das Ausfüllen des Formulars ist noch kein gestellter Antrag –
-          der Status wird deshalb immer manuell gesetzt.
-        </p>
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <h1 className="text-lg font-semibold text-emerald-800">Lohnsteuer</h1>
+          <p className="text-sm text-neutral-500">
+            Antrag auf Lohnsteuerabzug (doppelte Haushaltsführung): Angaben aus
+            der „Bestätigung für den Nachweis der doppelten Haushaltsführung"
+            (manuell vom gestempelten Papierformular abgetippt, ein Datensatz je
+            Person und Saison-Jahr) sowie der Verfahrensstand beim Finanzamt.
+            Wichtig: das Ausfüllen des Formulars ist noch kein gestellter Antrag –
+            der Status wird deshalb immer manuell gesetzt.
+          </p>
+        </div>
+        <Link href="/personal-lohnsteuer/antrag" className="btn whitespace-nowrap">
+          Sammelantrag Finanzamt →
+        </Link>
       </div>
 
       <div className="sticky top-[calc(3.5rem+var(--subtabs-h,2.5rem))] z-30 flex flex-wrap items-center gap-4 bg-sand py-2 text-sm">

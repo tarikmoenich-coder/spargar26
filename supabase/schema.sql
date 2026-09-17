@@ -949,6 +949,79 @@ alter view personal_kandidaten_checkliste set (security_invoker = true);
 grant select on personal_kandidaten_checkliste to authenticated;
 
 -- ---------------------------------------------------------------------------
+-- 2c. Lohnsteuerabzug-Sammelantrag (Nutzer-Vorgabe 2026-09-17): die vom
+--     Finanzamt Bensheim geschickte Excel-Vorlage ("Antrag auf Erteilung
+--     einer (Sammel-)Bescheinigung für den Lohnsteuerabzug bei beschränkt
+--     einkommensteuerpflichtigen Arbeitnehmern") wird hieraus erzeugt statt
+--     von Hand gepflegt. Baut auf doppelte_haushaltsfuehrung/
+--     employee_documents auf ("Personal → Lohnsteuer") - dieser Antrag
+--     speichert nur die je Einreichung variierenden Eingaben
+--     (Aufenthaltszeitraum, Fahrtkosten, Unterkunft, ...) und die daraus
+--     berechneten Werte (lib/lohnsteuerantrag.ts), eingefroren zum
+--     Zeitpunkt des Speicherns, damit ein einmal verschickter Antrag
+--     nachvollziehbar bleibt, auch wenn sich Stammdaten später ändern.
+-- ---------------------------------------------------------------------------
+create table lohnsteuerantrag (
+  id bigint generated always as identity primary key,
+  jahr int not null,
+  status text not null default 'entwurf'
+    check (status in ('entwurf', 'bereit', 'verschickt')),
+  erstellt_von uuid references profiles (id) default auth.uid(),
+  erstellt_am timestamptz not null default now(),
+  verschickt_von uuid references profiles (id),
+  verschickt_am timestamptz,
+  notiz text,
+  version int not null default 1,
+  updated_at timestamptz not null default now()
+);
+
+create index idx_lohnsteuerantrag_jahr on lohnsteuerantrag (jahr);
+
+create table lohnsteuerantrag_position (
+  id bigint generated always as identity primary key,
+  antrag_id bigint not null references lohnsteuerantrag (id) on delete cascade,
+  employee_id uuid not null references employees (id) on delete restrict,
+
+  aufenthalt_von date not null,
+  aufenthalt_bis date not null,
+  an_abreisetage int not null default 2,
+  -- "eigener Hausstand ja/nein" laut Formular - wird beim Anlegen aus
+  -- doppelte_haushaltsfuehrung vorbelegt (familienstand='verheiratet' oder
+  -- wohnsituation='eigentuemer_mieter'), bleibt aber überschreibbar.
+  eigener_hausstand boolean not null default true,
+  gefahrene_km numeric(10, 2) not null default 0,
+  unterkunftskosten numeric(10, 2) not null default 0,
+  sonstige_werbungskosten numeric(10, 2) not null default 0,
+  -- Freitext "vorherige Zeiträume in Deutschland" - vorbelegt aus
+  -- employee_saison_praesenz (Liste der Saison-Jahre), frei änderbar.
+  vorherige_zeitraeume text,
+
+  tage int not null,
+  verpflegungsmehraufwand numeric(10, 2) not null,
+  fahrtkosten_absetzbar numeric(10, 2) not null,
+  werbungskosten_gesamt numeric(10, 2) not null,
+  pauschbetrag_anteilig numeric(10, 2) not null,
+  freibetrag_beantragt numeric(10, 2) not null,
+
+  ergebnis text not null default 'offen'
+    check (ergebnis in ('offen', 'genehmigt', 'abgelehnt')),
+  bescheid_freibetrag numeric(10, 2),
+  bescheid_gueltig_von date,
+  bescheid_gueltig_bis date,
+  bescheid_datum date,
+  bescheid_notiz text,
+
+  erstellt_am timestamptz not null default now(),
+
+  unique (antrag_id, employee_id)
+);
+
+create index idx_lohnsteuerantrag_position_antrag
+  on lohnsteuerantrag_position (antrag_id);
+create index idx_lohnsteuerantrag_position_employee
+  on lohnsteuerantrag_position (employee_id);
+
+-- ---------------------------------------------------------------------------
 -- 3. Tageserfassung (ersetzt Sheets "Jan" bis "August")
 -- ---------------------------------------------------------------------------
 create table work_entries (
@@ -2435,6 +2508,15 @@ create table firmen_bankdaten (
   name text not null default 'Mömmel Agrar GmbH & Co. KG',
   iban text,
   bic text,
+  -- Steuernummer/Anschrift (Nutzer-Vorgabe 2026-09-17): für den Kopf des
+  -- Lohnsteuerabzug-Sammelantrags (Finanzamt Bensheim) und die dort bei
+  -- jeder Position identische "Aufenthalt in der BRD"-Adresse - die
+  -- Arbeitnehmer sind bei Mömmel gemeldet, nicht an ihrer Heimatadresse.
+  steuernummer text,
+  strasse text,
+  hausnummer text,
+  plz text,
+  ort text,
   updated_by uuid references profiles (id),
   updated_at timestamptz not null default now()
 );
@@ -4223,6 +4305,8 @@ $$;
 
 create trigger trg_employees_updated_at before update on employees
   for each row execute function set_updated_at_and_version();
+create trigger trg_lohnsteuerantrag_updated_at before update on lohnsteuerantrag
+  for each row execute function set_updated_at_and_version();
 create trigger trg_work_entries_updated_at before update on work_entries
   for each row execute function set_updated_at_and_version();
 create trigger trg_zuckermais_rohdaten_updated_at before update on zuckermais_rohdaten
@@ -5296,6 +5380,8 @@ alter table personal_kandidaten enable row level security;
 alter table sv_fragebogen enable row level security;
 alter table sv_fragebogen_vorbeschaeftigung enable row level security;
 alter table doppelte_haushaltsfuehrung enable row level security;
+alter table lohnsteuerantrag enable row level security;
+alter table lohnsteuerantrag_position enable row level security;
 
 -- profiles
 create policy "profiles_select" on profiles for select
@@ -5353,6 +5439,15 @@ create policy "sv_fragebogen_vorbeschaeftigung_admin_hr_all"
 -- Doppelte Haushaltsführung: gleiche Sensibilität wie SV-Fragebogen.
 create policy "doppelte_haushaltsfuehrung_admin_hr_all"
   on doppelte_haushaltsfuehrung for all
+  using (current_role_name() in ('admin', 'hr'))
+  with check (current_role_name() in ('admin', 'hr'));
+
+-- Lohnsteuerabzug-Sammelantrag: gleiche Sensibilität.
+create policy "lohnsteuerantrag_admin_hr_all" on lohnsteuerantrag for all
+  using (current_role_name() in ('admin', 'hr'))
+  with check (current_role_name() in ('admin', 'hr'));
+create policy "lohnsteuerantrag_position_admin_hr_all"
+  on lohnsteuerantrag_position for all
   using (current_role_name() in ('admin', 'hr'))
   with check (current_role_name() in ('admin', 'hr'));
 
@@ -5553,8 +5648,11 @@ create policy "kleidung_ausgaben_select" on kleidung_ausgaben for select
 -- lesen (kasse erstellt die Vorschüsse und generiert die SEPA-Datei
 -- daraus), schreiben nur admin - eigenes Unternehmenskonto, keine
 -- niedrigere Hürde als bei anderen Firmen-Einstellungen nötig.
+-- hr ergänzt (Nutzer-Vorgabe 2026-09-17): der Lohnsteuerabzug-Sammelantrag
+-- auf "Personal → Lohnsteuer" (admin/hr) braucht Steuernummer/Anschrift für
+-- den Excel-Export.
 create policy "firmen_bankdaten_select" on firmen_bankdaten for select
-  using (current_role_name() in ('admin', 'kasse'));
+  using (current_role_name() in ('admin', 'kasse', 'hr'));
 create policy "firmen_bankdaten_write" on firmen_bankdaten for update
   using (is_admin()) with check (is_admin());
 

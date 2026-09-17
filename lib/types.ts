@@ -573,6 +573,72 @@ export interface DoppelteHaushaltsfuehrung {
   updated_at: string;
 }
 
+// Lohnsteuerabzug-Sammelantrag (Nutzer-Vorgabe 2026-09-17): erzeugt die vom
+// Finanzamt Bensheim vorgegebene Excel-Vorlage aus den Personaldaten. Ein
+// Antrag bündelt mehrere Personen (Positionen) für ein Steuerjahr, siehe
+// lohnsteuerantrag/lohnsteuerantrag_position in schema.sql.
+export type LohnsteuerantragStatus = 'entwurf' | 'bereit' | 'verschickt';
+
+export const LOHNSTEUERANTRAG_STATUS_LABELS: Record<
+  LohnsteuerantragStatus,
+  string
+> = {
+  entwurf: 'Entwurf',
+  bereit: 'Bereit zum Versand',
+  verschickt: 'Verschickt',
+};
+
+export type LohnsteuerantragErgebnis = 'offen' | 'genehmigt' | 'abgelehnt';
+
+export const LOHNSTEUERANTRAG_ERGEBNIS_LABELS: Record<
+  LohnsteuerantragErgebnis,
+  string
+> = {
+  offen: 'Offen',
+  genehmigt: 'Genehmigt',
+  abgelehnt: 'Abgelehnt',
+};
+
+export interface Lohnsteuerantrag {
+  id: number;
+  jahr: number;
+  status: LohnsteuerantragStatus;
+  erstellt_von: string | null;
+  erstellt_am: string;
+  verschickt_von: string | null;
+  verschickt_am: string | null;
+  notiz: string | null;
+  version: number;
+  updated_at: string;
+}
+
+export interface LohnsteuerantragPosition {
+  id: number;
+  antrag_id: number;
+  employee_id: string;
+  aufenthalt_von: string;
+  aufenthalt_bis: string;
+  an_abreisetage: number;
+  eigener_hausstand: boolean;
+  gefahrene_km: number;
+  unterkunftskosten: number;
+  sonstige_werbungskosten: number;
+  vorherige_zeitraeume: string | null;
+  tage: number;
+  verpflegungsmehraufwand: number;
+  fahrtkosten_absetzbar: number;
+  werbungskosten_gesamt: number;
+  pauschbetrag_anteilig: number;
+  freibetrag_beantragt: number;
+  ergebnis: LohnsteuerantragErgebnis;
+  bescheid_freibetrag: number | null;
+  bescheid_gueltig_von: string | null;
+  bescheid_gueltig_bis: string | null;
+  bescheid_datum: string | null;
+  bescheid_notiz: string | null;
+  erstellt_am: string;
+}
+
 export interface WorkEntry {
   id: number;
   employee_id: string;
@@ -809,6 +875,13 @@ export interface FirmenBankdaten {
   name: string;
   iban: string | null;
   bic: string | null;
+  // Steuernummer/Anschrift (Nutzer-Vorgabe 2026-09-17) - für den
+  // Lohnsteuerabzug-Sammelantrag (Finanzamt Bensheim).
+  steuernummer: string | null;
+  strasse: string | null;
+  hausnummer: string | null;
+  plz: string | null;
+  ort: string | null;
   updated_by: string | null;
   updated_at: string;
 }

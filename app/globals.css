@@ -274,6 +274,84 @@ input[type="number"]::-webkit-inner-spin-button {
   }
 }
 
+/* Bescheinigung "Doppelte Haushaltsführung" (Anlage zum Lohnsteuerabzug-
+   Sammelantrag, app/personal-lohnsteuer/antrag/bescheinigungen) - ein Blatt
+   A4 hoch je Person. Eigene benannte @page (siehe Bugfix-Kommentar oben bei
+   .stammkarte) statt einer unbenannten Regel. */
+.bescheinigung-druck {
+  max-width: 700px;
+  margin: 0 auto;
+  padding: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+.bescheinigung-druck .bd-kopf {
+  font-size: 0.85rem;
+  color: #555;
+}
+.bescheinigung-druck .bd-titel {
+  font-size: 1.15rem;
+  font-weight: 600;
+  text-align: center;
+  margin-top: 12px;
+}
+.bescheinigung-druck .bd-untertitel {
+  text-align: center;
+  color: #555;
+  margin-top: -12px;
+}
+.bescheinigung-druck .bd-felder {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  border-top: 1px solid #ccc;
+  border-bottom: 1px solid #ccc;
+  padding: 12px 0;
+}
+.bescheinigung-druck .bd-felder > div {
+  display: flex;
+  flex-direction: column;
+}
+.bescheinigung-druck .bd-felder span {
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: #777;
+}
+.bescheinigung-druck .bd-erklaerung {
+  font-size: 0.9rem;
+  line-height: 1.5;
+}
+.bescheinigung-druck .bd-unterschrift {
+  display: flex;
+  gap: 48px;
+  margin-top: 40px;
+}
+.bescheinigung-druck .bd-unterschrift > div {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.bescheinigung-druck .bd-unterschrift span {
+  font-size: 0.7rem;
+  color: #777;
+}
+.bescheinigung-druck .bd-linie {
+  border-bottom: 1px solid #333;
+  min-height: 28px;
+}
+@media print {
+  @page bescheinigung-a4 {
+    size: A4 portrait;
+    margin: 20mm;
+  }
+  .bescheinigung-druck {
+    page: bescheinigung-a4;
+  }
+}
+
 /* ---------------------------------------------------------------------------
    Blanko-Strichliste Zuckermais (app/praemien/zuckermais/strichliste) -
    A3 quer, ZWEI Zeilen je Person untereinander (obere = Kreuzfelder 1-20,

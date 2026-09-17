@@ -37,6 +37,11 @@ export default function EinstellungenAllgemeinPage() {
     name: "",
     iban: "",
     bic: "",
+    steuernummer: "",
+    strasse: "",
+    hausnummer: "",
+    plz: "",
+    ort: "",
   });
   const [bankdatenSaving, setBankdatenSaving] = useState(false);
   const [bankdatenError, setBankdatenError] = useState<string | null>(null);
@@ -59,6 +64,11 @@ export default function EinstellungenAllgemeinPage() {
       name: bd?.name ?? "",
       iban: bd?.iban ?? "",
       bic: bd?.bic ?? "",
+      steuernummer: bd?.steuernummer ?? "",
+      strasse: bd?.strasse ?? "",
+      hausnummer: bd?.hausnummer ?? "",
+      plz: bd?.plz ?? "",
+      ort: bd?.ort ?? "",
     });
     setLoading(false);
   }
@@ -78,6 +88,11 @@ export default function EinstellungenAllgemeinPage() {
         name: bankdatenForm.name,
         iban: bankdatenForm.iban || null,
         bic: bankdatenForm.bic || null,
+        steuernummer: bankdatenForm.steuernummer || null,
+        strasse: bankdatenForm.strasse || null,
+        hausnummer: bankdatenForm.hausnummer || null,
+        plz: bankdatenForm.plz || null,
+        ort: bankdatenForm.ort || null,
       })
       .eq("id", 1);
     setBankdatenSaving(false);
@@ -151,8 +166,9 @@ export default function EinstellungenAllgemeinPage() {
         </h2>
         <p className="text-sm text-neutral-500">
           Auftraggeber-Konto für den SEPA-Überweisungs-Export bei Vorschüssen
-          (Zahlungsart Banküberweisung). Nur admin/kasse können diese Daten
-          lesen.
+          (Zahlungsart Banküberweisung) sowie Steuernummer/Anschrift für den
+          Lohnsteuerabzug-Sammelantrag (Finanzamt Bensheim). Nur admin/kasse/hr
+          können diese Daten lesen.
         </p>
       </div>
 
@@ -181,6 +197,47 @@ export default function EinstellungenAllgemeinPage() {
             value={bankdatenForm.bic}
             onChange={(e) =>
               setBankdatenForm({ ...bankdatenForm, bic: e.target.value })
+            }
+          />
+          <input
+            placeholder="Steuernummer (z.B. 07 390 01921)"
+            value={bankdatenForm.steuernummer}
+            onChange={(e) =>
+              setBankdatenForm({
+                ...bankdatenForm,
+                steuernummer: e.target.value,
+              })
+            }
+          />
+          <input
+            placeholder="Straße"
+            value={bankdatenForm.strasse}
+            onChange={(e) =>
+              setBankdatenForm({ ...bankdatenForm, strasse: e.target.value })
+            }
+          />
+          <input
+            placeholder="Haus-Nr."
+            value={bankdatenForm.hausnummer}
+            onChange={(e) =>
+              setBankdatenForm({
+                ...bankdatenForm,
+                hausnummer: e.target.value,
+              })
+            }
+          />
+          <input
+            placeholder="PLZ"
+            value={bankdatenForm.plz}
+            onChange={(e) =>
+              setBankdatenForm({ ...bankdatenForm, plz: e.target.value })
+            }
+          />
+          <input
+            placeholder="Ort"
+            value={bankdatenForm.ort}
+            onChange={(e) =>
+              setBankdatenForm({ ...bankdatenForm, ort: e.target.value })
             }
           />
           <div className="col-span-full flex items-center gap-2">

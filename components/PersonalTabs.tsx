@@ -50,7 +50,7 @@ export default function PersonalTabs() {
           key={tab.href}
           href={tab.href}
           className={`-mb-px border-b-2 pb-2 text-sm ${
-            pathname === tab.href
+            pathname === tab.href || pathname.startsWith(`${tab.href}/`)
               ? "border-emerald-700 font-semibold text-emerald-800"
               : "border-transparent text-neutral-600 hover:text-emerald-800"
           }`}
