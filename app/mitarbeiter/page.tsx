@@ -201,6 +201,7 @@ export default function MitarbeiterPage() {
   const [herkunftListenFilter, setHerkunftListenFilter] = useState("");
   const [form, setForm] = useState(emptyForm);
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [neuOffen, setNeuOffen] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   // Alle je vergebenen Personalnummern (auch inaktive Mitarbeiter, da deren
@@ -480,6 +481,7 @@ export default function MitarbeiterPage() {
 
   function resetForm() {
     setEditingId(null);
+    setNeuOffen(false);
     setForm(emptyForm);
   }
 
@@ -1132,7 +1134,7 @@ export default function MitarbeiterPage() {
           >
             {editingId ? "Speichern" : "Anlegen"}
           </button>
-          {editingId && (
+          {(editingId || neuOffen) && (
             <button type="button" className="btn-secondary" onClick={resetForm}>
               Abbrechen
             </button>
@@ -1300,7 +1302,19 @@ export default function MitarbeiterPage() {
         </p>
       </div>
 
-      {canEdit && !editingId && mitarbeiterFormular()}
+      {canEdit && !editingId && (
+        neuOffen ? (
+          mitarbeiterFormular()
+        ) : (
+          <button
+            type="button"
+            className="btn self-start"
+            onClick={() => setNeuOffen(true)}
+          >
+            + Personal anlegen
+          </button>
+        )
+      )}
 
       <div className="sticky top-[calc(3.5rem+var(--subtabs-h,2.5rem))] z-30 flex items-center gap-3 bg-sand py-2">
         <input
