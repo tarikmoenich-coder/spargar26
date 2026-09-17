@@ -289,15 +289,21 @@ create table employee_documents (
     'Führerschein Kopie',
     'Arbeitsvertrag',
     'Werks- und Mietvertrag',
+    'Doppelte Haushaltsführung Bescheinigung',
     'Sonstiges'
   )),
-  -- Entfernt 2026-08-11 (Nutzer-Vorgabe): Formular "Doppelte
-  -- Haushaltsführung" und Formular zur Feststellung der
-  -- Versicherungspflicht werden NICHT mehr hochgeladen. Beide werden
-  -- ausschließlich über ihre Eingabemaske erfasst (Personal → Lohnsteuer
-  -- bzw. Sozialversicherung); die erfassten Angaben sind der Nachweis.
-  -- Die Anreiseliste-Checkliste prüft entsprechend die Angaben statt eines
-  -- Dokuments (siehe personal_kandidaten_checkliste weiter unten).
+  -- Formular "Doppelte Haushaltsführung" und Formular zur Feststellung der
+  -- Versicherungspflicht wurden 2026-08-11 als Upload entfernt: beide werden
+  -- für die Anreiseliste-Checkliste ausschließlich über ihre Eingabemaske
+  -- erfasst (Personal → Lohnsteuer bzw. Sozialversicherung); die erfassten
+  -- Angaben sind dafür der Nachweis (siehe personal_kandidaten_checkliste
+  -- weiter unten - unverändert).
+  -- "Doppelte Haushaltsführung Bescheinigung" kam 2026-09-17 als eigene,
+  -- NEUE Kategorie zurück (Nutzer-Vorgabe: "Für das Finanzamt brauche ich
+  -- die Bescheinigung ... tatsächlich als Scan im Anhang") - der
+  -- Lohnsteuerabzug-Sammelantrag (app/personal-lohnsteuer/antrag) braucht
+  -- das unterschriebene Original als Anlage, dafür reichen die erfassten
+  -- Angaben nicht. Betrifft NICHT die Anreiseliste-Checkliste oben.
   dateiname text not null,
   -- Pfad im Storage-Bucket "mitarbeiter-dokumente", z.B.
   -- "<employee_id>/<zeitstempel>_<dateiname>".

@@ -3,19 +3,25 @@
 // Lohnsteuerabzug-Sammelantrag (Nutzer-Vorgabe 2026-09-17): erzeugt die vom
 // Finanzamt Bensheim gelieferte Excel-Vorlage aus den Personaldaten, bündelt
 // Personen zu einem Antrag je Steuerjahr, prüft die Vollständigkeit
-// (Familienstand erfasst, Hochzeitsurkunde/Ausweiskopie bei Bedarf,
-// Heimatadresse/Geburtsdatum vorhanden) und erfasst nach Rückmeldung des
-// Finanzamts genehmigt/abgelehnt je Person. Baut auf der bestehenden
-// "Personal → Lohnsteuer"-Seite auf (doppelte_haushaltsfuehrung) - der
-// Verfahrensstand dort wird beim Verschicken/bei der Rückmeldung automatisch
-// mitgesetzt, keine zweite Statuslogik.
+// (Familienstand erfasst, Bescheinigung Doppelte Haushaltsführung als Scan
+// bei allen, Hochzeitsurkunde/Ausweiskopie bei Bedarf, Heimatadresse/
+// Geburtsdatum vorhanden) und erfasst nach Rückmeldung des Finanzamts
+// genehmigt/abgelehnt je Person. Baut auf der bestehenden "Personal →
+// Lohnsteuer"-Seite auf (doppelte_haushaltsfuehrung) - der Verfahrensstand
+// dort wird beim Verschicken/bei der Rückmeldung automatisch mitgesetzt,
+// keine zweite Statuslogik.
 //
 // Versand ans Finanzamt bleibt manuell (Nutzer-Entscheidung 2026-09-17): diese
-// Seite erzeugt nur das Datei-Paket (Excel + gedruckte Anlagen), verschickt
-// wird per E-Mail/Post außerhalb der App.
+// Seite erzeugt nur das Datei-Paket (Excel + hochgeladene Scans der
+// Anlagen), verschickt wird per E-Mail/Post außerhalb der App.
+//
+// Korrektur 2026-09-17: die Bescheinigung Doppelte Haushaltsführung wurde
+// zunächst als generierte Druckansicht aus den erfassten Angaben geplant
+// (konsistent mit der 2026-08-11-Entscheidung "kein Upload nötig") - das
+// Finanzamt braucht aber tatsächlich den unterschriebenen Original-Scan,
+// daher jetzt ein echter Upload (eigene Dokument-Kategorie).
 
 import { Fragment, useEffect, useMemo, useState } from "react";
-import Link from "next/link";
 import { getSupabaseClient } from "@/lib/supabase/client";
 import { ladeAlleSeiten } from "@/lib/ladeAlle";
 import { useProfile } from "@/lib/useProfile";
@@ -53,6 +59,12 @@ function checkliste(
   punkte.push({
     ok: !!dhhEmp?.familienstand,
     text: "Familienstand erfasst (Personal → Lohnsteuer)",
+  });
+  punkte.push({
+    ok: dokumenteEmp.some(
+      (d) => d.kategorie === "Doppelte Haushaltsführung Bescheinigung"
+    ),
+    text: "Bescheinigung Doppelte Haushaltsführung hochgeladen (Scan)",
   });
   if (dhhEmp?.familienstand === "verheiratet") {
     punkte.push({
@@ -221,7 +233,11 @@ export default function LohnsteuerantragPage() {
             .from("employee_documents")
             .select("*")
             .in("employee_id", employeeIds)
-            .in("kategorie", ["Hochzeitsurkunde", "Ausweiskopie"]),
+            .in("kategorie", [
+              "Hochzeitsurkunde",
+              "Ausweiskopie",
+              "Doppelte Haushaltsführung Bescheinigung",
+            ]),
           supabase
             .from("lohnsteuerantrag_position")
             .select("employee_id, ergebnis, lohnsteuerantrag!inner(jahr)")
@@ -687,15 +703,6 @@ export default function LohnsteuerantragPage() {
                   Excel erzeugen
                 </button>
               )}
-              {(aktiv.status === "bereit" || aktiv.status === "verschickt") && (
-                <Link
-                  href={`/personal-lohnsteuer/antrag/bescheinigungen?antragId=${aktiv.id}`}
-                  target="_blank"
-                  className="btn-secondary text-xs"
-                >
-                  Bescheinigungen drucken
-                </Link>
-              )}
               {canEdit && aktiv.status === "bereit" && (
                 <button
                   type="button"
@@ -960,6 +967,18 @@ export default function LohnsteuerantragPage() {
                                 ))}
                                 {emp && (
                                   <div className="mt-1 flex gap-4">
+                                    <div>
+                                      <span className="block text-neutral-500">
+                                        Doppelte Haushaltsführung (Scan)
+                                      </span>
+                                      <FormularDokumentZelle
+                                        employeeId={emp.id}
+                                        kategorie="Doppelte Haushaltsführung Bescheinigung"
+                                        dokumente={dokumente[emp.id] ?? []}
+                                        canEdit={canEdit}
+                                        onGeaendert={() => aktivId && ladeDetails(aktivId)}
+                                      />
+                                    </div>
                                     {dhh[emp.id]?.familienstand === "verheiratet" && (
                                       <div>
                                         <span className="block text-neutral-500">Hochzeitsurkunde</span>

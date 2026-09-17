@@ -50,15 +50,18 @@ export const DOKUMENT_KATEGORIEN = [
   'Führerschein Kopie',
   'Arbeitsvertrag',
   'Werks- und Mietvertrag',
+  'Doppelte Haushaltsführung Bescheinigung',
   'Sonstiges',
 ] as const;
-// Entfernt 2026-08-11 (Nutzer-Vorgabe): Formular "Doppelte
-// Haushaltsführung" und Formular zur Feststellung der Versicherungspflicht
-// werden NICHT mehr als Datei hochgeladen. Beide werden ausschließlich über
-// die jeweilige Eingabemaske erfasst (Personal → Lohnsteuer bzw.
-// Sozialversicherung) - die erfassten Angaben sind der Nachweis, nicht der
-// Scan. Die Anreiseliste-Checkliste prüft entsprechend die Angaben statt
-// eines Dokuments.
+// Formular "Doppelte Haushaltsführung" und Formular zur Feststellung der
+// Versicherungspflicht wurden 2026-08-11 als Upload entfernt: für die
+// Anreiseliste-Checkliste werden beide ausschließlich über die jeweilige
+// Eingabemaske erfasst (Personal → Lohnsteuer bzw. Sozialversicherung) -
+// die erfassten Angaben sind dafür der Nachweis, nicht der Scan.
+// "Doppelte Haushaltsführung Bescheinigung" kam 2026-09-17 als eigene, NEUE
+// Kategorie zurück (Nutzer-Vorgabe: der Lohnsteuerabzug-Sammelantrag ans
+// Finanzamt Bensheim braucht das unterschriebene Original als Anlage) -
+// betrifft NICHT die Anreiseliste-Checkliste oben.
 
 export type DokumentKategorie = (typeof DOKUMENT_KATEGORIEN)[number];
 
