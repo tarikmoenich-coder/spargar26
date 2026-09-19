@@ -33,8 +33,12 @@ Ergebnis:  pro Kiste: Maschine · Fahrer · Feld/Flur (aus GPS) · Zeit · netto
   (Mobil/GNSS/WLAN), **Netronix MW-R4G** (RFID 13,56 MHz **HF** — passt NICHT zu
   den UHF-Kisten), VE.Direct-Kabel + MAX3232 (liest Victron-Batteriedaten),
   Gehäuse/Hutschiene/Klemmen.
-- **Waage am Hof:** stationärer Leser *iDTRONIC-Klasse MAGNUM, UHF, Long Range,
-  Ethernet/WLAN/RS232/RS485, 1 int./2 ext. Antennen.* Die **Waage selbst kommt noch**.
+- **Waage am Hof:** stationärer Leser *MAGNUM, UHF, Long Range,
+  Ethernet/WLAN/RS232/RS485, 1 int./2 ext. Antennen* - Hersteller laut
+  Typenschild **TECTUS Technology GmbH** (tec-tus.com), nicht iDTRONIC wie
+  zunächst angenommen; P/N `MAGNUM 4077-01-000-00`, Versorgung 12-36 V/2,5 A.
+  Die **Waage selbst kommt noch** (siehe Teil D für das gewählte Modell
+  RHEWA 84vario).
 - **±1 m Präzision** wird gebraucht (im Testaufbau mit einem Board der
   Entwicklungsfirma erreicht — das hatte RTK). Interne TRB246-GNSS schafft das
   **nicht** (2,5–5 m).
@@ -128,12 +132,57 @@ Kleiner Node/Python-Dienst auf einem Mini-PC/RPi am Hof (Muster wie
 `tools/fahrzeug-poller/`):
 
 - liest Kisten-Tag vom **MAGNUM UHF** über TCP (bzw. Reader pusht zum Agenten);
-- liest Gewicht von der **Waage** (RS232/Ethernet, Modell TBD) — „stabiles Gewicht"
-  als Trigger;
+- liest Gewicht von der **Waage** — „stabiles Gewicht" als Trigger;
 - **paart**: stabiles Gewicht ≠ 0 + frische Tag-Lesung innerhalb von N Sekunden →
   ein `{waage, tag, gewicht_kg, ts}` → POST an `ernte-ingest`;
 - lokale SQLite-Queue + Retry bei Netzausfall;
 - Config: Reader-IP, Waagen-Port, Ingest-URL/Token, Paarungsfenster, Mindestgewicht.
+
+**Waage — Modell entschieden (Klärung 2026-09-18): RHEWA 84vario**, Anbindung
+per **Ethernet/TCP/IP direkt** (nicht über die RHEWA-eigene Windows-Software
+DataRDK/DataLog - die passt nicht zum Linux-Agenten-Ansatz hier und wird nicht
+gebraucht). Protokoll-Unterlagen liegen vor (`EDV-Anbindung 83s-84v.pdf`,
+`Kundeninformation TCP_IP.pdf`, `84vario_Ethernet.pdf`, C#-Referenzbeispiel
+für ein anderes Modell/82c).
+
+- **Verbindung:** Auswertegerät ist der TCP-**Server** (Default-Port 8000, am
+  Gerät änderbar/einsehbar), unser Agent ist der **Client** - reiner
+  Stream-Socket, kein HTTP/Telnet/SSH, keine UDP-Sockets, kein DHCP. IP/Port/
+  Subnetz/Gateway werden direkt am Gerätedisplay eingestellt (Menü
+  Einstellungen → Gerätekonfiguration → Ethernet, Passwort = Fabriknummer).
+  **Wichtig:** Die Ethernet-Schnittstelle des 84vario ist kostenpflichtig
+  freizuschalten (Freischaltcode beim Händler bestellen) - ohne Freischaltung
+  bleibt nur RS232.
+- **Befehlsrahmen:** ASCII-Befehle, geklammert `<..>` (Start `<`, Ende `>`),
+  zweistelliger Befehlscode + optionale Parameter/Schnittstellen-Nummer. Für
+  83sigma/84vario ist die TCP/IP-Schnittstelle **Nummer 7** (z.B. `<GN7>` =
+  aktuelles Nettogewicht über TCP/IP). Antwort quittiert denselben Befehl
+  (`<FP>`) oder meldet Fehler (`<FP!>`, `<..%!>` unbekannter Befehl, `<..#>`
+  fehlendes Stoppzeichen).
+- **Der richtige Befehl für uns: `<FP0>`** - fordert den kompletten,
+  **eichfähigen** Datensatz „EDV1" an, **wartet geräteseitig selbst auf
+  Gewichtsruhelage** (kein eigenes Polling/Stabilitäts-Timing im Agenten
+  nötig) und bricht nach 30 s mit `<FP!>` ab, wenn nie stabil/außerhalb
+  Wägebereich. Genau das ist unser „stabiles Gewicht"-Trigger aus Teil D -
+  eine Zustandsmaschine dafür entfällt.
+- **EDV1-Datensatz** (STX…ETX, `;`-getrennt, danach CR LF + `<FP>`): laufende
+  Nummer (10-stellig, = Schlüssel des geräteinternen **Alibispeichers** -
+  **mit in `ernte_scan.roh` speichern**, das ist der amtliche Prüfnachweis),
+  Datum (TT.MM.JJJJ), Uhrzeit (HH:MM:SS), Wägebrücken-Nr, Wägebereich,
+  Stückzahl, Gewichtseinheit (kg), Brutto, Tara, Netto (je 8-stellig,
+  rechtsbündig, Dezimalpunkt).
+  **Offene Frage Tara:** „Netto" ist Brutto minus dem, was zuletzt per `<FT>`/
+  `<FH..>` am Gerät als Tara gesetzt wurde - bei unbeaufsichtigtem Betrieb
+  (keine Person tariert je Kiste am Terminal) bräuchte das entweder eine feste
+  Plattform-Tara (leere Palette dauerhaft aufgesetzt) oder wir tarieren
+  überhaupt nicht am Gerät und lesen stattdessen **Brutto**, ziehen das
+  bekannte Kisten-Leergewicht (je Kistentyp, aus `ernte_tag`/Stammdaten) selbst
+  im Backend ab. Zweiteres ist robuster (kein Risiko einer veraltet stehen
+  gebliebenen Geräte-Tara) - vorbehaltlich Rückfrage/Praxistest.
+- Ablauf im Agenten: Kisten-Tag-Scan kommt rein → kurz warten (Kiste steht auf
+  der Waage) → TCP-Verbindung öffnen → `<FP0>` senden → Antwort parsen (Erfolg
+  → Netto+laufende Nummer weiter wie bisher geplant; `<FP!>`/Timeout →
+  verwerfen bzw. `ungeklaert`, siehe Teil E) → Verbindung schließen.
 
 ## Teil E — Datenbank (Modul-Migration + `schema.sql`-Abschnitt)
 
