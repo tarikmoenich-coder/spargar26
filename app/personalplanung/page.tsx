@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { Fragment, useEffect, useMemo, useState } from "react";
 import { getSupabaseClient } from "@/lib/supabase/client";
 import { useProfile } from "@/lib/useProfile";
 import {
@@ -12,6 +12,11 @@ import {
 import { formatDatumDE } from "@/lib/format";
 import { ladeAlleSeiten } from "@/lib/ladeAlle";
 import { satzFuerJahr } from "@/lib/satzFuerJahr";
+import {
+  arbeitsendeAuto,
+  endeFolgtBeginn,
+  inBloecken,
+} from "@/lib/planungTermine";
 import { historieKurz } from "@/lib/saisonHistorie";
 import {
   baueIndex,
@@ -70,6 +75,24 @@ export default function PersonalplanungPage() {
   // Für die Vorbelegung des Stundenlohns mit dem Mindestlohn (siehe
   // Einstellungen-Seite).
   const [saetze, setSaetze] = useState<VerpflegungsSatz[]>([]);
+  // Einklappbare Herkunfts-Gruppen (Schlüssel = Herkunft bzw. "__ohne__").
+  const [eingeklappt, setEingeklappt] = useState<Set<string>>(new Set());
+  // Termine für alle setzen: Gruppen-Schlüssel oder "__alle__".
+  const [terminePanel, setTerminePanel] = useState<string | null>(null);
+  const [terminAnreise, setTerminAnreise] = useState("");
+  const [terminBeginn, setTerminBeginn] = useState("");
+  const [terminLaeuft, setTerminLaeuft] = useState(false);
+  // Bearbeiten einzelner Kandidaten (Führerschein, Name, ...).
+  const [bearbeitenId, setBearbeitenId] = useState<string | null>(null);
+  const [bearbeitenForm, setBearbeitenForm] = useState<{
+    name: string;
+    vorname: string;
+    geburtsdatum: string;
+    nationalitaet: string;
+    herkunft: string;
+    notiz: string;
+    fuehrerschein: string[];
+  } | null>(null);
 
   async function load() {
     setLoading(true);
@@ -512,11 +535,16 @@ export default function PersonalplanungPage() {
     load();
   }
 
-  // Einzelne Vertragsdaten eines geplanten Kandidaten direkt in der Liste
-  // ändern (Arbeitsbeginn/-ende und Stundenlohn fließen in den Arbeitsvertrag).
+  // Einzelne Termin-/Vertragsdaten eines geplanten Kandidaten direkt in der
+  // Liste ändern. Ein neuer Arbeitsbeginn zieht das Arbeitsende automatisch
+  // nach (Beginn + 104 Tage), außer es wurde bewusst abweichend gesetzt.
   async function vertragsfeldSpeichern(
     k: PersonalKandidat,
-    feld: "arbeitsbeginn_datum" | "arbeitsende_datum" | "stundenlohn",
+    feld:
+      | "geplante_ankunft"
+      | "arbeitsbeginn_datum"
+      | "arbeitsende_datum"
+      | "stundenlohn",
     wert: string
   ) {
     const neu =
@@ -526,17 +554,133 @@ export default function PersonalplanungPage() {
           : Number(wert)
         : wert || null;
     if (neu === k[feld]) return;
+    const payload: Partial<PersonalKandidat> = { [feld]: neu };
+    if (
+      feld === "arbeitsbeginn_datum" &&
+      typeof neu === "string" &&
+      endeFolgtBeginn(k.arbeitsbeginn_datum, k.arbeitsende_datum)
+    ) {
+      payload.arbeitsende_datum = arbeitsendeAuto(neu);
+    }
     const { error } = await getSupabaseClient()
       .from("personal_kandidaten")
-      .update({ [feld]: neu })
+      .update(payload)
       .eq("id", k.id);
     if (error) {
       setError(error.message);
       return;
     }
     setKandidaten((prev) =>
-      prev.map((x) => (x.id === k.id ? { ...x, [feld]: neu } : x))
+      prev.map((x) => (x.id === k.id ? { ...x, ...payload } : x))
     );
+  }
+
+  // Geplante Anreise und/oder Arbeitsbeginn für viele Kandidaten auf einmal
+  // setzen (eine Herkunfts-Gruppe oder alle). Das Arbeitsende folgt dem
+  // Arbeitsbeginn automatisch (+104 Tage); individuell abweichende Enden
+  // bleiben stehen.
+  async function termineSetzen(ziele: PersonalKandidat[]) {
+    if (ziele.length === 0 || (!terminAnreise && !terminBeginn)) return;
+    setTerminLaeuft(true);
+    setError(null);
+    const supabase = getSupabaseClient();
+    const fehler: string[] = [];
+    const schreibe = async (
+      ids: string[],
+      payload: Record<string, string | null>
+    ) => {
+      for (const block of inBloecken(ids)) {
+        const { error } = await supabase
+          .from("personal_kandidaten")
+          .update(payload)
+          .in("id", block);
+        if (error) fehler.push(error.message);
+      }
+    };
+    if (terminAnreise) {
+      await schreibe(
+        ziele.map((k) => k.id),
+        { geplante_ankunft: terminAnreise }
+      );
+    }
+    if (terminBeginn) {
+      const folgt = ziele.filter((k) =>
+        endeFolgtBeginn(k.arbeitsbeginn_datum, k.arbeitsende_datum)
+      );
+      const bleibt = ziele.filter(
+        (k) => !endeFolgtBeginn(k.arbeitsbeginn_datum, k.arbeitsende_datum)
+      );
+      await schreibe(
+        folgt.map((k) => k.id),
+        {
+          arbeitsbeginn_datum: terminBeginn,
+          arbeitsende_datum: arbeitsendeAuto(terminBeginn),
+        }
+      );
+      await schreibe(
+        bleibt.map((k) => k.id),
+        { arbeitsbeginn_datum: terminBeginn }
+      );
+    }
+    setTerminLaeuft(false);
+    if (fehler.length > 0) {
+      setError([...new Set(fehler)].join(" · "));
+    } else {
+      setTerminePanel(null);
+      setTerminAnreise("");
+      setTerminBeginn("");
+    }
+    load();
+  }
+
+  function bearbeitenStarten(k: PersonalKandidat) {
+    setBearbeitenId(k.id);
+    setBearbeitenForm({
+      name: k.name,
+      vorname: k.vorname,
+      geburtsdatum: k.geburtsdatum ?? "",
+      nationalitaet: k.nationalitaet ?? "",
+      herkunft: k.herkunft ?? "",
+      notiz: k.notiz ?? "",
+      fuehrerschein: k.fuehrerschein_kategorien ?? [],
+    });
+  }
+
+  async function bearbeitenSpeichern() {
+    if (!bearbeitenId || !bearbeitenForm) return;
+    const f = bearbeitenForm;
+    setSaving(true);
+    setError(null);
+    const { error } = await getSupabaseClient()
+      .from("personal_kandidaten")
+      .update({
+        name: f.name,
+        vorname: f.vorname,
+        geburtsdatum: f.geburtsdatum || null,
+        nationalitaet: f.nationalitaet || null,
+        herkunft: f.herkunft || null,
+        notiz: f.notiz || null,
+        fuehrerschein_kategorien:
+          f.fuehrerschein.length > 0 ? f.fuehrerschein : null,
+      })
+      .eq("id", bearbeitenId);
+    setSaving(false);
+    if (error) {
+      setError(error.message);
+      return;
+    }
+    setBearbeitenId(null);
+    setBearbeitenForm(null);
+    load();
+  }
+
+  function toggleGruppe(key: string) {
+    setEingeklappt((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
   }
 
   // Ohne Begründung und ohne Rückfrage (Nutzer-Vorgabe 2026-09-19: Kandidaten
@@ -587,6 +731,53 @@ export default function PersonalplanungPage() {
     if (!empId) return null;
     const e = employees.find((x) => x.id === empId);
     return e?.schwarze_liste ? e : null;
+  }
+
+  // Kleines Formular "Termine für alle setzen" - einmal für alle Kandidaten
+  // oder für eine Herkunfts-Gruppe.
+  function terminePanelJsx(ziele: PersonalKandidat[], bezeichnung: string) {
+    return (
+      <div className="flex flex-col gap-2 rounded border border-emerald-300 bg-emerald-50 p-3">
+        <div className="flex flex-wrap items-end gap-3">
+          <label className="flex flex-col gap-0.5 text-xs text-neutral-600">
+            Geplante Anreise
+            <input
+              type="date"
+              value={terminAnreise}
+              onChange={(e) => setTerminAnreise(e.target.value)}
+            />
+          </label>
+          <label className="flex flex-col gap-0.5 text-xs text-neutral-600">
+            Arbeitsbeginn
+            <input
+              type="date"
+              value={terminBeginn}
+              onChange={(e) => setTerminBeginn(e.target.value)}
+            />
+          </label>
+          <button
+            type="button"
+            className="btn text-xs"
+            disabled={terminLaeuft || (!terminAnreise && !terminBeginn)}
+            onClick={() => termineSetzen(ziele)}
+          >
+            Für {bezeichnung} setzen
+          </button>
+          <button
+            type="button"
+            className="btn-secondary text-xs"
+            onClick={() => setTerminePanel(null)}
+          >
+            Abbrechen
+          </button>
+        </div>
+        <p className="text-xs text-neutral-600">
+          Leere Felder bleiben unverändert. Das Arbeitsende wird automatisch auf
+          Arbeitsbeginn + 104 Tage gesetzt; ein bewusst abweichendes Arbeitsende
+          einzelner Personen bleibt stehen.
+        </p>
+      </div>
+    );
   }
 
   return (
@@ -826,13 +1017,21 @@ export default function PersonalplanungPage() {
               <input
                 type="date"
                 value={form.arbeitsbeginn}
-                onChange={(e) =>
-                  setForm({ ...form, arbeitsbeginn: e.target.value })
-                }
+                onChange={(e) => {
+                  const beginn = e.target.value;
+                  setForm((f) => ({
+                    ...f,
+                    arbeitsbeginn: beginn,
+                    arbeitsende:
+                      beginn && endeFolgtBeginn(f.arbeitsbeginn || null, f.arbeitsende || null)
+                        ? arbeitsendeAuto(beginn)
+                        : f.arbeitsende,
+                  }));
+                }}
               />
             </label>
             <label className="flex flex-col gap-0.5 text-xs text-neutral-500">
-              Arbeitsende (Arbeitsvertrag)
+              Arbeitsende (automatisch Beginn + 104 Tage)
               <input
                 type="date"
                 value={form.arbeitsende}
@@ -919,11 +1118,85 @@ export default function PersonalplanungPage() {
           Keine geplanten Kandidaten.
         </p>
       ) : (
-        gruppen.map((g) => (
+        <>
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              className="btn-secondary text-xs"
+              onClick={() =>
+                setEingeklappt(new Set(gruppen.map((gr) => gr.key)))
+              }
+            >
+              Alle einklappen
+            </button>
+            <button
+              type="button"
+              className="btn-secondary text-xs"
+              onClick={() => setEingeklappt(new Set())}
+            >
+              Alle ausklappen
+            </button>
+            {canEdit && (
+              <button
+                type="button"
+                className="btn-secondary text-xs"
+                onClick={() =>
+                  setTerminePanel(terminePanel === "__alle__" ? null : "__alle__")
+                }
+              >
+                Termine für ALLE setzen
+              </button>
+            )}
+          </div>
+          {terminePanel === "__alle__" &&
+            terminePanelJsx(geplante, `alle ${geplante.length} Kandidaten`)}
+          {gruppen.map((g) => {
+            const zu = eingeklappt.has(g.key);
+            const anreisen = [
+              ...new Set(
+                g.liste
+                  .map((k) => k.geplante_ankunft)
+                  .filter((d): d is string => !!d)
+              ),
+            ].sort();
+            const anreiseText =
+              anreisen.length === 0
+                ? "nicht gesetzt"
+                : anreisen.length === 1
+                  ? formatDatumDE(anreisen[0])
+                  : `${formatDatumDE(anreisen[0])} – ${formatDatumDE(anreisen[anreisen.length - 1])} (${anreisen.length} Termine)`;
+            return (
           <div key={g.key} className="flex flex-col gap-2">
-            <h2 className="text-base font-semibold text-emerald-800">
-              {g.anzeige} ({g.liste.length})
-            </h2>
+            <div className="flex flex-wrap items-center gap-3">
+              <button
+                type="button"
+                className="flex items-center gap-2 text-left"
+                aria-expanded={!zu}
+                onClick={() => toggleGruppe(g.key)}
+              >
+                <span className="w-4 text-emerald-700">{zu ? "▸" : "▾"}</span>
+                <h2 className="text-base font-semibold text-emerald-800">
+                  {g.anzeige} ({g.liste.length})
+                </h2>
+              </button>
+              <span className="text-sm text-neutral-600">
+                Geplante Anreise: {anreiseText}
+              </span>
+              {canEdit && (
+                <button
+                  type="button"
+                  className="btn-secondary text-xs"
+                  onClick={() =>
+                    setTerminePanel(terminePanel === g.key ? null : g.key)
+                  }
+                >
+                  Termine für alle setzen
+                </button>
+              )}
+            </div>
+            {terminePanel === g.key &&
+              terminePanelJsx(g.liste, `alle ${g.liste.length} in ${g.anzeige}`)}
+            {!zu && (
             <table>
               <thead>
                 <tr>
@@ -948,7 +1221,8 @@ export default function PersonalplanungPage() {
                     k.verknuepfter_employee_id
                   );
                   return (
-                    <tr key={k.id}>
+                    <Fragment key={k.id}>
+                    <tr>
                       {canEdit && (
                         <td>
                           <input
@@ -987,9 +1261,9 @@ export default function PersonalplanungPage() {
                       </td>
                       <td>{k.vorname}</td>
                       <td>{formatDatumDE(k.geburtsdatum)}</td>
-                      <td>{formatDatumDE(k.geplante_ankunft)}</td>
                       {(
                         [
+                          ["geplante_ankunft", "date"],
                           ["arbeitsbeginn_datum", "date"],
                           ["arbeitsende_datum", "date"],
                           ["stundenlohn", "number"],
@@ -1039,22 +1313,188 @@ export default function PersonalplanungPage() {
                       <td>{k.notiz ?? "—"}</td>
                       {canEdit && (
                         <td>
-                          <button
-                            type="button"
-                            className="btn-secondary text-xs"
-                            onClick={() => entfernen(k)}
-                          >
-                            Entfernen
-                          </button>
+                          <div className="flex gap-1">
+                            <button
+                              type="button"
+                              className="btn-secondary text-xs"
+                              onClick={() =>
+                                bearbeitenId === k.id
+                                  ? setBearbeitenId(null)
+                                  : bearbeitenStarten(k)
+                              }
+                            >
+                              Bearbeiten
+                            </button>
+                            <button
+                              type="button"
+                              className="btn-secondary text-xs"
+                              onClick={() => entfernen(k)}
+                            >
+                              Entfernen
+                            </button>
+                          </div>
                         </td>
                       )}
                     </tr>
+                    {bearbeitenId === k.id && bearbeitenForm && (
+                      <tr>
+                        <td colSpan={14}>
+                          <div className="flex flex-col gap-3 rounded border border-linie bg-sand p-3">
+                            <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+                              <label className="flex flex-col gap-0.5 text-xs text-neutral-500">
+                                Name
+                                <input
+                                  value={bearbeitenForm.name}
+                                  onChange={(e) =>
+                                    setBearbeitenForm({
+                                      ...bearbeitenForm,
+                                      name: e.target.value,
+                                    })
+                                  }
+                                />
+                              </label>
+                              <label className="flex flex-col gap-0.5 text-xs text-neutral-500">
+                                Vorname
+                                <input
+                                  value={bearbeitenForm.vorname}
+                                  onChange={(e) =>
+                                    setBearbeitenForm({
+                                      ...bearbeitenForm,
+                                      vorname: e.target.value,
+                                    })
+                                  }
+                                />
+                              </label>
+                              <label className="flex flex-col gap-0.5 text-xs text-neutral-500">
+                                Geburtsdatum
+                                <input
+                                  type="date"
+                                  value={bearbeitenForm.geburtsdatum}
+                                  onChange={(e) =>
+                                    setBearbeitenForm({
+                                      ...bearbeitenForm,
+                                      geburtsdatum: e.target.value,
+                                    })
+                                  }
+                                />
+                              </label>
+                              <label className="flex flex-col gap-0.5 text-xs text-neutral-500">
+                                Staatsangehörigkeit
+                                <input
+                                  value={bearbeitenForm.nationalitaet}
+                                  onChange={(e) =>
+                                    setBearbeitenForm({
+                                      ...bearbeitenForm,
+                                      nationalitaet: e.target.value,
+                                    })
+                                  }
+                                />
+                              </label>
+                              <label className="flex flex-col gap-0.5 text-xs text-neutral-500">
+                                Herkunft
+                                <select
+                                  value={bearbeitenForm.herkunft}
+                                  onChange={(e) =>
+                                    setBearbeitenForm({
+                                      ...bearbeitenForm,
+                                      herkunft: e.target.value,
+                                    })
+                                  }
+                                >
+                                  <option value="">— keine Herkunft —</option>
+                                  {herkuenfte.map((h) => (
+                                    <option key={h.wert} value={h.wert}>
+                                      {h.wert}
+                                    </option>
+                                  ))}
+                                </select>
+                              </label>
+                              <div className="col-span-2 flex flex-col gap-1">
+                                <span className="text-xs text-neutral-500">
+                                  Führerschein (Selbstauskunft)
+                                </span>
+                                <div className="flex flex-wrap gap-3">
+                                  {FUEHRERSCHEIN_KATEGORIEN.map((kategorie) => (
+                                    <label
+                                      key={kategorie}
+                                      className="flex items-center gap-1 text-sm"
+                                    >
+                                      <input
+                                        type="checkbox"
+                                        checked={bearbeitenForm.fuehrerschein.includes(
+                                          kategorie
+                                        )}
+                                        onChange={() =>
+                                          setBearbeitenForm({
+                                            ...bearbeitenForm,
+                                            fuehrerschein:
+                                              bearbeitenForm.fuehrerschein.includes(
+                                                kategorie
+                                              )
+                                                ? bearbeitenForm.fuehrerschein.filter(
+                                                    (x) => x !== kategorie
+                                                  )
+                                                : [
+                                                    ...bearbeitenForm.fuehrerschein,
+                                                    kategorie,
+                                                  ],
+                                          })
+                                        }
+                                      />
+                                      {kategorie}
+                                    </label>
+                                  ))}
+                                </div>
+                              </div>
+                              <label className="col-span-2 flex flex-col gap-0.5 text-xs text-neutral-500">
+                                Notiz
+                                <input
+                                  value={bearbeitenForm.notiz}
+                                  onChange={(e) =>
+                                    setBearbeitenForm({
+                                      ...bearbeitenForm,
+                                      notiz: e.target.value,
+                                    })
+                                  }
+                                />
+                              </label>
+                            </div>
+                            <p className="text-xs text-neutral-500">
+                              Anreise, Arbeitsbeginn/-ende und Stundenlohn
+                              lassen sich direkt in der Zeile ändern, die
+                              Personalnummer bleibt fest.
+                            </p>
+                            <div className="flex items-center gap-2">
+                              <button
+                                type="button"
+                                className="btn text-xs"
+                                disabled={saving}
+                                onClick={bearbeitenSpeichern}
+                              >
+                                Speichern
+                              </button>
+                              <button
+                                type="button"
+                                className="btn-secondary text-xs"
+                                onClick={() => setBearbeitenId(null)}
+                              >
+                                Abbrechen
+                              </button>
+                            </div>
+                          </div>
+                        </td>
+                      </tr>
+                    )}
+                    </Fragment>
                   );
                 })}
               </tbody>
             </table>
+            )}
           </div>
-        ))
+            );
+          })}
+        </>
       )}
     </div>
   );
