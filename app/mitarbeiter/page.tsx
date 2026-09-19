@@ -3,6 +3,7 @@
 import { Fragment, useEffect, useRef, useState } from "react";
 import { getSupabaseClient } from "@/lib/supabase/client";
 import { ladeAlleSeiten } from "@/lib/ladeAlle";
+import { jahrAusDatum, satzFuerJahr } from "@/lib/satzFuerJahr";
 import { useProfile } from "@/lib/useProfile";
 import {
   ABRECHNUNGSART_LABELS,
@@ -219,8 +220,10 @@ export default function MitarbeiterPage() {
   >({});
   // Für die Vorbelegung des Stundenlohns bei neu angelegten Personen -
   // siehe Kommentar bei der Vorbelegungs-useEffect weiter unten.
-  const [verpflegungssatz, setVerpflegungssatz] =
-    useState<VerpflegungsSatz | null>(null);
+  const [saetze, setSaetze] = useState<VerpflegungsSatz[]>([]);
+  // Satz des LAUFENDEN Jahres, nicht der neueste Eintrag (sonst schlüge das
+  // System schon den Mindestlohn des Folgejahres vor, sobald der angelegt ist).
+  const verpflegungssatz = satzFuerJahr(saetze, CURRENT_YEAR);
   // Dokumente-Status (Offen/Vollständig) aus der Anreiseliste gespiegelt -
   // nur befüllt für Personen, die aktuell dort durchlaufen (Personal →
   // Anreiseliste). "—" für alle anderen.
@@ -349,8 +352,7 @@ export default function MitarbeiterPage() {
       supabase
         .from("verpflegungssaetze")
         .select("*")
-        .order("saison_jahr", { ascending: false })
-        .limit(1),
+        .order("saison_jahr", { ascending: false }),
       // Dokumente-Status aus der Anreiseliste gespiegelt (siehe Personal →
       // Anreiseliste) - live berechnet, damit hier nie ein veralteter Stand
       // stehen bleibt.
@@ -407,7 +409,7 @@ export default function MitarbeiterPage() {
       fsMap[row.employee_id] = row.fuehrerschein_kategorien;
     });
     setFuehrerschein(fsMap);
-    setVerpflegungssatz(((vSatzData as VerpflegungsSatz[]) ?? [])[0] ?? null);
+    setSaetze((vSatzData as VerpflegungsSatz[]) ?? []);
     const anreiseMap: Record<string, "offen" | "vollstaendig"> = {};
     ((checklisteData as PersonalKandidatChecklisteRow[]) ?? []).forEach((c) => {
       if (!c.employee_id) return;
@@ -657,12 +659,18 @@ export default function MitarbeiterPage() {
             : `Arbeitsvertrag_${dateiPrefix}.docx`
         );
       } else if (art === "werkmietvertrag") {
+        // Tagessätze des Jahres, in dem der Vertrag beginnt (falls oben ein
+        // Vertragsbeginn eingetragen ist), sonst des laufenden Jahres.
+        const satzVertrag = satzFuerJahr(
+          saetze,
+          jahrAusDatum(dokumenteVertragsbeginn, CURRENT_YEAR)
+        );
         await generiereDokument(
           "Werkmietvertrag_Vorlage.docx",
           {
             ...gemeinsam,
-            TagessatzWohnen: formatEuro(verpflegungssatz?.wohnen),
-            TagessatzVerpflegung: formatEuro(verpflegungssatz?.verpflegung),
+            TagessatzWohnen: formatEuro(satzVertrag?.wohnen),
+            TagessatzVerpflegung: formatEuro(satzVertrag?.verpflegung),
           },
           `Werkmietvertrag_${dateiPrefix}.docx`
         );

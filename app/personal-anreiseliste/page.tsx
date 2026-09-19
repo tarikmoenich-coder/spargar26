@@ -3,6 +3,7 @@
 import { Fragment, useEffect, useMemo, useState } from "react";
 import { getSupabaseClient } from "@/lib/supabase/client";
 import { ladeAlleSeiten } from "@/lib/ladeAlle";
+import { jahrAusDatum, satzFuerJahr } from "@/lib/satzFuerJahr";
 import { useProfile } from "@/lib/useProfile";
 import { formatDatumDE, formatEuro } from "@/lib/format";
 import {
@@ -43,8 +44,7 @@ export default function AnreiselistePage() {
   const [checkliste, setCheckliste] = useState<
     Record<string, PersonalKandidatChecklisteRow>
   >({});
-  const [verpflegungssatz, setVerpflegungssatz] =
-    useState<VerpflegungsSatz | null>(null);
+  const [saetze, setSaetze] = useState<VerpflegungsSatz[]>([]);
   const [loading, setLoading] = useState(true);
   const [showVollstaendig, setShowVollstaendig] = useState(false);
   const [dokumentFehler, setDokumentFehler] = useState<string | null>(null);
@@ -86,8 +86,7 @@ export default function AnreiselistePage() {
       supabase
         .from("verpflegungssaetze")
         .select("*")
-        .order("saison_jahr", { ascending: false })
-        .limit(1),
+        .order("saison_jahr", { ascending: false }),
       supabase
         .from("season_bonuses")
         .select("employee_id, bus_hin")
@@ -101,7 +100,7 @@ export default function AnreiselistePage() {
       cMap[row.kandidat_id] = row;
     });
     setCheckliste(cMap);
-    setVerpflegungssatz(((vData as VerpflegungsSatz[]) ?? [])[0] ?? null);
+    setSaetze((vData as VerpflegungsSatz[]) ?? []);
     const busMap: Record<string, number> = {};
     (
       (bData as { employee_id: string; bus_hin: number }[]) ?? []
@@ -248,6 +247,12 @@ export default function AnreiselistePage() {
       ? employees.find((e) => e.id === k.verknuepfter_employee_id) ?? null
       : null;
     const f = vertragsfelder[k.id];
+    // Tagessätze des Jahres, in dem der Vertrag beginnt (sonst geplante
+    // Ankunft, sonst laufendes Jahr) - nicht der neueste Eintrag.
+    const verpflegungssatz = satzFuerJahr(
+      saetze,
+      jahrAusDatum(f?.beginn || k.geplante_ankunft, CURRENT_YEAR)
+    );
     const gemeinsam = {
       Name: k.name,
       Vorname: k.vorname,

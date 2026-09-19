@@ -11,6 +11,7 @@ import {
 } from "@/lib/personalnummern";
 import { formatDatumDE } from "@/lib/format";
 import { ladeAlleSeiten } from "@/lib/ladeAlle";
+import { jahrAusDatum, satzFuerJahr } from "@/lib/satzFuerJahr";
 import { historieKurz } from "@/lib/saisonHistorie";
 import {
   baueIndex,
@@ -67,8 +68,10 @@ export default function PersonalplanungPage() {
   const [showStorniert, setShowStorniert] = useState(false);
   // Für die Vorbelegung des Stundenlohns mit dem Mindestlohn (siehe
   // Einstellungen-Seite).
-  const [verpflegungssatz, setVerpflegungssatz] =
-    useState<VerpflegungsSatz | null>(null);
+  const [saetze, setSaetze] = useState<VerpflegungsSatz[]>([]);
+  // Zuletzt automatisch vorgeschlagener Stundenlohn - nur solange das Feld
+  // noch diesen Vorschlag enthält, darf ein Jahreswechsel ihn ersetzen.
+  const [autoLohn, setAutoLohn] = useState<string | null>(null);
 
   async function load() {
     setLoading(true);
@@ -102,14 +105,13 @@ export default function PersonalplanungPage() {
       supabase
         .from("verpflegungssaetze")
         .select("*")
-        .order("saison_jahr", { ascending: false })
-        .limit(1),
+        .order("saison_jahr", { ascending: false }),
       supabase.from("employee_saison_historie_agg").select("*"),
     ]);
     setKandidaten((kData as PersonalKandidat[]) ?? []);
     setEmployees(eList);
     setHerkuenfte((hData as Herkunft[]) ?? []);
-    setVerpflegungssatz(((vData as VerpflegungsSatz[]) ?? [])[0] ?? null);
+    setSaetze((vData as VerpflegungsSatz[]) ?? []);
     const shMap: Record<string, EmployeeSaisonHistorieAgg> = {};
     ((shData as EmployeeSaisonHistorieAgg[] | null) ?? []).forEach((r) => {
       shMap[r.employee_id] = r;
@@ -141,16 +143,25 @@ export default function PersonalplanungPage() {
   }, [employees, kandidaten]);
 
   // Vorbelegt den Stundenlohn für NEUE (nicht verknüpfte) Kandidaten mit dem
-  // aktuell gültigen Mindestlohn aus den Einstellungen - bleibt weiterhin
-  // frei änderbar. Läuft absichtlich bei jedem load() erneut (z.B. nach dem
-  // Zurücksetzen des Formulars nach dem Anlegen), nicht nur beim ersten Mal.
+  // Mindestlohn des Jahres der geplanten Ankunft (ohne Datum: laufendes Jahr)
+  // - NICHT mit dem neuesten Eintrag, sonst bekäme jeder schon den Satz des
+  // Folgejahres, sobald der angelegt ist. Bleibt frei änderbar; ein
+  // Jahreswechsel im Datumsfeld ersetzt nur einen noch unveränderten
+  // Vorschlag. Läuft auch nach jedem load() erneut (Formular-Reset).
+  const lohnSatz = satzFuerJahr(
+    saetze,
+    jahrAusDatum(form.geplante_ankunft, new Date().getFullYear())
+  );
   useEffect(() => {
     if (verknuepfterId) return;
-    if (form.stundenlohn !== "") return;
-    if (verpflegungssatz?.mindestlohn == null) return;
-    setForm((f) => ({ ...f, stundenlohn: String(verpflegungssatz.mindestlohn) }));
+    const vorschlag =
+      lohnSatz?.mindestlohn != null ? String(lohnSatz.mindestlohn) : "";
+    if (form.stundenlohn === "" || form.stundenlohn === autoLohn) {
+      setForm((f) => ({ ...f, stundenlohn: vorschlag }));
+      setAutoLohn(vorschlag);
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [verpflegungssatz]);
+  }, [saetze, form.geplante_ankunft, verknuepfterId]);
 
   function naechsteFreieUebernehmen() {
     const frei = naechsteFreieNummer(belegteNummern, Number(naechsteKreis));
@@ -768,6 +779,11 @@ export default function PersonalplanungPage() {
             </label>
             <label className="flex flex-col gap-0.5 text-xs text-neutral-500">
               Stundenlohn € (für Arbeitsvertrag)
+              {lohnSatz?.mindestlohn != null && (
+                <span className="text-[10px] text-neutral-400">
+                  Vorschlag: Mindestlohn {lohnSatz.saison_jahr}
+                </span>
+              )}
               <input
                 type="number"
                 step="0.01"
