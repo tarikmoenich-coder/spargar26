@@ -13,6 +13,11 @@ import { formatDatumDE } from "@/lib/format";
 import { ladeAlleSeiten } from "@/lib/ladeAlle";
 import { historieKurz } from "@/lib/saisonHistorie";
 import {
+  baueIndex,
+  findeAehnliche,
+  normalisiereName,
+} from "@/lib/personalAehnlich";
+import {
   FUEHRERSCHEIN_KATEGORIEN,
   type Employee,
   type EmployeeSaisonHistorieAgg,
@@ -174,22 +179,78 @@ export default function PersonalplanungPage() {
     return null;
   })();
 
+  // Suche nach Name (ohne Akzente, auch "Name Vorname"), Personalnummer und
+  // Geburtsdatum (TT.MM.JJJJ, auch teilweise wie "14.03." oder "1990").
+  const suchIndex = useMemo(
+    () =>
+      employees.map((e) => {
+        const n = normalisiereName(e.name);
+        const v = normalisiereName(e.vorname);
+        return {
+          e,
+          n,
+          v,
+          voll: n + v,
+          vollUmgekehrt: v + n,
+          pn: e.personal_nr.toLowerCase(),
+          gdDe: e.geburtsdatum ? formatDatumDE(e.geburtsdatum) : "",
+        };
+      }),
+    [employees]
+  );
+
   const employeeTreffer = useMemo(() => {
-    const q = employeeSuche.trim().toLowerCase();
-    if (q.length < 2) return [];
-    return employees
-      .filter(
-        (e) =>
-          e.name.toLowerCase().includes(q) ||
-          e.vorname.toLowerCase().includes(q) ||
-          e.personal_nr.toLowerCase().includes(q)
-      )
-      .slice(0, 8);
-  }, [employeeSuche, employees]);
+    const roh = employeeSuche.trim();
+    if (roh.length < 2) return [];
+    const q = normalisiereName(roh);
+    const rohKlein = roh.toLowerCase();
+    const datumQuery = /^[\d.\-/\s]{4,}$/.test(roh) ? roh.replace(/\s/g, "") : null;
+    return suchIndex
+      .filter((x) => {
+        if (
+          q &&
+          (x.n.includes(q) ||
+            x.v.includes(q) ||
+            x.voll.includes(q) ||
+            x.vollUmgekehrt.includes(q))
+        ) {
+          return true;
+        }
+        if (x.pn.includes(rohKlein)) return true;
+        if (datumQuery && x.e.geburtsdatum) {
+          return (
+            x.gdDe.includes(datumQuery) || x.e.geburtsdatum.includes(datumQuery)
+          );
+        }
+        return false;
+      })
+      .slice(0, 12)
+      .map((x) => x.e);
+  }, [employeeSuche, suchIndex]);
 
   const verknuepfterEmployee = verknuepfterId
     ? employees.find((e) => e.id === verknuepfterId) ?? null
     : null;
+
+  // "Neu" = die Person war noch nie hier: nicht mit einer bestehenden
+  // (ggf. inaktiven) Person verknüpft UND keine ähnliche Person im
+  // Personalstamm (gleicher Name auch mit anderer Schreibweise/vertauscht,
+  // oder gleiches Geburtsdatum + ähnlicher Name) - siehe
+  // lib/personalAehnlich.ts. So erscheint "neu" nicht fälschlich, wenn
+  // jemand einen Rückkehrer nicht verknüpft hat.
+  const personenIndex = useMemo(() => baueIndex(employees), [employees]);
+
+  const formAehnliche = useMemo(
+    () =>
+      verknuepfterId || !form.name.trim() || !form.vorname.trim()
+        ? []
+        : findeAehnliche(personenIndex, {
+            name: form.name,
+            vorname: form.vorname,
+            geburtsdatum: form.geburtsdatum || null,
+          }),
+    [verknuepfterId, form.name, form.vorname, form.geburtsdatum, personenIndex]
+  );
 
   function personVerknuepfen(emp: Employee) {
     setVerknuepfterId(emp.id);
@@ -439,33 +500,13 @@ export default function PersonalplanungPage() {
     load();
   }
 
-  // "Neu" = die Person war noch nie hier: nicht mit einer bestehenden
-  // (ggf. inaktiven) Person verknüpft UND kein Personalstamm-Eintrag mit
-  // gleichem Namen (bei bekanntem Geburtsdatum auch gleichem Datum) - so
-  // erscheint "neu" auch dann nicht fälschlich, wenn jemand vergessen hat,
-  // einen Rückkehrer zu verknüpfen.
-  const bekannteNamen = useMemo(() => {
-    const m = new Map<string, (string | null)[]>();
-    employees.forEach((e) => {
-      const key = `${e.name.trim().toLowerCase()}|${e.vorname.trim().toLowerCase()}`;
-      if (!m.has(key)) m.set(key, []);
-      m.get(key)!.push(e.geburtsdatum);
-    });
-    return m;
-  }, [employees]);
-
-  function istNeu(k: PersonalKandidat): boolean {
-    if (k.verknuepfter_employee_id) return false;
-    const key = `${k.name.trim().toLowerCase()}|${k.vorname.trim().toLowerCase()}`;
-    const treffer = bekannteNamen.get(key);
-    if (!treffer) return true;
-    return !treffer.some(
-      (gd) => !gd || !k.geburtsdatum || gd === k.geburtsdatum
-    );
-  }
-
   const geplante = kandidaten.filter((k) => k.status === "geplant");
   const stornierteListe = kandidaten.filter((k) => k.status === "storniert");
+
+  function aehnlicheZu(k: PersonalKandidat) {
+    if (k.verknuepfter_employee_id) return [];
+    return findeAehnliche(personenIndex, k);
+  }
 
   const gruppen = useMemo(() => {
     const buckets = new Map<string, PersonalKandidat[]>();
@@ -547,7 +588,7 @@ export default function PersonalplanungPage() {
             ) : (
               <div className="relative">
                 <input
-                  placeholder="Name/Personalnummer suchen, um eine bekannte Person zu verknüpfen…"
+                  placeholder="Name, Personalnummer oder Geburtsdatum (TT.MM.JJJJ) suchen, um eine bekannte Person zu verknüpfen…"
                   value={employeeSuche}
                   onChange={(e) => setEmployeeSuche(e.target.value)}
                   className="w-full"
@@ -563,6 +604,9 @@ export default function PersonalplanungPage() {
                       >
                         <span>
                           {e.name}, {e.vorname} ({e.personal_nr})
+                          {e.geburtsdatum
+                            ? ` · geb. ${formatDatumDE(e.geburtsdatum)}`
+                            : ""}
                           {!e.aktiv ? " · inaktiv" : ""}
                           {historieKurz(saisonHistorie[e.id]) && (
                             <span className="text-neutral-500">
@@ -580,6 +624,39 @@ export default function PersonalplanungPage() {
                     ))}
                   </div>
                 )}
+              </div>
+            )}
+            {!verknuepfterEmployee && formAehnliche.length > 0 && (
+              <div className="flex flex-col gap-1 rounded border border-amber-300 bg-amber-50 px-2 py-1.5 text-sm text-amber-900">
+                <span className="font-medium">
+                  Ähnliche Person im Personalstamm gefunden – war sie schon
+                  einmal hier?
+                </span>
+                {formAehnliche.map(({ emp, grund }) => (
+                  <div key={emp.id} className="flex flex-wrap items-center gap-2">
+                    <span>
+                      {emp.name}, {emp.vorname} ({emp.personal_nr}
+                      {emp.geburtsdatum
+                        ? `, geb. ${formatDatumDE(emp.geburtsdatum)}`
+                        : ""}
+                      {!emp.aktiv ? ", inaktiv" : ""})
+                      <span className="text-xs text-amber-700">
+                        {" "}
+                        –{" "}
+                        {grund === "name"
+                          ? "gleicher Name"
+                          : "gleiches Geburtsdatum, ähnlicher Name"}
+                      </span>
+                    </span>
+                    <button
+                      type="button"
+                      className="btn-secondary text-xs"
+                      onClick={() => personVerknuepfen(emp)}
+                    >
+                      Verknüpfen
+                    </button>
+                  </div>
+                ))}
               </div>
             )}
             {verknuepfterEmployee?.schwarze_liste && (
@@ -800,23 +877,29 @@ export default function PersonalplanungPage() {
                       <td>{k.personal_nr}</td>
                       <td>
                         {k.name}
-                        {istNeu(k) ? (
-                          <span
-                            className="ml-1.5 rounded bg-emerald-100 px-1 py-0.5 align-middle text-[10px] font-semibold uppercase text-emerald-800"
-                            title="Noch nie hier gewesen"
-                          >
-                            neu
-                          </span>
-                        ) : (
-                          !k.verknuepfter_employee_id && (
+                        {(() => {
+                          if (k.verknuepfter_employee_id) return null;
+                          const aehnlich = aehnlicheZu(k);
+                          if (aehnlich.length === 0) {
+                            return (
+                              <span
+                                className="ml-1.5 rounded bg-emerald-100 px-1 py-0.5 align-middle text-[10px] font-semibold uppercase text-emerald-800"
+                                title="Noch nie hier gewesen"
+                              >
+                                neu
+                              </span>
+                            );
+                          }
+                          const a = aehnlich[0].emp;
+                          return (
                             <span
                               className="ml-1.5 rounded bg-amber-100 px-1 py-0.5 align-middle text-[10px] font-semibold text-amber-800"
-                              title="Im Personalstamm gibt es schon jemanden mit diesem Namen - evtl. war die Person schon hier, dann bitte verknüpfen"
+                              title={`Ähnliche Person im Personalstamm: ${a.name}, ${a.vorname} (${a.personal_nr}${a.geburtsdatum ? `, geb. ${formatDatumDE(a.geburtsdatum)}` : ""}) - evtl. war die Person schon hier, dann bitte verknüpfen`}
                             >
                               schon bekannt?
                             </span>
-                          )
-                        )}
+                          );
+                        })()}
                       </td>
                       <td>{k.vorname}</td>
                       <td>{formatDatumDE(k.geburtsdatum)}</td>
