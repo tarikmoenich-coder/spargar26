@@ -422,17 +422,46 @@ export default function PersonalplanungPage() {
     load();
   }
 
-  async function stornieren(k: PersonalKandidat) {
-    const grund = window.prompt(
-      "Begründung für die Absage (Pflichtfeld, wird protokolliert):"
-    );
-    if (!grund) return;
+  // Ohne Begründung und ohne Rückfrage (Nutzer-Vorgabe 2026-09-19: Kandidaten
+  // sollen sich in der Planung locker rein- und rausnehmen lassen). Die
+  // Nummer ist danach sofort wieder frei; das Löschen steht im Audit-Log.
+  async function entfernen(k: PersonalKandidat) {
     const supabase = getSupabaseClient();
-    await supabase
+    const { error } = await supabase
       .from("personal_kandidaten")
-      .update({ status: "storniert", storniert_grund: grund })
+      .delete()
       .eq("id", k.id);
+    if (error) {
+      setError(error.message);
+      return;
+    }
+    setAusgewaehlt((prev) => prev.filter((x) => x !== k.id));
     load();
+  }
+
+  // "Neu" = die Person war noch nie hier: nicht mit einer bestehenden
+  // (ggf. inaktiven) Person verknüpft UND kein Personalstamm-Eintrag mit
+  // gleichem Namen (bei bekanntem Geburtsdatum auch gleichem Datum) - so
+  // erscheint "neu" auch dann nicht fälschlich, wenn jemand vergessen hat,
+  // einen Rückkehrer zu verknüpfen.
+  const bekannteNamen = useMemo(() => {
+    const m = new Map<string, (string | null)[]>();
+    employees.forEach((e) => {
+      const key = `${e.name.trim().toLowerCase()}|${e.vorname.trim().toLowerCase()}`;
+      if (!m.has(key)) m.set(key, []);
+      m.get(key)!.push(e.geburtsdatum);
+    });
+    return m;
+  }, [employees]);
+
+  function istNeu(k: PersonalKandidat): boolean {
+    if (k.verknuepfter_employee_id) return false;
+    const key = `${k.name.trim().toLowerCase()}|${k.vorname.trim().toLowerCase()}`;
+    const treffer = bekannteNamen.get(key);
+    if (!treffer) return true;
+    return !treffer.some(
+      (gd) => !gd || !k.geburtsdatum || gd === k.geburtsdatum
+    );
   }
 
   const geplante = kandidaten.filter((k) => k.status === "geplant");
@@ -474,8 +503,10 @@ export default function PersonalplanungPage() {
         <p className="text-sm text-neutral-500">
           Kandidaten für die kommende Saison vorab anlegen, bevor sie
           tatsächlich anreisen. Personalnummern werden dabei nur reserviert,
-          nicht final vergeben – bei einer Absage wird die Nummer sofort
-          wieder frei. Über „Anreise vorbereiten" wird aus einem Kandidaten
+          nicht final vergeben – Kandidaten lassen sich jederzeit ohne
+          Begründung wieder entfernen, die Nummer ist dann sofort wieder frei.
+          Ein „neu" neben dem Namen zeigt Personen, die noch nie hier
+          waren. Über „Anreise vorbereiten" wird aus einem Kandidaten
           ein echter Mitarbeiter unter „Personal" und er wandert in die{" "}
           <a href="/personal-anreiseliste" className="underline">
             Anreiseliste
@@ -767,7 +798,26 @@ export default function PersonalplanungPage() {
                         </td>
                       )}
                       <td>{k.personal_nr}</td>
-                      <td>{k.name}</td>
+                      <td>
+                        {k.name}
+                        {istNeu(k) ? (
+                          <span
+                            className="ml-1.5 rounded bg-emerald-100 px-1 py-0.5 align-middle text-[10px] font-semibold uppercase text-emerald-800"
+                            title="Noch nie hier gewesen"
+                          >
+                            neu
+                          </span>
+                        ) : (
+                          !k.verknuepfter_employee_id && (
+                            <span
+                              className="ml-1.5 rounded bg-amber-100 px-1 py-0.5 align-middle text-[10px] font-semibold text-amber-800"
+                              title="Im Personalstamm gibt es schon jemanden mit diesem Namen - evtl. war die Person schon hier, dann bitte verknüpfen"
+                            >
+                              schon bekannt?
+                            </span>
+                          )
+                        )}
+                      </td>
                       <td>{k.vorname}</td>
                       <td>{formatDatumDE(k.geburtsdatum)}</td>
                       <td>{formatDatumDE(k.geplante_ankunft)}</td>
@@ -798,10 +848,10 @@ export default function PersonalplanungPage() {
                         <td>
                           <button
                             type="button"
-                            className="btn-danger text-xs"
-                            onClick={() => stornieren(k)}
+                            className="btn-secondary text-xs"
+                            onClick={() => entfernen(k)}
                           >
-                            Absagen
+                            Entfernen
                           </button>
                         </td>
                       )}

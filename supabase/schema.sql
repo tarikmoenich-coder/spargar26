@@ -344,7 +344,10 @@ on conflict (id) do nothing;
 -- ---------------------------------------------------------------------------
 create table personal_kandidaten (
   id uuid primary key default gen_random_uuid(),
-  personal_nr text not null unique,
+  -- Eindeutig nur unter nicht stornierten Kandidaten (partieller Index
+  -- weiter unten) - sonst blockierte die Nummer eines stornierten
+  -- Kandidaten ihre Wiederverwendung (Migration 2026-09-19).
+  personal_nr text not null,
   name text not null,
   vorname text not null,
   geburtsdatum date,
@@ -417,6 +420,9 @@ create table personal_kandidaten (
 );
 
 create index idx_personal_kandidaten_status on personal_kandidaten (status);
+create unique index personal_kandidaten_personal_nr_aktiv_key
+  on personal_kandidaten (personal_nr)
+  where status <> 'storniert';
 
 -- ---------------------------------------------------------------------------
 -- 2a. SV-Fragebogen ("Fragebogen zur Feststellung der Versicherungspflicht/
@@ -4223,9 +4229,10 @@ create trigger trg_audit_periods
   for each row execute function write_audit_log();
 -- Personalplanung: Anlage/Änderung/Stornierung/Aktivierung eines
 -- Kandidaten mitloggen (enthält u.a. Geburtsdatum/Staatsangehörigkeit,
--- daher wie employees behandelt).
+-- daher wie employees behandelt). Seit 2026-09-19 auch "delete": geplante
+-- Kandidaten werden ohne Begründung direkt entfernt.
 create trigger trg_audit_personal_kandidaten
-  after insert or update on personal_kandidaten
+  after insert or update or delete on personal_kandidaten
   for each row execute function write_audit_log();
 
 -- ---------------------------------------------------------------------------
