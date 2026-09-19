@@ -67,7 +67,6 @@ export default function PersonalplanungPage() {
   const [error, setError] = useState<string | null>(null);
   const [ausgewaehlt, setAusgewaehlt] = useState<string[]>([]);
   const [aktivierenLaufend, setAktivierenLaufend] = useState(false);
-  const [showStorniert, setShowStorniert] = useState(false);
   // Für die Vorbelegung des Stundenlohns mit dem Mindestlohn (siehe
   // Einstellungen-Seite).
   const [saetze, setSaetze] = useState<VerpflegungsSatz[]>([]);
@@ -558,7 +557,6 @@ export default function PersonalplanungPage() {
   }
 
   const geplante = kandidaten.filter((k) => k.status === "geplant");
-  const stornierteListe = kandidaten.filter((k) => k.status === "storniert");
 
   function aehnlicheZu(k: PersonalKandidat) {
     if (k.verknuepfter_employee_id) return [];
@@ -1057,42 +1055,6 @@ export default function PersonalplanungPage() {
             </table>
           </div>
         ))
-      )}
-
-      {stornierteListe.length > 0 && (
-        <div className="flex flex-col gap-2">
-          <button
-            type="button"
-            className="btn-secondary w-fit text-xs"
-            onClick={() => setShowStorniert((v) => !v)}
-          >
-            {showStorniert
-              ? "Stornierte ausblenden"
-              : `Stornierte anzeigen (${stornierteListe.length})`}
-          </button>
-          {showStorniert && (
-            <table>
-              <thead>
-                <tr>
-                  <th>Pers.-Nr.</th>
-                  <th>Name</th>
-                  <th>Vorname</th>
-                  <th>Grund</th>
-                </tr>
-              </thead>
-              <tbody>
-                {stornierteListe.map((k) => (
-                  <tr key={k.id} className="opacity-60">
-                    <td>{k.personal_nr}</td>
-                    <td>{k.name}</td>
-                    <td>{k.vorname}</td>
-                    <td>{k.storniert_grund}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          )}
-        </div>
       )}
     </div>
   );
