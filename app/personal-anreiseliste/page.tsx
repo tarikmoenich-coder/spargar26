@@ -4,6 +4,12 @@ import { Fragment, useEffect, useMemo, useState } from "react";
 import { getSupabaseClient } from "@/lib/supabase/client";
 import { ladeAlleSeiten } from "@/lib/ladeAlle";
 import { satzFuerJahr } from "@/lib/satzFuerJahr";
+import {
+  arbeitsendeAuto,
+  differenzTage,
+  endeFolgtBeginn,
+  inBloecken,
+} from "@/lib/planungTermine";
 import { useProfile } from "@/lib/useProfile";
 import { formatDatumDE, formatEuro } from "@/lib/format";
 import {
@@ -54,6 +60,8 @@ export default function AnreiselistePage() {
     Record<string, Vertragsfeld>
   >({});
   const [busfelder, setBusfelder] = useState<Record<string, string>>({});
+  // "Arbeitsbeginn für alle" je Anreisegruppe (Schlüssel = Gruppen-Key).
+  const [gruppenBeginn, setGruppenBeginn] = useState<Record<string, string>>({});
   // Kandidat, für den gerade der SV-Fragebogen inline erfasst/bearbeitet
   // wird (person für person, siehe svSaisonJahrFuer).
   const [svEditingId, setSvEditingId] = useState<string | null>(null);
@@ -170,6 +178,57 @@ export default function AnreiselistePage() {
       })
       .eq("id", k.id);
     load();
+  }
+
+  // Arbeitsbeginn für alle Personen einer Anreisegruppe auf einmal setzen.
+  // Das Arbeitsende folgt automatisch (Beginn + 104 Tage); ein bewusst
+  // abweichendes Arbeitsende einzelner Personen bleibt stehen.
+  async function beginnFuerGruppeSetzen(
+    gruppe: PersonalKandidat[],
+    datum: string
+  ) {
+    if (!datum || gruppe.length === 0) return;
+    setDokumentFehler(null);
+    const supabase = getSupabaseClient();
+    const folgt: string[] = [];
+    const bleibt: string[] = [];
+    const neuLokal: Record<string, Vertragsfeld> = {};
+    for (const k of gruppe) {
+      const f = vertragsfelder[k.id] ?? {
+        beginn: k.arbeitsbeginn_datum ?? "",
+        ende: k.arbeitsende_datum ?? "",
+      };
+      if (endeFolgtBeginn(f.beginn || null, f.ende || null)) {
+        folgt.push(k.id);
+        neuLokal[k.id] = { beginn: datum, ende: arbeitsendeAuto(datum) };
+      } else {
+        bleibt.push(k.id);
+        neuLokal[k.id] = { ...f, beginn: datum };
+      }
+    }
+    const fehler: string[] = [];
+    for (const block of inBloecken(folgt)) {
+      const { error } = await supabase
+        .from("personal_kandidaten")
+        .update({
+          arbeitsbeginn_datum: datum,
+          arbeitsende_datum: arbeitsendeAuto(datum),
+        })
+        .in("id", block);
+      if (error) fehler.push(error.message);
+    }
+    for (const block of inBloecken(bleibt)) {
+      const { error } = await supabase
+        .from("personal_kandidaten")
+        .update({ arbeitsbeginn_datum: datum })
+        .in("id", block);
+      if (error) fehler.push(error.message);
+    }
+    if (fehler.length > 0) {
+      setDokumentFehler([...new Set(fehler)].join(" · "));
+      return;
+    }
+    setVertragsfelder((prev) => ({ ...prev, ...neuLokal }));
   }
 
   async function checklistFeldSpeichern(
@@ -325,7 +384,7 @@ export default function AnreiselistePage() {
     const uebersprungen = gruppe.filter((k) => !vertragszeitraumBereit(k));
     if (bereit.length === 0) {
       setDokumentFehler(
-        "Kein Vertragszeitraum erfasst - bitte erst Vertragsbeginn/-ende eintragen."
+        "Kein Vertragszeitraum erfasst - bitte erst Arbeitsbeginn/-ende eintragen."
       );
       return;
     }
@@ -395,7 +454,7 @@ export default function AnreiselistePage() {
             Personalplanung
           </a>{" "}
           aktiviert wurden - gruppiert nach geplantem Ankunftsdatum. Vor dem
-          Drucken müssen Vertragsbeginn und -ende erfasst sein. Nach der
+          Drucken müssen Arbeitsbeginn und Arbeitsende erfasst sein. Nach der
           tatsächlichen Anreise hier die weiteren Unterlagen abhaken - erst
           wenn alles erfüllt ist, springt der Status auf „Vollständig" (auch
           im Personalstamm sichtbar).
@@ -420,10 +479,38 @@ export default function AnreiselistePage() {
             key={g.key}
             className="flex flex-col gap-3 rounded border border-linie bg-white p-4"
           >
-            <div className="flex items-center justify-between">
+            <div className="flex flex-wrap items-center justify-between gap-2">
               <h2 className="text-base font-semibold text-emerald-800">
                 Anreise {g.anzeige} ({g.liste.length})
               </h2>
+              {canEdit && (
+                <div className="flex flex-wrap items-center gap-2 text-xs text-neutral-600">
+                  <label className="flex items-center gap-1">
+                    Arbeitsbeginn für alle:
+                    <input
+                      type="date"
+                      value={gruppenBeginn[g.key] ?? ""}
+                      onChange={(e) =>
+                        setGruppenBeginn((prev) => ({
+                          ...prev,
+                          [g.key]: e.target.value,
+                        }))
+                      }
+                    />
+                  </label>
+                  <button
+                    type="button"
+                    className="btn-secondary text-xs"
+                    disabled={!gruppenBeginn[g.key]}
+                    onClick={() =>
+                      beginnFuerGruppeSetzen(g.liste, gruppenBeginn[g.key])
+                    }
+                    title="Setzt den Arbeitsbeginn für alle und das Arbeitsende automatisch auf Beginn + 104 Tage (abweichende Enden bleiben)"
+                  >
+                    Setzen (Ende = Beginn + 104 Tage)
+                  </button>
+                </div>
+              )}
               {canEdit && (
                 <button
                   type="button"
@@ -439,8 +526,8 @@ export default function AnreiselistePage() {
               <thead>
                 <tr>
                   <th>Name</th>
-                  <th>Vertragsbeginn</th>
-                  <th>Vertragsende</th>
+                  <th>Arbeitsbeginn</th>
+                  <th>Arbeitsende (Anwesenheitstage)</th>
                   {canEdit && <th>Dokumente</th>}
                   <th>Gedruckt</th>
                   <th>SV-Fragebogen</th>
@@ -469,28 +556,49 @@ export default function AnreiselistePage() {
                           type="date"
                           disabled={!canEdit}
                           value={f.beginn}
-                          onChange={(e) =>
+                          onChange={(e) => {
+                            const beginn = e.target.value;
                             setVertragsfelder((prev) => ({
                               ...prev,
-                              [k.id]: { ...f, beginn: e.target.value },
-                            }))
-                          }
+                              [k.id]: {
+                                beginn,
+                                ende:
+                                  beginn && endeFolgtBeginn(f.beginn || null, f.ende || null)
+                                    ? arbeitsendeAuto(beginn)
+                                    : f.ende,
+                              },
+                            }));
+                          }}
                           onBlur={() => vertragszeitraumSpeichern(k)}
                         />
                       </td>
                       <td>
-                        <input
-                          type="date"
-                          disabled={!canEdit}
-                          value={f.ende}
-                          onChange={(e) =>
-                            setVertragsfelder((prev) => ({
-                              ...prev,
-                              [k.id]: { ...f, ende: e.target.value },
-                            }))
-                          }
-                          onBlur={() => vertragszeitraumSpeichern(k)}
-                        />
+                        <div className="flex items-center gap-2">
+                          <input
+                            type="date"
+                            disabled={!canEdit}
+                            value={f.ende}
+                            onChange={(e) =>
+                              setVertragsfelder((prev) => ({
+                                ...prev,
+                                [k.id]: { ...f, ende: e.target.value },
+                              }))
+                            }
+                            onBlur={() => vertragszeitraumSpeichern(k)}
+                          />
+                          {(() => {
+                            const tage = differenzTage(f.beginn, f.ende);
+                            if (tage === null) return null;
+                            return (
+                              <span
+                                className={`text-xs font-medium ${tage < 0 ? "text-red-600" : "text-neutral-500"}`}
+                                title="Anwesenheitstage = Arbeitsende minus Arbeitsbeginn"
+                              >
+                                {tage} Tage
+                              </span>
+                            );
+                          })()}
+                        </div>
                       </td>
                       {canEdit && (
                         <td className="flex gap-1">
@@ -501,7 +609,7 @@ export default function AnreiselistePage() {
                             title={
                               bereit
                                 ? "Arbeitsvertrag herunterladen"
-                                : "Erst Vertragsbeginn/-ende eintragen"
+                                : "Erst Arbeitsbeginn/-ende eintragen"
                             }
                             onClick={() => dokument("arbeitsvertrag", k)}
                           >
@@ -514,7 +622,7 @@ export default function AnreiselistePage() {
                             title={
                               bereit
                                 ? "Werkmiet- und Bewirtungsvertrag herunterladen"
-                                : "Erst Vertragsbeginn/-ende eintragen"
+                                : "Erst Arbeitsbeginn/-ende eintragen"
                             }
                             onClick={() => dokument("werkmietvertrag", k)}
                           >
@@ -527,7 +635,7 @@ export default function AnreiselistePage() {
                             title={
                               bereit
                                 ? "Bankverbindungs-Erfassungsbogen herunterladen"
-                                : "Erst Vertragsbeginn/-ende eintragen"
+                                : "Erst Arbeitsbeginn/-ende eintragen"
                             }
                             onClick={() => dokument("bankverbindung", k)}
                           >

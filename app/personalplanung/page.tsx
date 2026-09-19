@@ -12,11 +12,7 @@ import {
 import { formatDatumDE } from "@/lib/format";
 import { ladeAlleSeiten } from "@/lib/ladeAlle";
 import { satzFuerJahr } from "@/lib/satzFuerJahr";
-import {
-  arbeitsendeAuto,
-  endeFolgtBeginn,
-  inBloecken,
-} from "@/lib/planungTermine";
+import { inBloecken } from "@/lib/planungTermine";
 import { historieKurz } from "@/lib/saisonHistorie";
 import {
   baueIndex,
@@ -43,8 +39,6 @@ const emptyForm = {
   herkunft: "",
   stundenlohn: "",
   geplante_ankunft: "",
-  arbeitsbeginn: "",
-  arbeitsende: "",
   fuehrerschein: [] as string[],
   notiz: "",
 };
@@ -80,7 +74,6 @@ export default function PersonalplanungPage() {
   // Termine für alle setzen: Gruppen-Schlüssel oder "__alle__".
   const [terminePanel, setTerminePanel] = useState<string | null>(null);
   const [terminAnreise, setTerminAnreise] = useState("");
-  const [terminBeginn, setTerminBeginn] = useState("");
   const [terminLaeuft, setTerminLaeuft] = useState(false);
   // Bearbeiten einzelner Kandidaten (Führerschein, Name, ...).
   const [bearbeitenId, setBearbeitenId] = useState<string | null>(null);
@@ -326,8 +319,6 @@ export default function PersonalplanungPage() {
       verknuepfter_employee_id: verknuepfterId,
       stundenlohn: form.stundenlohn ? Number(form.stundenlohn) : null,
       geplante_ankunft: form.geplante_ankunft || null,
-      arbeitsbeginn_datum: form.arbeitsbeginn || null,
-      arbeitsende_datum: form.arbeitsende || null,
       fuehrerschein_kategorien:
         form.fuehrerschein.length > 0 ? form.fuehrerschein : null,
       notiz: form.notiz || null,
@@ -535,16 +526,12 @@ export default function PersonalplanungPage() {
     load();
   }
 
-  // Einzelne Termin-/Vertragsdaten eines geplanten Kandidaten direkt in der
-  // Liste ändern. Ein neuer Arbeitsbeginn zieht das Arbeitsende automatisch
-  // nach (Beginn + 104 Tage), außer es wurde bewusst abweichend gesetzt.
+  // Geplante Anreise bzw. Stundenlohn eines geplanten Kandidaten direkt in
+  // der Liste ändern. (Arbeitsbeginn/-ende werden erst in der Anreiseliste
+  // erfasst - Nutzer-Vorgabe 2026-09-19.)
   async function vertragsfeldSpeichern(
     k: PersonalKandidat,
-    feld:
-      | "geplante_ankunft"
-      | "arbeitsbeginn_datum"
-      | "arbeitsende_datum"
-      | "stundenlohn",
+    feld: "geplante_ankunft" | "stundenlohn",
     wert: string
   ) {
     const neu =
@@ -555,13 +542,6 @@ export default function PersonalplanungPage() {
         : wert || null;
     if (neu === k[feld]) return;
     const payload: Partial<PersonalKandidat> = { [feld]: neu };
-    if (
-      feld === "arbeitsbeginn_datum" &&
-      typeof neu === "string" &&
-      endeFolgtBeginn(k.arbeitsbeginn_datum, k.arbeitsende_datum)
-    ) {
-      payload.arbeitsende_datum = arbeitsendeAuto(neu);
-    }
     const { error } = await getSupabaseClient()
       .from("personal_kandidaten")
       .update(payload)
@@ -575,52 +555,20 @@ export default function PersonalplanungPage() {
     );
   }
 
-  // Geplante Anreise und/oder Arbeitsbeginn für viele Kandidaten auf einmal
-  // setzen (eine Herkunfts-Gruppe oder alle). Das Arbeitsende folgt dem
-  // Arbeitsbeginn automatisch (+104 Tage); individuell abweichende Enden
-  // bleiben stehen.
-  async function termineSetzen(ziele: PersonalKandidat[]) {
-    if (ziele.length === 0 || (!terminAnreise && !terminBeginn)) return;
+  // Geplante Anreise für viele Kandidaten auf einmal setzen (eine
+  // Herkunfts-Gruppe oder alle).
+  async function anreiseSetzen(ziele: PersonalKandidat[]) {
+    if (ziele.length === 0 || !terminAnreise) return;
     setTerminLaeuft(true);
     setError(null);
     const supabase = getSupabaseClient();
     const fehler: string[] = [];
-    const schreibe = async (
-      ids: string[],
-      payload: Record<string, string | null>
-    ) => {
-      for (const block of inBloecken(ids)) {
-        const { error } = await supabase
-          .from("personal_kandidaten")
-          .update(payload)
-          .in("id", block);
-        if (error) fehler.push(error.message);
-      }
-    };
-    if (terminAnreise) {
-      await schreibe(
-        ziele.map((k) => k.id),
-        { geplante_ankunft: terminAnreise }
-      );
-    }
-    if (terminBeginn) {
-      const folgt = ziele.filter((k) =>
-        endeFolgtBeginn(k.arbeitsbeginn_datum, k.arbeitsende_datum)
-      );
-      const bleibt = ziele.filter(
-        (k) => !endeFolgtBeginn(k.arbeitsbeginn_datum, k.arbeitsende_datum)
-      );
-      await schreibe(
-        folgt.map((k) => k.id),
-        {
-          arbeitsbeginn_datum: terminBeginn,
-          arbeitsende_datum: arbeitsendeAuto(terminBeginn),
-        }
-      );
-      await schreibe(
-        bleibt.map((k) => k.id),
-        { arbeitsbeginn_datum: terminBeginn }
-      );
+    for (const block of inBloecken(ziele.map((k) => k.id))) {
+      const { error } = await supabase
+        .from("personal_kandidaten")
+        .update({ geplante_ankunft: terminAnreise })
+        .in("id", block);
+      if (error) fehler.push(error.message);
     }
     setTerminLaeuft(false);
     if (fehler.length > 0) {
@@ -628,9 +576,18 @@ export default function PersonalplanungPage() {
     } else {
       setTerminePanel(null);
       setTerminAnreise("");
-      setTerminBeginn("");
     }
     load();
+  }
+
+  // Alle Kandidaten einer Herkunfts-Gruppe an-/abwählen.
+  function toggleGruppeAuswahl(liste: PersonalKandidat[]) {
+    const ids = liste.map((k) => k.id);
+    setAusgewaehlt((prev) =>
+      ids.every((id) => prev.includes(id))
+        ? prev.filter((id) => !ids.includes(id))
+        : [...new Set([...prev, ...ids])]
+    );
   }
 
   function bearbeitenStarten(k: PersonalKandidat) {
@@ -733,49 +690,34 @@ export default function PersonalplanungPage() {
     return e?.schwarze_liste ? e : null;
   }
 
-  // Kleines Formular "Termine für alle setzen" - einmal für alle Kandidaten
+  // Kleines Formular "Anreise für alle setzen" - einmal für alle Kandidaten
   // oder für eine Herkunfts-Gruppe.
   function terminePanelJsx(ziele: PersonalKandidat[], bezeichnung: string) {
     return (
-      <div className="flex flex-col gap-2 rounded border border-emerald-300 bg-emerald-50 p-3">
-        <div className="flex flex-wrap items-end gap-3">
-          <label className="flex flex-col gap-0.5 text-xs text-neutral-600">
-            Geplante Anreise
-            <input
-              type="date"
-              value={terminAnreise}
-              onChange={(e) => setTerminAnreise(e.target.value)}
-            />
-          </label>
-          <label className="flex flex-col gap-0.5 text-xs text-neutral-600">
-            Arbeitsbeginn
-            <input
-              type="date"
-              value={terminBeginn}
-              onChange={(e) => setTerminBeginn(e.target.value)}
-            />
-          </label>
-          <button
-            type="button"
-            className="btn text-xs"
-            disabled={terminLaeuft || (!terminAnreise && !terminBeginn)}
-            onClick={() => termineSetzen(ziele)}
-          >
-            Für {bezeichnung} setzen
-          </button>
-          <button
-            type="button"
-            className="btn-secondary text-xs"
-            onClick={() => setTerminePanel(null)}
-          >
-            Abbrechen
-          </button>
-        </div>
-        <p className="text-xs text-neutral-600">
-          Leere Felder bleiben unverändert. Das Arbeitsende wird automatisch auf
-          Arbeitsbeginn + 104 Tage gesetzt; ein bewusst abweichendes Arbeitsende
-          einzelner Personen bleibt stehen.
-        </p>
+      <div className="flex flex-wrap items-end gap-3 rounded border border-emerald-300 bg-emerald-50 p-3">
+        <label className="flex flex-col gap-0.5 text-xs text-neutral-600">
+          Geplante Anreise
+          <input
+            type="date"
+            value={terminAnreise}
+            onChange={(e) => setTerminAnreise(e.target.value)}
+          />
+        </label>
+        <button
+          type="button"
+          className="btn text-xs"
+          disabled={terminLaeuft || !terminAnreise}
+          onClick={() => anreiseSetzen(ziele)}
+        >
+          Für {bezeichnung} setzen
+        </button>
+        <button
+          type="button"
+          className="btn-secondary text-xs"
+          onClick={() => setTerminePanel(null)}
+        >
+          Abbrechen
+        </button>
       </div>
     );
   }
@@ -1013,34 +955,6 @@ export default function PersonalplanungPage() {
               />
             </label>
             <label className="flex flex-col gap-0.5 text-xs text-neutral-500">
-              Arbeitsbeginn (Arbeitsvertrag)
-              <input
-                type="date"
-                value={form.arbeitsbeginn}
-                onChange={(e) => {
-                  const beginn = e.target.value;
-                  setForm((f) => ({
-                    ...f,
-                    arbeitsbeginn: beginn,
-                    arbeitsende:
-                      beginn && endeFolgtBeginn(f.arbeitsbeginn || null, f.arbeitsende || null)
-                        ? arbeitsendeAuto(beginn)
-                        : f.arbeitsende,
-                  }));
-                }}
-              />
-            </label>
-            <label className="flex flex-col gap-0.5 text-xs text-neutral-500">
-              Arbeitsende (automatisch Beginn + 104 Tage)
-              <input
-                type="date"
-                value={form.arbeitsende}
-                onChange={(e) =>
-                  setForm({ ...form, arbeitsende: e.target.value })
-                }
-              />
-            </label>
-            <label className="flex flex-col gap-0.5 text-xs text-neutral-500">
               Stundenlohn € (für Arbeitsvertrag)
               {lohnSatz?.mindestlohn != null && (
                 <span className="text-[10px] text-neutral-400">
@@ -1144,7 +1058,7 @@ export default function PersonalplanungPage() {
                   setTerminePanel(terminePanel === "__alle__" ? null : "__alle__")
                 }
               >
-                Termine für ALLE setzen
+                Anreise für ALLE setzen
               </button>
             )}
           </div>
@@ -1183,6 +1097,24 @@ export default function PersonalplanungPage() {
                 Geplante Anreise: {anreiseText}
               </span>
               {canEdit && (
+                <label className="flex items-center gap-1 text-xs text-neutral-600">
+                  <input
+                    type="checkbox"
+                    checked={g.liste.every((k) => ausgewaehlt.includes(k.id))}
+                    ref={(el) => {
+                      if (el) {
+                        const n = g.liste.filter((k) =>
+                          ausgewaehlt.includes(k.id)
+                        ).length;
+                        el.indeterminate = n > 0 && n < g.liste.length;
+                      }
+                    }}
+                    onChange={() => toggleGruppeAuswahl(g.liste)}
+                  />
+                  alle auswählen
+                </label>
+              )}
+              {canEdit && (
                 <button
                   type="button"
                   className="btn-secondary text-xs"
@@ -1190,7 +1122,7 @@ export default function PersonalplanungPage() {
                     setTerminePanel(terminePanel === g.key ? null : g.key)
                   }
                 >
-                  Termine für alle setzen
+                  Anreise für alle setzen
                 </button>
               )}
             </div>
@@ -1206,8 +1138,6 @@ export default function PersonalplanungPage() {
                   <th>Vorname</th>
                   <th>Geburtsdatum</th>
                   <th>Geplante Ankunft</th>
-                  <th>Arbeitsbeginn</th>
-                  <th>Arbeitsende</th>
                   <th>Stundenlohn €</th>
                   <th>Führerschein</th>
                   <th>Verknüpft</th>
@@ -1264,8 +1194,6 @@ export default function PersonalplanungPage() {
                       {(
                         [
                           ["geplante_ankunft", "date"],
-                          ["arbeitsbeginn_datum", "date"],
-                          ["arbeitsende_datum", "date"],
                           ["stundenlohn", "number"],
                         ] as const
                       ).map(([feld, typ]) => (
@@ -1460,9 +1388,10 @@ export default function PersonalplanungPage() {
                               </label>
                             </div>
                             <p className="text-xs text-neutral-500">
-                              Anreise, Arbeitsbeginn/-ende und Stundenlohn
-                              lassen sich direkt in der Zeile ändern, die
-                              Personalnummer bleibt fest.
+                              Geplante Anreise und Stundenlohn lassen sich
+                              direkt in der Zeile ändern, die Personalnummer
+                              bleibt fest. Arbeitsbeginn/-ende werden in der
+                              Anreiseliste erfasst.
                             </p>
                             <div className="flex items-center gap-2">
                               <button

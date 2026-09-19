@@ -1,4 +1,5 @@
-// Terminlogik der Personalplanung: Arbeitsende ergibt sich automatisch aus dem
+// Terminlogik der Anreiseliste (und Hilfen der Personalplanung): Arbeitsende
+// ergibt sich automatisch aus dem
 // Arbeitsbeginn (Nutzer-Vorgabe 2026-09-19: Arbeitsbeginn + 104 Tage =
 // Arbeitsende, entspricht der 15-Wochen-Grenze inkl. Starttag).
 
@@ -12,6 +13,20 @@ export function plusTage(iso: string, tage: number): string {
 
 export function arbeitsendeAuto(beginn: string): string {
   return plusTage(beginn, ARBEITSDAUER_TAGE);
+}
+
+// Anwesenheitstage = Arbeitsende minus Arbeitsbeginn (Nutzer-Vorgabe
+// 2026-09-19, reine Differenz - der Starttag wird nicht mitgezählt). Leer,
+// solange eines der beiden Daten fehlt.
+export function differenzTage(
+  beginn: string | null | undefined,
+  ende: string | null | undefined
+): number | null {
+  if (!beginn || !ende) return null;
+  const b = new Date(`${beginn}T00:00:00Z`).getTime();
+  const e = new Date(`${ende}T00:00:00Z`).getTime();
+  if (Number.isNaN(b) || Number.isNaN(e)) return null;
+  return Math.round((e - b) / 86400000);
 }
 
 // Wird das Arbeitsende bei einem neuen Arbeitsbeginn automatisch nachgezogen?
