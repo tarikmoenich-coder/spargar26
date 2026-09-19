@@ -3,7 +3,7 @@
 import { Fragment, useEffect, useMemo, useState } from "react";
 import { getSupabaseClient } from "@/lib/supabase/client";
 import { ladeAlleSeiten } from "@/lib/ladeAlle";
-import { jahrAusDatum, satzFuerJahr } from "@/lib/satzFuerJahr";
+import { satzFuerJahr } from "@/lib/satzFuerJahr";
 import { useProfile } from "@/lib/useProfile";
 import { formatDatumDE, formatEuro } from "@/lib/format";
 import {
@@ -247,12 +247,9 @@ export default function AnreiselistePage() {
       ? employees.find((e) => e.id === k.verknuepfter_employee_id) ?? null
       : null;
     const f = vertragsfelder[k.id];
-    // Tagessätze des Jahres, in dem der Vertrag beginnt (sonst geplante
-    // Ankunft, sonst laufendes Jahr) - nicht der neueste Eintrag.
-    const verpflegungssatz = satzFuerJahr(
-      saetze,
-      jahrAusDatum(f?.beginn || k.geplante_ankunft, CURRENT_YEAR)
-    );
+    // Ab der Anreise gilt für alle Sätze das aktuelle Jahr (Nutzer-Vorgabe
+    // 2026-09-19) - nicht der neueste Eintrag und nicht das Vertragsjahr.
+    const verpflegungssatz = satzFuerJahr(saetze, CURRENT_YEAR);
     const gemeinsam = {
       Name: k.name,
       Vorname: k.vorname,

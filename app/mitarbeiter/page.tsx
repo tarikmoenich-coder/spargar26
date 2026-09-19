@@ -3,7 +3,7 @@
 import { Fragment, useEffect, useRef, useState } from "react";
 import { getSupabaseClient } from "@/lib/supabase/client";
 import { ladeAlleSeiten } from "@/lib/ladeAlle";
-import { jahrAusDatum, satzFuerJahr } from "@/lib/satzFuerJahr";
+import { satzFuerJahr } from "@/lib/satzFuerJahr";
 import { useProfile } from "@/lib/useProfile";
 import {
   ABRECHNUNGSART_LABELS,
@@ -659,18 +659,13 @@ export default function MitarbeiterPage() {
             : `Arbeitsvertrag_${dateiPrefix}.docx`
         );
       } else if (art === "werkmietvertrag") {
-        // Tagessätze des Jahres, in dem der Vertrag beginnt (falls oben ein
-        // Vertragsbeginn eingetragen ist), sonst des laufenden Jahres.
-        const satzVertrag = satzFuerJahr(
-          saetze,
-          jahrAusDatum(dokumenteVertragsbeginn, CURRENT_YEAR)
-        );
+        // Tagessätze des laufenden Jahres (nicht des neuesten Eintrags).
         await generiereDokument(
           "Werkmietvertrag_Vorlage.docx",
           {
             ...gemeinsam,
-            TagessatzWohnen: formatEuro(satzVertrag?.wohnen),
-            TagessatzVerpflegung: formatEuro(satzVertrag?.verpflegung),
+            TagessatzWohnen: formatEuro(verpflegungssatz?.wohnen),
+            TagessatzVerpflegung: formatEuro(verpflegungssatz?.verpflegung),
           },
           `Werkmietvertrag_${dateiPrefix}.docx`
         );

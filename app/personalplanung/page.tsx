@@ -11,7 +11,7 @@ import {
 } from "@/lib/personalnummern";
 import { formatDatumDE } from "@/lib/format";
 import { ladeAlleSeiten } from "@/lib/ladeAlle";
-import { jahrAusDatum, satzFuerJahr } from "@/lib/satzFuerJahr";
+import { satzFuerJahr } from "@/lib/satzFuerJahr";
 import { historieKurz } from "@/lib/saisonHistorie";
 import {
   baueIndex,
@@ -38,6 +38,8 @@ const emptyForm = {
   herkunft: "",
   stundenlohn: "",
   geplante_ankunft: "",
+  arbeitsbeginn: "",
+  arbeitsende: "",
   fuehrerschein: [] as string[],
   notiz: "",
 };
@@ -69,9 +71,6 @@ export default function PersonalplanungPage() {
   // Für die Vorbelegung des Stundenlohns mit dem Mindestlohn (siehe
   // Einstellungen-Seite).
   const [saetze, setSaetze] = useState<VerpflegungsSatz[]>([]);
-  // Zuletzt automatisch vorgeschlagener Stundenlohn - nur solange das Feld
-  // noch diesen Vorschlag enthält, darf ein Jahreswechsel ihn ersetzen.
-  const [autoLohn, setAutoLohn] = useState<string | null>(null);
 
   async function load() {
     setLoading(true);
@@ -143,25 +142,20 @@ export default function PersonalplanungPage() {
   }, [employees, kandidaten]);
 
   // Vorbelegt den Stundenlohn für NEUE (nicht verknüpfte) Kandidaten mit dem
-  // Mindestlohn des Jahres der geplanten Ankunft (ohne Datum: laufendes Jahr)
-  // - NICHT mit dem neuesten Eintrag, sonst bekäme jeder schon den Satz des
-  // Folgejahres, sobald der angelegt ist. Bleibt frei änderbar; ein
-  // Jahreswechsel im Datumsfeld ersetzt nur einen noch unveränderten
-  // Vorschlag. Läuft auch nach jedem load() erneut (Formular-Reset).
-  const lohnSatz = satzFuerJahr(
-    saetze,
-    jahrAusDatum(form.geplante_ankunft, new Date().getFullYear())
-  );
+  // Mindestlohn des LAUFENDEN Jahres (nicht dem neuesten Eintrag - sonst gälte
+  // schon der Satz des Folgejahres, sobald der angelegt ist). Nur ein
+  // Vorschlag: bei "Anreise vorbereiten" gilt für alle Sätze das dann
+  // aktuelle Jahr (siehe anreiseVorbereiten). Bleibt frei änderbar; läuft
+  // auch nach jedem load() erneut (Formular-Reset).
+  const heuteJahr = new Date().getFullYear();
+  const lohnSatz = satzFuerJahr(saetze, heuteJahr);
   useEffect(() => {
     if (verknuepfterId) return;
-    const vorschlag =
-      lohnSatz?.mindestlohn != null ? String(lohnSatz.mindestlohn) : "";
-    if (form.stundenlohn === "" || form.stundenlohn === autoLohn) {
-      setForm((f) => ({ ...f, stundenlohn: vorschlag }));
-      setAutoLohn(vorschlag);
-    }
+    if (form.stundenlohn !== "") return;
+    if (lohnSatz?.mindestlohn == null) return;
+    setForm((f) => ({ ...f, stundenlohn: String(lohnSatz.mindestlohn) }));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [saetze, form.geplante_ankunft, verknuepfterId]);
+  }, [saetze]);
 
   function naechsteFreieUebernehmen() {
     const frei = naechsteFreieNummer(belegteNummern, Number(naechsteKreis));
@@ -310,6 +304,8 @@ export default function PersonalplanungPage() {
       verknuepfter_employee_id: verknuepfterId,
       stundenlohn: form.stundenlohn ? Number(form.stundenlohn) : null,
       geplante_ankunft: form.geplante_ankunft || null,
+      arbeitsbeginn_datum: form.arbeitsbeginn || null,
+      arbeitsende_datum: form.arbeitsende || null,
       fuehrerschein_kategorien:
         form.fuehrerschein.length > 0 ? form.fuehrerschein : null,
       notiz: form.notiz || null,
@@ -340,7 +336,7 @@ export default function PersonalplanungPage() {
     if (ausgewaehlt.length === 0) return;
     if (
       !window.confirm(
-        `${ausgewaehlt.length} Kandidat(en) jetzt aktivieren und in die Anreiseliste verschieben?`
+        `${ausgewaehlt.length} Kandidat(en) jetzt aktivieren und in die Anreiseliste verschieben?\n\nAb jetzt gilt für alle Sätze das aktuelle Jahr ${heuteJahr}: Stundenlohn (sofern nicht individuell abweichend) und Tagessätze Wohnen/Verpflegung.`
       )
     ) {
       return;
@@ -388,10 +384,29 @@ export default function PersonalplanungPage() {
     const platziertProWe = new Map<number, number>();
     const ohnePlatz = new Map<string, number>();
 
+    // Ab der Anreise gilt für ALLE Sätze das aktuelle Jahr (Nutzer-Vorgabe
+    // 2026-09-19). Der bei der Planung eingetragene Stundenlohn ist nur
+    // vorläufig: entspricht er einem Standard-Mindestlohn (irgendeines Jahres,
+    // auch leer), wird er auf den des aktuellen Jahres gesetzt. Ein bewusst
+    // abweichender Lohn (z.B. Vorarbeiter) bleibt unangetastet.
+    const mindestHeute =
+      satzFuerJahr(saetze, heuteJahr)?.mindestlohn != null
+        ? Number(satzFuerJahr(saetze, heuteJahr)!.mindestlohn)
+        : null;
+    const istStandardLohn = (lohn: number | null) =>
+      lohn === null ||
+      saetze.some(
+        (sz) => sz.mindestlohn != null && Number(sz.mindestlohn) === Number(lohn)
+      );
+
     for (const id of ausgewaehlt) {
       const k = kandidaten.find((x) => x.id === id);
       if (!k || k.status !== "geplant") continue;
       let employeeId: string | null = null;
+      const lohn =
+        mindestHeute !== null && istStandardLohn(k.stundenlohn)
+          ? mindestHeute
+          : k.stundenlohn;
       if (k.verknuepfter_employee_id) {
         const { error } = await supabase
           .from("employees")
@@ -402,7 +417,7 @@ export default function PersonalplanungPage() {
             geburtsdatum: k.geburtsdatum,
             nationalitaet: k.nationalitaet,
             herkunft: k.herkunft,
-            ...(k.stundenlohn !== null ? { stundenlohn: k.stundenlohn } : {}),
+            ...(lohn !== null ? { stundenlohn: lohn } : {}),
           })
           .eq("id", k.verknuepfter_employee_id);
         if (error) {
@@ -420,7 +435,7 @@ export default function PersonalplanungPage() {
             geburtsdatum: k.geburtsdatum,
             nationalitaet: k.nationalitaet,
             herkunft: k.herkunft,
-            stundenlohn: k.stundenlohn,
+            stundenlohn: lohn,
             aktiv: true,
           })
           .select("id")
@@ -435,7 +450,11 @@ export default function PersonalplanungPage() {
       }
       await supabase
         .from("personal_kandidaten")
-        .update({ status: "anreiseliste", aktivierter_employee_id: employeeId })
+        .update({
+          status: "anreiseliste",
+          aktivierter_employee_id: employeeId,
+          stundenlohn: lohn,
+        })
         .eq("id", k.id);
 
       // Person in das nächste freie reservierte Haus ihrer Herkunft setzen
@@ -492,6 +511,33 @@ export default function PersonalplanungPage() {
     }
     if (fehlerListe.length > 0) setError(fehlerListe.join(" · "));
     load();
+  }
+
+  // Einzelne Vertragsdaten eines geplanten Kandidaten direkt in der Liste
+  // ändern (Arbeitsbeginn/-ende und Stundenlohn fließen in den Arbeitsvertrag).
+  async function vertragsfeldSpeichern(
+    k: PersonalKandidat,
+    feld: "arbeitsbeginn_datum" | "arbeitsende_datum" | "stundenlohn",
+    wert: string
+  ) {
+    const neu =
+      feld === "stundenlohn"
+        ? wert === ""
+          ? null
+          : Number(wert)
+        : wert || null;
+    if (neu === k[feld]) return;
+    const { error } = await getSupabaseClient()
+      .from("personal_kandidaten")
+      .update({ [feld]: neu })
+      .eq("id", k.id);
+    if (error) {
+      setError(error.message);
+      return;
+    }
+    setKandidaten((prev) =>
+      prev.map((x) => (x.id === k.id ? { ...x, [feld]: neu } : x))
+    );
   }
 
   // Ohne Begründung und ohne Rückfrage (Nutzer-Vorgabe 2026-09-19: Kandidaten
@@ -778,10 +824,31 @@ export default function PersonalplanungPage() {
               />
             </label>
             <label className="flex flex-col gap-0.5 text-xs text-neutral-500">
+              Arbeitsbeginn (Arbeitsvertrag)
+              <input
+                type="date"
+                value={form.arbeitsbeginn}
+                onChange={(e) =>
+                  setForm({ ...form, arbeitsbeginn: e.target.value })
+                }
+              />
+            </label>
+            <label className="flex flex-col gap-0.5 text-xs text-neutral-500">
+              Arbeitsende (Arbeitsvertrag)
+              <input
+                type="date"
+                value={form.arbeitsende}
+                onChange={(e) =>
+                  setForm({ ...form, arbeitsende: e.target.value })
+                }
+              />
+            </label>
+            <label className="flex flex-col gap-0.5 text-xs text-neutral-500">
               Stundenlohn € (für Arbeitsvertrag)
               {lohnSatz?.mindestlohn != null && (
                 <span className="text-[10px] text-neutral-400">
-                  Vorschlag: Mindestlohn {lohnSatz.saison_jahr}
+                  Vorschlag: Mindestlohn {lohnSatz.saison_jahr} (bei Anreise gilt
+                  das dann aktuelle Jahr)
                 </span>
               )}
               <input
@@ -868,6 +935,9 @@ export default function PersonalplanungPage() {
                   <th>Vorname</th>
                   <th>Geburtsdatum</th>
                   <th>Geplante Ankunft</th>
+                  <th>Arbeitsbeginn</th>
+                  <th>Arbeitsende</th>
+                  <th>Stundenlohn €</th>
                   <th>Führerschein</th>
                   <th>Verknüpft</th>
                   <th>Notiz</th>
@@ -920,6 +990,32 @@ export default function PersonalplanungPage() {
                       <td>{k.vorname}</td>
                       <td>{formatDatumDE(k.geburtsdatum)}</td>
                       <td>{formatDatumDE(k.geplante_ankunft)}</td>
+                      {(
+                        [
+                          ["arbeitsbeginn_datum", "date"],
+                          ["arbeitsende_datum", "date"],
+                          ["stundenlohn", "number"],
+                        ] as const
+                      ).map(([feld, typ]) => (
+                        <td key={feld}>
+                          {canEdit ? (
+                            <input
+                              key={`${k.id}-${feld}-${k[feld] ?? ""}`}
+                              type={typ}
+                              step={typ === "number" ? "0.01" : undefined}
+                              defaultValue={k[feld] ?? ""}
+                              className={typ === "number" ? "w-20" : undefined}
+                              onBlur={(e) =>
+                                vertragsfeldSpeichern(k, feld, e.target.value)
+                              }
+                            />
+                          ) : feld === "stundenlohn" ? (
+                            k.stundenlohn ?? "—"
+                          ) : (
+                            formatDatumDE(k[feld])
+                          )}
+                        </td>
+                      ))}
                       <td>
                         {k.fuehrerschein_kategorien &&
                         k.fuehrerschein_kategorien.length > 0
