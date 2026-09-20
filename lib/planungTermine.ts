@@ -15,8 +15,8 @@ export function arbeitsendeAuto(beginn: string): string {
   return plusTage(beginn, ARBEITSDAUER_TAGE);
 }
 
-// Anwesenheitstage = Arbeitsende minus Arbeitsbeginn (Nutzer-Vorgabe
-// 2026-09-19, reine Differenz - der Starttag wird nicht mitgezählt). Leer,
+// Anwesenheitstage = Arbeitsende minus Arbeitsbeginn, der Starttag zählt
+// immer mit (Nutzer-Vorgabe 2026-09-20): Beginn = Ende ergibt 1 Tag. Leer,
 // solange eines der beiden Daten fehlt.
 export function differenzTage(
   beginn: string | null | undefined,
@@ -26,7 +26,7 @@ export function differenzTage(
   const b = new Date(`${beginn}T00:00:00Z`).getTime();
   const e = new Date(`${ende}T00:00:00Z`).getTime();
   if (Number.isNaN(b) || Number.isNaN(e)) return null;
-  return Math.round((e - b) / 86400000);
+  return Math.round((e - b) / 86400000) + 1;
 }
 
 // Wird das Arbeitsende bei einem neuen Arbeitsbeginn automatisch nachgezogen?

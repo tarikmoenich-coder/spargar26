@@ -592,7 +592,7 @@ export default function AnreiselistePage() {
                             return (
                               <span
                                 className={`text-xs font-medium ${tage < 0 ? "text-red-600" : "text-neutral-500"}`}
-                                title="Anwesenheitstage = Arbeitsende minus Arbeitsbeginn"
+                                title="Anwesenheitstage = Arbeitsende minus Arbeitsbeginn, der Starttag zählt mit"
                               >
                                 {tage} Tage
                               </span>
