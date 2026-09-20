@@ -246,14 +246,6 @@ create table employees (
 
 create index idx_employees_name on employees (name, vorname);
 
--- Abgespeckte Sicht ohne sensible Felder (SV-Nr., Steuer-ID, IBAN, BIC) für
--- Rollen, die nur Stunden erfassen (Rollenmatrix: "Time Recording" = View).
-create view employees_public as
-  select
-    id, personal_nr, gruppe_nr, herkunft, nationalitaet, name, vorname,
-    geburtsdatum, ort, land, stundenlohn, saison_beginn, saison_ende, aktiv
-  from employees;
-
 -- Jahreshistorie "Person war in Saison X da" - OHNE Jahresdetails
 -- (Nutzer-Vorgabe 2026-09-04: "Nur das Wissen, dass die Person da war").
 -- Gespeist aus dem einmaligen Historie-Import (/personal-import-historie), der
@@ -2803,25 +2795,6 @@ create table qs_kontrolle (
 create index idx_qs_kontrolle_kultur_datum
   on qs_kontrolle (kultur, datum desc, zeitpunkt desc);
 
--- Tagesaggregat je Kultur (Anzahl Kontrollen, Tagesquote %, schlechteste
--- Einzelkontrolle) - für die Statistik.
-create or replace view qs_kontrolle_tag as
-select
-  kultur,
-  datum,
-  count(*)::int as kontrollen,
-  sum(kolben_io)::int as kolben_io,
-  sum(kolben_gesamt)::int as kolben_gesamt,
-  round(sum(kolben_io)::numeric / nullif(sum(kolben_gesamt), 0) * 100, 1)
-    as quote_prozent,
-  min(round(kolben_io::numeric / nullif(kolben_gesamt, 0) * 100, 1))
-    as quote_min_prozent
-from qs_kontrolle
-group by kultur, datum;
-
-alter view qs_kontrolle_tag set (security_invoker = true);
-grant select on qs_kontrolle_tag to authenticated;
-
 -- Digitale Strichliste / Nacharbeitsquote Zuckermais-Halle (Nutzer-Vorgabe
 -- 2026-09-10, Migrationen migration_2026-10-12_zuckermais_annahme.sql und
 -- migration_2026-10-13_zuckermais_annahme_tagessumme.sql). Je Person und
@@ -4273,26 +4246,6 @@ left join profile_namen p on p.id = a.actor_id;
 alter view audit_log_ansicht set (security_invoker = true);
 grant select on audit_log_ansicht to authenticated;
 
--- Letzte Änderung am STAMMDATENSATZ je Mitarbeiter ("wann hat welcher
--- Nutzer diese Person zuletzt bearbeitet") - für die Spalte auf der
--- Personal-Seite. Bewusst nur entity = 'employees': Änderungen an Stunden
--- oder Vorschüssen der Person sind etwas anderes und stehen im vollen
--- Protokoll.
-create or replace view employee_letzte_aenderung as
-select distinct on (a.entity_id)
-  a.entity_id as employee_id,
-  a.occurred_at,
-  a.actor_id,
-  p.full_name as actor_name,
-  a.action
-from audit_log a
-left join profile_namen p on p.id = a.actor_id
-where a.entity = 'employees'
-order by a.entity_id, a.occurred_at desc;
-
-alter view employee_letzte_aenderung set (security_invoker = true);
-grant select on employee_letzte_aenderung to authenticated;
-
 -- ---------------------------------------------------------------------------
 -- Trigger: updated_at + version automatisch pflegen (optimistische Sperre)
 -- ---------------------------------------------------------------------------
@@ -5464,7 +5417,6 @@ create policy "lohnsteuerantrag_position_admin_hr_all"
   using (current_role_name() in ('admin', 'hr'))
   with check (current_role_name() in ('admin', 'hr'));
 
-alter view employees_public set (security_invoker = true);
 create policy "employees_read_for_logged_in" on employees for select
   using (auth.uid() is not null);
 -- WICHTIGE LEHRE (2026-08-09-Vorfall): hier stand früher ein Versuch,

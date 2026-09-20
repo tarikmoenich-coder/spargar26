@@ -38,8 +38,8 @@ interface VorschussAnzeigeZeile {
   belegDateiname: string | null;
 }
 
-// Für die Suche reicht die eingeschränkte Sicht (keine sensiblen Felder) -
-// alle Rollen dürfen hier lesen, siehe employees_public/employees-Grant.
+// Für die Suche reichen wenige, nicht sensible Felder - alle angemeldeten
+// Rollen dürfen employees lesen (Policy employees_read_for_logged_in).
 type SucheEmployee = Pick<
   Employee,
   "id" | "personal_nr" | "name" | "vorname" | "aktiv"
