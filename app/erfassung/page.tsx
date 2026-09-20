@@ -176,6 +176,13 @@ function ErfassungInner() {
   >({});
   const [loading, setLoading] = useState(true);
   const [printGroupKey, setPrintGroupKey] = useState<string | null>(null);
+  // "Für ganze Gruppe übernehmen": Stundenwert je Gruppe (Kopfzeile), Meldung
+  // zum letzten Durchlauf und welche Gruppe gerade speichert.
+  const [gruppenWert, setGruppenWert] = useState<Record<string, string>>({});
+  const [gruppenMeldung, setGruppenMeldung] = useState<
+    Record<string, { text: string; fehler: boolean }>
+  >({});
+  const [gruppeLaeuft, setGruppeLaeuft] = useState<string | null>(null);
   // Aus employee_fuehrerschein_kategorien (schmale, breit zugängliche
   // Sicht) - zeigt nur, DASS und WOFÜR jemand einen Führerschein hat.
   const [fuehrerschein, setFuehrerschein] = useState<
@@ -598,6 +605,86 @@ function ErfassungInner() {
     naechstes?.select();
   }
 
+  // Trägt den Wert aus der Gruppen-Kopfzeile bei allen Personen der Gruppe
+  // ein, die für den Tag noch keine Stunden UND keine Markierung (Urlaub/
+  // Fahrer) haben - bereits Erfasstes wird nie überschrieben. Nutzt dieselbe
+  // Speicherlogik wie die Einzelerfassung (optimistische Sperre).
+  async function gruppeUebernehmen(g: Gruppierung) {
+    const meldung = (text: string, fehler = false) =>
+      setGruppenMeldung((prev) => ({ ...prev, [g.key]: { text, fehler } }));
+    const roh = (gruppenWert[g.key] ?? "").trim().replace(",", ".");
+    const stunden = Number(roh);
+    if (roh === "" || !Number.isFinite(stunden) || stunden < 0 || stunden > 24) {
+      meldung(t("erfassung.gruppestundenungueltig"), true);
+      return;
+    }
+    const ziele = g.employees.filter(
+      (emp) => entries[emp.id]?.stunden == null && !entries[emp.id]?.markierung
+    );
+    const uebersprungen = g.employees.length - ziele.length;
+    if (ziele.length === 0) {
+      meldung(t("erfassung.gruppenichtsoffen"), true);
+      return;
+    }
+    setGruppeLaeuft(g.key);
+    setGruppenMeldung((prev) => {
+      const next = { ...prev };
+      delete next[g.key];
+      return next;
+    });
+    let gefuellt = 0;
+    const fehler: string[] = [];
+    // In kleinen Paketen parallel, damit große Gruppen schnell fertig sind,
+    // ohne die Datenbank mit allem auf einmal zu belasten.
+    for (let i = 0; i < ziele.length; i += 5) {
+      const ergebnisse = await Promise.all(
+        ziele.slice(i, i + 5).map(async (emp) => ({
+          emp,
+          r: await speichereWorkEntryFeld(emp.id, datum, entries[emp.id], {
+            stunden,
+          }),
+        }))
+      );
+      for (const { emp, r } of ergebnisse) {
+        if (r.ok) gefuellt += 1;
+        else fehler.push(`${emp.name}, ${emp.vorname}`);
+      }
+    }
+    // Die betroffenen Einträge frisch laden, damit die Felder den
+    // gespeicherten Stand zeigen (auch bei einem Konflikt).
+    const { data } = await getSupabaseClient()
+      .from("work_entries")
+      .select("*")
+      .eq("datum", datum)
+      .in(
+        "employee_id",
+        ziele.map((emp) => emp.id)
+      );
+    setEntries((prev) => {
+      const next = { ...prev };
+      ((data as WorkEntry[]) ?? []).forEach((row) => {
+        next[row.employee_id] = row;
+      });
+      return next;
+    });
+    const teile = [
+      t("erfassung.gruppefuellergebnis", {
+        n: gefuellt,
+        std: formatMenge(stunden, 2),
+      }),
+    ];
+    if (uebersprungen > 0) {
+      teile.push(t("erfassung.gruppeuebersprungen", { n: uebersprungen }));
+    }
+    if (fehler.length > 0) {
+      teile.push(
+        t("erfassung.gruppefehler", { n: fehler.length, namen: fehler.join("; ") })
+      );
+    }
+    meldung(teile.join(" · "), fehler.length > 0);
+    setGruppeLaeuft(null);
+  }
+
   async function gruppeAendern(employeeId: string, neueGruppeNr: string) {
     const supabase = getSupabaseClient();
     const gruppe_nr = neueGruppeNr || null;
@@ -795,6 +882,49 @@ function ErfassungInner() {
                   )
                 </span>
               </h2>
+              {canEditStunden && !gesperrt && (
+                <div className="flex flex-wrap items-center gap-2">
+                  <input
+                    type="text"
+                    inputMode="decimal"
+                    autoComplete="off"
+                    className="w-24"
+                    placeholder={t("erfassung.gruppestundenplatzhalter")}
+                    value={gruppenWert[g.key] ?? ""}
+                    onChange={(e) =>
+                      setGruppenWert((prev) => ({
+                        ...prev,
+                        [g.key]: e.target.value,
+                      }))
+                    }
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") {
+                        e.preventDefault();
+                        gruppeUebernehmen(g);
+                      }
+                    }}
+                  />
+                  <button
+                    type="button"
+                    className="btn text-xs"
+                    disabled={
+                      gruppeLaeuft !== null ||
+                      (gruppenWert[g.key] ?? "").trim() === ""
+                    }
+                    title={t("erfassung.gruppeuebernehmentitel")}
+                    onClick={() => gruppeUebernehmen(g)}
+                  >
+                    {t("erfassung.gruppeuebernehmen")}
+                  </button>
+                  {gruppenMeldung[g.key] && (
+                    <span
+                      className={`text-xs font-medium ${gruppenMeldung[g.key].fehler ? "text-red-600" : "text-emerald-700"}`}
+                    >
+                      {gruppenMeldung[g.key].text}
+                    </span>
+                  )}
+                </div>
+              )}
               <button
                 type="button"
                 className="btn-secondary text-xs"
@@ -804,12 +934,14 @@ function ErfassungInner() {
               </button>
             </div>
 
-            <table className="print:hidden">
+            <div className="overflow-x-auto print:hidden">
+            <table className="whitespace-nowrap print:hidden">
               <thead>
                 <tr>
                   <th>{t("erfassung.persnr")}</th>
                   {canGruppeAendern && <th>{t("erfassung.gruppe")}</th>}
-                  <th>{t("erfassung.name")}</th>
+                  <th>{t("erfassung.nachname")}</th>
+                  <th>{t("erfassung.vorname")}</th>
                   <th>{t("erfassung.herkunft")}</th>
                   <th>{t("erfassung.fuehrerschein")}</th>
                   {wochenTage.map((d) => {
@@ -868,9 +1000,8 @@ function ErfassungInner() {
                           </select>
                         </td>
                       )}
-                      <td>
-                        {emp.name}, {emp.vorname}
-                      </td>
+                      <td>{emp.name}</td>
+                      <td>{emp.vorname}</td>
                       <td>{emp.herkunft ?? "—"}</td>
                       <td>
                         {fuehrerschein[emp.id] ? (
@@ -967,12 +1098,12 @@ function ErfassungInner() {
                       <tr>
                         <td
                           colSpan={
-                            5 +
+                            6 +
                             wochenTage.length +
                             (zeigeMarkierung ? 2 : 1) +
                             (canGruppeAendern ? 1 : 0)
                           }
-                          className="bg-sand"
+                          className="whitespace-normal bg-sand"
                         >
                           <StundenkontoBereich
                             employeeId={emp.id}
@@ -994,6 +1125,7 @@ function ErfassungInner() {
                 })}
               </tbody>
             </table>
+            </div>
 
             {/* Reine Papier-Vorlage zum handschriftlichen Ausfüllen -
                 bewusst ohne die digital erfassten Stunden, da vor Ort

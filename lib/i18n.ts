@@ -62,6 +62,19 @@ const de = {
   "erfassung.name": "Name",
   "erfassung.herkunft": "Herkunft",
   "erfassung.fuehrerschein": "Führerschein",
+  "erfassung.nachname": "Nachname",
+  "erfassung.vorname": "Vorname",
+  "erfassung.gruppeuebernehmen": "Für ganze Gruppe übernehmen",
+  "erfassung.gruppestundenplatzhalter": "Std. für alle",
+  "erfassung.gruppeuebernehmentitel":
+    "Trägt diese Stunden bei allen Personen dieser Gruppe ein, die für den Tag noch keine Stunden und keine Markierung haben",
+  "erfassung.gruppestundenungueltig": "Bitte Stunden zwischen 0 und 24 eintragen",
+  "erfassung.gruppenichtsoffen":
+    "Alle haben schon Stunden oder eine Markierung - nichts geändert",
+  "erfassung.gruppefuellergebnis": "{n} Person(en) mit {std} Std. gefüllt",
+  "erfassung.gruppeuebersprungen":
+    "{n} übersprungen (schon Stunden oder Markierung)",
+  "erfassung.gruppefehler": "{n} Fehler: {namen}",
   "erfassung.stunden": "Stunden",
   "erfassung.gruppe": "Gruppe",
   "erfassung.nurkontrolle": "Nur zur Kontrolle - hier nicht bearbeitbar",
@@ -164,6 +177,19 @@ const hr: Record<TKey, string> = {
   "erfassung.name": "Ime",
   "erfassung.herkunft": "Podrijetlo",
   "erfassung.fuehrerschein": "Vozačka dozvola",
+  "erfassung.nachname": "Prezime",
+  "erfassung.vorname": "Ime",
+  "erfassung.gruppeuebernehmen": "Primijeni na cijelu grupu",
+  "erfassung.gruppestundenplatzhalter": "Sati za sve",
+  "erfassung.gruppeuebernehmentitel":
+    "Upisuje ove sate svim osobama u grupi koje za taj dan još nemaju sate ni oznaku",
+  "erfassung.gruppestundenungueltig": "Unesite sate između 0 i 24",
+  "erfassung.gruppenichtsoffen":
+    "Svi već imaju sate ili oznaku - ništa nije promijenjeno",
+  "erfassung.gruppefuellergebnis": "{n} osoba popunjeno s {std} h",
+  "erfassung.gruppeuebersprungen":
+    "{n} preskočeno (već ima sate ili oznaku)",
+  "erfassung.gruppefehler": "{n} pogrešaka: {namen}",
   "erfassung.stunden": "Sati",
   "erfassung.gruppe": "Grupa",
   "erfassung.nurkontrolle": "Samo za kontrolu - ovdje se ne može uređivati",
