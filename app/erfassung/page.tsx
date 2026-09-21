@@ -21,6 +21,7 @@ import type {
 } from "@/lib/types";
 import ErfassungTabs from "@/components/ErfassungTabs";
 import StundenkontoBereich from "@/components/StundenkontoBereich";
+import { Car } from "lucide-react";
 import GruppenAuswahl from "@/components/GruppenAuswahl";
 import ZeitenZelle, { type ZeitenSpeichern } from "@/components/ZeitenZelle";
 import {
@@ -1152,8 +1153,10 @@ function ErfassungInner() {
                   <th>{t("erfassung.nachname")}</th>
                   <th>{t("erfassung.vorname")}</th>
                   <th>{t("erfassung.herkunft")}</th>
-                  <th>{t("erfassung.fuehrerschein")}</th>
-                  {wochenTage.map((d) => {
+                  {(zeitenOffen[g.key]
+                    ? wochenTage.filter((d) => d === datum)
+                    : wochenTage
+                  ).map((d) => {
                     const istBearbeitbar = d === datum;
                     return (
                       <th
@@ -1191,7 +1194,16 @@ function ErfassungInner() {
                   return (
                   <Fragment key={emp.id}>
                     <tr>
-                      <td>{emp.personal_nr}</td>
+                      <td>
+                        {emp.personal_nr}
+                        {fuehrerschein[emp.id] && (
+                          <span
+                            title={`${t("erfassung.fuehrerschein")}: ${fuehrerschein[emp.id].join(", ")}`}
+                          >
+                            <Car className="ml-1 inline h-3.5 w-3.5 align-text-bottom text-emerald-700" />
+                          </span>
+                        )}
+                      </td>
                       {canGruppeAendern && (
                         <td>
                           <GruppenAuswahl
@@ -1205,16 +1217,10 @@ function ErfassungInner() {
                       <td>{emp.name}</td>
                       <td>{emp.vorname}</td>
                       <td>{emp.herkunft ?? "—"}</td>
-                      <td>
-                        {fuehrerschein[emp.id] ? (
-                          <span className="text-emerald-700">
-                            {fuehrerschein[emp.id].join(", ")}
-                          </span>
-                        ) : (
-                          "—"
-                        )}
-                      </td>
-                      {wochenTage.map((d) => {
+                      {(zeitenOffen[g.key]
+                        ? wochenTage.filter((d) => d === datum)
+                        : wochenTage
+                      ).map((d) => {
                         if (d === datum) {
                           return (
                             <td key={d}>
@@ -1304,8 +1310,8 @@ function ErfassungInner() {
                         <td
                           colSpan={
                             6 +
-                            wochenTage.length +
-                            (zeitenOffen[g.key] ? 2 : 1) +
+                            (zeitenOffen[g.key] ? 1 : wochenTage.length) +
+                            (zeitenOffen[g.key] ? 1 : 0) +
                             (canGruppeAendern ? 1 : 0)
                           }
                           className="whitespace-normal bg-sand"
