@@ -21,7 +21,7 @@ import type {
 } from "@/lib/types";
 import ErfassungTabs from "@/components/ErfassungTabs";
 import StundenkontoBereich from "@/components/StundenkontoBereich";
-import { Car } from "lucide-react";
+import { Car, Truck } from "lucide-react";
 import GruppenAuswahl from "@/components/GruppenAuswahl";
 import ZeitenZelle, { type ZeitenSpeichern } from "@/components/ZeitenZelle";
 import {
@@ -1200,7 +1200,11 @@ function ErfassungInner() {
                           <span
                             title={`${t("erfassung.fuehrerschein")}: ${fuehrerschein[emp.id].join(", ")}`}
                           >
-                            <Car className="ml-1 inline h-3.5 w-3.5 align-text-bottom text-emerald-700" />
+                            {fuehrerschein[emp.id].some((k) => k === "C" || k === "CE") ? (
+                              <Truck className="ml-1 inline h-4 w-4 align-text-bottom text-emerald-700" />
+                            ) : (
+                              <Car className="ml-1 inline h-3.5 w-3.5 align-text-bottom text-emerald-700" />
+                            )}
                           </span>
                         )}
                       </td>
