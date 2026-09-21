@@ -117,7 +117,7 @@ export default function ZeitenZelle({
       {feld("nmBis", "Nachmittag bis")}
       <span className="ml-1 text-xs">
         {ergebnis.fehler ? (
-          <span className="text-red-600">{ergebnis.fehler}</span>
+          <span className="text-beere-600">{ergebnis.fehler}</span>
         ) : ergebnis.leer ? null : (
           <>
             <span className="font-medium">{formatMenge(ergebnis.stunden, 2)} Std.</span>

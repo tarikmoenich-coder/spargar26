@@ -174,7 +174,7 @@ export default function UmbuchungForm({
           Abbrechen
         </button>
       </div>
-      {error && <span className="w-full text-sm text-red-600">{error}</span>}
+      {error && <span className="w-full text-sm text-beere-600">{error}</span>}
     </form>
   );
 }

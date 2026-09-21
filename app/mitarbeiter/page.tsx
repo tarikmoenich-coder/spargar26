@@ -848,7 +848,7 @@ export default function MitarbeiterPage() {
               </div>
             </label>
             {personalNrKonflikt && (
-              <span className="text-xs text-red-600">
+              <span className="text-xs text-beere-600">
                 Bereits vergeben an {personalNrKonflikt.name},{" "}
                 {personalNrKonflikt.vorname}
               </span>
@@ -1046,8 +1046,8 @@ export default function MitarbeiterPage() {
           </label>
         </Abschnitt>
 
-        <div className="flex flex-col gap-1 rounded border border-red-200 bg-red-50 p-2">
-          <label className="flex items-center gap-2 text-sm font-medium text-red-800">
+        <div className="flex flex-col gap-1 rounded border border-beere-200 bg-beere-50 p-2">
+          <label className="flex items-center gap-2 text-sm font-medium text-beere-800">
             <input
               type="checkbox"
               checked={form.schwarze_liste}
@@ -1080,7 +1080,7 @@ export default function MitarbeiterPage() {
               Abbrechen
             </button>
           )}
-          {error && <span className="text-sm text-red-600">{error}</span>}
+          {error && <span className="text-sm text-beere-600">{error}</span>}
         </div>
       </form>
     );
@@ -1150,7 +1150,7 @@ export default function MitarbeiterPage() {
               Abbrechen
             </button>
             {statuswechselFehler && (
-              <span className="text-sm text-red-600">
+              <span className="text-sm text-beere-600">
                 {statuswechselFehler}
               </span>
             )}
@@ -1227,7 +1227,7 @@ export default function MitarbeiterPage() {
           </button>
         </div>
         {dokumenteFehler && (
-          <span className="text-sm text-red-600">{dokumenteFehler}</span>
+          <span className="text-sm text-beere-600">{dokumenteFehler}</span>
         )}
       </div>
     );
@@ -1474,7 +1474,7 @@ export default function MitarbeiterPage() {
                 <td>
                   {sv ? (
                     sv.kritisch ? (
-                      <span className="font-medium text-red-600">
+                      <span className="font-medium text-beere-600">
                         ⚠ Überschritten
                       </span>
                     ) : (

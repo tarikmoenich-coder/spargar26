@@ -6,6 +6,8 @@
 // nächsten Kontrolltermin (offene Mängel ziehen ihn vor). Nur lesend – von
 // hier springt man in die Zwischenkontrolle bzw. die Mängelliste.
 
+import PageHeader from "@/components/PageHeader";
+import { CalendarCheck } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -449,7 +451,7 @@ export default function UnterkunftKontrollplanPage() {
     return (
       <span className="flex flex-wrap gap-1 text-xs">
         {r.ueberfaellig > 0 && (
-          <span className="rounded bg-red-100 px-1.5 py-0.5 font-medium text-red-700">
+          <span className="rounded bg-beere-100 px-1.5 py-0.5 font-medium text-beere-700">
             {r.ueberfaellig} überfällig
           </span>
         )}
@@ -464,7 +466,7 @@ export default function UnterkunftKontrollplanPage() {
           </span>
         )}
         {r.maengel > 0 && (
-          <span className="rounded bg-red-50 px-1.5 py-0.5 text-red-700">
+          <span className="rounded bg-beere-50 px-1.5 py-0.5 text-beere-700">
             {r.maengel} Mängel
           </span>
         )}
@@ -497,7 +499,7 @@ export default function UnterkunftKontrollplanPage() {
         <span className="min-w-[6rem] font-medium">
           {raumName(z)}
           {!z.aktiv && (
-            <span className="ml-1 text-xs font-normal text-red-500">inaktiv</span>
+            <span className="ml-1 text-xs font-normal text-beere-500">inaktiv</span>
           )}
         </span>
         <span className="min-w-[12rem] text-neutral-600">
@@ -526,7 +528,7 @@ export default function UnterkunftKontrollplanPage() {
           return (
             <Link
               href={href}
-              className="font-medium text-red-600 underline decoration-dotted underline-offset-2"
+              className="font-medium text-beere-600 underline decoration-dotted underline-offset-2"
             >
               {mgl.length} {mgl.length === 1 ? "Mangel" : "Mängel"} öffnen
             </Link>
@@ -537,7 +539,7 @@ export default function UnterkunftKontrollplanPage() {
             leer
               ? "text-neutral-400"
               : ueberfaellig
-                ? "font-medium text-red-600"
+                ? "font-medium text-beere-600"
                 : "text-neutral-600"
           }`}
         >
@@ -580,7 +582,7 @@ export default function UnterkunftKontrollplanPage() {
 
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <h1 className="text-lg font-semibold text-emerald-900">Kontrollplan</h1>
+          <PageHeader icon={CalendarCheck} titel="Kontrollplan" />
           <p className="max-w-3xl text-sm text-neutral-500">
             Gebäude → Wohneinheit → Raum · letzte Kontrolle, offene Mängel und
             spätester nächster Kontrolltermin. Zeitzyklus je Raumtyp aus den{" "}
@@ -666,7 +668,7 @@ export default function UnterkunftKontrollplanPage() {
           <span
             className={`rounded-full px-2 py-0.5 text-xs font-semibold ${
               heuteListe.length > 0
-                ? "bg-red-600 text-white"
+                ? "bg-beere-600 text-white"
                 : "bg-emerald-600 text-white"
             }`}
           >
@@ -699,7 +701,7 @@ export default function UnterkunftKontrollplanPage() {
                       <span className="font-semibold text-emerald-900">
                         {gZu ? "▸" : "▾"} {geb}
                       </span>
-                      <span className="rounded-full bg-red-600 px-2 py-0.5 text-xs font-semibold text-white">
+                      <span className="rounded-full bg-beere-600 px-2 py-0.5 text-xs font-semibold text-white">
                         {rows.length}
                       </span>
                     </button>
@@ -714,7 +716,7 @@ export default function UnterkunftKontrollplanPage() {
                               <span className="font-medium text-neutral-800">
                                 {we.name}
                               </span>
-                              <span className="rounded-full bg-red-600 px-1.5 py-0.5 text-xs font-semibold text-white">
+                              <span className="rounded-full bg-beere-600 px-1.5 py-0.5 text-xs font-semibold text-white">
                                 {we.rows.length}
                               </span>
                               {we.id != null && (
@@ -755,14 +757,14 @@ export default function UnterkunftKontrollplanPage() {
                                     <span
                                       className={
                                         info.frist != null && info.frist < heute
-                                          ? "font-medium text-red-600"
+                                          ? "font-medium text-beere-600"
                                           : "text-neutral-600"
                                       }
                                     >
                                       {grund}
                                     </span>
                                     {z.offene_maengel > 0 && (
-                                      <span className="text-red-600">
+                                      <span className="text-beere-600">
                                         · {z.offene_maengel}{" "}
                                         {z.offene_maengel === 1
                                           ? "Mangel"
@@ -810,7 +812,7 @@ export default function UnterkunftKontrollplanPage() {
           <span
             className={`rounded-full px-2 py-0.5 text-xs font-semibold ${
               offeneReparaturen > 0
-                ? "bg-red-600 text-white"
+                ? "bg-beere-600 text-white"
                 : "bg-neutral-300 text-neutral-700"
             }`}
           >

@@ -462,7 +462,7 @@ export default function AnreiselistePage() {
       </div>
 
       {dokumentFehler && (
-        <p className="rounded border border-red-300 bg-red-50 px-3 py-2 text-sm font-medium text-red-800">
+        <p className="rounded border border-beere-300 bg-beere-50 px-3 py-2 text-sm font-medium text-beere-800">
           {dokumentFehler}
         </p>
       )}
@@ -591,7 +591,7 @@ export default function AnreiselistePage() {
                             if (tage === null) return null;
                             return (
                               <span
-                                className={`text-xs font-medium ${tage < 0 ? "text-red-600" : "text-neutral-500"}`}
+                                className={`text-xs font-medium ${tage < 0 ? "text-beere-600" : "text-neutral-500"}`}
                                 title="Anwesenheitstage = Arbeitsende minus Arbeitsbeginn, der Starttag zählt mit"
                               >
                                 {tage} Tage
@@ -666,11 +666,11 @@ export default function AnreiselistePage() {
                               ✓ Bestanden
                             </span>
                           ) : c.sv_fragebogen_unvollstaendig_fehlerhaft ? (
-                            <span className="font-medium text-red-600">
+                            <span className="font-medium text-beere-600">
                               ⚠ Unvollständig/Fehlerhaft
                             </span>
                           ) : c.sv_fragebogen_erfasst ? (
-                            <span className="font-medium text-red-600">
+                            <span className="font-medium text-beere-600">
                               ⚠ Nicht bestanden
                             </span>
                           ) : (

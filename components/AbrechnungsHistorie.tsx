@@ -152,7 +152,7 @@ export default function AbrechnungsHistorie({
           </button>
         </div>
       )}
-      {fehler && <p className="mt-1 text-xs text-red-600">{fehler}</p>}
+      {fehler && <p className="mt-1 text-xs text-beere-600">{fehler}</p>}
     </div>
   );
 }

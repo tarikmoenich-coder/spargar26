@@ -9,6 +9,8 @@
 // Hausmeister sieht nur die Zuordnung Herkunft → Häuser (read-only), keine
 // Planzahlen (RLS).
 
+import PageHeader from "@/components/PageHeader";
+import { CalendarClock } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { getSupabaseClient } from "@/lib/supabase/client";
@@ -282,9 +284,7 @@ export default function UnterkunftPlanungPage() {
 
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <h1 className="text-lg font-semibold text-emerald-900">
-            Herkunfts-Planung
-          </h1>
+          <PageHeader icon={CalendarClock} titel="Herkunfts-Planung" />
           <p className="max-w-2xl text-sm text-neutral-500">
             Je Herkunft die Planzahl setzen und Häuser stapeln, bis genug
             Betten reserviert sind. Die HR füllt die Plätze beim „Anreise
@@ -303,7 +303,7 @@ export default function UnterkunftPlanungPage() {
       </div>
 
       {fehler && (
-        <p className="rounded border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+        <p className="rounded border border-beere-200 bg-beere-50 px-3 py-2 text-sm text-beere-700">
           {fehler}
         </p>
       )}
@@ -399,7 +399,7 @@ export default function UnterkunftPlanungPage() {
                         ↓
                       </button>
                       <button
-                        className="text-xs text-red-600 hover:underline"
+                        className="text-xs text-beere-600 hover:underline"
                         onClick={() => weEntfernen(k.id)}
                       >
                         ×
@@ -458,7 +458,7 @@ export default function UnterkunftPlanungPage() {
                 <span
                   className={
                     diff > 0
-                      ? "font-medium text-red-600"
+                      ? "font-medium text-beere-600"
                       : diff < 0
                         ? "font-medium text-amber-700"
                         : "text-emerald-700"
@@ -471,7 +471,7 @@ export default function UnterkunftPlanungPage() {
                       : "→ vollständig"}
                 </span>
                 <span
-                  className={puffer < 0 ? "font-medium text-red-600" : ""}
+                  className={puffer < 0 ? "font-medium text-beere-600" : ""}
                 >
                   · Puffer {puffer}
                 </span>
@@ -542,12 +542,12 @@ export default function UnterkunftPlanungPage() {
                         )}
                       </td>
                       <td>{betten}</td>
-                      <td className={belegt > betten ? "text-red-600" : ""}>
+                      <td className={belegt > betten ? "text-beere-600" : ""}>
                         {belegt}
                       </td>
                       <td
                         className={
-                          betten - belegt < 0 ? "font-medium text-red-600" : ""
+                          betten - belegt < 0 ? "font-medium text-beere-600" : ""
                         }
                       >
                         {betten - belegt}

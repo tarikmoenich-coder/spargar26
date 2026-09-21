@@ -429,7 +429,7 @@ export default function KassenbuchJournalPage() {
           <button type="submit" className="btn" disabled={saving}>
             Einzahlung erfassen
           </button>
-          {error && <span className="text-sm text-red-600">{error}</span>}
+          {error && <span className="text-sm text-beere-600">{error}</span>}
         </form>
       )}
 
@@ -513,7 +513,7 @@ export default function KassenbuchJournalPage() {
                     {z.storniert && " (storniert)"}
                   </td>
                   <td>{z.belegnummer}</td>
-                  <td className={(z.betrag ?? 0) < 0 ? "text-red-600" : ""}>
+                  <td className={(z.betrag ?? 0) < 0 ? "text-beere-600" : ""}>
                     {z.betrag === null
                       ? "—"
                       : `${z.betrag > 0 ? "+" : ""}${formatMenge(z.betrag, 2)}`}
@@ -521,7 +521,7 @@ export default function KassenbuchJournalPage() {
                   <td
                     className={
                       z.korrekturDelta !== null && z.korrekturDelta < 0
-                        ? "text-red-600"
+                        ? "text-beere-600"
                         : ""
                     }
                   >

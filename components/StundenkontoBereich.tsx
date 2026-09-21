@@ -206,7 +206,7 @@ export default function StundenkontoBereich({
       </p>
 
       {fehler && (
-        <p className="text-sm font-medium text-red-600">⚠ {fehler}</p>
+        <p className="text-sm font-medium text-beere-600">⚠ {fehler}</p>
       )}
       {erfolg && (
         <p className="text-sm font-medium text-emerald-700">✓ {erfolg}</p>
@@ -325,7 +325,7 @@ export default function StundenkontoBereich({
               {historie.map((b) => (
                 <tr key={b.id} className={b.storniert ? "opacity-50" : ""}>
                   <td>{formatDatumDE(b.datum)}</td>
-                  <td className={b.stunden < 0 ? "text-red-600" : ""}>
+                  <td className={b.stunden < 0 ? "text-beere-600" : ""}>
                     {b.stunden > 0 ? "+" : ""}
                     {formatMenge(Number(b.stunden), 2)}
                   </td>

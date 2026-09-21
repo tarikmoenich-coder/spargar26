@@ -118,7 +118,7 @@ export default function FormularDokumentZelle({
             {canEdit && (
               <button
                 type="button"
-                className="text-neutral-400 hover:text-red-600"
+                className="text-neutral-400 hover:text-beere-600"
                 onClick={() => loeschen(d)}
                 title="Löschen"
               >
@@ -140,7 +140,7 @@ export default function FormularDokumentZelle({
               if (datei) hochladen(datei);
             }}
           />
-          {fehler && <span className="text-red-600">{fehler}</span>}
+          {fehler && <span className="text-beere-600">{fehler}</span>}
         </>
       )}
     </div>

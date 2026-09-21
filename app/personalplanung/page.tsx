@@ -804,7 +804,7 @@ export default function PersonalplanungPage() {
                           )}
                         </span>
                         {e.schwarze_liste && (
-                          <span className="font-medium text-red-600">
+                          <span className="font-medium text-beere-600">
                             ⚠ Schwarze Liste
                           </span>
                         )}
@@ -848,7 +848,7 @@ export default function PersonalplanungPage() {
               </div>
             )}
             {verknuepfterEmployee?.schwarze_liste && (
-              <p className="rounded border border-red-300 bg-red-50 px-3 py-2 text-sm font-medium text-red-800">
+              <p className="rounded border border-beere-300 bg-beere-50 px-3 py-2 text-sm font-medium text-beere-800">
                 ⚠ Diese Person steht auf der Schwarzen Liste
                 {verknuepfterEmployee.schwarze_liste_grund
                   ? `: ${verknuepfterEmployee.schwarze_liste_grund}`
@@ -898,7 +898,7 @@ export default function PersonalplanungPage() {
                 )}
               </div>
               {personalNrKonflikt && (
-                <span className="text-xs text-red-600">
+                <span className="text-xs text-beere-600">
                   Bereits vergeben an {personalNrKonflikt}
                 </span>
               )}
@@ -1004,7 +1004,7 @@ export default function PersonalplanungPage() {
             >
               Kandidat anlegen
             </button>
-            {error && <span className="text-sm text-red-600">{error}</span>}
+            {error && <span className="text-sm text-beere-600">{error}</span>}
           </div>
         </form>
       )}
@@ -1226,7 +1226,7 @@ export default function PersonalplanungPage() {
                         {k.verknuepfter_employee_id ? (
                           blacklisted ? (
                             <span
-                              className="font-medium text-red-600"
+                              className="font-medium text-beere-600"
                               title={blacklisted.schwarze_liste_grund ?? undefined}
                             >
                               ⚠ Schwarze Liste

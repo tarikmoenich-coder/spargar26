@@ -369,7 +369,7 @@ export default function TageRaster({
   return (
     <div className="flex flex-col gap-2 p-2">
       {lock && !lock.own && (
-        <p className="text-sm font-medium text-red-600">
+        <p className="text-sm font-medium text-beere-600">
           🔒 Wird gerade von {lock.halter ?? "jemand"} bearbeitet
           {lock.seit ? ` (seit ${new Date(lock.seit).toLocaleString("de-DE")})` : ""}.
           Nur Ansicht.
@@ -381,10 +381,10 @@ export default function TageRaster({
         </p>
       )}
       {rasterFehler && (
-        <p className="text-sm font-medium text-red-600">⚠ {rasterFehler}</p>
+        <p className="text-sm font-medium text-beere-600">⚠ {rasterFehler}</p>
       )}
       {saveFehler.length > 0 && (
-        <div className="text-sm font-medium text-red-600">
+        <div className="text-sm font-medium text-beere-600">
           ⚠ Nicht gespeichert:
           <ul className="ml-4 list-disc font-normal">
             {saveFehler.map((f) => (
@@ -511,7 +511,7 @@ export default function TageRaster({
                   Nach dem Speichern verbleibend:{" "}
                   <span
                     className={`font-medium ${
-                      restNachSpeichern < 0 ? "text-red-600" : "text-emerald-700"
+                      restNachSpeichern < 0 ? "text-beere-600" : "text-emerald-700"
                     }`}
                   >
                     {restNachSpeichern}

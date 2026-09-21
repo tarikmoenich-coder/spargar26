@@ -373,7 +373,7 @@ export default function SvFragebogenFormular({
         </h3>
         <span
           className={`text-sm font-medium ${
-            bestandenVorschau(entwurf) ? "text-emerald-700" : "text-red-600"
+            bestandenVorschau(entwurf) ? "text-emerald-700" : "text-beere-600"
           }`}
         >
           Vorschau:{" "}
@@ -875,8 +875,8 @@ export default function SvFragebogenFormular({
         )}
       </div>
 
-      <div className="rounded border border-red-300 bg-red-50 p-3">
-        <label className="flex items-center gap-2 text-sm font-medium text-red-900">
+      <div className="rounded border border-beere-300 bg-beere-50 p-3">
+        <label className="flex items-center gap-2 text-sm font-medium text-beere-900">
           <input
             type="checkbox"
             checked={entwurf.unvollstaendig_fehlerhaft}
@@ -887,7 +887,7 @@ export default function SvFragebogenFormular({
           />
           Erfassungsbogen unvollständig/fehlerhaft
         </label>
-        <p className="mt-1 text-xs text-red-800">
+        <p className="mt-1 text-xs text-beere-800">
           Für Bögen, die bereits geprüft wurden, aber z.B. fehlende
           Angaben, unleserliche Stellen oder eine fehlende Bestätigung
           haben - unterscheidet das von "noch nicht angesehen". Zählt
@@ -916,7 +916,7 @@ export default function SvFragebogenFormular({
         />
       </label>
 
-      {fehler && <p className="text-sm text-red-600">{fehler}</p>}
+      {fehler && <p className="text-sm text-beere-600">{fehler}</p>}
 
       {canEdit && (
         <div className="flex gap-2">

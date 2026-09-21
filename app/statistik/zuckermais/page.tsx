@@ -19,6 +19,8 @@
 // Wert - das Frontend darf verpflegungssaetze selbst nicht direkt lesen
 // (admin-only per RLS).
 
+import PageHeader from "@/components/PageHeader";
+import { BarChart3 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { getSupabaseClient } from "@/lib/supabase/client";
 import { useProfile } from "@/lib/useProfile";
@@ -351,7 +353,7 @@ export default function StatistikZuckermaisPage() {
 
   function auslastungKlasse(a: number | null) {
     if (a === null) return "";
-    if (a < 90) return "text-red-600 font-medium";
+    if (a < 90) return "text-beere-600 font-medium";
     if (a < 105) return "text-amber-600";
     return "text-emerald-700";
   }
@@ -533,9 +535,7 @@ export default function StatistikZuckermaisPage() {
     <div className="flex flex-col gap-4">
       <ErntewirtschaftTabs />
       <div>
-        <h1 className="text-lg font-semibold text-emerald-800">
-          Statistik – Zuckermais
-        </h1>
+        <PageHeader icon={BarChart3} titel="Statistik – Zuckermais" />
         <p className="text-sm text-neutral-500">
           Tagesstatistik über alle Mitarbeiter. Kosten/Kolben ={" "}
           (Mindestlohn × Summe Stunden + Summe Prämien) / Summe Kolben –
@@ -624,7 +624,7 @@ export default function StatistikZuckermaisPage() {
                   <td className="font-medium">{fmt(z.kosten_pro_kolben, 4)}</td>
                   <td
                     className={
-                      Number(z.summe_negativpraemie) > 0 ? "text-red-600" : ""
+                      Number(z.summe_negativpraemie) > 0 ? "text-beere-600" : ""
                     }
                   >
                     {fmt(z.summe_negativpraemie)}
@@ -648,7 +648,7 @@ export default function StatistikZuckermaisPage() {
                 <td>{fmt(summePraemie)}</td>
                 <td>{fmt(gesamtKolbenProStunde)}</td>
                 <td>{fmt(gesamtKostenProKolben, 4)}</td>
-                <td className={summeNegativpraemieTag > 0 ? "text-red-600" : ""}>
+                <td className={summeNegativpraemieTag > 0 ? "text-beere-600" : ""}>
                   {fmt(summeNegativpraemieTag)}
                 </td>
                 <td className="border-l-2 border-neutral-300 pl-4">
@@ -847,7 +847,7 @@ export default function StatistikZuckermaisPage() {
           <div className="flex flex-wrap gap-4 rounded border border-linie bg-white p-3 text-sm">
             <span>
               Summe Abzüge:{" "}
-              <span className="font-medium text-red-600">
+              <span className="font-medium text-beere-600">
                 −{fmt(qsVerrechnung.summeAbzuege)} €
               </span>
             </span>
@@ -922,7 +922,7 @@ export default function StatistikZuckermaisPage() {
                     <td
                       className={
                         t.wertung < 0
-                          ? "font-medium text-red-600"
+                          ? "font-medium text-beere-600"
                           : t.wertung > 0
                             ? "font-medium text-emerald-700"
                             : "text-neutral-400"
@@ -1045,7 +1045,7 @@ export default function StatistikZuckermaisPage() {
                       </td>
                       <td>{fmt(z.lohnkosten)}</td>
                       <td>{fmt(z.praemie)}</td>
-                      <td className={z.negativpraemie > 0 ? "text-red-600" : ""}>
+                      <td className={z.negativpraemie > 0 ? "text-beere-600" : ""}>
                         {fmt(z.negativpraemie)}
                       </td>
                       <td className="font-medium">{fmt(z.kostenProKolben, 4)}</td>
@@ -1057,7 +1057,7 @@ export default function StatistikZuckermaisPage() {
                     <td colSpan={8} className="text-right">
                       Summe Negativprämie im Zeitraum
                     </td>
-                    <td className="text-red-600">{fmt(summeNegativpraemie)}</td>
+                    <td className="text-beere-600">{fmt(summeNegativpraemie)}</td>
                     <td></td>
                   </tr>
                 </tfoot>

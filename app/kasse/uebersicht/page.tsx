@@ -75,7 +75,7 @@ export default function KassenbuecherUebersichtPage() {
       <KassenbuchTabs />
       <PageHeader icon={Landmark} titel="Kassenbücher" beschreibung="Aktueller Saldo je Buch. Eine Umbuchung wird in beiden betroffenen Büchern erfasst – als Ausgang im Quellbuch, als Eingang im Zielbuch." />
 
-      {fehler && <p className="text-sm text-red-600">⚠ {fehler}</p>}
+      {fehler && <p className="text-sm text-beere-600">⚠ {fehler}</p>}
 
       {loading ? (
         <p className="text-neutral-500">Lädt…</p>

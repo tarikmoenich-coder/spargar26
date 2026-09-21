@@ -5,6 +5,8 @@
 // optionale Kultur legt die Stunden dieser Gruppe für die Kulturkosten in
 // der jeweiligen Statistik zu Grunde.
 
+import PageHeader from "@/components/PageHeader";
+import { Users } from "lucide-react";
 import { useEffect, useState } from "react";
 import { getSupabaseClient } from "@/lib/supabase/client";
 import { useProfile } from "@/lib/useProfile";
@@ -77,7 +79,7 @@ export default function ArbeitsgruppenPage() {
     <div className="flex flex-col gap-6">
       <EinstellungenTabs />
       <div>
-        <h1 className="text-lg font-semibold text-emerald-800">Arbeitsgruppen</h1>
+        <PageHeader icon={Users} titel="Arbeitsgruppen" />
         <p className="text-sm text-neutral-500">
           Gruppen (z.B. Sortierer, Träger, Schälmannschaft) für die
           Gruppierung auf der Stundenerfassung und die gedruckten
@@ -133,7 +135,7 @@ export default function ArbeitsgruppenPage() {
                 Abbrechen
               </button>
             )}
-            {error && <span className="text-sm text-red-600">{error}</span>}
+            {error && <span className="text-sm text-beere-600">{error}</span>}
           </div>
         </form>
       )}

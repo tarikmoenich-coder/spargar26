@@ -299,7 +299,7 @@ export default function KassenpruefungPage() {
                                 ? "text-emerald-700"
                                 : letzte.innerhalb_toleranz
                                   ? ""
-                                  : "text-red-600"
+                                  : "text-beere-600"
                             }
                           >
                             {letzte.freigegeben ? "Freigegeben" : letzte.status}
@@ -358,7 +358,7 @@ export default function KassenpruefungPage() {
                   <button type="submit" className="btn" disabled={checking}>
                     Prüfung durchführen
                   </button>
-                  {error && <span className="text-sm text-red-600">{error}</span>}
+                  {error && <span className="text-sm text-beere-600">{error}</span>}
                 </form>
               )}
 
@@ -389,7 +389,7 @@ export default function KassenpruefungPage() {
                           <td>{new Date(b.datum).toLocaleString("de-DE")}</td>
                           <td>{b.art}</td>
                           <td>{b.belegnummer}</td>
-                          <td className={b.betrag < 0 ? "text-red-600" : ""}>
+                          <td className={b.betrag < 0 ? "text-beere-600" : ""}>
                             {b.betrag > 0 ? "+" : ""}
                             {formatMenge(b.betrag, 2)}
                           </td>
@@ -438,7 +438,7 @@ export default function KassenpruefungPage() {
                         <td>{new Date(c.check_zeit).toLocaleString("de-DE")}</td>
                         <td>{formatMenge(c.soll, 2)}</td>
                         <td>{formatMenge(c.ist, 2)}</td>
-                        <td className={Number(c.differenz) !== 0 ? "text-red-600" : ""}>
+                        <td className={Number(c.differenz) !== 0 ? "text-beere-600" : ""}>
                           {formatMenge(c.differenz, 2)}
                         </td>
                         <td>{c.status}</td>

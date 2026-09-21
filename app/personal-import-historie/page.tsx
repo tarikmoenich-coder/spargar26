@@ -1,5 +1,7 @@
 "use client";
 
+import PageHeader from "@/components/PageHeader";
+import { Archive } from "lucide-react";
 import { useMemo, useState } from "react";
 import * as XLSX from "xlsx";
 import { getSupabaseClient } from "@/lib/supabase/client";
@@ -339,9 +341,7 @@ export default function PersonalImportHistoriePage() {
     <div className="flex flex-col gap-6">
       <PersonalTabs />
       <div>
-        <h1 className="text-lg font-semibold text-emerald-800">
-          Personal-Historie importieren
-        </h1>
+        <PageHeader icon={Archive} titel="Personal-Historie importieren" />
         <p className="text-sm text-neutral-500">
           Einmaliger Import der kompletten Vorjahres-Personaldatei (eine Zeile je
           Person <strong>und</strong> Saison-Jahr). Zeilen mit derselben
@@ -398,7 +398,7 @@ export default function PersonalImportHistoriePage() {
               </span>
             )}
             {stats.fehler > 0 && (
-              <span className="text-red-600">{stats.fehler} mit Fehler</span>
+              <span className="text-beere-600">{stats.fehler} mit Fehler</span>
             )}
           </div>
 
@@ -438,7 +438,7 @@ export default function PersonalImportHistoriePage() {
                       </td>
                       <td>
                         {p.fehler.length > 0 ? (
-                          <span className="text-red-600">
+                          <span className="text-beere-600">
                             Fehler: {p.fehler.join("; ")}
                           </span>
                         ) : p.verdacht ? (
@@ -519,7 +519,7 @@ export default function PersonalImportHistoriePage() {
                 {ergebnis.fehler.map((f, i) => (
                   <tr key={`${f.personal_nr}-${i}`}>
                     <td>{f.personal_nr}</td>
-                    <td className="text-red-600">{f.grund}</td>
+                    <td className="text-beere-600">{f.grund}</td>
                   </tr>
                 ))}
               </tbody>

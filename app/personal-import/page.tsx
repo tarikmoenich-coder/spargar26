@@ -355,7 +355,7 @@ export default function PersonalImportPage() {
                     </td>
                     <td>
                       {z.fehler.length > 0 ? (
-                        <span className="text-red-600">
+                        <span className="text-beere-600">
                           Fehler: {z.fehler.join("; ")}
                         </span>
                       ) : z.warnungen.length > 0 ? (
@@ -418,7 +418,7 @@ export default function PersonalImportPage() {
                 {ergebnis.fehlgeschlagen.map((f) => (
                   <tr key={f.zeile}>
                     <td>{f.zeile}</td>
-                    <td className="text-red-600">{f.grund}</td>
+                    <td className="text-beere-600">{f.grund}</td>
                   </tr>
                 ))}
               </tbody>

@@ -96,7 +96,7 @@ export default function ControllingAnreiselistePage() {
                     <td
                       className={
                         z.tage_seit_arbeitsbeginn >= 14
-                          ? "font-medium text-red-600"
+                          ? "font-medium text-beere-600"
                           : "font-medium text-amber-600"
                       }
                     >

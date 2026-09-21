@@ -1016,7 +1016,7 @@ function ErfassungInner() {
         )}
 
         {speicherFehler && (
-          <p className="flex items-center justify-between gap-3 rounded border border-red-300 bg-red-50 px-3 py-2 text-sm font-medium text-red-800">
+          <p className="flex items-center justify-between gap-3 rounded border border-beere-300 bg-beere-50 px-3 py-2 text-sm font-medium text-beere-800">
             <span>⚠ {speicherFehler}</span>
             <button
               type="button"
@@ -1145,7 +1145,7 @@ function ErfassungInner() {
                   </button>
                   <button
                     type="button"
-                    className="btn-secondary text-xs text-red-700"
+                    className="btn-secondary text-xs text-beere-700"
                     disabled={gruppeLaeuft !== null}
                     title={t("erfassung.gruppeleerentitel")}
                     onClick={() => gruppeLeeren(g)}
@@ -1154,7 +1154,7 @@ function ErfassungInner() {
                   </button>
                   {gruppenMeldung[g.key] && (
                     <span
-                      className={`text-xs font-medium ${gruppenMeldung[g.key].fehler ? "text-red-600" : "text-emerald-700"}`}
+                      className={`text-xs font-medium ${gruppenMeldung[g.key].fehler ? "text-beere-600" : "text-emerald-700"}`}
                     >
                       {gruppenMeldung[g.key].text}
                     </span>
@@ -1399,7 +1399,7 @@ function ErfassungInner() {
                         <span
                           className={
                             saldo < 0
-                              ? "font-medium text-red-600"
+                              ? "font-medium text-beere-600"
                               : "font-medium"
                           }
                         >

@@ -10,6 +10,8 @@
 // Direkt-Belegung ohne Übergabe bleibt als Notnagel unter „Direkt belegen".
 // Planen dürfen nur admin/hr (RLS); hausmeister arbeitet die Übergaben ab.
 
+import PageHeader from "@/components/PageHeader";
+import { BedDouble } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { getSupabaseClient } from "@/lib/supabase/client";
 import { useProfile } from "@/lib/useProfile";
@@ -291,7 +293,7 @@ export default function UnterkunftBelegungPage() {
       <UnterkunftTabs />
 
       <div>
-        <h1 className="text-lg font-semibold text-emerald-900">Belegung planen</h1>
+        <PageHeader icon={BedDouble} titel="Belegung planen" />
         <p className="text-sm text-neutral-500">
           Personen einer Wohneinheit zuordnen (Status „geplant“) – „fest“ wird daraus mit
           der Zimmerübergabe.
@@ -299,7 +301,7 @@ export default function UnterkunftBelegungPage() {
       </div>
 
       {fehler && (
-        <p className="rounded border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+        <p className="rounded border border-beere-200 bg-beere-50 px-3 py-2 text-sm text-beere-700">
           {fehler}
         </p>
       )}

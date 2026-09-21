@@ -223,7 +223,7 @@ export default function ControllingStundenmonitoringPage() {
                               </p>
                             )}
                             {ueberstundenFehler && (
-                              <p className="text-sm font-medium text-red-600">
+                              <p className="text-sm font-medium text-beere-600">
                                 ⚠ {ueberstundenFehler}
                               </p>
                             )}

@@ -188,7 +188,7 @@ export default function FotoAufnahme({
                     onClick={() => loeschen(foto)}
                     disabled={laeuft}
                     title="Foto löschen"
-                    className="absolute -right-2 -top-2 h-6 w-6 rounded-full bg-red-600 text-xs text-white hover:bg-red-700 disabled:opacity-50"
+                    className="absolute -right-2 -top-2 h-6 w-6 rounded-full bg-beere-600 text-xs text-white hover:bg-beere-700 disabled:opacity-50"
                   >
                     ×
                   </button>
@@ -219,7 +219,7 @@ export default function FotoAufnahme({
         </label>
       )}
 
-      {fehler && <p className="text-sm text-red-600">{fehler}</p>}
+      {fehler && <p className="text-sm text-beere-600">{fehler}</p>}
     </div>
   );
 }

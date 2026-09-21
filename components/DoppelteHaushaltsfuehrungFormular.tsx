@@ -220,7 +220,7 @@ export default function DoppelteHaushaltsfuehrungFormular({
         />
       </label>
 
-      {fehler && <p className="text-sm text-red-600">{fehler}</p>}
+      {fehler && <p className="text-sm text-beere-600">{fehler}</p>}
 
       {canEdit && (
         <div className="flex gap-2">

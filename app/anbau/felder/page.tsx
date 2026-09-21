@@ -9,6 +9,8 @@
 // früher ebenfalls hier - beides ergibt sich jetzt aus der Planung je
 // Tunnel und Sorte und wäre als Zweitangabe nur eine zweite Wahrheit.
 
+import PageHeader from "@/components/PageHeader";
+import { MapPin } from "lucide-react";
 import { useEffect, useState } from "react";
 import { getSupabaseClient } from "@/lib/supabase/client";
 import { useProfile } from "@/lib/useProfile";
@@ -120,7 +122,7 @@ export default function AnbauFelderPage() {
     <div className="flex flex-col gap-4">
       <ErntewirtschaftTabs />
       <div>
-        <h1 className="text-lg font-semibold text-emerald-800">Felder</h1>
+        <PageHeader icon={MapPin} titel="Felder" />
         <p className="text-sm text-neutral-500">
           Stammdaten der Erdbeer-Felder – Name und Größe. Was darauf wächst,
           steht nicht hier, sondern je Saison unter „Erdbeeren": Tunnel,
@@ -167,7 +169,7 @@ export default function AnbauFelderPage() {
       )}
 
       {fehler && (
-        <p className="rounded border border-red-300 bg-red-50 p-2 text-sm text-red-700">
+        <p className="rounded border border-beere-300 bg-beere-50 p-2 text-sm text-beere-700">
           {fehler}
         </p>
       )}

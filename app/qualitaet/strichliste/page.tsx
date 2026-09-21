@@ -14,6 +14,8 @@
 // Strichliste/Nacharbeit nochmal"). "i.O." wird hier nur noch angezeigt,
 // berechnet aus Prämien-Kisten - Nacharbeit (Sicht zuckermais_annahme_quote).
 
+import PageHeader from "@/components/PageHeader";
+import { ListChecks } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { getSupabaseClient } from "@/lib/supabase/client";
 import { useProfile } from "@/lib/useProfile";
@@ -212,9 +214,7 @@ export default function StrichlistePage() {
       <ErntewirtschaftTabs />
 
       <div>
-        <h1 className="text-lg font-semibold text-emerald-800">
-          Qualität – Strichliste / Nacharbeit
-        </h1>
+        <PageHeader icon={ListChecks} titel="Qualität – Strichliste / Nacharbeit" />
         <p className="text-sm text-neutral-500">
           Am Tagesende je Person nur die Nacharbeit vom Papierblatt der
           Kistenannahme eintragen. „Kisten i.O." wird nicht mehr separat
@@ -246,7 +246,7 @@ export default function StrichlistePage() {
       </div>
 
       {fehler && (
-        <p className="rounded border border-red-300 bg-red-50 px-3 py-2 text-sm text-red-800">
+        <p className="rounded border border-beere-300 bg-beere-50 px-3 py-2 text-sm text-beere-800">
           {fehler}
         </p>
       )}

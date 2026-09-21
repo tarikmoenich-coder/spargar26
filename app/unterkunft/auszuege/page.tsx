@@ -6,6 +6,8 @@
 // Kontrollplan: flach, nach Gebäude gruppiert. „Auszug starten" führt direkt
 // in die Abnahme; danach ist die Belegung beendet und die Zeile verschwindet.
 
+import PageHeader from "@/components/PageHeader";
+import { FileText } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { getSupabaseClient } from "@/lib/supabase/client";
@@ -55,9 +57,7 @@ export default function UnterkunftAuszuegePage() {
       <UnterkunftTabs />
 
       <div>
-        <h1 className="text-lg font-semibold text-emerald-900">
-          Auszüge ({zeilen.length})
-        </h1>
+        <PageHeader icon={FileText} titel={`Auszüge (${zeilen.length})`} />
         <p className="max-w-2xl text-sm text-neutral-500">
           Personen mit laufender Belegung, für die die Lohn-Auszahlung erfolgt
           ist (oder die inzwischen abgereist sind). Zimmer abnehmen und „Auszug
@@ -109,7 +109,7 @@ export default function UnterkunftAuszuegePage() {
                   </span>
                   <Link
                     href={`/unterkunft/uebergabe?zimmer=${z.zimmer_id}&typ=auszug&belegung=${z.belegung_id}`}
-                    className="ml-auto rounded bg-red-600 px-3 py-1 text-xs font-medium text-white"
+                    className="ml-auto rounded bg-beere-600 px-3 py-1 text-xs font-medium text-white"
                   >
                     Auszug starten
                   </Link>

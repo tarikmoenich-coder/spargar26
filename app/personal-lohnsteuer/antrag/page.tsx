@@ -21,6 +21,8 @@
 // Finanzamt braucht aber tatsächlich den unterschriebenen Original-Scan,
 // daher jetzt ein echter Upload (eigene Dokument-Kategorie).
 
+import PageHeader from "@/components/PageHeader";
+import { FileText } from "lucide-react";
 import { Fragment, useEffect, useMemo, useState } from "react";
 import { getSupabaseClient } from "@/lib/supabase/client";
 import { ladeAlleSeiten } from "@/lib/ladeAlle";
@@ -614,9 +616,7 @@ export default function LohnsteuerantragPage() {
     <div className="flex flex-col gap-4">
       <PersonalTabs />
       <div>
-        <h1 className="text-lg font-semibold text-emerald-800">
-          Sammelantrag Lohnsteuerabzug
-        </h1>
+        <PageHeader icon={FileText} titel="Sammelantrag Lohnsteuerabzug" />
         <p className="text-sm text-neutral-500">
           Antrag auf (Sammel-)Bescheinigung für den Lohnsteuerabzug bei
           beschränkt einkommensteuerpflichtigen Arbeitnehmern (Finanzamt
@@ -829,7 +829,7 @@ export default function LohnsteuerantragPage() {
                           {aktiv.status === "entwurf" && (
                             <button
                               type="button"
-                              className="text-neutral-400 hover:text-red-600"
+                              className="text-neutral-400 hover:text-beere-600"
                               onClick={() => positionLoeschen(p)}
                               title="Aus Antrag entfernen"
                             >
@@ -1118,7 +1118,7 @@ export default function LohnsteuerantragPage() {
                                   Abbrechen
                                 </button>
                                 {speichernFehler && (
-                                  <span className="text-xs text-red-600">{speichernFehler}</span>
+                                  <span className="text-xs text-beere-600">{speichernFehler}</span>
                                 )}
                               </div>
                             </div>

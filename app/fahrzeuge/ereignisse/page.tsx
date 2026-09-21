@@ -167,7 +167,7 @@ export default function FahrzeugeEreignissePage() {
                 {gefilterte.map((e) => (
                   <tr
                     key={e.traccar_event_id}
-                    className={e.alarm_relevant ? "bg-red-50" : ""}
+                    className={e.alarm_relevant ? "bg-beere-50" : ""}
                   >
                     <td className="whitespace-nowrap">{uhr(e.zeitpunkt)}</td>
                     <td>

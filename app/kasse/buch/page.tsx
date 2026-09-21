@@ -240,7 +240,7 @@ function BuchJournalInner() {
         <>
           <PageHeader icon={BookOpen} titel={`${buch.bezeichnung} – Journal`} beschreibung="Einnahmen und Ausgaben chronologisch mit laufendem Saldo ab dem Jahres-Eröffnungssaldo. Umbuchungen von/zu anderen Kassenbüchern erscheinen als eigene Zeile. Kassenprüfungen erscheinen als eigene, hervorgehobene Trennzeile mit ihrem damaligen Soll/Ist-Stand." />
 
-          {fehler && <p className="text-sm text-red-600">⚠ {fehler}</p>}
+          {fehler && <p className="text-sm text-beere-600">⚠ {fehler}</p>}
 
           {canWrite && (
             <form
@@ -376,7 +376,7 @@ function BuchJournalInner() {
                               ? formatMenge(Number(b.betrag), 2)
                               : ""}
                           </td>
-                          <td className="text-red-600">
+                          <td className="text-beere-600">
                             {!b.storniert && b.richtung === "ausgang"
                               ? formatMenge(Number(b.betrag), 2)
                               : ""}

@@ -63,7 +63,7 @@ function statusFarbe(status: LohnsteuerStatus): string {
     case "freibetrag_erteilt":
       return "font-medium text-emerald-700";
     case "kein_freibetrag":
-      return "font-medium text-red-600";
+      return "font-medium text-beere-600";
     case "antrag_gestellt":
       return "font-medium text-amber-600";
     default:

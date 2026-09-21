@@ -1,5 +1,7 @@
 "use client";
 
+import PageHeader from "@/components/PageHeader";
+import { BarChart3 } from "lucide-react";
 import ErntewirtschaftTabs from "@/components/ErntewirtschaftTabs";
 
 // Platzhalter (Stand 2026-08-09) - folgt, sobald Prämien -> Spargel steht.
@@ -8,9 +10,7 @@ export default function StatistikSpargelPage() {
     <div className="flex flex-col gap-4">
       <ErntewirtschaftTabs />
       <div>
-        <h1 className="text-lg font-semibold text-emerald-800">
-          Statistik – Spargel
-        </h1>
+        <PageHeader icon={BarChart3} titel="Statistik – Spargel" />
         <p className="text-sm text-neutral-500">
           Noch in Vorbereitung - folgt, sobald Prämien → Spargel steht.
         </p>

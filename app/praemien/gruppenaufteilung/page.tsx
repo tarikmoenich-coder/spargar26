@@ -10,6 +10,8 @@
 // auf einmal auszuwählen (z.B. "alle aus Gruppe 101" oder "alle aus
 // Rumänien"). Nur admin/hr (wie andere Personalstamm-Änderungen).
 
+import PageHeader from "@/components/PageHeader";
+import { Users } from "lucide-react";
 import { useEffect, useState } from "react";
 import { getSupabaseClient } from "@/lib/supabase/client";
 import { ladeAlleSeiten } from "@/lib/ladeAlle";
@@ -141,9 +143,7 @@ export default function PraemienGruppenaufteilungPage() {
     <div className="flex flex-col gap-4">
       <ErntewirtschaftTabs />
       <div>
-        <h1 className="text-lg font-semibold text-emerald-800">
-          Prämien – Gruppenaufteilung
-        </h1>
+        <PageHeader icon={Users} titel="Prämien – Gruppenaufteilung" />
         <p className="text-sm text-neutral-500">
           Legt fest, wer in den Prämien-Erfassungsseiten (Zuckermais/
           Erdbeeren/Spargel) überhaupt auftaucht - unabhängig von den
@@ -225,7 +225,7 @@ export default function PraemienGruppenaufteilungPage() {
         >
           Von {kulturLabel} entfernen
         </button>
-        {fehler && <span className="text-sm text-red-600">⚠ {fehler}</span>}
+        {fehler && <span className="text-sm text-beere-600">⚠ {fehler}</span>}
       </div>
 
       {loading ? (

@@ -908,7 +908,7 @@ export default function VorschuessePage() {
                     ? `${b.employees.vorname} ${b.employees.name}`
                     : b.employee_id}
                 </span>
-                <span className="font-semibold tabular-nums text-red-700">
+                <span className="font-semibold tabular-nums text-beere-700">
                   {formatMenge(b.betrag, 2)} €
                 </span>
                 <span className="text-neutral-600">{belastungLabel(b)}</span>
@@ -1251,7 +1251,7 @@ export default function VorschuessePage() {
             <button type="submit" className="btn" disabled={saving}>
               Vorschuss bestätigen
             </button>
-            {error && <span className="text-sm text-red-600">{error}</span>}
+            {error && <span className="text-sm text-beere-600">{error}</span>}
           </div>
         </form>
       )}
@@ -1297,7 +1297,7 @@ export default function VorschuessePage() {
             )}
           </div>
           {sepaFehler && (
-            <span className="text-sm text-red-600">{sepaFehler}</span>
+            <span className="text-sm text-beere-600">{sepaFehler}</span>
           )}
         </div>
       )}
@@ -1472,7 +1472,7 @@ export default function VorschuessePage() {
                           Abbrechen
                         </button>
                         {sepaFehler && (
-                          <span className="text-red-600">{sepaFehler}</span>
+                          <span className="text-beere-600">{sepaFehler}</span>
                         )}
                       </div>
                     </td>

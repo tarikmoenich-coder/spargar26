@@ -1,5 +1,7 @@
 "use client";
 
+import PageHeader from "@/components/PageHeader";
+import { Search } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { getSupabaseClient } from "@/lib/supabase/client";
 import { ladeAlleSeiten } from "@/lib/ladeAlle";
@@ -429,9 +431,7 @@ export default function SuchePage() {
   return (
     <div className="flex flex-col gap-4">
       <div className="print:hidden">
-        <h1 className="text-lg font-semibold text-emerald-800">
-          {t("suche.title")}
-        </h1>
+        <PageHeader icon={Search} titel={t("suche.title")} />
         <p className="text-sm text-neutral-500">{t("suche.untertitel")}</p>
       </div>
 
@@ -655,7 +655,7 @@ export default function SuchePage() {
                   <span
                     className={
                       stundenkontoSaldo < 0
-                        ? "text-sm font-medium text-red-600"
+                        ? "text-sm font-medium text-beere-600"
                         : "text-sm font-medium text-neutral-700"
                     }
                   >
@@ -681,7 +681,7 @@ export default function SuchePage() {
                         {stundenkontoBewegungen.map((b) => (
                           <tr key={b.id}>
                             <td>{formatDatumDE(b.datum)}</td>
-                            <td className={b.stunden < 0 ? "text-red-600" : ""}>
+                            <td className={b.stunden < 0 ? "text-beere-600" : ""}>
                               {b.stunden > 0 ? "+" : ""}
                               {formatMenge(Number(b.stunden), 2)}
                             </td>
@@ -807,7 +807,7 @@ export default function SuchePage() {
                             </td>
                             <td className="text-sm">
                               {z.praemie_storniert ? (
-                                <span className="text-red-700">
+                                <span className="text-beere-700">
                                   {t("gemeinsam.storniert")}
                                   {z.storno_grund ? `: ${z.storno_grund}` : ""}
                                 </span>
@@ -876,7 +876,7 @@ export default function SuchePage() {
                             </td>
                             <td className="text-sm">
                               {e.praemie_storniert ? (
-                                <span className="text-red-700">
+                                <span className="text-beere-700">
                                   {t("gemeinsam.storniert")}
                                   {e.storno_grund ? `: ${e.storno_grund}` : ""}
                                 </span>

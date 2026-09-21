@@ -10,6 +10,8 @@
 // und die Seite führt Raum für Raum durch ("Raum 2 von 6"). Kontrolliert-von /
 // Gesamtzustand / Notiz gelten für die ganze Runde.
 
+import PageHeader from "@/components/PageHeader";
+import { ClipboardCheck } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { getSupabaseClient } from "@/lib/supabase/client";
@@ -592,7 +594,7 @@ export default function UnterkunftKontrollePage() {
       <UnterkunftTabs />
 
       {fehler && (
-        <p className="rounded border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+        <p className="rounded border border-beere-200 bg-beere-50 px-3 py-2 text-sm text-beere-700">
           {fehler}
         </p>
       )}
@@ -605,9 +607,7 @@ export default function UnterkunftKontrollePage() {
       {runde.length === 0 && (
         <>
           <section className="space-y-3 rounded border border-linie p-3">
-            <h1 className="text-lg font-semibold text-emerald-900">
-              Zwischenkontrolle starten
-            </h1>
+            <PageHeader icon={ClipboardCheck} titel="Zwischenkontrolle starten" />
             <div className="flex flex-wrap items-end gap-2 text-sm">
               <label>
                 Gebäude

@@ -157,7 +157,7 @@ function StammkarteInner() {
       </div>
 
       {emp.schwarze_liste && (
-        <div className="border border-red-400 bg-red-50 px-3 py-2 text-sm font-medium text-red-800 print:bg-white">
+        <div className="border border-beere-400 bg-beere-50 px-3 py-2 text-sm font-medium text-beere-800 print:bg-white">
           ⚠ Schwarze Liste
           {emp.schwarze_liste_grund ? `: ${emp.schwarze_liste_grund}` : ""}
         </div>

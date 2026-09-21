@@ -86,7 +86,7 @@ function LoginFormular() {
               className="mt-1 w-full"
             />
           </label>
-          {error && <p className="text-sm text-red-600">{error}</p>}
+          {error && <p className="text-sm text-beere-600">{error}</p>}
           <button type="submit" className="btn" disabled={busy}>
             {busy ? "Anmelden…" : "Anmelden"}
           </button>

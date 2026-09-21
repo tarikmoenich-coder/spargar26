@@ -19,6 +19,8 @@
 //   ohne eigene Buchungsart abbildbar, wie vom Nutzer gewünscht ("muss
 //   nicht immer 100% korrekt sein, aber ich kann besser nachverfolgen").
 
+import PageHeader from "@/components/PageHeader";
+import { Warehouse } from "lucide-react";
 import { useEffect, useState } from "react";
 import { getSupabaseClient } from "@/lib/supabase/client";
 import { useProfile } from "@/lib/useProfile";
@@ -211,9 +213,7 @@ export default function LagerPage() {
     <div className="flex flex-col gap-4">
       <ErfassungTabs />
       <div>
-        <h1 className="text-lg font-semibold text-emerald-800">
-          Lager {CURRENT_YEAR}
-        </h1>
+        <PageHeader icon={Warehouse} titel={`Lager ${CURRENT_YEAR}`} />
         <p className="text-sm text-neutral-500">
           Lagerbestand an Arbeitskleidung je Größe. „Aktueller Bestand" wird
           automatisch berechnet (Anfangsbestand − alle Ausgaben, siehe
@@ -226,7 +226,7 @@ export default function LagerPage() {
       </div>
 
       {fehler && (
-        <p className="rounded border border-red-300 bg-red-50 px-3 py-2 text-sm font-medium text-red-800">
+        <p className="rounded border border-beere-300 bg-beere-50 px-3 py-2 text-sm font-medium text-beere-800">
           ⚠ {fehler}
         </p>
       )}
@@ -352,7 +352,7 @@ export default function LagerPage() {
                       <td
                         className={
                           aktuell <= 0
-                            ? "font-semibold text-red-600"
+                            ? "font-semibold text-beere-600"
                             : aktuell <= 3
                               ? "font-semibold text-amber-600"
                               : "font-semibold"

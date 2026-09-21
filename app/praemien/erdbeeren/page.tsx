@@ -11,6 +11,8 @@
 // fließt automatisch (live) in die Lohnübersicht/Auszahlung ein, wie bei
 // Zuckermais.
 
+import PageHeader from "@/components/PageHeader";
+import { Award } from "lucide-react";
 import { useEffect, useState } from "react";
 import { getSupabaseClient } from "@/lib/supabase/client";
 import { useProfile } from "@/lib/useProfile";
@@ -441,9 +443,7 @@ export default function PraemienErdbeerenPage() {
     <div className="flex flex-col gap-4">
       <ErntewirtschaftTabs />
       <div className="print:hidden">
-        <h1 className="text-lg font-semibold text-emerald-800">
-          Prämien – Erdbeeren
-        </h1>
+        <PageHeader icon={Award} titel="Prämien – Erdbeeren" />
         <p className="text-sm text-neutral-500">
           Pro Mitarbeiter, Parzelle und Tag Steigen, Stunden und Sut (Abfall/
           nicht vermarktungsfähige Ware) erfassen. Norm und Bonus gelten je
@@ -586,7 +586,7 @@ export default function PraemienErdbeerenPage() {
             </button>
           </div>
           {satzFehler && (
-            <p className="mt-1 text-sm text-red-600">{satzFehler}</p>
+            <p className="mt-1 text-sm text-beere-600">{satzFehler}</p>
           )}
           {alleSaetze.length > 0 && (
             <table className="mt-3">
@@ -620,7 +620,7 @@ export default function PraemienErdbeerenPage() {
       )}
 
       {fehler && (
-        <p className="rounded border border-red-300 bg-red-50 px-3 py-2 text-sm font-medium text-red-800 print:hidden">
+        <p className="rounded border border-beere-300 bg-beere-50 px-3 py-2 text-sm font-medium text-beere-800 print:hidden">
           ⚠ {fehler}
         </p>
       )}

@@ -11,6 +11,8 @@
 // zusätzlich der Rolle pruefer den Lesezugriff (bestehende Regelung für
 // die Kassenprüfung) - diese Detailansicht hier bleibt trotzdem admin.
 
+import PageHeader from "@/components/PageHeader";
+import { History } from "lucide-react";
 import { Fragment, useEffect, useState } from "react";
 import { getSupabaseClient } from "@/lib/supabase/client";
 import { useProfile } from "@/lib/useProfile";
@@ -98,9 +100,7 @@ export default function AenderungsprotokollPage() {
   if (!istAdmin) {
     return (
       <div className="flex flex-col gap-4">
-        <h1 className="text-lg font-semibold text-emerald-800">
-          Änderungsprotokoll
-        </h1>
+        <PageHeader icon={History} titel="Änderungsprotokoll" />
         <p className="text-neutral-500">
           Das Änderungsprotokoll enthält vollständige Datensätze inklusive
           sensibler Felder und ist deshalb nur für die Rolle admin sichtbar.
@@ -129,9 +129,7 @@ export default function AenderungsprotokollPage() {
   return (
     <div className="flex flex-col gap-4">
       <div>
-        <h1 className="text-lg font-semibold text-emerald-800">
-          Änderungsprotokoll
-        </h1>
+        <PageHeader icon={History} titel="Änderungsprotokoll" />
         <p className="text-sm text-neutral-500">
           Wer hat wann was geändert - lückenlos mitgeschrieben seit Beginn
           (Personalstamm, Stunden, Vorschüsse, Prämien, Kassenbuch,

@@ -1,5 +1,7 @@
 "use client";
 
+import PageHeader from "@/components/PageHeader";
+import { Upload } from "lucide-react";
 import { useState } from "react";
 import * as XLSX from "xlsx";
 import { getSupabaseClient } from "@/lib/supabase/client";
@@ -167,9 +169,7 @@ export default function ErfassungImportPage() {
     <div className="flex flex-col gap-6">
       <ErfassungTabs />
       <div>
-        <h1 className="text-lg font-semibold text-emerald-800">
-          Stunden importieren
-        </h1>
+        <PageHeader icon={Upload} titel="Stunden importieren" />
         <p className="text-sm text-neutral-500">
           Excel- oder CSV-Datei hochladen: Spalte 1 = Personalnummer, ab
           Spalte 2 je eine Spalte pro Datum (Kopfzeile = Datum, z.B.
@@ -206,7 +206,7 @@ export default function ErfassungImportPage() {
 
           {ergebnis.zeilenFehler.length > 0 && (
             <div className="flex flex-col gap-1">
-              <h2 className="text-sm font-semibold text-red-700">
+              <h2 className="text-sm font-semibold text-beere-700">
                 Fehler ({ergebnis.zeilenFehler.length})
               </h2>
               <table>
@@ -220,7 +220,7 @@ export default function ErfassungImportPage() {
                   {ergebnis.zeilenFehler.map((f, i) => (
                     <tr key={i}>
                       <td>{f.zeile}</td>
-                      <td className="text-red-600">{f.grund}</td>
+                      <td className="text-beere-600">{f.grund}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -318,7 +318,7 @@ export default function ErfassungImportPage() {
                   <tr key={i}>
                     <td>{f.zelle.personal_nr}</td>
                     <td>{formatDatumDE(f.zelle.datum)}</td>
-                    <td className="text-red-600">{f.grund}</td>
+                    <td className="text-beere-600">{f.grund}</td>
                   </tr>
                 ))}
               </tbody>

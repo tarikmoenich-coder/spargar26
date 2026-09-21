@@ -18,7 +18,7 @@ export default function PageHeader({
     <div className="flex flex-wrap items-start justify-between gap-3">
       <div className="flex items-start gap-2.5">
         {Icon && (
-          <span className="mt-0.5 grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-emerald-50 text-emerald-700">
+          <span className="mt-0.5 grid h-9 w-9 print:hidden shrink-0 place-items-center rounded-lg bg-emerald-50 text-emerald-700">
             <Icon className="h-5 w-5" />
           </span>
         )}

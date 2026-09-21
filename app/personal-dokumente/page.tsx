@@ -366,7 +366,7 @@ export default function PersonalDokumentePage() {
                                 Hochladen
                               </button>
                               {fehler && (
-                                <span className="text-sm text-red-600">
+                                <span className="text-sm text-beere-600">
                                   {fehler}
                                 </span>
                               )}

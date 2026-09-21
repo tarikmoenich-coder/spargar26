@@ -5,6 +5,8 @@
 // Übergabe/Abnahme/Kontrolle. Pflege nur admin/hr (RLS), andere sehen die
 // Seite schreibgeschützt.
 
+import PageHeader from "@/components/PageHeader";
+import { Database } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { getSupabaseClient } from "@/lib/supabase/client";
 import { useProfile } from "@/lib/useProfile";
@@ -490,14 +492,14 @@ export default function UnterkunftStammdatenPage() {
       <UnterkunftTabs />
 
       <div>
-        <h1 className="text-lg font-semibold text-emerald-900">Stammdaten</h1>
+        <PageHeader icon={Database} titel="Stammdaten" />
         <p className="text-sm text-neutral-500">
           Gebäude und Zimmer. {canEdit ? "" : "Nur admin/hr dürfen ändern."}
         </p>
       </div>
 
       {fehler && (
-        <p className="rounded border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+        <p className="rounded border border-beere-200 bg-beere-50 px-3 py-2 text-sm text-beere-700">
           {fehler}
         </p>
       )}
@@ -556,7 +558,7 @@ export default function UnterkunftStammdatenPage() {
                       ({zimmerDesGebaeudes.length} Zimmer)
                     </span>
                     {!g.aktiv && (
-                      <span className="ml-2 text-xs text-red-600">inaktiv</span>
+                      <span className="ml-2 text-xs text-beere-600">inaktiv</span>
                     )}
                   </button>
                   {canEdit && (
@@ -641,7 +643,7 @@ export default function UnterkunftStammdatenPage() {
                                   {e.aktiv ? "deaktivieren" : "aktivieren"}
                                 </button>
                                 <button
-                                  className="text-xs text-red-600 hover:underline"
+                                  className="text-xs text-beere-600 hover:underline"
                                   onClick={() => wohneinheitLoeschen(e)}
                                 >
                                   löschen
@@ -796,7 +798,7 @@ export default function UnterkunftStammdatenPage() {
                               {z.aktiv ? (
                                 "aktiv"
                               ) : (
-                                <span className="text-red-600">inaktiv</span>
+                                <span className="text-beere-600">inaktiv</span>
                               )}
                             </td>
                             {canEdit && (
@@ -876,7 +878,7 @@ export default function UnterkunftStammdatenPage() {
                 <span>{v.bereich}</span>
                 {canEdit && (
                   <button
-                    className="text-xs text-red-600 hover:underline"
+                    className="text-xs text-beere-600 hover:underline"
                     onClick={() => bereichEntfernen(v)}
                   >
                     entfernen

@@ -305,13 +305,13 @@ export default function SozialversicherungPage() {
                         </span>
                       ) : f.unvollstaendig_fehlerhaft ? (
                         <span
-                          className="font-medium text-red-600"
+                          className="font-medium text-beere-600"
                           title={f.unvollstaendig_fehlerhaft_grund ?? undefined}
                         >
                           ⚠ Unvollständig/Fehlerhaft
                         </span>
                       ) : (
-                        <span className="font-medium text-red-600">
+                        <span className="font-medium text-beere-600">
                           ⚠ Nicht bestanden
                         </span>
                       )}
@@ -505,7 +505,7 @@ export default function SozialversicherungPage() {
                             <div
                               className={
                                 svPruefung?.ueberschritten_sv_frei_luecke
-                                  ? "font-medium text-red-600"
+                                  ? "font-medium text-beere-600"
                                   : "text-amber-700"
                               }
                               title={
@@ -556,7 +556,7 @@ export default function SozialversicherungPage() {
                         </span>
                       ) : zutreffendeFelder.length > 1 ? (
                         <span
-                          className="font-medium text-red-600"
+                          className="font-medium text-beere-600"
                           title='Mehrere Angaben mit "Ja" gleichzeitig - rechtlich nicht möglich, bitte Eingabe prüfen'
                         >
                           ⚠ {zutreffendeFelder.map((v) => v.label).join(", ")}

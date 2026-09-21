@@ -169,7 +169,7 @@ export default function ControllingArbeitstagePage() {
     const soll = ersatzausgleichSoll(s);
     if (s.ersatzausgleich === "kein_ausgleich")
       return (
-        <span className="font-medium text-red-600">
+        <span className="font-medium text-beere-600">
           kein legaler Ausgleich möglich
         </span>
       );
@@ -185,7 +185,7 @@ export default function ControllingArbeitstagePage() {
         </>
       );
     return (
-      <span className="font-medium text-red-600">
+      <span className="font-medium text-beere-600">
         fehlt ({s.ersatz_freie_tage ?? 0}/{soll} freie Tage)
       </span>
     );
@@ -201,7 +201,7 @@ export default function ControllingArbeitstagePage() {
         <span
           className={
             s.ampel === "rot"
-              ? "font-medium text-red-600"
+              ? "font-medium text-beere-600"
               : "font-medium text-amber-600"
           }
         >
@@ -217,7 +217,7 @@ export default function ControllingArbeitstagePage() {
           {s.ersatz_fenster_bis ? formatDatumDE(s.ersatz_fenster_bis) : "?"}
         </span>
       );
-    return <span className="font-medium text-red-600">⚠ Verstoß</span>;
+    return <span className="font-medium text-beere-600">⚠ Verstoß</span>;
   }
 
   return (
@@ -234,7 +234,7 @@ export default function ControllingArbeitstagePage() {
           "…"
         ) : (
           <>
-            <span className="font-medium text-red-600">{serieVerstoss}</span>{" "}
+            <span className="font-medium text-beere-600">{serieVerstoss}</span>{" "}
             Verstoß/Verstöße ·{" "}
             <span className="font-medium text-amber-600">
               {serieAusgleichOffen}
@@ -257,7 +257,7 @@ export default function ControllingArbeitstagePage() {
       {loadingArbeitsserie ? (
         <p className="text-neutral-500">Lädt…</p>
       ) : arbeitsserieFehler ? (
-        <p className="text-sm text-red-600">
+        <p className="text-sm text-beere-600">
           Auswertung nicht verfügbar ({arbeitsserieFehler}). Vermutlich fehlt
           die Migration 2026-09-19 (arbeitstage_serie_uebersicht) in der
           Datenbank.
@@ -308,7 +308,7 @@ export default function ControllingArbeitstagePage() {
                           <td
                             className={
                               s.ampel === "rot"
-                                ? "font-medium text-red-600"
+                                ? "font-medium text-beere-600"
                                 : "font-medium text-amber-600"
                             }
                           >

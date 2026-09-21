@@ -170,7 +170,7 @@ export default function ControllingUrlaubPage() {
           "…"
         ) : (
           <>
-            <span className="font-medium text-red-600">
+            <span className="font-medium text-beere-600">
               {counts.ueberzogen + counts.abgeltungFaellig}
             </span>{" "}
             Handlungsbedarf ({counts.ueberzogen} überzogen ·{" "}
@@ -238,7 +238,7 @@ export default function ControllingUrlaubPage() {
                       <td
                         className={
                           status === "ueberzogen" || status === "abgeltung_faellig"
-                            ? "font-medium text-red-600"
+                            ? "font-medium text-beere-600"
                             : status === "laeuft"
                               ? "text-amber-600"
                               : "text-neutral-500"

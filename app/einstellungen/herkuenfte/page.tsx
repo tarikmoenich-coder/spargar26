@@ -3,6 +3,8 @@
 // Einstellungen → Herkünfte. Feste Liste der Herkünfte für den Personalstamm
 // (keine Tippfehler-Varianten), u.a. für die Auswahl bei Vorschüssen.
 
+import PageHeader from "@/components/PageHeader";
+import { Globe } from "lucide-react";
 import { useEffect, useState } from "react";
 import { getSupabaseClient } from "@/lib/supabase/client";
 import { useProfile } from "@/lib/useProfile";
@@ -67,7 +69,7 @@ export default function HerkuenftePage() {
     <div className="flex flex-col gap-6">
       <EinstellungenTabs />
       <div>
-        <h1 className="text-lg font-semibold text-emerald-800">Herkünfte</h1>
+        <PageHeader icon={Globe} titel="Herkünfte" />
         <p className="text-sm text-neutral-500">
           Feste Liste der Herkünfte für den Personalstamm – damit sich
           Vorschüsse zuverlässig nach Herkunft auswählen lassen (keine
@@ -102,7 +104,7 @@ export default function HerkuenftePage() {
                 Abbrechen
               </button>
             )}
-            {error && <span className="text-sm text-red-600">{error}</span>}
+            {error && <span className="text-sm text-beere-600">{error}</span>}
           </div>
         </form>
       )}

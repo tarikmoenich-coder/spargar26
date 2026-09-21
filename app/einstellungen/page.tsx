@@ -5,6 +5,8 @@
 // Arbeitskleidung. Arbeitsgruppen, Herkünfte und Nutzer & Rollen sind eigene
 // Unterseiten (components/EinstellungenTabs.tsx).
 
+import PageHeader from "@/components/PageHeader";
+import { Settings } from "lucide-react";
 import { useEffect, useState } from "react";
 import { formatMenge } from "@/lib/format";
 import { getSupabaseClient } from "@/lib/supabase/client";
@@ -147,9 +149,7 @@ export default function EinstellungenAllgemeinPage() {
     <div className="flex flex-col gap-6">
       <EinstellungenTabs />
       <div>
-        <h1 className="text-lg font-semibold text-emerald-800">
-          Einstellungen – Allgemein
-        </h1>
+        <PageHeader icon={Settings} titel="Einstellungen – Allgemein" />
         <p className="mt-1 text-sm text-neutral-500">
           Firmen-Bankdaten für den SEPA-Export sowie die je Saisonjahr
           versionierten Sätze (ADR-007) für Verpflegung, Unterkunft,
@@ -248,7 +248,7 @@ export default function EinstellungenAllgemeinPage() {
               <span className="text-sm text-emerald-700">Gespeichert.</span>
             )}
             {bankdatenError && (
-              <span className="text-sm text-red-600">{bankdatenError}</span>
+              <span className="text-sm text-beere-600">{bankdatenError}</span>
             )}
           </div>
         </form>
@@ -333,7 +333,7 @@ export default function EinstellungenAllgemeinPage() {
             <button type="submit" className="btn" disabled={saving}>
               Speichern
             </button>
-            {error && <span className="text-sm text-red-600">{error}</span>}
+            {error && <span className="text-sm text-beere-600">{error}</span>}
           </div>
         </form>
       ) : (

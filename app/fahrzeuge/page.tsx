@@ -354,7 +354,7 @@ export default function FahrzeugeUebersichtPage() {
                               <span
                                 className={
                                   f.batterie_prozent < 20
-                                    ? "font-medium text-red-600"
+                                    ? "font-medium text-beere-600"
                                     : f.batterie_prozent < 40
                                       ? "text-amber-600"
                                       : "text-neutral-600"
@@ -384,7 +384,7 @@ export default function FahrzeugeUebersichtPage() {
                           </td>
                           <td className="px-3 py-1.5">
                             {f.abgemeldet_am ? (
-                              <span className="text-red-600">
+                              <span className="text-beere-600">
                                 {formatDatumDE(f.abgemeldet_am)}
                               </span>
                             ) : (

@@ -6,6 +6,8 @@
 // "vom Bewohner verschuldet" – Verursacher + geschätzte Kosten als Grundlage
 // für eine Belastung. Reparaturen beeinflussen die Kontroll-Ampel nicht.
 
+import PageHeader from "@/components/PageHeader";
+import { Wrench } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { getSupabaseClient } from "@/lib/supabase/client";
 import { useProfile } from "@/lib/useProfile";
@@ -427,7 +429,7 @@ export default function UnterkunftReparaturenPage() {
         </div>
 
         {fehler && (
-          <p className="rounded border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+          <p className="rounded border border-beere-200 bg-beere-50 px-3 py-2 text-sm text-beere-700">
             {fehler}
           </p>
         )}
@@ -451,7 +453,7 @@ export default function UnterkunftReparaturenPage() {
                   >
                     <span>{gZu ? "▸" : "▾"}</span>
                     {g.gebName}
-                    <span className="rounded-full bg-red-600 px-2 py-0.5 text-xs font-normal text-white">
+                    <span className="rounded-full bg-beere-600 px-2 py-0.5 text-xs font-normal text-white">
                       {g.offen}
                     </span>
                   </button>
@@ -546,11 +548,11 @@ export default function UnterkunftReparaturenPage() {
 
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <h1 className="text-lg font-semibold text-emerald-900">Reparaturen</h1>
+          <PageHeader icon={Wrench} titel="Reparaturen" />
           <p className="text-sm text-neutral-500">
             {kennzahlen.gemeldet} gemeldet · {kennzahlen.beauftragt} beauftragt ·
             geschätzte Kosten „vom Bewohner verschuldet" (offen):{" "}
-            <span className="font-medium text-red-700">
+            <span className="font-medium text-beere-700">
               {formatMenge(kennzahlen.kostenBewohner, 2)} €
             </span>
           </p>
@@ -591,7 +593,7 @@ export default function UnterkunftReparaturenPage() {
       </div>
 
       {fehler && (
-        <p className="rounded border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+        <p className="rounded border border-beere-200 bg-beere-50 px-3 py-2 text-sm text-beere-700">
           {fehler}
         </p>
       )}
@@ -836,8 +838,8 @@ export default function UnterkunftReparaturenPage() {
                       </div>
 
                       {m.verursachung === "bewohner" && (
-                        <div className="mt-2 space-y-2 rounded bg-red-50 px-2 py-2 text-sm">
-                          <div className="font-medium text-red-900">
+                        <div className="mt-2 space-y-2 rounded bg-beere-50 px-2 py-2 text-sm">
+                          <div className="font-medium text-beere-900">
                             Verursacher &amp; Kostenteilung
                           </div>
 
@@ -850,17 +852,17 @@ export default function UnterkunftReparaturenPage() {
                             {vids.map((id) => (
                               <span
                                 key={id}
-                                className="inline-flex items-center gap-1 rounded border border-red-300 bg-white px-2 py-0.5"
+                                className="inline-flex items-center gap-1 rounded border border-beere-300 bg-white px-2 py-0.5"
                               >
                                 {personName(id)}
                                 {anteil != null && (
-                                  <span className="text-red-700">
+                                  <span className="text-beere-700">
                                     · {formatMenge(anteil, 2)} €
                                   </span>
                                 )}
                                 {canEdit && (
                                   <button
-                                    className="text-red-600"
+                                    className="text-beere-600"
                                     title="entfernen"
                                     onClick={() =>
                                       verursacherSetzen(
@@ -1001,7 +1003,7 @@ export default function UnterkunftReparaturenPage() {
                           {(() => {
                             const bl = belastungProMangel[m.id] ?? [];
                             return (
-                              <div className="border-t border-red-200 pt-2">
+                              <div className="border-t border-beere-200 pt-2">
                                 {bl.length === 0 ? (
                                   <div className="flex flex-wrap items-center gap-2">
                                     <span className="text-neutral-500">
@@ -1018,7 +1020,7 @@ export default function UnterkunftReparaturenPage() {
                                   </div>
                                 ) : (
                                   <div className="space-y-1">
-                                    <div className="font-medium text-red-900">
+                                    <div className="font-medium text-beere-900">
                                       Belastung
                                     </div>
                                     <ul className="space-y-0.5">
@@ -1071,7 +1073,7 @@ export default function UnterkunftReparaturenPage() {
                                         </button>
                                         {bl.some((b) => b.status === "offen") && (
                                           <button
-                                            className="text-xs text-red-600 hover:underline"
+                                            className="text-xs text-beere-600 hover:underline"
                                             onClick={() =>
                                               belastungVerwerfen(m.id)
                                             }
@@ -1136,8 +1138,8 @@ export default function UnterkunftReparaturenPage() {
           return (
             <>
               {belastungJePerson.length > 0 && (
-                <div className="rounded border border-red-200 bg-red-50 p-2 text-sm">
-                  <div className="font-medium text-red-900">
+                <div className="rounded border border-beere-200 bg-beere-50 p-2 text-sm">
+                  <div className="font-medium text-beere-900">
                     Belastung je Person (offen, anteilig)
                     {kostenOffen > 0 && ` · ${formatMenge(kostenOffen, 2)} € gesamt`}
                   </div>
@@ -1171,7 +1173,7 @@ export default function UnterkunftReparaturenPage() {
                         {g.total}
                       </span>
                       {g.offen > 0 && (
-                        <span className="rounded-full bg-red-600 px-2 py-0.5 text-xs font-normal text-white">
+                        <span className="rounded-full bg-beere-600 px-2 py-0.5 text-xs font-normal text-white">
                           {g.offen} offen
                         </span>
                       )}

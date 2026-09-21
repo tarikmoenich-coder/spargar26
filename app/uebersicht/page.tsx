@@ -820,7 +820,7 @@ export default function UebersichtPage() {
           </button>
         )}
         {monatFilter === 0 && abrechnenFehler && (
-          <span className="text-sm text-red-600">{abrechnenFehler}</span>
+          <span className="text-sm text-beere-600">{abrechnenFehler}</span>
         )}
       </div>
 
@@ -1384,7 +1384,7 @@ export default function UebersichtPage() {
                     );
                   })}
                   {fehlendeImMonat.map((m) => (
-                    <tr key={m.id} className="bg-red-50">
+                    <tr key={m.id} className="bg-beere-50">
                       <td>{m.personal_nr}</td>
                       <td>
                         {m.name}, {m.vorname}
@@ -1405,7 +1405,7 @@ export default function UebersichtPage() {
                       <td>—</td>
                       <td>—</td>
                       <td>—</td>
-                      <td className="font-medium text-red-600">
+                      <td className="font-medium text-beere-600">
                         ⚠ Keine Einträge
                       </td>
                     </tr>

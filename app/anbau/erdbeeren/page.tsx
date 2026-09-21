@@ -12,6 +12,8 @@
 // Länge × Reihen × Pflanzen-pro-lfm, wie in der Excel Spalte I (4,37 im
 // Feld, 8 im Glashaus).
 
+import PageHeader from "@/components/PageHeader";
+import { Sprout } from "lucide-react";
 import { Fragment, useEffect, useState } from "react";
 import { getSupabaseClient } from "@/lib/supabase/client";
 import { useProfile } from "@/lib/useProfile";
@@ -453,9 +455,7 @@ export default function AnbauErdbeerenPage() {
     <div className="flex flex-col gap-4">
       <ErntewirtschaftTabs />
       <div>
-        <h1 className="text-lg font-semibold text-emerald-800">
-          Anbauplanung Erdbeeren
-        </h1>
+        <PageHeader icon={Sprout} titel="Anbauplanung Erdbeeren" />
         <p className="text-sm text-neutral-500">
           Je Feld die einzelnen Tunnel mit eigener Länge und Reihenzahl,
           darunter die Bepflanzung je Sorte. Laufende Meter und Pflanzenzahl
@@ -506,7 +506,7 @@ export default function AnbauErdbeerenPage() {
       </div>
 
       {fehler && (
-        <p className="rounded border border-red-300 bg-red-50 p-2 text-sm text-red-700">
+        <p className="rounded border border-beere-300 bg-beere-50 p-2 text-sm text-beere-700">
           {fehler}
         </p>
       )}
@@ -599,7 +599,7 @@ export default function AnbauErdbeerenPage() {
               Meldung am Seitenanfang schlicht nicht sehen (Nutzer-Meldung
               2026-08-11: "es passiert einfach nichts"). */}
           {fehler && (
-            <p className="rounded border border-red-300 bg-red-50 p-2 text-sm text-red-700">
+            <p className="rounded border border-beere-300 bg-beere-50 p-2 text-sm text-beere-700">
               {fehler}
             </p>
           )}
@@ -1017,7 +1017,7 @@ export default function AnbauErdbeerenPage() {
                                   {canEdit && (
                                     <button
                                       type="button"
-                                      className="text-neutral-400 hover:text-red-600"
+                                      className="text-neutral-400 hover:text-beere-600"
                                       title="Entfernen"
                                       onClick={() =>
                                         bepflanzungLoeschen(b.id)
@@ -1037,7 +1037,7 @@ export default function AnbauErdbeerenPage() {
                               {t.reihen_anzahl != null &&
                                 belegteReihen(t) >
                                   t.reihen_anzahl && (
-                                  <span className="font-medium text-red-600">
+                                  <span className="font-medium text-beere-600">
                                     ⚠ {belegteReihen(t)} von{" "}
                                     {t.reihen_anzahl} Reihen
                                     belegt

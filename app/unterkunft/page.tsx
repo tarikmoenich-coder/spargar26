@@ -9,6 +9,8 @@
 //
 // Zimmer im Raster platzieren/verschieben: nur admin.
 
+import PageHeader from "@/components/PageHeader";
+import { Building2 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -1239,7 +1241,7 @@ export default function UnterkunftGrundrissPage() {
 
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <h1 className="text-lg font-semibold text-emerald-900">Immobilien</h1>
+          <PageHeader icon={Building2} titel="Immobilien" />
           <p className="text-sm text-neutral-500">
             Wohneinheit wählen → Zimmer antippen. „Belegen": Person antippen,
             dann Zimmer antippen.
@@ -1329,7 +1331,7 @@ export default function UnterkunftGrundrissPage() {
                         {!g.aktiv ? " (inaktiv)" : ""}
                       </span>
                       {st.ueber > 0 && (
-                        <span className="shrink-0 rounded bg-red-100 px-1.5 py-0.5 text-xs font-medium text-red-700">
+                        <span className="shrink-0 rounded bg-beere-100 px-1.5 py-0.5 text-xs font-medium text-beere-700">
                           +{st.ueber} über
                         </span>
                       )}
@@ -1364,7 +1366,7 @@ export default function UnterkunftGrundrissPage() {
       )}
 
       {fehler && (
-        <p className="rounded border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+        <p className="rounded border border-beere-200 bg-beere-50 px-3 py-2 text-sm text-beere-700">
           {fehler}
         </p>
       )}
@@ -1988,7 +1990,7 @@ export default function UnterkunftGrundrissPage() {
                           ))}
                         </span>
                         {z.offene_maengel > 0 && (
-                          <span className="shrink-0 self-center rounded bg-red-100 px-1.5 py-0.5 text-xs font-semibold text-red-700">
+                          <span className="shrink-0 self-center rounded bg-beere-100 px-1.5 py-0.5 text-xs font-semibold text-beere-700">
                             {z.offene_maengel} Mangel
                           </span>
                         )}
@@ -2355,7 +2357,7 @@ export default function UnterkunftGrundrissPage() {
                         ✕ Schließen
                       </button>
                     </div>
-                    {!sel.aktiv && <p className="text-xs text-red-600">inaktiv</p>}
+                    {!sel.aktiv && <p className="text-xs text-beere-600">inaktiv</p>}
 
                     <dl className="mt-2 space-y-1 text-sm">
                       {sel.art === "zimmer" && (
@@ -2423,7 +2425,7 @@ export default function UnterkunftGrundrissPage() {
                         <dd
                           className={
                             sel.offene_maengel > 0
-                              ? "font-medium text-red-600"
+                              ? "font-medium text-beere-600"
                               : ""
                           }
                         >
@@ -2442,7 +2444,7 @@ export default function UnterkunftGrundrissPage() {
                     </dl>
 
                     {maengelAuf && (
-                      <ul className="mt-2 space-y-2 rounded border border-red-100 bg-red-50/50 p-2 text-sm">
+                      <ul className="mt-2 space-y-2 rounded border border-beere-100 bg-beere-50/50 p-2 text-sm">
                         {(maengelProZimmer[sel.zimmer_id] ?? []).length === 0 ? (
                           <li className="text-neutral-400">
                             keine offenen Mängel geladen.
@@ -2784,7 +2786,7 @@ export default function UnterkunftGrundrissPage() {
                             <IconEinzug /> Einzug starten
                           </button>
                           <button
-                            className="inline-flex items-center gap-1.5 rounded border border-red-600 px-3 py-1 font-medium text-red-700"
+                            className="inline-flex items-center gap-1.5 rounded border border-beere-600 px-3 py-1 font-medium text-beere-700"
                             onClick={() => {
                               const bew =
                                 belegungProZimmer[sel.zimmer_id] ?? [];
@@ -2850,15 +2852,15 @@ export default function UnterkunftGrundrissPage() {
                     </div>
 
                     {auszugWahlOffen && (
-                      <div className="mt-2 rounded border border-red-300 bg-red-50 p-2 text-sm">
-                        <div className="font-medium text-red-900">
+                      <div className="mt-2 rounded border border-beere-300 bg-beere-50 p-2 text-sm">
+                        <div className="font-medium text-beere-900">
                           Wer zieht aus?
                         </div>
                         <ul className="mt-1 space-y-1">
                           {(belegungProZimmer[sel.zimmer_id] ?? []).map((b) => (
                             <li key={b.id}>
                               <button
-                                className="w-full rounded border border-red-200 bg-white px-2 py-1 text-left hover:border-red-400"
+                                className="w-full rounded border border-beere-200 bg-white px-2 py-1 text-left hover:border-beere-400"
                                 onClick={() =>
                                   router.push(
                                     `/unterkunft/uebergabe?zimmer=${sel.zimmer_id}&typ=auszug&belegung=${b.id}`
@@ -2880,8 +2882,8 @@ export default function UnterkunftGrundrissPage() {
                     )}
 
                     {neuerMangel && canEditMangel && (
-                      <div className="mt-3 space-y-2 rounded border border-red-200 bg-red-50 p-2 text-sm">
-                        <div className="font-medium text-red-900">
+                      <div className="mt-3 space-y-2 rounded border border-beere-200 bg-beere-50 p-2 text-sm">
+                        <div className="font-medium text-beere-900">
                           Mangel für{" "}
                           {sel.art === "zimmer"
                             ? `Zimmer ${sel.nummer}`
@@ -3027,7 +3029,7 @@ export default function UnterkunftGrundrissPage() {
                         </div>
                         <div className="flex gap-3">
                           <button
-                            className="text-xs text-red-600 hover:underline"
+                            className="text-xs text-beere-600 hover:underline"
                             onClick={() =>
                               speicherePlan(sel.zimmer_id, {
                                 plan_x: null,
@@ -3039,7 +3041,7 @@ export default function UnterkunftGrundrissPage() {
                           </button>
                           {sel.art !== "zimmer" && (
                             <button
-                              className="text-xs text-red-600 hover:underline"
+                              className="text-xs text-beere-600 hover:underline"
                               onClick={() => zimmerLoeschen(sel)}
                             >
                               Löschen

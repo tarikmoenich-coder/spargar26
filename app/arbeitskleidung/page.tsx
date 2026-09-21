@@ -14,6 +14,8 @@
 // Vorgabe: "'Stundenerfassung' macht nur die Ausgabe") - siehe
 // app/lager/page.tsx.
 
+import PageHeader from "@/components/PageHeader";
+import { Shirt } from "lucide-react";
 import { Fragment, useEffect, useState } from "react";
 import Link from "next/link";
 import { getSupabaseClient } from "@/lib/supabase/client";
@@ -213,9 +215,7 @@ export default function ArbeitskleidungPage() {
     <div className="flex flex-col gap-4">
       <ErfassungTabs />
       <div>
-        <h1 className="text-lg font-semibold text-emerald-800">
-          {t("arbeitskleidung.title", { jahr: CURRENT_YEAR })}
-        </h1>
+        <PageHeader icon={Shirt} titel={t("arbeitskleidung.title", { jahr: CURRENT_YEAR })} />
         <p className="text-sm text-neutral-500">
           {t("arbeitskleidung.untertitel")}
           {canSeeLagerLink && (
@@ -238,7 +238,7 @@ export default function ArbeitskleidungPage() {
       )}
 
       {fehler && (
-        <p className="rounded border border-red-300 bg-red-50 px-3 py-2 text-sm font-medium text-red-800">
+        <p className="rounded border border-beere-300 bg-beere-50 px-3 py-2 text-sm font-medium text-beere-800">
           ⚠ {fehler}
         </p>
       )}

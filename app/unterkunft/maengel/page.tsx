@@ -4,6 +4,8 @@
 // Status (offen / in Arbeit / behoben), Schwere, Fotos. Mängel entstehen bei
 // Übergabe/Abnahme/Kontrolle oder werden hier direkt angelegt.
 
+import PageHeader from "@/components/PageHeader";
+import { TriangleAlert } from "lucide-react";
 import { Fragment, useCallback, useEffect, useMemo, useState } from "react";
 import { getSupabaseClient } from "@/lib/supabase/client";
 import { useProfile } from "@/lib/useProfile";
@@ -305,7 +307,7 @@ export default function UnterkunftMaengelPage() {
 
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <h1 className="text-lg font-semibold text-emerald-900">Mängel</h1>
+          <PageHeader icon={TriangleAlert} titel="Mängel" />
           <p className="text-sm text-neutral-500">
             {maengel.filter((m) => m.status !== "behoben").length} offen ·{" "}
             {maengel.length} gesamt
@@ -368,7 +370,7 @@ export default function UnterkunftMaengelPage() {
       </div>
 
       {fehler && (
-        <p className="rounded border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+        <p className="rounded border border-beere-200 bg-beere-50 px-3 py-2 text-sm text-beere-700">
           {fehler}
         </p>
       )}
@@ -576,7 +578,7 @@ export default function UnterkunftMaengelPage() {
                           m.status === "behoben"
                             ? "text-neutral-400"
                             : m.status === "offen"
-                              ? "font-medium text-red-600"
+                              ? "font-medium text-beere-600"
                               : "font-medium text-amber-700"
                         }
                       >
@@ -712,7 +714,7 @@ export default function UnterkunftMaengelPage() {
                           {g.total}
                         </span>
                         {g.offen > 0 && (
-                          <span className="rounded-full bg-red-600 px-2 py-0.5 text-xs font-semibold text-white">
+                          <span className="rounded-full bg-beere-600 px-2 py-0.5 text-xs font-semibold text-white">
                             {g.offen} offen
                           </span>
                         )}

@@ -876,7 +876,7 @@ export default function AuszahlungenPage() {
                                 </button>
                               )}
                               {sepaFehler && sepaBelegId === beleg.id && (
-                                <span className="text-xs text-red-600">
+                                <span className="text-xs text-beere-600">
                                   {sepaFehler}
                                 </span>
                               )}
@@ -1035,7 +1035,7 @@ export default function AuszahlungenPage() {
                                         Abbrechen
                                       </button>
                                       {kautionFehler && (
-                                        <span className="text-sm text-red-600">
+                                        <span className="text-sm text-beere-600">
                                           {kautionFehler}
                                         </span>
                                       )}

@@ -22,6 +22,8 @@
 // fest verdrahteten Wert - das Frontend darf verpflegungssaetze selbst
 // nicht direkt lesen (admin-only per RLS).
 
+import PageHeader from "@/components/PageHeader";
+import { BarChart3 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { getSupabaseClient } from "@/lib/supabase/client";
 import ErntewirtschaftTabs from "@/components/ErntewirtschaftTabs";
@@ -155,9 +157,7 @@ export default function StatistikErdbeerenPage() {
     <div className="flex flex-col gap-4">
       <ErntewirtschaftTabs />
       <div>
-        <h1 className="text-lg font-semibold text-emerald-800">
-          Statistik – Erdbeeren
-        </h1>
+        <PageHeader icon={BarChart3} titel="Statistik – Erdbeeren" />
         <p className="text-sm text-neutral-500">
           Tagesstatistik je Parzelle. Kosten/Steige = (Mindestlohn × Summe
           Stunden + Summe Prämien) / Summe Steigen – gerechnet mit dem

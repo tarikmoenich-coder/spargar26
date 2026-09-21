@@ -213,7 +213,7 @@ function FahrerZelle({
         {fahrzeug.fahrer_employee_id && (
           <button
             type="button"
-            className="text-red-600"
+            className="text-beere-600"
             disabled={speichert}
             onClick={() => setze(null)}
           >
@@ -457,7 +457,7 @@ export default function FahrzeugeStammdatenPage() {
       />
 
       {fehler && (
-        <p className="text-sm font-medium text-red-600">⚠ {fehler}</p>
+        <p className="text-sm font-medium text-beere-600">⚠ {fehler}</p>
       )}
       {!canEdit && (
         <p className="text-xs text-amber-700">
@@ -843,7 +843,7 @@ export default function FahrzeugeStammdatenPage() {
                       </td>
                       <td>
                         {f.abgemeldet_am ? (
-                          <span className="text-red-600">
+                          <span className="text-beere-600">
                             {formatDatumDE(f.abgemeldet_am)}
                           </span>
                         ) : (

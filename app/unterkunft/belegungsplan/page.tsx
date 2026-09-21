@@ -6,6 +6,8 @@
 // lesend – Pflege läuft über die anderen Tabs. Kontrolle/Mängel stehen im
 // eigenen Tab „Kontrollplan“.
 
+import PageHeader from "@/components/PageHeader";
+import { CalendarRange } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { getSupabaseClient } from "@/lib/supabase/client";
 import UnterkunftTabs from "@/components/UnterkunftTabs";
@@ -80,7 +82,7 @@ export default function UnterkunftBelegungsplanPage() {
 
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <h1 className="text-lg font-semibold text-emerald-900">Belegungsplan</h1>
+          <PageHeader icon={CalendarRange} titel="Belegungsplan" />
           <p className="text-sm text-neutral-500">
             Stand heute · {summe.belegt} belegt · {summe.frei} frei
           </p>

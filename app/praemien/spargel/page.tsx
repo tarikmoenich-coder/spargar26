@@ -1,5 +1,7 @@
 "use client";
 
+import PageHeader from "@/components/PageHeader";
+import { Award } from "lucide-react";
 import ErntewirtschaftTabs from "@/components/ErntewirtschaftTabs";
 
 // Platzhalter (Stand 2026-08-09) - Struktur steht (Menü/Reiter), Aufbau
@@ -11,9 +13,7 @@ export default function PraemienSpargelPage() {
     <div className="flex flex-col gap-4">
       <ErntewirtschaftTabs />
       <div>
-        <h1 className="text-lg font-semibold text-emerald-800">
-          Prämien – Spargel
-        </h1>
+        <PageHeader icon={Award} titel="Prämien – Spargel" />
         <p className="text-sm text-neutral-500">
           Noch in Vorbereitung. Die Rohdaten kommen von der Waage
           (Zwischenanwendung mit eigener Datenbank) - die Anbindung wird als

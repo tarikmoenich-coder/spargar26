@@ -7,6 +7,8 @@
 // profiles_admin_all + Trigger trg_profiles_schutz (role/aktiv nur durch
 // admin) + Audit-Trigger trg_audit_profiles.
 
+import PageHeader from "@/components/PageHeader";
+import { UserCog } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { getSupabaseClient } from "@/lib/supabase/client";
 import { useProfile } from "@/lib/useProfile";
@@ -133,9 +135,7 @@ export default function NutzerVerwaltungPage() {
     return (
       <div className="flex flex-col gap-4">
         <EinstellungenTabs />
-        <h1 className="text-lg font-semibold text-emerald-800">
-          Nutzer &amp; Rollen
-        </h1>
+        <PageHeader icon={UserCog} titel="Nutzer &amp; Rollen" />
         <p className="text-sm text-neutral-500">
           Nur Administratoren dürfen die Nutzerverwaltung öffnen.
         </p>
@@ -147,9 +147,7 @@ export default function NutzerVerwaltungPage() {
     <div className="flex flex-col gap-6">
       <EinstellungenTabs />
       <div>
-        <h1 className="text-lg font-semibold text-emerald-800">
-          Nutzer &amp; Rollen
-        </h1>
+        <PageHeader icon={UserCog} titel="Nutzer &amp; Rollen" />
         <p className="text-sm text-neutral-500">
           Name, Rolle und Aktiv-Status je Nutzer. Der Login (E-Mail/Passwort)
           wird in Supabase → Authentication → Users angelegt; hier wird
@@ -158,7 +156,7 @@ export default function NutzerVerwaltungPage() {
         </p>
       </div>
 
-      {fehler && <p className="text-sm text-red-600">⚠ {fehler}</p>}
+      {fehler && <p className="text-sm text-beere-600">⚠ {fehler}</p>}
 
       {loading ? (
         <p className="text-neutral-500">Lädt…</p>

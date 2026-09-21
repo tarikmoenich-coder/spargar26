@@ -80,7 +80,7 @@ export default function ControllingSozialversicherungPage() {
           "…"
         ) : (
           <>
-            <span className="font-medium text-red-600">{faelle.length}</span>{" "}
+            <span className="font-medium text-beere-600">{faelle.length}</span>{" "}
             kritische Fälle ·{" "}
             <span className="font-medium text-amber-600">
               {baldEndend.length}
@@ -222,7 +222,7 @@ export default function ControllingSozialversicherungPage() {
                         .filter(Boolean)
                         .join(" + ")}
                     </td>
-                    <td className="font-medium text-red-600">
+                    <td className="font-medium text-beere-600">
                       ⚠ Überschritten
                     </td>
                   </tr>

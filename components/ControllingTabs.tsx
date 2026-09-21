@@ -106,7 +106,7 @@ export default function ControllingTabs() {
                     ? "bg-neutral-100 text-neutral-500"
                     : BERNSTEIN_ZAEHLER.has(tab.zaehler)
                       ? "bg-amber-100 text-amber-700"
-                      : "bg-red-100 text-red-700"
+                      : "bg-beere-100 text-beere-700"
                 }`}
               >
                 {n}

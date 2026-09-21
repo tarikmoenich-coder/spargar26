@@ -95,7 +95,7 @@ export default function ControllingUebersichtPage() {
               ? "text-emerald-700"
               : k.ton === "bernstein"
                 ? "text-amber-600"
-                : "text-red-600";
+                : "text-beere-600";
           return (
             <Link
               key={k.href}

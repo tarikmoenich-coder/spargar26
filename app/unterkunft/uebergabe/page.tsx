@@ -9,6 +9,8 @@
 //   3. Abschließen → Vorgang wird schreibgeschützt (Trigger); Positionen mit
 //      Zustand "Mangel" können als Mängel übernommen werden.
 
+import PageHeader from "@/components/PageHeader";
+import { KeyRound } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { getSupabaseClient } from "@/lib/supabase/client";
 import { useProfile } from "@/lib/useProfile";
@@ -621,7 +623,7 @@ export default function UnterkunftUebergabePage() {
       <UnterkunftTabs />
 
       {fehler && (
-        <p className="rounded border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+        <p className="rounded border border-beere-200 bg-beere-50 px-3 py-2 text-sm text-beere-700">
           {fehler}
         </p>
       )}
@@ -634,9 +636,7 @@ export default function UnterkunftUebergabePage() {
       {!vorgang && (
         <>
           <section className="space-y-2 rounded border border-linie p-3">
-            <h1 className="text-lg font-semibold text-emerald-900">
-              Übergabe / Abnahme starten
-            </h1>
+            <PageHeader icon={KeyRound} titel="Übergabe / Abnahme starten" />
             <div className="flex flex-wrap items-end gap-2 text-sm">
               <label>
                 Gebäude
@@ -758,7 +758,7 @@ export default function UnterkunftUebergabePage() {
                       {personName(empId)}
                     </span>
                     <button
-                      className="text-xs text-red-600 hover:underline"
+                      className="text-xs text-beere-600 hover:underline"
                       onClick={() =>
                         setEinzug((s) => {
                           const n = new Set(s);
