@@ -11,6 +11,8 @@ import {
 } from "@/lib/types";
 import { formatDatumDE } from "@/lib/format";
 import PersonalTabs from "@/components/PersonalTabs";
+import PageHeader from "@/components/PageHeader";
+import { FileText } from "lucide-react";
 
 const DOKUMENTE_BUCKET = "mitarbeiter-dokumente";
 const FUEHRERSCHEIN_KATEGORIE: DokumentKategorie = "Führerschein Kopie";
@@ -211,7 +213,7 @@ export default function PersonalDokumentePage() {
     <div className="flex flex-col gap-6">
       <PersonalTabs />
       <div>
-        <h1 className="text-lg font-semibold text-emerald-800">Dokumente</h1>
+        <PageHeader icon={FileText} titel="Dokumente" />
         <p className="text-sm text-neutral-500">
           Allgemeine Personaldokumente je Mitarbeiter und Kategorie. Leere
           Felder bedeuten: für diese Kategorie wurde noch nichts hochgeladen.

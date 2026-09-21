@@ -24,6 +24,8 @@ import type {
   VerpflegungsSatz,
 } from "@/lib/types";
 import PersonalTabs from "@/components/PersonalTabs";
+import PageHeader from "@/components/PageHeader";
+import { Plane } from "lucide-react";
 import SvFragebogenFormular from "@/components/SvFragebogenFormular";
 
 // Saison-Jahr für den SV-Fragebogen eines Kandidaten: aus dem geplanten
@@ -445,9 +447,7 @@ export default function AnreiselistePage() {
     <div className="flex flex-col gap-6">
       <PersonalTabs />
       <div>
-        <h1 className="text-lg font-semibold text-emerald-800">
-          Anreiseliste
-        </h1>
+        <PageHeader icon={Plane} titel="Anreiseliste" />
         <p className="text-sm text-neutral-500">
           Personen, die über „Anreise vorbereiten" aus der{" "}
           <a href="/personalplanung" className="underline">

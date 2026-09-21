@@ -20,6 +20,8 @@ import type {
   WorkEntry,
 } from "@/lib/types";
 import ErfassungTabs from "@/components/ErfassungTabs";
+import PageHeader from "@/components/PageHeader";
+import { Clock } from "lucide-react";
 import StundenkontoBereich from "@/components/StundenkontoBereich";
 import { Car, Truck } from "lucide-react";
 import GruppenAuswahl from "@/components/GruppenAuswahl";
@@ -917,10 +919,7 @@ function ErfassungInner() {
     <div className="flex flex-col gap-4">
       <ErfassungTabs />
       <div className="print:hidden">
-        <h1 className="text-lg font-semibold text-emerald-800">
-          {t("erfassung.title")}
-        </h1>
-        <p className="text-sm text-neutral-500">{t("erfassung.untertitel")}</p>
+        <PageHeader icon={Clock} titel={t("erfassung.title")} beschreibung={t("erfassung.untertitel")} />
       </div>
 
       <div className="sticky top-[calc(3.5rem+var(--subtabs-h,2.5rem))] z-30 flex flex-col gap-2 bg-sand py-2 print:hidden">

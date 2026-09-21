@@ -23,6 +23,8 @@ import type {
   ProfilName,
 } from "@/lib/types";
 import KassenbuchTabs from "@/components/KassenbuchTabs";
+import PageHeader from "@/components/PageHeader";
+import { ClipboardCheck } from "lucide-react";
 import KassenSaldoKarte from "@/components/KassenSaldoKarte";
 
 interface CashCheckRow {
@@ -256,17 +258,7 @@ export default function KassenpruefungPage() {
   return (
     <div className="flex flex-col gap-6">
       <KassenbuchTabs />
-      <div>
-        <h1 className="text-lg font-semibold text-emerald-800">
-          Kassenbuch – Kassenprüfung
-        </h1>
-        <p className="text-sm text-neutral-500">
-          Jedes Kassenbuch wird einzeln geprüft. Toleranz aktuell:{" "}
-          {formatMenge(toleranz, 2)} € (konfigurierbar, siehe README). Eine
-          freigegebene Prüfung sperrt die Belege dieses Buchs im geprüften
-          Zeitraum gegen nachträgliche Änderung.
-        </p>
-      </div>
+      <PageHeader icon={ClipboardCheck} titel="Kassenbuch – Kassenprüfung" beschreibung={`Jedes Kassenbuch wird einzeln geprüft. Toleranz aktuell:${" "} ${formatMenge(toleranz, 2)} € (konfigurierbar, siehe README). Eine freigegebene Prüfung sperrt die Belege dieses Buchs im geprüften Zeitraum gegen nachträgliche Änderung.`} />
 
       {loading ? (
         <p className="text-neutral-500">Lädt…</p>

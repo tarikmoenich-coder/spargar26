@@ -29,6 +29,8 @@ import {
   type VerpflegungsSatz,
 } from "@/lib/types";
 import PersonalTabs from "@/components/PersonalTabs";
+import PageHeader from "@/components/PageHeader";
+import { CalendarRange } from "lucide-react";
 
 const emptyForm = {
   personal_nr: "",
@@ -726,9 +728,7 @@ export default function PersonalplanungPage() {
     <div className="flex flex-col gap-6">
       <PersonalTabs />
       <div>
-        <h1 className="text-lg font-semibold text-emerald-800">
-          Personalplanung
-        </h1>
+        <PageHeader icon={CalendarRange} titel="Personalplanung" />
         <p className="text-sm text-neutral-500">
           Kandidaten für die kommende Saison vorab anlegen, bevor sie
           tatsächlich anreisen. Personalnummern werden dabei nur reserviert,

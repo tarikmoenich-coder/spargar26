@@ -10,6 +10,8 @@ import {
   parsePersonalNrNummer,
 } from "@/lib/personalnummern";
 import PersonalTabs from "@/components/PersonalTabs";
+import PageHeader from "@/components/PageHeader";
+import { Hash } from "lucide-react";
 
 interface Row {
   personal_nr: string;
@@ -90,17 +92,7 @@ export default function PersonalnummernPage() {
   return (
     <div className="flex flex-col gap-6">
       <PersonalTabs />
-      <div>
-        <h1 className="text-lg font-semibold text-emerald-800">
-          Personalnummern
-        </h1>
-        <p className="text-sm text-neutral-500">
-          Übersicht über die 10 Personalnummern-Kreise (Kreis 1: 1–999, Kreis
-          2: 1000–1999, usw.) und ob eine Nummer doppelt vergeben wurde.
-          Deaktivierte Mitarbeiter zählen weiter als „belegt“, da ihre Nummer
-          aus Historiengründen nicht neu vergeben wird.
-        </p>
-      </div>
+      <PageHeader icon={Hash} titel="Personalnummern" beschreibung="Übersicht über die 10 Personalnummern-Kreise (Kreis 1: 1–999, Kreis 2: 1000–1999, usw.) und ob eine Nummer doppelt vergeben wurde. Deaktivierte Mitarbeiter zählen weiter als „belegt“, da ihre Nummer aus Historiengründen nicht neu vergeben wird." />
 
       {loading ? (
         <p className="text-neutral-500">Lädt…</p>

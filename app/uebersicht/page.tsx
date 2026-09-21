@@ -15,6 +15,8 @@ import {
 } from "@/lib/types";
 import { formatDatumDE, formatMenge } from "@/lib/format";
 import LohnTabs from "@/components/LohnTabs";
+import PageHeader from "@/components/PageHeader";
+import { Banknote } from "lucide-react";
 import {
   FARBE_ABZUG_TH,
   FARBE_BRUTTO_TD,
@@ -706,9 +708,7 @@ export default function UebersichtPage() {
     <div className="flex flex-col gap-4">
       <LohnTabs />
       <div className="print:hidden">
-        <h1 className="text-lg font-semibold text-emerald-800">
-          Saison-Lohnübersicht
-        </h1>
+        <PageHeader icon={Banknote} titel="Saison-Lohnübersicht" />
         <p className="text-sm text-neutral-500">
           Automatisch aus Stunden, Prämien, Verpflegungs-/Wohnen-Abzügen und
           Vorschüssen berechnet. <strong>Erster Entwurf</strong> - vor echten

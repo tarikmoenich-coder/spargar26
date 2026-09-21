@@ -19,6 +19,8 @@ import type {
   ProfilName,
 } from "@/lib/types";
 import KassenbuchTabs from "@/components/KassenbuchTabs";
+import PageHeader from "@/components/PageHeader";
+import { BookOpen } from "lucide-react";
 import UmbuchungForm from "@/components/UmbuchungForm";
 
 const CURRENT_YEAR = new Date().getFullYear();
@@ -236,18 +238,7 @@ function BuchJournalInner() {
         </p>
       ) : (
         <>
-          <div>
-            <h1 className="text-lg font-semibold text-emerald-800">
-              {buch.bezeichnung} – Journal
-            </h1>
-            <p className="text-sm text-neutral-500">
-              Einnahmen und Ausgaben chronologisch mit laufendem Saldo ab dem
-              Jahres-Eröffnungssaldo. Umbuchungen von/zu anderen Kassenbüchern
-              erscheinen als eigene Zeile. Kassenprüfungen erscheinen als
-              eigene, hervorgehobene Trennzeile mit ihrem damaligen
-              Soll/Ist-Stand.
-            </p>
-          </div>
+          <PageHeader icon={BookOpen} titel={`${buch.bezeichnung} – Journal`} beschreibung="Einnahmen und Ausgaben chronologisch mit laufendem Saldo ab dem Jahres-Eröffnungssaldo. Umbuchungen von/zu anderen Kassenbüchern erscheinen als eigene Zeile. Kassenprüfungen erscheinen als eigene, hervorgehobene Trennzeile mit ihrem damaligen Soll/Ist-Stand." />
 
           {fehler && <p className="text-sm text-red-600">⚠ {fehler}</p>}
 

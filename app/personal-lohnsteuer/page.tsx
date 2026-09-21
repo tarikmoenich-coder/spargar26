@@ -15,6 +15,8 @@ import { getSupabaseClient } from "@/lib/supabase/client";
 import { ladeAlleSeiten } from "@/lib/ladeAlle";
 import { useProfile } from "@/lib/useProfile";
 import PersonalTabs from "@/components/PersonalTabs";
+import PageHeader from "@/components/PageHeader";
+import { Receipt } from "lucide-react";
 import DoppelteHaushaltsfuehrungFormular from "@/components/DoppelteHaushaltsfuehrungFormular";
 import FormularDokumentZelle from "@/components/FormularDokumentZelle";
 import {
@@ -145,7 +147,7 @@ export default function LohnsteuerPage() {
       <PersonalTabs />
       <div className="flex items-start justify-between gap-4">
         <div>
-          <h1 className="text-lg font-semibold text-emerald-800">Lohnsteuer</h1>
+          <PageHeader icon={Receipt} titel="Lohnsteuer" />
           <p className="text-sm text-neutral-500">
             Antrag auf Lohnsteuerabzug (doppelte Haushaltsführung): Angaben aus
             der „Bestätigung für den Nachweis der doppelten Haushaltsführung"

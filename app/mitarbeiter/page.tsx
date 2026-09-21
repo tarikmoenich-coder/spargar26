@@ -27,6 +27,8 @@ import {
 import { formatDatumDE, formatEuro, formatMenge } from "@/lib/format";
 import { generiereDokument } from "@/lib/dokumentGenerator";
 import PersonalTabs from "@/components/PersonalTabs";
+import PageHeader from "@/components/PageHeader";
+import { Users } from "lucide-react";
 
 const CURRENT_YEAR = new Date().getFullYear();
 
@@ -1234,13 +1236,7 @@ export default function MitarbeiterPage() {
   return (
     <div className="flex flex-col gap-6">
       <PersonalTabs />
-      <div>
-        <h1 className="text-lg font-semibold text-emerald-800">Personal</h1>
-        <p className="text-sm text-neutral-500">
-          Stammdaten der Mitarbeiter. Löschen ist nicht möglich - Personen
-          werden bei Bedarf deaktiviert, die Historie bleibt erhalten.
-        </p>
-      </div>
+      <PageHeader icon={Users} titel="Personal" beschreibung="Stammdaten der Mitarbeiter. Löschen ist nicht möglich - Personen werden bei Bedarf deaktiviert, die Historie bleibt erhalten." />
 
       {canEdit && !editingId && (
         neuOffen ? (

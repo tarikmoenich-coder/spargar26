@@ -5,6 +5,8 @@ import { getSupabaseClient } from "@/lib/supabase/client";
 import { ladeAlleSeiten } from "@/lib/ladeAlle";
 import { useProfile } from "@/lib/useProfile";
 import PersonalTabs from "@/components/PersonalTabs";
+import PageHeader from "@/components/PageHeader";
+import { ShieldCheck } from "lucide-react";
 import SvFragebogenFormular, {
   SV_VERGLEICHS_FELDER,
 } from "@/components/SvFragebogenFormular";
@@ -163,9 +165,7 @@ export default function SozialversicherungPage() {
     <div className="flex flex-col gap-4">
       <PersonalTabs />
       <div>
-        <h1 className="text-lg font-semibold text-emerald-800">
-          Sozialversicherung
-        </h1>
+        <PageHeader icon={ShieldCheck} titel="Sozialversicherung" />
         <p className="text-sm text-neutral-500">
           SV-Fragebogen ("Fragebogen zur Feststellung der
           Versicherungspflicht/Versicherungsfreiheit rumänischer

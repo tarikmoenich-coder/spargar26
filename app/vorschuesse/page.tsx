@@ -14,6 +14,8 @@ import type {
   SepaExport,
 } from "@/lib/types";
 import LohnTabs from "@/components/LohnTabs";
+import PageHeader from "@/components/PageHeader";
+import { HandCoins } from "lucide-react";
 import { erzeugeSepaXml, sepaDateiHerunterladen } from "@/lib/sepa";
 
 function heuteIsoDatum() {
@@ -882,12 +884,7 @@ export default function VorschuessePage() {
     <div className="flex flex-col gap-6">
       <LohnTabs />
       <div className="print:hidden">
-        <h1 className="text-lg font-semibold text-emerald-800">Vorschüsse</h1>
-        <p className="text-sm text-neutral-500">
-          Einzeln, gruppenweise oder nach Herkunft auswählen. Bestätigte
-          Vorschüsse werden nicht gelöscht, sondern storniert - die
-          Belegnummer und Historie bleiben nachvollziehbar.
-        </p>
+        <PageHeader icon={HandCoins} titel="Vorschüsse" beschreibung="Einzeln, gruppenweise oder nach Herkunft auswählen. Bestätigte Vorschüsse werden nicht gelöscht, sondern storniert - die Belegnummer und Historie bleiben nachvollziehbar." />
       </div>
 
       {canSeeDetails && belastungOffen.length > 0 && (

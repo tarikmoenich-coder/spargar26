@@ -35,6 +35,8 @@ import type {
   ProfilName,
 } from "@/lib/types";
 import KassenbuchTabs from "@/components/KassenbuchTabs";
+import PageHeader from "@/components/PageHeader";
+import { Wallet } from "lucide-react";
 import KassenSaldoKarte from "@/components/KassenSaldoKarte";
 import UmbuchungForm from "@/components/UmbuchungForm";
 
@@ -390,9 +392,7 @@ export default function KassenbuchJournalPage() {
     <div className="flex flex-col gap-6">
       <KassenbuchTabs />
       <div>
-        <h1 className="text-lg font-semibold text-emerald-800">
-          Mömmel Lohnkasse – Journal
-        </h1>
+        <PageHeader icon={Wallet} titel="Mömmel Lohnkasse – Journal" />
         <p className="text-sm text-neutral-500">
           Alle Bargeldbewegungen chronologisch mit laufendem Saldo, wie ein
           klassisches Kassenbuch mit Jahres-Eröffnungssaldo. Umbuchungen von/zu

@@ -15,6 +15,8 @@ import type {
 import { formatDatumDE, formatMenge } from "@/lib/format";
 import { erzeugeSepaXml, sepaDateiHerunterladen } from "@/lib/sepa";
 import LohnTabs from "@/components/LohnTabs";
+import PageHeader from "@/components/PageHeader";
+import { Banknote } from "lucide-react";
 import {
   FARBE_ABZUG_TH,
   FARBE_BRUTTO_TD,
@@ -671,9 +673,7 @@ export default function AuszahlungenPage() {
     <div className="flex flex-col gap-4">
       <LohnTabs />
       <div className="print:hidden">
-        <h1 className="text-lg font-semibold text-emerald-800">
-          Auszahlungen
-        </h1>
+        <PageHeader icon={Banknote} titel="Auszahlungen" />
         <p className="text-sm text-neutral-500">
           Ein Beleg je „Jetzt Abrechnen"-Aktion auf der Lohnübersicht, auch
           bei mehreren Personen gleichzeitig. „⚠" bedeutet: mindestens eine

@@ -12,6 +12,8 @@ import { getSupabaseClient } from "@/lib/supabase/client";
 import { useProfile } from "@/lib/useProfile";
 import type { Kassenbuch } from "@/lib/types";
 import KassenbuchTabs from "@/components/KassenbuchTabs";
+import PageHeader from "@/components/PageHeader";
+import { Landmark } from "lucide-react";
 import UmbuchungForm from "@/components/UmbuchungForm";
 
 export default function KassenbuecherUebersichtPage() {
@@ -71,13 +73,7 @@ export default function KassenbuecherUebersichtPage() {
   return (
     <div className="flex flex-col gap-6">
       <KassenbuchTabs />
-      <div>
-        <h1 className="text-lg font-semibold text-emerald-800">Kassenbücher</h1>
-        <p className="text-sm text-neutral-500">
-          Aktueller Saldo je Buch. Eine Umbuchung wird in beiden betroffenen
-          Büchern erfasst – als Ausgang im Quellbuch, als Eingang im Zielbuch.
-        </p>
-      </div>
+      <PageHeader icon={Landmark} titel="Kassenbücher" beschreibung="Aktueller Saldo je Buch. Eine Umbuchung wird in beiden betroffenen Büchern erfasst – als Ausgang im Quellbuch, als Eingang im Zielbuch." />
 
       {fehler && <p className="text-sm text-red-600">⚠ {fehler}</p>}
 

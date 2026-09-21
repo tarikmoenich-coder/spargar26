@@ -12,6 +12,8 @@ import {
   type ImportZeile,
 } from "@/lib/personalImport";
 import PersonalTabs from "@/components/PersonalTabs";
+import PageHeader from "@/components/PageHeader";
+import { Upload } from "lucide-react";
 
 const TEMPLATE_SPALTEN: Record<ImportFeld, string> = {
   personal_nr: "Personalnummer",
@@ -286,9 +288,7 @@ export default function PersonalImportPage() {
     <div className="flex flex-col gap-6">
       <PersonalTabs />
       <div>
-        <h1 className="text-lg font-semibold text-emerald-800">
-          Personal importieren
-        </h1>
+        <PageHeader icon={Upload} titel="Personal importieren" />
         <p className="text-sm text-neutral-500">
           Excel- oder CSV-Datei mit einer Zeile pro Mitarbeiter hochladen.
           Personalnummer, Name und Vorname sind Pflicht; alle anderen Spalten
