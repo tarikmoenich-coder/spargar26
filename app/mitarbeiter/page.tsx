@@ -4,6 +4,7 @@ import { Fragment, useEffect, useRef, useState } from "react";
 import { getSupabaseClient } from "@/lib/supabase/client";
 import { ladeAlleSeiten } from "@/lib/ladeAlle";
 import { satzFuerJahr } from "@/lib/satzFuerJahr";
+import { naechsteStatuswechselNr } from "@/lib/statuswechselNummer";
 import { useProfile } from "@/lib/useProfile";
 import {
   ABRECHNUNGSART_LABELS,
@@ -12,8 +13,6 @@ import {
   type Employee,
   type FuehrerscheinEintrag,
   type Herkunft,
-  type PersonalKandidatChecklisteRow,
-  type EmployeeLetzteAenderung,
   type SvAbschnitt,
   type SvPruefung,
   type VerpflegungsSatz,
@@ -190,9 +189,6 @@ export default function MitarbeiterPage() {
   // (Nutzer-Vorgabe 2026-08-15) - ungruppiert, tageAufschluesselung()
   // filtert selbst je Person.
   const [svAbschnitte, setSvAbschnitte] = useState<SvAbschnitt[]>([]);
-  const [letzteAenderung, setLetzteAenderung] = useState<
-    Record<string, EmployeeLetzteAenderung>
-  >({});
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [showInactive, setShowInactive] = useState(false);
@@ -224,22 +220,9 @@ export default function MitarbeiterPage() {
   // Satz des LAUFENDEN Jahres, nicht der neueste Eintrag (sonst schlüge das
   // System schon den Mindestlohn des Folgejahres vor, sobald der angelegt ist).
   const verpflegungssatz = satzFuerJahr(saetze, CURRENT_YEAR);
-  // Dokumente-Status (Offen/Vollständig) aus der Anreiseliste gespiegelt -
-  // nur befüllt für Personen, die aktuell dort durchlaufen (Personal →
-  // Anreiseliste). "—" für alle anderen.
-  const [anreiselisteStatus, setAnreiselisteStatus] = useState<
-    Record<string, "offen" | "vollstaendig">
-  >({});
-  // Alle Mitarbeiter (auch inaktive, unabhängig vom showInactive-Filter) nur
-  // mit Personalnummer - für die Verknüpfungs-Anzeige bei einem
-  // Statuswechsel: die "Vorgänger"-Person ist danach inaktiv und wäre sonst
-  // ggf. nicht in der aktuell gefilterten Liste enthalten.
-  const [alleEmployeesById, setAlleEmployeesById] = useState<
-    Record<string, { personal_nr: string; name: string; vorname: string }>
-  >({});
   // Statuswechsel (z.B. sozialversicherungsfrei -> -pflichtig bei Erreichen
   // der 90-Tage-/15-Wochen-Grenze): legt eine neue, verknüpfte Person mit
-  // "a" an der Personalnummer an und deaktiviert die alte - siehe
+  // Buchstaben-Endung an der Personalnummer an und deaktiviert die alte - siehe
   // statuswechselDurchfuehren() weiter unten.
   const [statuswechselId, setStatuswechselId] = useState<string | null>(null);
   const [statuswechselStichtag, setStatuswechselStichtag] = useState("");
@@ -334,7 +317,6 @@ export default function MitarbeiterPage() {
       { data: svAbschnitteData },
       { data: fsData },
       { data: vSatzData },
-      { data: checklisteData },
     ] = await Promise.all([
       supabase.from("employee_erster_arbeitstag").select("*"),
       supabase.from("employee_letzte_abrechnung").select("*"),
@@ -353,10 +335,6 @@ export default function MitarbeiterPage() {
         .from("verpflegungssaetze")
         .select("*")
         .order("saison_jahr", { ascending: false }),
-      // Dokumente-Status aus der Anreiseliste gespiegelt (siehe Personal →
-      // Anreiseliste) - live berechnet, damit hier nie ein veralteter Stand
-      // stehen bleibt.
-      supabase.from("personal_kandidaten_checkliste").select("*"),
     ]);
     setEmployees(empListe);
     const map: Record<string, string> = {};
@@ -371,33 +349,9 @@ export default function MitarbeiterPage() {
       }
     );
     setLetzteAbrechnung(abrechnungMap);
-    // Nur für admin - die Sicht ist per RLS ohnehin gesperrt, aber so wird
-    // für alle anderen Rollen gar nicht erst angefragt.
-    if (istAdmin) {
-      const { data: aenderungen } = await supabase
-        .from("employee_letzte_aenderung")
-        .select("*");
-      const aenderungMap: Record<string, EmployeeLetzteAenderung> = {};
-      ((aenderungen as EmployeeLetzteAenderung[]) ?? []).forEach((a) => {
-        aenderungMap[a.employee_id] = a;
-      });
-      setLetzteAenderung(aenderungMap);
-    }
     setGruppen((gruppenData as Arbeitsgruppe[]) ?? []);
     setHerkuenfte((herkunftData as Herkunft[]) ?? []);
     setAllePersonalNummern(alleNr);
-    const byIdMap: Record<
-      string,
-      { personal_nr: string; name: string; vorname: string }
-    > = {};
-    alleNr.forEach((r) => {
-      byIdMap[r.id] = {
-        personal_nr: r.personal_nr,
-        name: r.name,
-        vorname: r.vorname,
-      };
-    });
-    setAlleEmployeesById(byIdMap);
     const svMap: Record<string, SvPruefung> = {};
     (svData as SvPruefung[] | null ?? []).forEach((row) => {
       svMap[row.employee_id] = row;
@@ -410,19 +364,6 @@ export default function MitarbeiterPage() {
     });
     setFuehrerschein(fsMap);
     setSaetze((vSatzData as VerpflegungsSatz[]) ?? []);
-    const anreiseMap: Record<string, "offen" | "vollstaendig"> = {};
-    ((checklisteData as PersonalKandidatChecklisteRow[]) ?? []).forEach((c) => {
-      if (!c.employee_id) return;
-      const vollstaendig =
-        c.fragebogen_erfasst &&
-        c.buskosten_erfasst &&
-        c.ausweiskopie_vorhanden &&
-        c.fuehrerschein_erfuellt &&
-        c.hochzeitsurkunde_erfuellt &&
-        c.lohnsteuerabzug_erfuellt;
-      anreiseMap[c.employee_id] = vollstaendig ? "vollstaendig" : "offen";
-    });
-    setAnreiselisteStatus(anreiseMap);
     setLoading(false);
   }
 
@@ -700,8 +641,9 @@ export default function MitarbeiterPage() {
     setStatuswechselFehler(null);
   }
 
-  // Legt eine neue, mit der bestehenden Person verknüpfte Person mit "a" an
-  // der Personalnummer an (z.B. bei Erreichen der 90-Tage-/15-Wochen-
+  // Legt eine neue, mit der bestehenden Person verknüpfte Person an, deren
+  // Personalnummer den nächsten Buchstaben trägt (6386 -> 6386a -> 6386b ...,
+  // siehe lib/statuswechselNummer.ts) (z.B. bei Erreichen der 90-Tage-/15-Wochen-
   // Grenze: sozialversicherungsfrei -> -pflichtig). Stunden/Boni/Vorschüsse
   // bleiben strikt getrennt, weil sie technisch an die jeweilige
   // Personalnummer hängen - ergibt zwei komplett getrennte Zeilen in der
@@ -718,7 +660,13 @@ export default function MitarbeiterPage() {
       );
       return;
     }
-    const neuePersonalNr = `${alt.personal_nr}a`;
+    const neuePersonalNr = naechsteStatuswechselNr(alt.personal_nr);
+    if (!neuePersonalNr) {
+      setStatuswechselFehler(
+        `Nach der Personalnummer "${alt.personal_nr}" ist kein weiterer Statuswechsel mit Buchstaben-Endung möglich.`
+      );
+      return;
+    }
     const konflikt = allePersonalNummern.find(
       (r) => r.personal_nr.trim().toLowerCase() === neuePersonalNr.toLowerCase()
     );
@@ -833,18 +781,6 @@ export default function MitarbeiterPage() {
     );
     load();
   }
-
-  // Rückwärts-Suche: welche Person hat DIESE Person als Vorgänger (also:
-  // wer ist die "Nachfolge"-Nummer)? Aus der aktuell geladenen Liste
-  // berechnet - reicht aus, da eine frisch angelegte Nachfolge-Person immer
-  // aktiv ist und damit unabhängig vom showInactive-Filter geladen wird.
-  const nachfolgerMap: Record<
-    string,
-    { personal_nr: string; name: string; vorname: string }
-  > = {};
-  employees.forEach((e) => {
-    if (e.vorgaenger_employee_id) nachfolgerMap[e.vorgaenger_employee_id] = e;
-  });
 
   const filtered = employees.filter((e) => {
     const q = search.toLowerCase();
@@ -1159,7 +1095,8 @@ export default function MitarbeiterPage() {
           </h2>
           <p className="text-xs text-neutral-600">
             Legt eine neue, verknüpfte Person mit der Personalnummer „
-            {statuswechselPerson.personal_nr}a" an und deaktiviert{" "}
+            {naechsteStatuswechselNr(statuswechselPerson.personal_nr) ?? "—"}" an
+            und deaktiviert{" "}
             {statuswechselPerson.personal_nr}. Stunden AB DEM STICHTAG werden
             auf die neue Nummer übertragen (sie unterliegen dann der neuen
             Abrechnungsart), Stunden davor bleiben an{" "}

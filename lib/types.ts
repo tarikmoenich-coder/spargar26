@@ -312,17 +312,6 @@ export interface AuditLogEintrag {
   betroffene_employee_id: string | null;
 }
 
-// Aus der Sicht employee_letzte_aenderung: wann hat welcher Nutzer diesen
-// Mitarbeiter-Stammdatensatz zuletzt bearbeitet (Spalte auf der
-// Personal-Seite, nur für admin).
-export interface EmployeeLetzteAenderung {
-  employee_id: string;
-  occurred_at: string;
-  actor_id: string | null;
-  actor_name: string | null;
-  action: string;
-}
-
 // Aus der Sicht anreiseliste_offen_arbeitend: Personen, die bereits
 // arbeiten, obwohl ihr Anreiselisten-Status noch offen ist
 // (Nutzer-Vorgabe 2026-08-11). Siehe schema.sql.
@@ -1097,17 +1086,6 @@ export interface QsKontrolle {
   erfasst_von: string | null;
   erfasst_am: string;
   updated_at: string;
-}
-
-// Aus der Sicht qs_kontrolle_tag - Tagesaggregat je Kultur.
-export interface QsKontrolleTag {
-  kultur: QsKultur;
-  datum: string;
-  kontrollen: number;
-  kolben_io: number;
-  kolben_gesamt: number;
-  quote_prozent: number | null;
-  quote_min_prozent: number | null;
 }
 
 // Digitale Strichliste Zuckermais-Halle (Nutzer-Vorgabe 2026-09-10, auf

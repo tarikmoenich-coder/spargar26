@@ -184,6 +184,42 @@ für ein anderes Modell/82c).
   → Netto+laufende Nummer weiter wie bisher geplant; `<FP!>`/Timeout →
   verwerfen bzw. `ungeklaert`, siehe Teil E) → Verbindung schließen.
 
+**Reader — TECTUS MAGNUM 4077, Handbuch V1.1 (Klärung 2026-09-21):**
+
+- **Anschlüsse (alle M12):** 3-polig = Strom (Pin 1 V+, 2 V-, 3 PE; Handbuch
+  nennt 9-32 V, Typenschild/Datenblatt 12-36 V, 2,5 A → sicher: 24 V DC);
+  4-polig = Ethernet 10/100 (Pinbelegung wie M12 **D-codiert** auf RJ45:
+  1 TD+, 2 RD+, 3 TD-, 4 RD-); 8-polig = RS232 (GND/RxD/TxD, 115200 8N1)
+  + 1 digitaler Ausgang + 1 digitaler Eingang. Die Codierung 3-/8-polig und das
+  Steckergeschlecht (Stifte/Buchse) stehen nicht im Handbuch → am Gerät prüfen.
+  Antennenanschlüsse: Steckertyp (TNC/N/SMA) steht nicht im Handbuch.
+- **Datenweg:** Der Reader **pusht** im Modus "Permanent Scan" nach jeder
+  Inventur-Runde per **HTTP(S)-POST** (Body `text/plain`, JSON) an
+  `tar_host`/`tar_url`/`tar_port` (optional `tar_user`/`tar_password`):
+  `{"Permanent Scan":{"id":..,"time":"..","Tag":[{"TagID":"E280..","RSSI":-67,
+  "Antenna":1}]}}`. **RSSI und Antennennummer kommen also je Tag mit**; leere
+  Runden kommen als `"Tag":[]`. Für HTTPS muss ein Root-Zertifikat im Reader
+  hochgeladen werden (nur über die Web-Oberfläche); Port 80/HTTP ist als
+  Beispiel genannt (im lokalen Netz zu testen). Der Waagen-Agent muss also
+  einen kleinen HTTP-Empfänger im lokalen Netz bereitstellen.
+- **Einstellungen** (Web-Oberfläche oder seriell `get`/`set`): Sendeleistung je
+  Antenne 0-33 dBm (`uhf_ant1pwr`..`4pwr`), aktive Antenne `uhf_workant`
+  (**es ist immer nur EINE Antenne gleichzeitig aktiv**), `dev_opmode`,
+  `uhf_acd` (Antennenerkennung). Werkseinstellung LAN: statisch
+  192.168.0.159/24 (DHCP möglich, anders als die Waage); Reset per Taste neben
+  der Power-LED (10 s beim Einschalten halten). **Keinen** RSSI-Filter im
+  Reader → Schwellenwert/Fenster macht der Agent.
+- **Konsequenz Antennen:** Zwei Antennen links/rechts der Waage lassen sich
+  nicht gleichzeitig betreiben. Realistisch: eine Antenne mittig so, dass beide
+  Kistenseiten ähnlich weit weg sind, oder `uhf_workant` zwischen den Runden
+  umschalten (nur seriell/Web, aufwändig).
+- **Digitaler Eingang** (>= 3,6 V): startet die Inventur, solange er aktiv ist
+  → eine Lichtschranke/ein Näherungssensor an der Waagenposition kann das
+  Lesen auf die Zeit begrenzen, in der eine Kiste wirklich auf der Waage steht.
+  **Digitaler Ausgang** im Automatikmodus (`io_output` 2): AN, solange ein Tag
+  gefunden wird → einfache Signal-Lampe "Kiste erkannt" ohne Software
+  (Belastbarkeit des Ausgangs steht nicht im Handbuch).
+
 ## Teil E — Datenbank (Modul-Migration + `schema.sql`-Abschnitt)
 
 PostGIS aktivieren (`create extension if not exists postgis`).
