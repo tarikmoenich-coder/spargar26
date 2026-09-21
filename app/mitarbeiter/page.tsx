@@ -4,6 +4,7 @@ import { Fragment, useEffect, useRef, useState } from "react";
 import { getSupabaseClient } from "@/lib/supabase/client";
 import { ladeAlleSeiten } from "@/lib/ladeAlle";
 import { satzFuerJahr } from "@/lib/satzFuerJahr";
+import { naechsteStatuswechselNr } from "@/lib/statuswechselNummer";
 import { useProfile } from "@/lib/useProfile";
 import {
   ABRECHNUNGSART_LABELS,
@@ -221,7 +222,7 @@ export default function MitarbeiterPage() {
   const verpflegungssatz = satzFuerJahr(saetze, CURRENT_YEAR);
   // Statuswechsel (z.B. sozialversicherungsfrei -> -pflichtig bei Erreichen
   // der 90-Tage-/15-Wochen-Grenze): legt eine neue, verknüpfte Person mit
-  // "a" an der Personalnummer an und deaktiviert die alte - siehe
+  // Buchstaben-Endung an der Personalnummer an und deaktiviert die alte - siehe
   // statuswechselDurchfuehren() weiter unten.
   const [statuswechselId, setStatuswechselId] = useState<string | null>(null);
   const [statuswechselStichtag, setStatuswechselStichtag] = useState("");
@@ -640,8 +641,9 @@ export default function MitarbeiterPage() {
     setStatuswechselFehler(null);
   }
 
-  // Legt eine neue, mit der bestehenden Person verknüpfte Person mit "a" an
-  // der Personalnummer an (z.B. bei Erreichen der 90-Tage-/15-Wochen-
+  // Legt eine neue, mit der bestehenden Person verknüpfte Person an, deren
+  // Personalnummer den nächsten Buchstaben trägt (6386 -> 6386a -> 6386b ...,
+  // siehe lib/statuswechselNummer.ts) (z.B. bei Erreichen der 90-Tage-/15-Wochen-
   // Grenze: sozialversicherungsfrei -> -pflichtig). Stunden/Boni/Vorschüsse
   // bleiben strikt getrennt, weil sie technisch an die jeweilige
   // Personalnummer hängen - ergibt zwei komplett getrennte Zeilen in der
@@ -658,7 +660,13 @@ export default function MitarbeiterPage() {
       );
       return;
     }
-    const neuePersonalNr = `${alt.personal_nr}a`;
+    const neuePersonalNr = naechsteStatuswechselNr(alt.personal_nr);
+    if (!neuePersonalNr) {
+      setStatuswechselFehler(
+        `Nach der Personalnummer "${alt.personal_nr}" ist kein weiterer Statuswechsel mit Buchstaben-Endung möglich.`
+      );
+      return;
+    }
     const konflikt = allePersonalNummern.find(
       (r) => r.personal_nr.trim().toLowerCase() === neuePersonalNr.toLowerCase()
     );
@@ -1087,7 +1095,8 @@ export default function MitarbeiterPage() {
           </h2>
           <p className="text-xs text-neutral-600">
             Legt eine neue, verknüpfte Person mit der Personalnummer „
-            {statuswechselPerson.personal_nr}a" an und deaktiviert{" "}
+            {naechsteStatuswechselNr(statuswechselPerson.personal_nr) ?? "—"}" an
+            und deaktiviert{" "}
             {statuswechselPerson.personal_nr}. Stunden AB DEM STICHTAG werden
             auf die neue Nummer übertragen (sie unterliegen dann der neuen
             Abrechnungsart), Stunden davor bleiben an{" "}

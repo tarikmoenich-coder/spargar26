@@ -4,6 +4,7 @@
 // beide als personal_nr).
 
 import type { Abrechnungsart } from "./types";
+import { vorgaengerStatuswechselNr } from "@/lib/statuswechselNummer";
 
 export const IMPORT_FELDER = [
   "personal_nr",
@@ -159,15 +160,14 @@ export function parseAbrechnungsart(wert: string): {
   };
 }
 
-// "342a" -> "342" (Statuswechsel-Konvention, siehe Personalstamm-Button
-// "Statuswechsel": ein "a" am Ende der Personalnummer markiert eine mit
-// einer Vorgänger-Person verknüpfte Nummer, z.B. bei SV-frei -> -pflichtig).
-// null, wenn die Nummer nicht auf "a" endet oder nur aus "a" besteht.
+// "342a" -> "342", "342b" -> "342a" (Statuswechsel-Konvention, siehe
+// Personalstamm-Button "Statuswechsel": ein Buchstabe am Ende der
+// Personalnummer markiert eine mit einer Vorgänger-Person verknüpfte Nummer,
+// z.B. bei SV-frei -> -pflichtig; jeder weitere Wechsel zählt den Buchstaben
+// weiter, siehe lib/statuswechselNummer.ts). null, wenn die Nummer nicht auf
+// einen Buchstaben endet oder nur aus einem Zeichen besteht.
 export function vorgaengerNrAus(personal_nr: string): string | null {
-  const v = personal_nr.trim();
-  if (v.length < 2) return null;
-  if (!v.toLowerCase().endsWith("a")) return null;
-  return v.slice(0, -1);
+  return vorgaengerStatuswechselNr(personal_nr);
 }
 
 export interface ImportZeile {
