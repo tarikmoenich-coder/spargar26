@@ -75,6 +75,10 @@ const de = {
   "erfassung.gruppeuebersprungen":
     "{n} übersprungen (schon Stunden oder Markierung)",
   "erfassung.gruppefehler": "{n} Fehler: {namen}",
+  "erfassung.gruppealle": "Alle Gruppen",
+  "erfassung.gruppeohne": "ohne",
+  "erfassung.gruppevorige": "Vorherige Gruppe",
+  "erfassung.gruppenaechste": "Nächste Gruppe",
   "erfassung.gruppeleeren": "Gruppe leeren",
   "erfassung.gruppeleerentitel":
     "Entfernt für den gewählten Tag bei allen Personen der Gruppe die Stunden und Arbeitszeiten. Notiz und Markierung bleiben.",
@@ -209,6 +213,10 @@ const hr: Record<TKey, string> = {
   "erfassung.gruppeuebersprungen":
     "{n} preskočeno (već ima sate ili oznaku)",
   "erfassung.gruppefehler": "{n} pogrešaka: {namen}",
+  "erfassung.gruppealle": "Sve grupe",
+  "erfassung.gruppeohne": "bez",
+  "erfassung.gruppevorige": "Prethodna grupa",
+  "erfassung.gruppenaechste": "Sljedeća grupa",
   "erfassung.gruppeleeren": "Isprazni grupu",
   "erfassung.gruppeleerentitel":
     "Za odabrani dan uklanja sate i radna vremena svih osoba u grupi. Bilješka i oznaka ostaju.",

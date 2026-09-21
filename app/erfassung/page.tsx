@@ -191,6 +191,8 @@ function ErfassungInner() {
   // "Für ganze Gruppe übernehmen": Stundenwert je Gruppe (Kopfzeile), Meldung
   // zum letzten Durchlauf und welche Gruppe gerade speichert.
   // Arbeitszeiten (von-bis): je Gruppe aufklappbar, Rundung seitenweit
+  // Gruppenfilter: null = alle Gruppen untereinander, sonst nur diese eine
+  const [gruppeFilter, setGruppeFilter] = useState<string | null>(null);
   const [zeitenOffen, setZeitenOffen] = useState<Record<string, boolean>>({});
   const [zeitenRundung, setZeitenRundung] = useState<Rundung>("viertel");
   const [gruppenZeiten, setGruppenZeiten] = useState<
@@ -836,6 +838,14 @@ function ErfassungInner() {
   });
 
   const gruppierungen = gruppiere(gefilterteEmployees, gruppen);
+  const aktiverIndex = gruppierungen.findIndex((g) => g.key === gruppeFilter);
+  // Existiert die gewählte Gruppe nicht mehr (z.B. Suchfilter oder leer
+  // geworden), werden wieder alle gezeigt.
+  const aktiveGruppe = aktiverIndex >= 0 ? gruppierungen[aktiverIndex].key : null;
+  const angezeigteGruppen =
+    aktiveGruppe === null
+      ? gruppierungen
+      : gruppierungen.filter((g) => g.key === aktiveGruppe);
 
   const gesamtStunden = Object.values(entries).reduce(
     (sum, e) => sum + (e.stunden ?? 0),
@@ -964,12 +974,47 @@ function ErfassungInner() {
         )}
 
         {!loading && gruppierungen.length > 1 && (
-          <div className="flex flex-wrap gap-2">
+          <div className="flex flex-wrap items-center gap-1">
+            <button
+              type="button"
+              className={`rounded border px-2 py-0.5 text-xs ${aktiveGruppe === null ? "border-emerald-700 bg-emerald-700 text-white" : "border-linie bg-white text-neutral-700 hover:border-emerald-700"}`}
+              onClick={() => setGruppeFilter(null)}
+            >
+              {t("erfassung.gruppealle")}
+            </button>
             {gruppierungen.map((g) => (
-              <a key={g.key} href={`#gruppe-${g.key}`} className="btn-secondary text-xs">
-                {g.anzeige} ({g.employees.length})
-              </a>
+              <button
+                key={g.key}
+                type="button"
+                title={`${g.anzeige} (${g.employees.length})`}
+                className={`rounded border px-2 py-0.5 text-xs ${aktiveGruppe === g.key ? "border-emerald-700 bg-emerald-700 text-white" : "border-linie bg-white text-neutral-700 hover:border-emerald-700"}`}
+                onClick={() => setGruppeFilter(g.key)}
+              >
+                {g.key === OHNE_GRUPPE_KEY ? t("erfassung.gruppeohne") : g.key}
+              </button>
             ))}
+            {aktiveGruppe !== null && (
+              <span className="ml-2 flex items-center gap-1">
+                <button
+                  type="button"
+                  className="btn-secondary px-2 text-xs"
+                  disabled={aktiverIndex <= 0}
+                  title={t("erfassung.gruppevorige")}
+                  onClick={() => setGruppeFilter(gruppierungen[aktiverIndex - 1].key)}
+                >
+                  ‹
+                </button>
+                <button
+                  type="button"
+                  className="btn-secondary px-2 text-xs"
+                  disabled={aktiverIndex >= gruppierungen.length - 1}
+                  title={t("erfassung.gruppenaechste")}
+                  onClick={() => setGruppeFilter(gruppierungen[aktiverIndex + 1].key)}
+                >
+                  ›
+                </button>
+              </span>
+            )}
           </div>
         )}
       </div>
@@ -977,7 +1022,7 @@ function ErfassungInner() {
       {loading ? (
         <p className="text-neutral-500">{t("gemeinsam.laedt")}</p>
       ) : (
-        gruppierungen.map((g) => (
+        angezeigteGruppen.map((g) => (
           <section
             key={g.key}
             id={`gruppe-${g.key}`}
@@ -997,8 +1042,8 @@ function ErfassungInner() {
               </p>
             </div>
 
-            <div className="flex items-center justify-between gap-3 print:hidden">
-              <h2 className="text-base font-semibold text-emerald-800">
+            <div className="flex items-start gap-3 print:hidden">
+              <h2 className="w-72 shrink-0 text-base font-semibold text-emerald-800">
                 {g.anzeige}{" "}
                 <span className="font-normal text-neutral-500">
                   (
@@ -1010,7 +1055,7 @@ function ErfassungInner() {
                 </span>
               </h2>
               {canEditStunden && !gesperrt && (
-                <div className="flex flex-wrap items-center gap-2">
+                <div className="flex flex-1 flex-wrap items-center gap-2">
                   <input
                     type="text"
                     inputMode="decimal"
@@ -1063,7 +1108,7 @@ function ErfassungInner() {
               )}
               <button
                 type="button"
-                className="btn-secondary text-xs"
+                className="btn-secondary ml-auto shrink-0 text-xs"
                 onClick={() => setPrintGroupKey(g.key)}
               >
                 {t("erfassung.gruppedrucken")}
