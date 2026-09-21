@@ -15,7 +15,8 @@ const leer = { gruppe_nr: "", bezeichnung: "", reihenfolge: "0", kultur: "" };
 
 export default function ArbeitsgruppenPage() {
   const { profile } = useProfile();
-  const isAdmin = profile?.role === "admin";
+  // admin und zeiterfassung dürfen Arbeitsgruppen pflegen (RLS: arbeitsgruppen_write)
+  const isAdmin = profile?.role === "admin" || profile?.role === "zeiterfassung";
 
   const [gruppen, setGruppen] = useState<Arbeitsgruppe[]>([]);
   const [loading, setLoading] = useState(true);

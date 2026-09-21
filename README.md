@@ -119,7 +119,7 @@ Enthalten:
   einem per Monatsabschluss gesperrten Monat. Vorschau zeigt vorab, was
   importiert/übersprungen wird bzw. wo Personalnummer oder Datumsspalte
   nicht erkannt wurden
-- Arbeitsgruppen-Verwaltung unter Einstellungen (nur admin): Bezeichnung und
+- Arbeitsgruppen-Verwaltung unter Einstellungen (admin und zeiterfassung): Bezeichnung und
   Anzeige-/Druckreihenfolge je Gruppe
 - Personalnummern-Übersicht: 10 Nummernkreise (1–999, 1000–1999, …),
   Dubletten-Erkennung, nächste freie Nummer je Kreis - Kreis-Auswahl beim

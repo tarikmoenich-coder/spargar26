@@ -6,7 +6,8 @@
 // Reiter für Arbeitsgruppen, Herkünfte und Nutzer & Rollen.
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
+import { useProfile } from "@/lib/useProfile";
 import { useEffect, useRef } from "react";
 
 const tabs = [
@@ -18,6 +19,20 @@ const tabs = [
 
 export default function EinstellungenTabs() {
   const pathname = usePathname();
+  const router = useRouter();
+  const { profile } = useProfile();
+  // Rolle "zeiterfassung" darf in den Einstellungen NUR die Arbeitsgruppen
+  // pflegen (Nutzer-Vorgabe 2026-09-21): andere Reiter ausblenden und
+  // direkte Aufrufe auf die Arbeitsgruppen umleiten.
+  const nurGruppen = profile?.role === "zeiterfassung";
+  useEffect(() => {
+    if (nurGruppen && pathname !== "/einstellungen/arbeitsgruppen") {
+      router.replace("/einstellungen/arbeitsgruppen");
+    }
+  }, [nurGruppen, pathname, router]);
+  const sichtbar = nurGruppen
+    ? tabs.filter((tab) => tab.href === "/einstellungen/arbeitsgruppen")
+    : tabs;
   const ref = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -40,7 +55,7 @@ export default function EinstellungenTabs() {
       ref={ref}
       className="sticky top-14 z-40 -mt-6 flex gap-4 border-b border-linie bg-sand print:hidden"
     >
-      {tabs.map((tab) => (
+      {sichtbar.map((tab) => (
         <Link
           key={tab.href}
           href={tab.href}

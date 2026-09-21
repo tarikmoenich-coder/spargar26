@@ -5369,11 +5369,12 @@ create policy "profiles_update_self" on profiles for update
 create policy "profiles_admin_all" on profiles for all
   using (is_admin()) with check (is_admin());
 
--- arbeitsgruppen: alle eingeloggten Rollen lesen, nur admin pflegt
+-- arbeitsgruppen: alle eingeloggten Rollen lesen, admin und zeiterfassung pflegen
 create policy "arbeitsgruppen_select" on arbeitsgruppen for select
   using (auth.uid() is not null);
-create policy "arbeitsgruppen_admin_write" on arbeitsgruppen for all
-  using (is_admin()) with check (is_admin());
+create policy "arbeitsgruppen_write" on arbeitsgruppen for all
+  using (current_role_name() in ('admin', 'zeiterfassung'))
+  with check (current_role_name() in ('admin', 'zeiterfassung'));
 
 -- herkuenfte: alle eingeloggten Rollen lesen, nur admin pflegt
 create policy "herkuenfte_select" on herkuenfte for select

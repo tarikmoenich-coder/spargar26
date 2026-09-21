@@ -38,7 +38,7 @@ export const ROLLEN: RolleInfo[] = [
   {
     wert: "zeiterfassung",
     label: "Stundenerfassung",
-    kurz: "Stunden, Prämien, Arbeitskleidung und Qualitätskontrollen (Halle) erfassen. Personal nur mit eingeschränkten Feldern.",
+    kurz: "Stunden, Prämien, Arbeitskleidung und Qualitätskontrollen (Halle) erfassen, Arbeitsgruppen pflegen. Personal nur mit eingeschränkten Feldern.",
   },
   {
     wert: "kasse",
@@ -148,5 +148,6 @@ export const MENUE_RECHTE: Record<string, UserRole[]> = {
   "/kasse": ["admin", "kasse", "pruefer", "management"],
   "/management": ["admin", "hr", "management"],
   "/aenderungsprotokoll": ["admin"],
-  "/einstellungen": ["admin"],
+  // zeiterfassung: nur Unterseite Arbeitsgruppen (EinstellungenTabs leitet um)
+  "/einstellungen": ["admin", "zeiterfassung"],
 };
