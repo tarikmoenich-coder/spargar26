@@ -192,7 +192,43 @@ function ErfassungInner() {
   // zum letzten Durchlauf und welche Gruppe gerade speichert.
   // Arbeitszeiten (von-bis): je Gruppe aufklappbar, Rundung seitenweit
   // Gruppenfilter: null = alle Gruppen untereinander, sonst nur diese eine
-  const [gruppeFilter, setGruppeFilter] = useState<string | null>(null);
+  const [gruppeFilter, setGruppeFilterRoh] = useState<string | null>(null);
+  // Spalten Notiz/Stundenkonto werden selten gebraucht: standardmäßig aus,
+  // per Schalter oben einblendbar. Auswahl (und Gruppenfilter) werden pro
+  // Browser gemerkt.
+  const [zeigeNotiz, setZeigeNotizRoh] = useState(false);
+  const [zeigeStundenkonto, setZeigeStundenkontoRoh] = useState(false);
+  const merke = (key: string, wert: string | null) => {
+    try {
+      if (wert === null) localStorage.removeItem(key);
+      else localStorage.setItem(key, wert);
+    } catch {
+      // Speicher gesperrt (z.B. privates Fenster): Auswahl gilt nur für diese Sitzung
+    }
+  };
+  const setGruppeFilter = (v: string | null) => {
+    setGruppeFilterRoh(v);
+    merke("erfassung.gruppeFilter", v);
+  };
+  const setZeigeNotiz = (v: boolean) => {
+    setZeigeNotizRoh(v);
+    merke("erfassung.zeigeNotiz", v ? "1" : "0");
+  };
+  const setZeigeStundenkonto = (v: boolean) => {
+    setZeigeStundenkontoRoh(v);
+    merke("erfassung.zeigeStundenkonto", v ? "1" : "0");
+  };
+  useEffect(() => {
+    try {
+      setGruppeFilterRoh(localStorage.getItem("erfassung.gruppeFilter"));
+      setZeigeNotizRoh(localStorage.getItem("erfassung.zeigeNotiz") === "1");
+      setZeigeStundenkontoRoh(
+        localStorage.getItem("erfassung.zeigeStundenkonto") === "1"
+      );
+    } catch {
+      // ohne gemerkte Auswahl starten
+    }
+  }, []);
   const [zeitenOffen, setZeitenOffen] = useState<Record<string, boolean>>({});
   const [zeitenRundung, setZeitenRundung] = useState<Rundung>("viertel");
   const [gruppenZeiten, setGruppenZeiten] = useState<
@@ -946,6 +982,26 @@ function ErfassungInner() {
             {t("erfassung.tagessumme", { wert: formatMenge(gesamtStunden, 2) })} ·
             Woche {formatMenge(wochenStunden, 2)}
           </span>
+          <span className="flex items-center gap-3 text-sm text-neutral-600">
+            <label className="flex items-center gap-1">
+              <input
+                type="checkbox"
+                id="zeige-notiz"
+                checked={zeigeNotiz}
+                onChange={(e) => setZeigeNotiz(e.target.checked)}
+              />
+              {t("erfassung.notizenzeigen")}
+            </label>
+            <label className="flex items-center gap-1">
+              <input
+                type="checkbox"
+                id="zeige-stundenkonto"
+                checked={zeigeStundenkonto}
+                onChange={(e) => setZeigeStundenkonto(e.target.checked)}
+              />
+              {t("erfassung.stundenkontozeigen")}
+            </label>
+          </span>
         </div>
 
         {!canEditStunden && (
@@ -1225,10 +1281,12 @@ function ErfassungInner() {
                     );
                   })}
                   {zeitenOffen[g.key] && <th>{t("erfassung.arbeitszeit")}</th>}
-                  <th>{t("gemeinsam.notiz")}</th>
-                  <th title="Immer sichtbar, unabhängig vom gewählten Tag - siehe Erklärung beim Aufklappen">
-                    Stundenkonto
-                  </th>
+                  {zeigeNotiz && <th>{t("gemeinsam.notiz")}</th>}
+                  {zeigeStundenkonto && (
+                    <th title="Immer sichtbar, unabhängig vom gewählten Tag - siehe Erklärung beim Aufklappen">
+                      Stundenkonto
+                    </th>
+                  )}
                 </tr>
               </thead>
               <tbody>
@@ -1324,6 +1382,7 @@ function ErfassungInner() {
                           />
                         </td>
                       )}
+                      {zeigeNotiz && (
                       <td>
                         <input
                           type="text"
@@ -1335,6 +1394,8 @@ function ErfassungInner() {
                           disabled={gesperrt || !canEditStunden}
                         />
                       </td>
+                      )}
+                      {zeigeStundenkonto && (
                       <td>
                         <span
                           className={
@@ -1355,12 +1416,15 @@ function ErfassungInner() {
                           </button>
                         )}
                       </td>
+                      )}
                     </tr>
-                    {stundenkontoOffen && (
+                    {zeigeStundenkonto && stundenkontoOffen && (
                       <tr>
                         <td
                           colSpan={
-                            6 +
+                            4 +
+                            (zeigeNotiz ? 1 : 0) +
+                            (zeigeStundenkonto ? 1 : 0) +
                             (zeitenOffen[g.key] ? 1 : wochenTage.length) +
                             (zeitenOffen[g.key] ? 1 : 0) +
                             (canGruppeAendern ? 1 : 0)

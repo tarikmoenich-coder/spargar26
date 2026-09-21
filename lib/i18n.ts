@@ -75,6 +75,8 @@ const de = {
   "erfassung.gruppeuebersprungen":
     "{n} übersprungen (schon Stunden oder Markierung)",
   "erfassung.gruppefehler": "{n} Fehler: {namen}",
+  "erfassung.notizenzeigen": "Notizen anzeigen",
+  "erfassung.stundenkontozeigen": "Stundenkonto anzeigen",
   "erfassung.gruppealle": "Alle Gruppen",
   "erfassung.gruppeohne": "ohne",
   "erfassung.gruppevorige": "Vorherige Gruppe",
@@ -213,6 +215,8 @@ const hr: Record<TKey, string> = {
   "erfassung.gruppeuebersprungen":
     "{n} preskočeno (već ima sate ili oznaku)",
   "erfassung.gruppefehler": "{n} pogrešaka: {namen}",
+  "erfassung.notizenzeigen": "Prikaži bilješke",
+  "erfassung.stundenkontozeigen": "Prikaži račun sati",
   "erfassung.gruppealle": "Sve grupe",
   "erfassung.gruppeohne": "bez",
   "erfassung.gruppevorige": "Prethodna grupa",
