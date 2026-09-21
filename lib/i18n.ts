@@ -75,6 +75,13 @@ const de = {
   "erfassung.gruppeuebersprungen":
     "{n} übersprungen (schon Stunden oder Markierung)",
   "erfassung.gruppefehler": "{n} Fehler: {namen}",
+  "erfassung.gruppeleeren": "Gruppe leeren",
+  "erfassung.gruppeleerentitel":
+    "Entfernt für den gewählten Tag bei allen Personen der Gruppe die Stunden und Arbeitszeiten. Notiz und Markierung bleiben.",
+  "erfassung.gruppeleerenfrage":
+    "Stunden und Arbeitszeiten von {n} Person(en) der Gruppe {gruppe} am {datum} wirklich entfernen?",
+  "erfassung.gruppeleerenichts": "In dieser Gruppe ist für den Tag nichts zu entfernen.",
+  "erfassung.gruppegeleert": "{n} Einträge geleert",
   "erfassung.zeitenauf": "Arbeitszeiten ▾",
   "erfassung.zeitenzu": "Arbeitszeiten ▴",
   "erfassung.arbeitszeit": "Arbeitszeit (Vormittag | Nachmittag)",
@@ -202,6 +209,13 @@ const hr: Record<TKey, string> = {
   "erfassung.gruppeuebersprungen":
     "{n} preskočeno (već ima sate ili oznaku)",
   "erfassung.gruppefehler": "{n} pogrešaka: {namen}",
+  "erfassung.gruppeleeren": "Isprazni grupu",
+  "erfassung.gruppeleerentitel":
+    "Za odabrani dan uklanja sate i radna vremena svih osoba u grupi. Bilješka i oznaka ostaju.",
+  "erfassung.gruppeleerenfrage":
+    "Stvarno ukloniti sate i radna vremena za {n} osoba iz grupe {gruppe} dana {datum}?",
+  "erfassung.gruppeleerenichts": "U ovoj grupi za taj dan nema što ukloniti.",
+  "erfassung.gruppegeleert": "Ispražnjeno unosa: {n}",
   "erfassung.zeitenauf": "Radno vrijeme ▾",
   "erfassung.zeitenzu": "Radno vrijeme ▴",
   "erfassung.arbeitszeit": "Radno vrijeme (prijepodne | poslijepodne)",

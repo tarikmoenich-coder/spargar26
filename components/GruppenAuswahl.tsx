@@ -25,6 +25,11 @@ export default function GruppenAuswahl({
   useEffect(() => {
     if (!pos) return;
     const schliessen = () => setPos(null);
+    // Scrollen INNERHALB der Liste darf sie nicht schließen.
+    const beiScroll = (e: Event) => {
+      if (liste.current && e.target instanceof Node && liste.current.contains(e.target)) return;
+      schliessen();
+    };
     const aussen = (e: MouseEvent) => {
       const n = e.target as Node;
       if (!liste.current?.contains(n) && !knopf.current?.contains(n)) schliessen();
@@ -32,12 +37,12 @@ export default function GruppenAuswahl({
     const taste = (e: KeyboardEvent) => e.key === "Escape" && schliessen();
     document.addEventListener("mousedown", aussen);
     document.addEventListener("keydown", taste);
-    window.addEventListener("scroll", schliessen, true);
+    window.addEventListener("scroll", beiScroll, true);
     window.addEventListener("resize", schliessen);
     return () => {
       document.removeEventListener("mousedown", aussen);
       document.removeEventListener("keydown", taste);
-      window.removeEventListener("scroll", schliessen, true);
+      window.removeEventListener("scroll", beiScroll, true);
       window.removeEventListener("resize", schliessen);
     };
   }, [pos]);

@@ -679,6 +679,66 @@ function ErfassungInner() {
     );
   }
 
+  // Entfernt für den gewählten Tag bei allen Personen der Gruppe die Stunden
+  // und Arbeitszeiten (Notiz und Markierung bleiben unberührt). Mit
+  // Rückfrage, weil es viele Einträge auf einmal betrifft.
+  async function gruppeLeeren(g: Gruppierung) {
+    const ziele = g.employees.filter((emp) => {
+      const e = entries[emp.id];
+      return (
+        e && (e.stunden != null || e.vm_von || e.vm_bis || e.nm_von || e.nm_bis)
+      );
+    });
+    const meldung = (text: string, fehler = false) =>
+      setGruppenMeldung((prev) => ({ ...prev, [g.key]: { text, fehler } }));
+    if (ziele.length === 0) {
+      meldung(t("erfassung.gruppeleerenichts"), true);
+      return;
+    }
+    if (!window.confirm(t("erfassung.gruppeleerenfrage", { n: ziele.length, gruppe: g.anzeige, datum }))) {
+      return;
+    }
+    setGruppeLaeuft(g.key);
+    let geleert = 0;
+    const fehler: string[] = [];
+    for (let i = 0; i < ziele.length; i += 5) {
+      const ergebnisse = await Promise.all(
+        ziele.slice(i, i + 5).map(async (emp) => ({
+          emp,
+          r: await speichereWorkEntryFeld(emp.id, datum, entries[emp.id], {
+            stunden: null,
+            vm_von: null,
+            vm_bis: null,
+            nm_von: null,
+            nm_bis: null,
+          }),
+        }))
+      );
+      for (const { emp, r } of ergebnisse) {
+        if (r.ok) geleert += 1;
+        else fehler.push(`${emp.name}, ${emp.vorname}`);
+      }
+    }
+    const { data } = await getSupabaseClient()
+      .from("work_entries")
+      .select("*")
+      .eq("datum", datum)
+      .in("employee_id", ziele.map((emp) => emp.id));
+    setEntries((prev) => {
+      const next = { ...prev };
+      ((data as WorkEntry[]) ?? []).forEach((row) => {
+        next[row.employee_id] = row;
+      });
+      return next;
+    });
+    const teile = [t("erfassung.gruppegeleert", { n: geleert })];
+    if (fehler.length > 0) {
+      teile.push(t("erfassung.gruppefehler", { n: fehler.length, namen: fehler.join("; ") }));
+    }
+    meldung(teile.join(" · "), fehler.length > 0);
+    setGruppeLaeuft(null);
+  }
+
   async function gruppeSchreiben(
     g: Gruppierung,
     patch: WorkEntryPatch,
@@ -981,6 +1041,15 @@ function ErfassungInner() {
                     onClick={() => gruppeUebernehmen(g)}
                   >
                     {t("erfassung.gruppeuebernehmen")}
+                  </button>
+                  <button
+                    type="button"
+                    className="btn-secondary text-xs text-red-700"
+                    disabled={gruppeLaeuft !== null}
+                    title={t("erfassung.gruppeleerentitel")}
+                    onClick={() => gruppeLeeren(g)}
+                  >
+                    {t("erfassung.gruppeleeren")}
                   </button>
                   {gruppenMeldung[g.key] && (
                     <span
