@@ -1196,17 +1196,6 @@ function ErfassungInner() {
                     <tr>
                       <td>
                         {emp.personal_nr}
-                        {fuehrerschein[emp.id] && (
-                          <span
-                            title={`${t("erfassung.fuehrerschein")}: ${fuehrerschein[emp.id].join(", ")}`}
-                          >
-                            {fuehrerschein[emp.id].some((k) => k === "C" || k === "CE") ? (
-                              <Truck className="ml-1 inline h-4 w-4 align-text-bottom text-emerald-700" />
-                            ) : (
-                              <Car className="ml-1 inline h-3.5 w-3.5 align-text-bottom text-emerald-700" />
-                            )}
-                          </span>
-                        )}
                       </td>
                       {canGruppeAendern && (
                         <td>
@@ -1219,7 +1208,20 @@ function ErfassungInner() {
                         </td>
                       )}
                       <td>{emp.name}</td>
-                      <td>{emp.vorname}</td>
+                      <td>
+                        {emp.vorname}
+                        {fuehrerschein[emp.id] && (
+                          <span
+                            title={`${t("erfassung.fuehrerschein")}: ${fuehrerschein[emp.id].join(", ")}`}
+                          >
+                            {fuehrerschein[emp.id].some((k) => k === "C" || k === "CE") ? (
+                              <Truck className="ml-1.5 inline h-[18px] w-[18px] align-text-bottom text-emerald-700" />
+                            ) : (
+                              <Car className="ml-1.5 inline h-4 w-4 align-text-bottom text-emerald-700" />
+                            )}
+                          </span>
+                        )}
+                      </td>
                       <td>{emp.herkunft ?? "—"}</td>
                       {(zeitenOffen[g.key]
                         ? wochenTage.filter((d) => d === datum)
