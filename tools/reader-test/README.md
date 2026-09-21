@@ -32,6 +32,17 @@ Web-Oberfläche des Readers (Werks-IP `192.168.0.159`, siehe Handbuch 3.3):
 
 Der Reader braucht dafür Internetzugang (DNS-Server und Gateway eintragen).
 
+Falls die HTTPS-Verbindung des Readers nicht zustande kommt (Zertifikat, Uhrzeit
+des Readers, Zertifikatskette), lässt sich zum Ausprobieren von Reichweite und
+RSSI auch unverschlüsselt senden: `sudo bash tools/reader-test/http-freigeben.sh`
+öffnet Port 80 nur für `/in/<TOKEN>` (alles andere wird weiter auf HTTPS
+umgeleitet). Dann im Reader Target Port `80` eintragen.
+
+**Hinweis zum Zertifikat:** Let's Encrypt liefert aktuell die Kette
+Zertifikat → `YR1` → `Root YR` → (kreuzsigniert von) `ISRG Root X1`. Im Reader
+gehört deshalb `ISRG-Root-X1.crt` als Root-Zertifikat hinein. Das Zertifikat
+läuft nach 90 Tagen ab und wird vom Server automatisch erneuert.
+
 ## Ansehen
 
 `https://reader-test.spargelhof-moenich.de/view/<TOKEN>` - aktualisiert sich alle
