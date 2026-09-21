@@ -73,7 +73,7 @@ export default function ZeitenZelle({
         inputMode="numeric"
         autoComplete="off"
         className="w-14 px-1 text-center"
-        placeholder="hh:mm"
+        placeholder="1130"
         title={titel}
         value={z[name]}
         disabled={disabled}

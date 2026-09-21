@@ -21,6 +21,7 @@ import type {
 } from "@/lib/types";
 import ErfassungTabs from "@/components/ErfassungTabs";
 import StundenkontoBereich from "@/components/StundenkontoBereich";
+import GruppenAuswahl from "@/components/GruppenAuswahl";
 import ZeitenZelle, { type ZeitenSpeichern } from "@/components/ZeitenZelle";
 import {
   formatZeit,
@@ -1030,7 +1031,7 @@ function ErfassungInner() {
                           inputMode="numeric"
                           autoComplete="off"
                           className="w-16 px-1 text-center"
-                          placeholder="hh:mm"
+                          placeholder="1130"
                           title={titel}
                           value={gruppenZeiten[g.key]?.[feld] ?? ""}
                           onChange={(e) =>
@@ -1124,24 +1125,12 @@ function ErfassungInner() {
                       <td>{emp.personal_nr}</td>
                       {canGruppeAendern && (
                         <td>
-                          <select
-                            className="w-16 px-1"
-                            title={
-                              gruppen.find((gr) => gr.gruppe_nr === emp.gruppe_nr)
-                                ?.bezeichnung ?? t("erfassung.keinegruppe")
-                            }
-                            value={emp.gruppe_nr ?? ""}
-                            onChange={(e) =>
-                              gruppeAendern(emp.id, e.target.value)
-                            }
-                          >
-                            <option value="">{t("erfassung.keinegruppe")}</option>
-                            {gruppen.map((gr) => (
-                              <option key={gr.gruppe_nr} value={gr.gruppe_nr}>
-                                {gr.gruppe_nr}
-                              </option>
-                            ))}
-                          </select>
+                          <GruppenAuswahl
+                            wert={emp.gruppe_nr}
+                            gruppen={gruppen}
+                            keineLabel={t("erfassung.keinegruppe")}
+                            onWaehlen={(nr) => gruppeAendern(emp.id, nr)}
+                          />
                         </td>
                       )}
                       <td>{emp.name}</td>
