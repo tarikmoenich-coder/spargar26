@@ -399,6 +399,28 @@ export default function SuchePage() {
     return wochen;
   }, [stundenDruck]);
 
+  // Bildschirm-Liste der Arbeitsstunden: JEDER Kalendertag von der ersten bis
+  // zur letzten Buchung, auch ohne Eintrag (Nutzer-Meldung 2026-09-21: die
+  // Mitarbeiter wunderten sich, dass einzelne Tage in der Liste ganz fehlten,
+  // weil nur vorhandene Datenbankzeilen angezeigt wurden). Tage ohne Zeile und
+  // leere Zeilen (weder Stunden noch Markierung noch Notiz) sehen gleich aus.
+  const stundenTage = useMemo(() => {
+    const gebucht = stunden
+      .filter((e) => e.stunden !== null || e.markierung !== null)
+      .map((e) => e.datum)
+      .sort();
+    if (gebucht.length === 0) {
+      return stunden.map((e) => ({ datum: e.datum, entry: e as WorkEntry | undefined }));
+    }
+    const byDatum = new Map(stunden.map((e) => [e.datum, e]));
+    const tage: { datum: string; entry: WorkEntry | undefined }[] = [];
+    const letzter = gebucht[gebucht.length - 1];
+    for (let d = gebucht[0]; d <= letzter; d = addTageIso(d, 1)) {
+      tage.push({ datum: d, entry: byDatum.get(d) });
+    }
+    return tage;
+  }, [stunden]);
+
   const jahreOptionen = Array.from(
     { length: 5 },
     (_, i) => jetzigeSaison() - i
@@ -542,16 +564,23 @@ export default function SuchePage() {
                         </tr>
                       </thead>
                       <tbody>
-                        {stunden.map((e) => (
-                          <tr key={e.id}>
-                            <td>
-                              {wochentagKuerzel(e.datum)}, {formatDatumDE(e.datum)}
-                            </td>
-                            <td>{e.stunden ?? "—"}</td>
-                            <td>{e.markierung ?? "—"}</td>
-                            <td className="text-neutral-500">{e.notiz}</td>
-                          </tr>
-                        ))}
+                        {stundenTage.map(({ datum, entry: e }) => {
+                          const leer =
+                            !e ||
+                            (e.stunden === null && e.markierung === null && !e.notiz);
+                          return (
+                            <tr key={datum} className={leer ? "text-neutral-400" : ""}>
+                              <td>
+                                {wochentagKuerzel(datum)}, {formatDatumDE(datum)}
+                              </td>
+                              <td>{e?.stunden ?? "—"}</td>
+                              <td>{e?.markierung ?? "—"}</td>
+                              <td className={leer ? "italic" : "text-neutral-500"}>
+                                {leer ? t("suche.keineintrag") : e?.notiz}
+                              </td>
+                            </tr>
+                          );
+                        })}
                       </tbody>
                     </table>
                   </div>
