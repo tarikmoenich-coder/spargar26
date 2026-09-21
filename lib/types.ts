@@ -649,6 +649,11 @@ export interface WorkEntry {
   stunden: number | null;
   markierung: string | null;
   notiz: string | null;
+  // Arbeitszeiten "HH:MM:SS" (optional, migration_2026-10-15)
+  vm_von?: string | null;
+  vm_bis?: string | null;
+  nm_von?: string | null;
+  nm_bis?: string | null;
   version: number;
 }
 

@@ -21,6 +21,14 @@ import type {
 } from "@/lib/types";
 import ErfassungTabs from "@/components/ErfassungTabs";
 import StundenkontoBereich from "@/components/StundenkontoBereich";
+import ZeitenZelle, { type ZeitenSpeichern } from "@/components/ZeitenZelle";
+import {
+  formatZeit,
+  parseZeit,
+  stundenAusZeiten,
+  type Rundung,
+  type ZettelZeiten,
+} from "@/lib/zettelZeiten";
 
 const OHNE_GRUPPE_KEY = "__ohne__";
 
@@ -124,15 +132,17 @@ function gruppiere(
   }));
 }
 
+const LEERE_ZEITEN: ZettelZeiten = { vmVon: "", vmBis: "", nmVon: "", nmBis: "" };
+
 function ErfassungInner() {
   const { profile } = useProfile();
   const t = uebersetzung(profile?.sprache);
   const canGruppeAendern =
     profile?.role === "admin" || profile?.role === "hr";
-  // Nutzer-Vorgabe 2026-09-01: die Rolle "zeiterfassung" (Anzeige-Name
-  // "Stundenerfassung") soll die Spalte "Markierung" gar nicht mehr sehen -
-  // U (Urlaub/Feiertag) und F (Fahrer) pflegt künftig nur noch admin/hr.
-  const zeigeMarkierung = profile?.role !== "zeiterfassung";
+  // Nutzer-Vorgabe 2026-09-21: die Spalte "Markierung" ist entfallen. Urlaub
+  // wird im Controlling (Urlaub / Arbeitstage am Stück) erfasst, "F" (Fahrer)
+  // gibt es nicht mehr. Bestehende Markierungen bleiben in den Daten und
+  // werden hier nur noch als Kürzel neben den Stunden angezeigt.
   // Muss exakt zu work_entries_write/-update in schema.sql passen (RLS).
   // Ohne diese clientseitige Sperre sahen Rollen ohne Schreibrecht (z.B.
   // "management") ganz normal editierbar wirkende Felder, deren Eingabe
@@ -178,6 +188,12 @@ function ErfassungInner() {
   const [printGroupKey, setPrintGroupKey] = useState<string | null>(null);
   // "Für ganze Gruppe übernehmen": Stundenwert je Gruppe (Kopfzeile), Meldung
   // zum letzten Durchlauf und welche Gruppe gerade speichert.
+  // Arbeitszeiten (von-bis): je Gruppe aufklappbar, Rundung seitenweit
+  const [zeitenOffen, setZeitenOffen] = useState<Record<string, boolean>>({});
+  const [zeitenRundung, setZeitenRundung] = useState<Rundung>("viertel");
+  const [gruppenZeiten, setGruppenZeiten] = useState<
+    Record<string, ZettelZeiten>
+  >({});
   const [gruppenWert, setGruppenWert] = useState<Record<string, string>>({});
   const [gruppenMeldung, setGruppenMeldung] = useState<
     Record<string, { text: string; fehler: boolean }>
@@ -556,9 +572,13 @@ function ErfassungInner() {
     await speichereFeld(employeeId, { stunden }, "Stunden");
   }
 
-  async function saveMarkierung(employeeId: string, markierung: string) {
-    const value = markierung === "" ? null : markierung;
-    await speichereFeld(employeeId, { markierung: value }, "Markierung");
+  async function saveZeiten(employeeId: string, w: ZeitenSpeichern) {
+    const { stunden, ...zeiten } = w;
+    await speichereFeld(
+      employeeId,
+      stunden === undefined ? zeiten : { ...zeiten, stunden },
+      "Arbeitszeiten"
+    );
   }
 
   // Freitext-Vermerk zum Tag (z.B. "krank", "zu spät") - erscheint auch in
@@ -610,14 +630,61 @@ function ErfassungInner() {
   // Fahrer) haben - bereits Erfasstes wird nie überschrieben. Nutzt dieselbe
   // Speicherlogik wie die Einzelerfassung (optimistische Sperre).
   async function gruppeUebernehmen(g: Gruppierung) {
-    const meldung = (text: string, fehler = false) =>
-      setGruppenMeldung((prev) => ({ ...prev, [g.key]: { text, fehler } }));
     const roh = (gruppenWert[g.key] ?? "").trim().replace(",", ".");
     const stunden = Number(roh);
     if (roh === "" || !Number.isFinite(stunden) || stunden < 0 || stunden > 24) {
-      meldung(t("erfassung.gruppestundenungueltig"), true);
+      setGruppenMeldung((prev) => ({
+        ...prev,
+        [g.key]: { text: t("erfassung.gruppestundenungueltig"), fehler: true },
+      }));
       return;
     }
+    await gruppeSchreiben(g, { stunden }, stunden);
+  }
+
+  // Wie gruppeUebernehmen, aber mit den Arbeitszeiten aus der Kopfzeile
+  // des aufgeklappten Zeiten-Bereichs: Stunden werden daraus errechnet.
+  async function gruppeZeitenUebernehmen(g: Gruppierung) {
+    const z = gruppenZeiten[g.key] ?? LEERE_ZEITEN;
+    const norm = (v: string) => {
+      const m = parseZeit(v);
+      return m === null ? v.trim() : formatZeit(m);
+    };
+    const n: ZettelZeiten = {
+      vmVon: norm(z.vmVon),
+      vmBis: norm(z.vmBis),
+      nmVon: norm(z.nmVon),
+      nmBis: norm(z.nmBis),
+    };
+    const r = stundenAusZeiten(n, zeitenRundung);
+    if (r.leer || r.fehler) {
+      setGruppenMeldung((prev) => ({
+        ...prev,
+        [g.key]: { text: r.fehler ?? t("erfassung.gruppezeitenleer"), fehler: true },
+      }));
+      return;
+    }
+    const oderNull = (v: string) => (v === "" ? null : v);
+    await gruppeSchreiben(
+      g,
+      {
+        vm_von: oderNull(n.vmVon),
+        vm_bis: oderNull(n.vmBis),
+        nm_von: oderNull(n.nmVon),
+        nm_bis: oderNull(n.nmBis),
+        stunden: r.stunden,
+      },
+      r.stunden
+    );
+  }
+
+  async function gruppeSchreiben(
+    g: Gruppierung,
+    patch: WorkEntryPatch,
+    stunden: number
+  ) {
+    const meldung = (text: string, fehler = false) =>
+      setGruppenMeldung((prev) => ({ ...prev, [g.key]: { text, fehler } }));
     const ziele = g.employees.filter(
       (emp) => entries[emp.id]?.stunden == null && !entries[emp.id]?.markierung
     );
@@ -640,9 +707,7 @@ function ErfassungInner() {
       const ergebnisse = await Promise.all(
         ziele.slice(i, i + 5).map(async (emp) => ({
           emp,
-          r: await speichereWorkEntryFeld(emp.id, datum, entries[emp.id], {
-            stunden,
-          }),
+          r: await speichereWorkEntryFeld(emp.id, datum, entries[emp.id], patch),
         }))
       );
       for (const { emp, r } of ergebnisse) {
@@ -934,6 +999,80 @@ function ErfassungInner() {
               </button>
             </div>
 
+            {canEditStunden && (
+              <div className="print:hidden">
+                <button
+                  type="button"
+                  className="text-xs text-emerald-700 underline"
+                  onClick={() =>
+                    setZeitenOffen((prev) => ({ ...prev, [g.key]: !prev[g.key] }))
+                  }
+                >
+                  {zeitenOffen[g.key]
+                    ? t("erfassung.zeitenzu")
+                    : t("erfassung.zeitenauf")}
+                </button>
+                {zeitenOffen[g.key] && !gesperrt && (
+                  <div className="mt-1 flex flex-wrap items-center gap-2 rounded border border-linie bg-sand px-3 py-2 text-sm">
+                    <span className="font-medium">{t("erfassung.zeitengruppe")}</span>
+                    {(
+                      [
+                        ["vmVon", "Vormittag von"],
+                        ["vmBis", "Vormittag bis"],
+                        ["nmVon", "Nachmittag von"],
+                        ["nmBis", "Nachmittag bis"],
+                      ] as const
+                    ).map(([feld, titel], i) => (
+                      <Fragment key={feld}>
+                        {i === 2 && <span className="text-neutral-300">|</span>}
+                        <input
+                          type="text"
+                          inputMode="numeric"
+                          autoComplete="off"
+                          className="w-16 px-1 text-center"
+                          placeholder="hh:mm"
+                          title={titel}
+                          value={gruppenZeiten[g.key]?.[feld] ?? ""}
+                          onChange={(e) =>
+                            setGruppenZeiten((prev) => ({
+                              ...prev,
+                              [g.key]: {
+                                ...LEERE_ZEITEN,
+                                ...prev[g.key],
+                                [feld]: e.target.value,
+                              },
+                            }))
+                          }
+                        />
+                        {i === 0 || i === 2 ? (
+                          <span className="text-neutral-400">–</span>
+                        ) : null}
+                      </Fragment>
+                    ))}
+                    <button
+                      type="button"
+                      className="btn text-xs"
+                      disabled={gruppeLaeuft !== null}
+                      title={t("erfassung.zeitengruppetitel")}
+                      onClick={() => gruppeZeitenUebernehmen(g)}
+                    >
+                      {t("erfassung.zeitengruppesetzen")}
+                    </button>
+                    <label className="ml-auto flex items-center gap-1 text-xs text-neutral-600">
+                      {t("erfassung.rundung")}
+                      <select
+                        value={zeitenRundung}
+                        onChange={(e) => setZeitenRundung(e.target.value as Rundung)}
+                      >
+                        <option value="viertel">{t("erfassung.rundungviertel")}</option>
+                        <option value="minute">{t("erfassung.rundungminute")}</option>
+                      </select>
+                    </label>
+                  </div>
+                )}
+              </div>
+            )}
+
             <div className="overflow-x-auto print:hidden">
             <table className="whitespace-nowrap print:hidden">
               <thead>
@@ -967,7 +1106,7 @@ function ErfassungInner() {
                       </th>
                     );
                   })}
-                  {zeigeMarkierung && <th>{t("gemeinsam.markierung")}</th>}
+                  {zeitenOffen[g.key] && <th>{t("erfassung.arbeitszeit")}</th>}
                   <th>{t("gemeinsam.notiz")}</th>
                   <th title="Immer sichtbar, unabhängig vom gewählten Tag - siehe Erklärung beim Aufklappen">
                     Stundenkonto
@@ -986,6 +1125,11 @@ function ErfassungInner() {
                       {canGruppeAendern && (
                         <td>
                           <select
+                            className="w-16 px-1"
+                            title={
+                              gruppen.find((gr) => gr.gruppe_nr === emp.gruppe_nr)
+                                ?.bezeichnung ?? t("erfassung.keinegruppe")
+                            }
                             value={emp.gruppe_nr ?? ""}
                             onChange={(e) =>
                               gruppeAendern(emp.id, e.target.value)
@@ -994,7 +1138,7 @@ function ErfassungInner() {
                             <option value="">{t("erfassung.keinegruppe")}</option>
                             {gruppen.map((gr) => (
                               <option key={gr.gruppe_nr} value={gr.gruppe_nr}>
-                                {gr.gruppe_nr} – {gr.bezeichnung}
+                                {gr.gruppe_nr}
                               </option>
                             ))}
                           </select>
@@ -1031,6 +1175,14 @@ function ErfassungInner() {
                                 disabled={gesperrt || !canEditStunden}
                                 title={t("erfassung.stundenfeldtitel")}
                               />
+                              {entry?.markierung && (
+                                <span
+                                  className="ml-1 rounded bg-neutral-200 px-1 text-xs text-neutral-600"
+                                  title={t("erfassung.markierunganzeige")}
+                                >
+                                  {entry.markierung}
+                                </span>
+                              )}
                             </td>
                           );
                         }
@@ -1046,20 +1198,15 @@ function ErfassungInner() {
                           </td>
                         );
                       })}
-                      {zeigeMarkierung && (
+                      {zeitenOffen[g.key] && (
                         <td>
-                          <select
-                            defaultValue={entry?.markierung ?? ""}
-                            key={`m-${emp.id}-${entry?.version ?? 0}`}
-                            onChange={(e) =>
-                              saveMarkierung(emp.id, e.target.value)
-                            }
+                          <ZeitenZelle
+                            key={`z-${emp.id}-${entry?.version ?? 0}`}
+                            entry={entry}
+                            rundung={zeitenRundung}
                             disabled={gesperrt || !canEditStunden}
-                          >
-                            <option value="">—</option>
-                            <option value="U">{t("erfassung.markierungurlaub")}</option>
-                            <option value="F">{t("erfassung.markierungfahrer")}</option>
-                          </select>
+                            onSpeichern={(w) => saveZeiten(emp.id, w)}
+                          />
                         </td>
                       )}
                       <td>
@@ -1100,7 +1247,7 @@ function ErfassungInner() {
                           colSpan={
                             6 +
                             wochenTage.length +
-                            (zeigeMarkierung ? 2 : 1) +
+                            (zeitenOffen[g.key] ? 2 : 1) +
                             (canGruppeAendern ? 1 : 0)
                           }
                           className="whitespace-normal bg-sand"

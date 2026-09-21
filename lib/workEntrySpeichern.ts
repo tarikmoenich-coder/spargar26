@@ -14,7 +14,10 @@ import { getSupabaseClient } from "@/lib/supabase/client";
 import type { WorkEntry } from "@/lib/types";
 
 export type WorkEntryPatch = Partial<
-  Pick<WorkEntry, "stunden" | "markierung" | "notiz">
+  Pick<
+    WorkEntry,
+    "stunden" | "markierung" | "notiz" | "vm_von" | "vm_bis" | "nm_von" | "nm_bis"
+  >
 >;
 
 export type WorkEntrySpeicherErgebnis =

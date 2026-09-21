@@ -1045,12 +1045,22 @@ create table work_entries (
   -- 'U' = Urlaub/Feiertag (in Excel pauschal mit 8 Std. verrechnet)
   markierung text,
   notiz text,
+  -- Arbeitszeiten (optional, migration_2026-10-15): Vormittag/Nachmittag von-bis
+  vm_von time,
+  vm_bis time,
+  nm_von time,
+  nm_bis time,
   created_by uuid references profiles (id),
   updated_by uuid references profiles (id),
   version int not null default 1,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
-  unique (employee_id, datum)
+  unique (employee_id, datum),
+  constraint work_entries_zeiten_reihenfolge check (
+    (vm_von is null or vm_bis is null or vm_bis > vm_von)
+    and (nm_von is null or nm_bis is null or nm_bis > nm_von)
+    and (vm_bis is null or nm_von is null or nm_von >= vm_bis)
+  )
 );
 
 create index idx_work_entries_datum on work_entries (datum);
