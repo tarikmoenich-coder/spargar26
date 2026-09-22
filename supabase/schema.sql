@@ -6477,6 +6477,12 @@ grant select on unterkunft_belegung_person to authenticated;
 
 -- Auszüge, die noch abgenommen werden müssen (Migration 2026-09-16): laufende
 -- Belegung + (Auszahlungsbeleg nach Einzug ODER Mitarbeiter inaktiv).
+-- "Mitarbeiter inaktiv" ist seit 2026-09-22 ein verlässliches Auszugssignal:
+-- ein Statuswechsel (neue Personalnummer bei gleicher Person) hängt die
+-- laufende Belegung beim Anlegen der neuen Nummer mit um (siehe
+-- statuswechselDurchfuehren in app/mitarbeiter/page.tsx) - eine per
+-- Statuswechsel abgelöste, inaktive Nummer hat deshalb keine laufende
+-- Belegung mehr und taucht hier gar nicht erst auf.
 -- BEWUSST security definer - muss auszahlungsbeleg_zeilen lesen (kein
 -- Hausmeister-Zugriff), gibt daher nur `hat_kaution` (bool) heraus.
 create view unterkunft_auszug_offen as
