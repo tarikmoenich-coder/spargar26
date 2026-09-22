@@ -1,8 +1,52 @@
 # Erntewirtschaft — Architektur- und Umsetzungsplan
 
-Stand: 2026-09-04. Arbeitsdokument (wie `unterkunft-plan.md`), damit der
-Planungsstand einen Konsolen-Neustart übersteht. Noch **kein Code** — wartet auf
-die Hardware-Entscheidungen unten.
+Stand: 2026-09-04, Frequenz-Entscheidung 2026-09-22 (UHF→HF), TECTUS-Rückmeldung
+2026-09-22 (HF→LF). Arbeitsdokument (wie `unterkunft-plan.md`), damit der
+Planungsstand einen Konsolen-Neustart übersteht. Noch **kein Code** — wartet
+auf die Hardware-Entscheidungen unten.
+
+**Frequenz-Verlauf 2026-09-22 - noch nicht final, Pilottest offen:**
+1. Erste Entscheidung: Kisten-/Badge-Scan weg von UHF, hin zu HF (13,56 MHz).
+   Grund: an keiner Lesestelle in diesem Plan (Badge, Kiste an der Maschine,
+   Kiste auf der Waage) wird UHFs eigentliche Stärke (viele Tags gleichzeitig
+   auf Distanz) gebraucht - überall gezielte Einzel-Lesevorgänge.
+2. **Rückmeldung von TECTUS (Hersteller des Waagen-Readers) auf Nachfrage:**
+   empfiehlt stattdessen **LF (125-134 kHz)** - bis 60 cm Lesereichweite (mit
+   entsprechend größerer Reader-Antenne, nicht mit einem kleinen Tag/Reader
+   wie bei den zuvor angesehenen HF-Beispielen), nach ihrer Einschätzung das
+   beste Preis-Leistungs-Verhältnis für diesen Anwendungsfall. LF ist zudem
+   die Frequenz mit der geringsten Störanfälligkeit durch Metall/Flüssigkeit
+   in der Nähe (Wasser dämpft HF/UHF stärker) - passt zur nassen Umgebung.
+   Klassische Industrie-Identifikationstechnik (z.B. Werkzeug-/Palettenkennung
+   in Fabrikumgebungen), kein Exot.
+   **Zusätzlich:** für die 140 Erntemaschinen sind **serielle Reader
+   (RS232/RS485) deutlich günstiger als Ethernet-Reader** - passt gut zum
+   ohnehin geplanten TRB246 in der SpidertrackBox, der beide seriellen
+   Schnittstellen schon mitbringt (kein zusätzliches Netzwerk-Interface pro
+   Maschine nötig, kein HTTP(S)-Empfänger im Waagen-Agenten wie beim
+   UHF-MAGNUM-Push).
+   **Einordnung:** TECTUS ist Verkäufer, keine neutrale Quelle - die fachliche
+   Begründung (Robustheit bei Nässe, seriell statt Ethernet für 140 Boxen)
+   ist trotzdem in sich schlüssig und deckt sich mit allgemeinem Wissen über
+   LF-Industrietechnik. Macht den ohnehin geplanten **Pilottest** umso
+   wichtiger, jetzt am besten direkt mit LF-Testhardware von TECTUS, bevor
+   140 Reader + neue Tags bestellt werden - drei Frequenz-Wechsel
+   nacheinander (UHF→HF→LF) sind ein Zeichen, dass hier ein echter Test mehr
+   wert ist als weitere Theorie.
+
+Alle UHF-spezifischen Abschnitte unten (Reader TECTUS MAGNUM 4077, Tag „U8")
+sind für den Kisten-/Badge-Scan überholt (jetzt LF statt HF/UHF) - stehen aber
+bewusst noch drin, weil das Material anderweitig weiterverwendet wird, siehe
+nächster Absatz.
+
+**Die bereits gekauften UHF-Tags und der TECTUS MAGNUM 4077 werden NICHT
+verworfen**, sondern für ein anderes, größeres Gebinde umgewidmet: 300-kg-
+Rohware-/Transportkisten, z.B. Fertigware von der Spargelsortieranlage oder
+(ab der nächsten Saison) Rohware Mais vom Feld. Dort passt UHFs Reichweite
+eher (weniger, größere, langsamer bewegte Einheiten) - noch keine
+ausgearbeitete Anforderung, nur als Verwendungszweck festgehalten, damit die
+Investition nicht verloren geht. Eigener Plan/Abschnitt folgt, sobald das
+konkret ansteht.
 
 ## Idee
 
@@ -10,12 +54,12 @@ Lückenlose Kette von der Erntearbeit auf dem Feld bis zum gewogenen Ertrag am H
 um einen echten Realitätscheck über die Arbeitseffizienz zu bekommen:
 
 ```
-Feld:      Spargelspinne (SpidertrackBox: LTE + RTK-GPS + UHF-RFID + Batterie)
+Feld:      Spargelspinne (SpidertrackBox: LTE + RTK-GPS + LF-RFID + Batterie)
              Fahrer scannt morgens 1× seinen Badge          → ernte_schicht
              Fahrer scannt leere Kiste, erntet rein          → ernte_kiste_zyklus (offen)
              Fahrer scannt nächste Kiste                     → vorige implizit "voll"
 LKW:       holt volle Kisten ab, fährt zum Hof              (LKW schon im Fahrzeug-Modul)
-Hof:       Waage + stationärer UHF-Leser scannt die Kiste   → Zyklus: gewogen_am, kg
+Hof:       Waage + stationärer LF-Leser scannt die Kiste    → Zyklus: gewogen_am, kg
 Ergebnis:  pro Kiste: Maschine · Fahrer · Feld/Flur (aus GPS) · Zeit · netto kg
            → kg/Personenstunde, kg/Maschinenstunde, Ertragsdichte-Karte,
              gebuchte Stunden (work_entries) vs. Maschine-aktiv-Zeit
@@ -25,19 +69,30 @@ Ergebnis:  pro Kiste: Maschine · Fahrer · Feld/Flur (aus GPS) · Zeit · netto
 
 - **140 Erntemaschinen = die Spargelspinnen.** 1 Person pro Maschine.
 - Fahrer **registriert sich 1×/Tag** per RFID-Badge an der Maschine.
-- **Kisten-Transponder sind schon gekauft:** *Transponder Square, UHF Tag Chip U8,
-  865–868 MHz, 69×23×7 mm, ABS+PC, IP68.* → **UHF, kein HF/NFC.**
-- **SpidertrackBox-Teileliste ist noch NICHT gekauft** (`docs/…BOM…xlsx`) — kann
-  also noch angepasst werden. Enthält aktuell: Teltonika **TRB246** (IoT-Gateway,
-  RutOS, LTE + GNSS + RS232 + RS485 + I/O), Teltonika Combo-Dachantenne
-  (Mobil/GNSS/WLAN), **Netronix MW-R4G** (RFID 13,56 MHz **HF** — passt NICHT zu
-  den UHF-Kisten), VE.Direct-Kabel + MAX3232 (liest Victron-Batteriedaten),
-  Gehäuse/Hutschiene/Klemmen.
-- **Waage am Hof:** stationärer Leser *MAGNUM, UHF, Long Range,
-  Ethernet/WLAN/RS232/RS485, 1 int./2 ext. Antennen* - Hersteller laut
-  Typenschild **TECTUS Technology GmbH** (tec-tus.com), nicht iDTRONIC wie
-  zunächst angenommen; P/N `MAGNUM 4077-01-000-00`, Versorgung 12-36 V/2,5 A.
-  Die **Waage selbst kommt noch** (siehe Teil D für das gewählte Modell
+- **Kisten-Transponder sind schon gekauft, aber seit 2026-09-22 umgewidmet:**
+  *Transponder Square, UHF Tag Chip U8, 865–868 MHz, 69×23×7 mm, ABS+PC,
+  IP68.* Für den Kisten-/Badge-Scan an der Maschine wird stattdessen LF
+  favorisiert (siehe Frequenz-Verlauf oben, Pilottest offen) - diese
+  UHF-Tags gehen an die 300-kg-Rohware-/Fertigware-Kisten.
+- Für den Kisten-/Badge-Scan wird jetzt ein **LF-Reader mit seriellem
+  Anschluss** favorisiert (konkretes Modell offen, siehe Frequenz-Verlauf
+  oben) - die **SpidertrackBox-Teileliste ist ohnehin noch NICHT gekauft**
+  (`docs/…BOM…xlsx`), kann also direkt danach geplant werden. Enthielt
+  vorher: Teltonika **TRB246** (IoT-Gateway, RutOS, LTE + GNSS + RS232 +
+  RS485 + I/O - die seriellen Schnittstellen passen zum LF-Reader),
+  Teltonika Combo-Dachantenne (Mobil/GNSS/WLAN), Netronix MW-R4G (RFID
+  13,56 MHz HF - ursprünglich für die Kiste vorgesehen, dann wegen der
+  UHF-Tags verworfen, durch die HF-Zwischenentscheidung kurz wieder passend,
+  jetzt durch die LF-Empfehlung erneut zu ersetzen), VE.Direct-Kabel +
+  MAX3232 (liest Victron-Batteriedaten), Gehäuse/Hutschiene/Klemmen.
+- **Waage am Hof - Reader jetzt umgewidmet (siehe oben):** stationärer Leser
+  *MAGNUM, UHF, Long Range, Ethernet/WLAN/RS232/RS485, 1 int./2 ext.
+  Antennen* - Hersteller laut Typenschild **TECTUS Technology GmbH**
+  (tec-tus.de) P/N `MAGNUM 4077-01-000-00`, Versorgung 12-36 V/2,5 A - wird
+  nicht mehr für den laufenden Kisten-Scan an der Waage gebraucht (dafür ein
+  neuer, noch zu wählender LF-Reader, TECTUS-Empfehlung), sondern für die
+  300-kg-Kisten vorgesehen. Die **Waage selbst kommt noch** (siehe Teil D
+  für das gewählte Modell
   RHEWA 84vario).
 - **±1 m Präzision** wird gebraucht (im Testaufbau mit einem Board der
   Entwicklungsfirma erreicht — das hatte RTK). Interne TRB246-GNSS schafft das
@@ -67,7 +122,7 @@ Ergebnis:  pro Kiste: Maschine · Fahrer · Feld/Flur (aus GPS) · Zeit · netto
 
 | Thema | Optionen | Empfehlung |
 |---|---|---|
-| **Kisten-Scan an der Maschine** (Tags sind UHF U8) | Netronix HF streichen; **UHF-Reader-Modul** an die Box, mit Near-Field-Antenne / getriggertem Einzel-Lesevorgang, damit nur die *vorgehaltene* Kiste zählt und nicht der Stapel auf der Maschine | UHF-Reader + definierter Scan-Punkt (Halterung/„Tasche" + Taster). Fahrer-Badge wird dann ebenfalls ein UHF-Tag. Netronix + MAX3232-für-RFID entfallen. |
+| **Kisten-Scan an der Maschine** (2026-09-22: UHF→HF→LF, siehe Hinweis oben, Pilottest offen) | LF-Reader-Modul (seriell, TECTUS-Empfehlung), Ethernet-HF-Modul, oder erst der Pilottest entscheidet | Aktuell favorisiert: LF mit seriellem Reader (RS232/RS485 an den ohnehin vorhandenen TRB246), bis 60 cm Reichweite, robust bei Nässe, günstiger als Ethernet-Reader für 140 Boxen. Vor Bestellung: Pilottest mit TECTUS-LF-Testhardware unter Feldbedingungen. Die bereits gekauften UHF-Tags/der UHF-Reader (TECTUS MAGNUM 4077) werden für 300-kg-Rohware-/Fertigware-Kisten weiterverwendet, nicht verworfen. |
 | **±1 m** | RTK-Empfänger (u-blox **ZED-F9P**-Klasse, Multiband L1/L2/L5) + NTRIP-Korrektur + Multiband-Antenne. TRB246 als NTRIP-Client reicht RTCM an den F9P durch; F9P → NMEA (GGA Fix-Qualität 4) → TRB246 → Traccar | F9P + **SAPOS** (in mehreren Bundesländern für Landwirtschaft günstig/kostenlos), sonst **PPP** (u-blox PointPerfect, kein Basisstations-Betrieb). Combo-Antenne bleibt für LTE/WLAN, separate GNSS-Multiband-Antenne dazu. Mehrkosten grob **+250–450 €/Box** + NTRIP-Gebühr. |
 | **Positions-Lograte** | 1 s / 5 s / on-move+min-distance | **1 s** in der Traccar-PostgreSQL (kurze Retention), **5 s** heruntergerechnet nach `ernte_position`. |
 | **Feld-Geometrien** | aus Pachtwesen2026 importieren / in Spargar neu pflegen | `ernte_feld` mit PostGIS in der Spargar-DB; Erstbefüllung als Import, danach kleiner Karten-Editor. |
@@ -184,7 +239,12 @@ für ein anderes Modell/82c).
   → Netto+laufende Nummer weiter wie bisher geplant; `<FP!>`/Timeout →
   verwerfen bzw. `ungeklaert`, siehe Teil E) → Verbindung schließen.
 
-**Reader — TECTUS MAGNUM 4077, Handbuch V1.1 (Klärung 2026-09-21):**
+**Reader — TECTUS MAGNUM 4077, Handbuch V1.1 (Klärung 2026-09-21) — seit
+2026-09-22 umgewidmet auf die 300-kg-Rohware-/Fertigware-Kisten, siehe
+Entscheidung ganz oben. Die folgenden Details bleiben für diesen neuen
+Zweck relevant, gelten aber NICHT mehr für den Kisten-/Badge-Scan an
+Maschine/Waage - dafür wird ein separater HF-Reader gewählt, sobald der
+Pilottest steht.**
 
 - **Anschlüsse (alle M12):** 3-polig = Strom (Pin 1 V+, 2 V-, 3 PE; Handbuch
   nennt 9-32 V, Typenschild/Datenblatt 12-36 V, 2,5 A → sicher: 24 V DC);
@@ -465,9 +525,11 @@ Spatial-Join `ernte_feld` → `flurstueck_id`/`feld`. Retention/Downsample-Job.
 1. **Feld-Geometrien:** liegen die Flurstück-/Schlag-Polygone schon in derselben
    Supabase-DB (Pachtwesen2026), oder importieren/neu pflegen? PostGIS im
    Supabase-Projekt schon aktiv?
-2. **UHF-Lesetiefe an der Maschine:** gibt es an der Spinne einen definierten
-   Scan-Punkt (Halterung/Tasche), an dem der Fahrer die leere Kiste vorhält? Sonst
-   liest ein UHF-Reader mehrere Kisten auf einmal.
+2. **Lesetiefe/-punkt an der Maschine:** gibt es an der Spinne einen
+   definierten Scan-Punkt (Halterung/Tasche), an dem der Fahrer die leere
+   Kiste vorhält? Bei LF (bis 60 cm mit größerer Reader-Antenne laut TECTUS)
+   weniger kritisch als bei UHF/HF mit kleinem Tag, aber erst der Pilottest
+   zeigt die reale Reichweite mit echter Antennengröße/-einbaulage.
 3. **Waage:** sobald das Modell feststeht — Schnittstelle (RS232 / Ethernet /
    Impuls)? Rechner am Hof für den Agenten vorhanden oder Teil des Projekts (RPi)?
 4. ~~`work_entries`-Kopplung~~ — **geklärt** (Pflichtenheft): der Stundenzettel
