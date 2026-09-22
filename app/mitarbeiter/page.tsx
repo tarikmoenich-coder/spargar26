@@ -650,9 +650,12 @@ export default function MitarbeiterPage() {
   // bleiben strikt getrennt, weil sie technisch an die jeweilige
   // Personalnummer hängen - ergibt zwei komplett getrennte Zeilen in der
   // Lohnübersicht mit je eigener Netto-Berechnung passend zur jeweiligen
-  // Abrechnungsart. Hochgeladene Dokumente wandern zur neuen Nummer mit
-  // (dieselben Dokumente derselben Person), die alte Nummer wird wie bei
-  // "Deaktivieren" nur deaktiviert, nicht gelöscht (ADR-011).
+  // Abrechnungsart. Hochgeladene Dokumente, eine laufende Zimmerbelegung/
+  // geplante Zuordnung, ein Firmenhandy und eine Fahrzeug-Zuordnung wandern
+  // zur neuen Nummer mit (dieselbe Person wohnt/dokumentiert/telefoniert/
+  // fährt unverändert weiter, siehe Nutzer-Vorgabe 2026-09-22), die alte
+  // Nummer wird wie bei "Deaktivieren" nur deaktiviert, nicht gelöscht
+  // (ADR-011).
   async function statuswechselDurchfuehren() {
     const alt = employees.find((e) => e.id === statuswechselId);
     if (!alt) return;
@@ -773,6 +776,41 @@ export default function MitarbeiterPage() {
       .from("employee_documents")
       .update({ employee_id: neu.id })
       .eq("employee_id", alt.id);
+
+    // Nutzer-Vorgabe 2026-09-22: ein Statuswechsel bedeutet NICHT, dass die
+    // Person auszieht oder das Firmenhandy abgibt - sie wohnt/telefoniert
+    // unverändert weiter, nur unter der neuen Personalnummer. Ohne dieses
+    // Umhängen würde "unterkunft_auszug_offen" die alte (jetzt inaktive)
+    // Nummer fälschlich als abnahmebereit zeigen (die Sicht liest u.a.
+    // "not e.aktiv" als Auszugssignal) und "unterkunft_person_offen" die
+    // neue Nummer fälschlich als "ohne Bleibe" - weil die Belegung an der
+    // alten ID hängen geblieben wäre. Eine laufende Belegung (bis is null)
+    // sowie eine noch nicht angetretene, geplante Zuordnung gehören
+    // deshalb wie die Dokumente der Person, nicht der Personalnummer.
+    await supabase
+      .from("unterkunft_belegung")
+      .update({ employee_id: neu.id })
+      .eq("employee_id", alt.id)
+      .is("bis", null);
+    await supabase
+      .from("unterkunft_zuordnung")
+      .update({ employee_id: neu.id })
+      .eq("employee_id", alt.id)
+      .eq("status", "geplant");
+    // Firmenhandy: gleicher Gedanke - die Person behält ihre Nummer.
+    await supabase
+      .from("firmenhandy")
+      .update({ employee_id: neu.id })
+      .eq("employee_id", alt.id);
+    // Fahrzeug-Zuordnung: gleicher Gedanke - wer Fahrer eines Fahrzeugs war,
+    // bleibt es auch unter der neuen Nummer. Ohne dieses Umhängen würde die
+    // Fahrzeugliste (lädt nur aktive Personen für das Fahrer-Dropdown) den
+    // Fahrer stillschweigend "verlieren", weil die alte Nummer dort nicht
+    // mehr auftaucht.
+    await supabase
+      .from("fahrzeug")
+      .update({ fahrer_employee_id: neu.id })
+      .eq("fahrer_employee_id", alt.id);
 
     await supabase.from("employees").update({ aktiv: false }).eq("id", alt.id);
 
