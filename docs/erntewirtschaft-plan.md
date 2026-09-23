@@ -224,23 +224,35 @@ per Default eine Kiste - kein Onboarding-Schritt für neue Kisten-Tags
 nötig.
 
 **Sicherheitsnetz gegen den Fall „unbekannter Mitarbeiter" (Nutzer-Frage
-2026-09-23):** Ohne Weiteres würde ein noch nicht angelerntes
-Mitarbeiter-Badge einfach als Kiste durchlaufen - ein Zyklus würde
-geöffnet, nie gewogen, und es fällt erst auf, wenn am Monatsende Stunden
-fehlen. Deshalb: **der erste Scan eines Tags an einer Maschine an einem
-Tag gilt immer als Login-Versuch**, unabhängig vom Ergebnis der
-Klassifizierung.
-- Tag ist als `person` registriert → normaler Login (`ernte_schicht`).
-- Tag ist NICHT registriert → **kein** Kisten-Zyklus wird angelegt,
-  stattdessen `ernte_scan.verarbeitung_fehler = 'unbekannter_mitarbeiter_tag'`
-  (eigene Fehlerkategorie, sichtbar in der App, kein stiller Datenverlust).
-- Jeder weitere Scan desselben Tages an dieser Maschine, der nicht
-  registriert ist, gilt regulär als Kiste (Verwechslungsrisiko dort gering,
-  da Kisten viel häufiger sind als neue Mitarbeiter).
-- Annahme dahinter: der Fahrer scannt morgens immer zuerst sein Badge,
-  bevor er eine Kiste anfasst. Falls sich das im Pilottest als unsicher
-  erweist, wäre ein physischer Taster nur für den Login-Scan die
-  Alternative - erstmal ohne zusätzliche Hardware versucht.
+2026-09-23, korrigiert nach Nutzer-Einwand 2026-09-23):** Ohne Weiteres
+würde ein noch nicht angelerntes Mitarbeiter-Badge einfach als Kiste
+durchlaufen - ein Zyklus würde geöffnet, nie gewogen, und es fällt erst
+auf, wenn am Monatsende Stunden fehlen.
+
+**Verworfen: „erster Scan des Tages = Login-Versuch".** Diese zunächst
+vorgeschlagene Regel ist nicht brauchbar, weil Kisten laut der
+Klassifizierungs-Entscheidung oben grundsätzlich NIE registriert sind -
+eine ganz normale Kiste sieht für das System also identisch aus wie ein
+vergessenes Mitarbeiter-Badge (beides „nicht in `ernte_tag` gefunden").
+Kommt der Fahrer morgens mit der ersten Kiste in der Hand statt zuerst mit
+dem Badge (realistisch, siehe Nutzer-Einwand), würde diese Regel bei jeder
+ganz normalen Kiste einen falschen „unbekannter Mitarbeiter"-Alarm auslösen
+- echte Fälle würden darin untergehen.
+
+**Stattdessen: ruhige tägliche Rückschau statt Echtzeit-Heuristik je Scan.**
+Ein registriertes Badge wird immer korrekt als Person erkannt, unabhängig
+von der Scan-Reihenfolge - das bleibt unverändert zuverlässig. Das
+verbleibende Risiko (Mitarbeiter, dessen Badge noch nicht angelernt wurde)
+lässt sich nicht scanweise von einer normalen Kiste unterscheiden, muss es
+aber auch nicht: eine tägliche Prüfung (Teil des Processors oder ein
+eigener Report) meldet **„Maschine M hatte heute Kisten-Aktivität, aber
+keinen erkannten Mitarbeiter-Login"** - erwischt denselben Fall, ohne bei
+jeder normalen Kiste-zuerst-Reihenfolge falschen Alarm zu schlagen.
+Vorbeugung bleibt organisatorisch: neue Mitarbeiter-Badges registrieren,
+bevor die Person das erste Mal an die Maschine geht. Ein physischer Taster
+nur für den Login-Scan bliebe eine Option, falls sich „vergessene
+Registrierung" in der Praxis häufiger zeigt, als eine tägliche Rückschau
+verträgt - erstmal bewusst ohne zusätzliche Hardware.
 
 **Erfolgston am Gerät (Nutzer-Vorschlag 2026-09-23):** Die Ingest-Antwort
 gibt den Klassifizierungs-Typ direkt zurück (siehe unten), damit das Skript
@@ -250,8 +262,10 @@ nach der Serverantwort, nicht schon beim reinen Lesen des Tags**, weil nur
 das wirklich bestätigt, dass die Daten sicher angekommen sind. Auch eine
 durch die Sperrzeit verworfene Wiederholung gilt dabei als Erfolg (der
 Server hat sie ja erhalten) - stumm bleibt es nur bei echten
-Übertragungsfehlern. Töne: „Person" / „Kiste" / „unbekannter Mitarbeiter"
-(siehe Sicherheitsnetz oben) - je ein einfacher Piezo-Summer an einem
+Übertragungsfehlern. Nur noch zwei Töne: „Person" / „Kiste" (das frühere
+dritte „unbekannter Mitarbeiter"-Signal entfällt, siehe Sicherheitsnetz
+oben - dieser Fall wird jetzt über die tägliche Rückschau erkannt, nicht
+scanweise) - je ein einfacher Piezo-Summer an einem
 Digitalausgang des TRB246, unterschiedliche Muster je Ereignis.
 
 Payload Maschine (TRB246):
@@ -274,8 +288,10 @@ Payload Waage (Hof-Agent):
 {"waage":"hofwaage-1","tag":"E280...","gewicht_kg":9.42,"ts":"2026-04-18T13:07:55Z"}
 ```
 Antwort: `200 {"angenommen": n, "dubletten": m, "klassifizierung":
-[{"tag":"E280...", "typ": "person"|"kiste"|"unbekannter_mitarbeiter_tag"}]}`
-- das `typ` je Tag ist neu, für den Erfolgston am Gerät.
+[{"tag":"E280...", "typ": "person"|"kiste"}]}`
+- das `typ` je Tag ist neu, für den Erfolgston am Gerät (immer eines von
+beiden, da ein nicht registrierter Tag laut Entscheidung oben als Kiste
+gilt - siehe Sicherheitsnetz für den Umgang mit vergessenen Registrierungen).
 
 **Offene Frage Stromausfall (Nutzer-Frage 2026-09-23):** Schaltet die
 Maschine nach Feierabend die komplette Stromversorgung ab (nicht nur
@@ -561,13 +577,17 @@ zeitaufwändigere Geschäftslogik. Je Zeile zuerst die Sperrzeit-Prüfung oben,
 danach:
 - Login (Tag als `person` klassifiziert) → `ernte_schicht` (neue Schicht,
   wenn nicht schon heute offen für Maschine+Fahrer).
-- Erster Tag des Tages an Maschine M, NICHT als `person` klassifiziert →
-  `verarbeitung_fehler = 'unbekannter_mitarbeiter_tag'`, **kein**
-  Kisten-Zyklus (siehe Teil C, Sicherheitsnetz).
-- Kiste (jeder weitere nicht als `person` klassifizierte Tag) an Maschine M
-  → jüngsten offenen Zyklus für M schließen (`voll_am`, `voll_lat/lng`),
-  neuen Zyklus `offen` anlegen (`befuellt_*`, `schicht_id` aus aktiver
-  Schicht an M, Spatial-Join `ernte_feld` → `feld`/`kultur`).
+- Kiste (jeder nicht als `person` klassifizierte Tag - das ist der
+  Normalfall für jede Kiste, siehe Klassifizierungs-Entscheidung oben) an
+  Maschine M → jüngsten offenen Zyklus für M schließen (`voll_am`,
+  `voll_lat/lng`), neuen Zyklus `offen` anlegen (`befuellt_*`, `schicht_id`
+  aus aktiver Schicht an M, Spatial-Join `ernte_feld` → `feld`/`kultur`).
+  **Keine** scanweise Sonderbehandlung für „erster Scan" mehr (siehe Teil C,
+  Sicherheitsnetz - diese frühere Idee wurde verworfen, weil sie bei jeder
+  Kiste-vor-Badge-Reihenfolge falschen Alarm geschlagen hätte). Stattdessen
+  einmal täglich: Maschinen mit Kisten-Aktivität, aber ohne erkannten Login
+  an diesem Tag, in einem Report/auf dem Dashboard auflisten (Hinweis auf
+  ein noch nicht angelerntes Mitarbeiter-Badge).
 - `gewicht` (Tag T) → jüngsten offenen Zyklus für T → `gewogen_am`,
   `gewicht_brutto_kg`, `tara_kg` aus Konfig, `status='gewogen'`; kein Treffer →
   `ungeklaert`-Zyklus.
