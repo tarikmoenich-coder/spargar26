@@ -33,14 +33,24 @@ Position dagegen geprüft wurde. Jetzt konkretisiert:
 - **Konsequenz:** RTK (F9P, Multiband-Antenne, NTRIP/SAPOS) entfällt
   voraussichtlich. Das spart ~250-450 €/Box (× 140 ≈ 35.000-63.000 €
   Hardware) UND macht den zuvor errechneten hohen Datenverbrauch (NTRIP war
-  der dominante Treiber, ~4-8 GB/Saison/Maschine) hinfällig - übrig bleiben
-  nur die reinen Positionsdaten, ca. 150 MB/Saison/Maschine. Die günstigen
-  100 SIM-Karten (500 MB/5 Jahre, siehe [[fahrzeuge-traccar]]) könnten dafür
-  sogar ausreichen, statt einer separaten teureren IoT-SIM.
+  der dominante Treiber, ~4-8 GB/Saison/Maschine) hinfällig.
   Alle RTK-spezifischen Abschnitte unten (Hardware-Tabelle, Teil A Schritt 4,
   `fix_qualitaet`-Spalte etc.) bleiben im Dokument stehen für den Fall, dass
   sich der Bedarf später doch ändert - gelten aber bis auf Weiteres als
   **nicht mehr Pflicht**, nur noch optional.
+- **Batterie-Meldeintervall entschieden (2026-09-23): alle 10 Minuten**, nicht
+  die native VE.Direct-Rate (~1 Hz) 1:1 weiterreichen - ein Ladezustand
+  ändert sich innerhalb einer Sekunde nicht nennenswert, dafür braucht
+  niemand eine sekundengenaue Cloud-Historie. Bei 12 aktiven Stunden/Tag
+  macht das 72 Meldungen/Tag statt 43.200 - der Unterschied zwischen "ein
+  paar KB/Tag" und "nochmal ~1,5-2,5 MB/Tag oben drauf".
+- **Ohne RTK ergibt sich damit für die drei Ströme zusammen** (Position +
+  RFID + gedrosselte Batterie) **ca. 150-160 MB/Saison/Maschine** (Position
+  macht davon fast alles aus, RFID/Batterie zusammen nur wenige MB). Die
+  günstigen 100 SIM-Karten (500 MB/5 Jahre, siehe [[fahrzeuge-traccar]])
+  könnten dafür sogar ausreichen, statt einer separaten teureren IoT-SIM -
+  das aber erst final entscheiden, wenn klar ist, wie viele davon die
+  Fahrzeugflotte selbst braucht.
 
 **Frequenz-Verlauf 2026-09-22 - noch nicht final, Pilottest offen:**
 1. Erste Entscheidung: Kisten-/Badge-Scan weg von UHF, hin zu HF (13,56 MHz).
@@ -389,7 +399,9 @@ Laderegler-Zustand, aus dem Pflichtenheft), `roh jsonb`,
 
 **`ernte_konfig`** — `schluessel text pk`, `wert text`, `beschreibung`. Seed:
 `tara_kg_standard`, `schicht_timeout_min`, `kiste_offen_warn_h`, `position_rate_s`,
-`offline_warn_min=5`, `offline_alarm_min=10`, `batterie_warn_v=24`,
+`batterie_melde_intervall_min=10` (Entscheidung 2026-09-23, siehe oben - nicht
+die native VE.Direct-Rate 1:1 durchreichen), `offline_warn_min=5`,
+`offline_alarm_min=10`, `batterie_warn_v=24`,
 `batterie_alarm_v=22`, `pause_max_meter=2`, `pause_fenster_min=5` — alle
 Schwellen 1:1 aus dem Pflichtenheft (Ampel Online/Offline, Batterie, Pausen-
 Erkennung), damit sie ohne Deploy nachjustierbar bleiben statt hart codiert.
