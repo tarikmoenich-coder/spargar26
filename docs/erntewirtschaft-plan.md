@@ -483,7 +483,9 @@ Laderegler-Zustand, aus dem Pflichtenheft), `roh jsonb`,
 `unique(maschine_id, zeitpunkt)`.
 
 **`ernte_konfig`** — `schluessel text pk`, `wert text`, `beschreibung`. Seed:
-`tara_kg_standard`, `schicht_timeout_min`, `kiste_offen_warn_h`, `position_rate_s`,
+`tara_kg_standard`, `schicht_timeout_min`, `kiste_faellig_bis='22:00'`
+(ersetzt `kiste_offen_warn_h`, siehe `ernte_kette_luecken` unten - feste
+Tagesend-Uhrzeit statt rollierender Stundenzahl), `position_rate_s`,
 `batterie_melde_intervall_min=10` (Entscheidung 2026-09-23, siehe oben - nicht
 die native VE.Direct-Rate 1:1 durchreichen), `sperrzeit_tag_s=15`
 (Entscheidung 2026-09-23, siehe Processor unten - gegen Mehrfach-Lesungen
@@ -521,9 +523,20 @@ Erkennung), damit sie ohne Deploy nachjustierbar bleiben statt hart codiert.
   Kumuliert über die Saison vs. `ernte_feld.laufmeter_gesamt` → Fortschritt in
   % fürs Dashboard (inkl. Summe letzte 48 h laut Pflichtenheft).
 - **`ernte_kette_luecken`** — Reconciliation: „befüllt, nie gewogen"
-  (`status='offen'` und `befuellt_am < now() − kiste_offen_warn_h`),
-  „gewogen ohne Befüllung" (`status='ungeklaert'`),
+  (`status='offen'` und Tagesende erreicht, siehe unten),
+  „gewogen ohne Befüllung" (`status='ungeklaert'` - Kiste zum ersten Mal an
+  der Waage gescannt, ohne Maschinen-Scan davor; **wird erkannt**, aber
+  Feld/Person/Zeit sind für diese eine Kiste nicht rekonstruierbar),
   „eingeloggt, nichts geerntet", implausibles Nettogewicht.
+  **Nutzer-Vorgabe 2026-09-23: Kisten müssen immer am selben Tag an der
+  Waage ankommen** - deshalb Fälligkeit an eine feste Tagesend-Uhrzeit
+  koppeln (`ernte_konfig.kiste_faellig_bis='22:00'`, ersetzt/ergänzt das
+  bisherige `kiste_offen_warn_h`, das als rollierende Stundenzahl eine um
+  17 Uhr befüllte Kiste schon um 19 Uhr fälschlich als „fehlt" markiert
+  hätte), nicht an eine rollierende Stundenzahl seit Befüllung.
+  **Je Mitarbeiter aggregiert** (nicht nur als lose Zyklen-Liste): „Person X
+  - heute N Kisten befüllt, davon M nicht gewogen" - direkter Soll-Ist-
+  Abgleich zwischen Maschinen-Scans und Waage je Person.
 - **`ernte_maschine_live`** — jüngste `ernte_position` je Maschine + aktive
   Schicht + kg heute. Für Karte/Überblick.
 
@@ -622,8 +635,11 @@ danach:
   nicht erst im Tagesreport, siehe Processor oben - Maschinen mit
   Kisten-Aktivität ohne aktive Schicht farblich hervorheben, damit
   Mitarbeiter/Vorarbeiter das noch während der Arbeit selbst beheben
-  können). Karten-Muster aus `FahrzeugKarte` (ggf. zu gemeinsamem
-  `GpsKarte` verallgemeinern).
+  können), **„Kisten fehlen heute"** - je Mitarbeiter befüllt vs. gewogen
+  aus `ernte_kette_luecken` (siehe Teil E), ebenfalls live, nicht erst nach
+  `kiste_faellig_bis`-Tagesende, damit eine tatsächlich verlorene Kiste
+  noch am selben Tag gesucht werden kann. Karten-Muster aus
+  `FahrzeugKarte` (ggf. zu gemeinsamem `GpsKarte` verallgemeinern).
 - **`/erntewirtschaft/ernte`** — Kisten-Zyklen: Datumsfilter, Tabelle (befüllt ·
   Maschine · Fahrer · Feld · netto kg · gewogen · Status), Filter „nur Lücken"
   und **„nur ohne Zuordnung"** (`employee_id is null`, siehe Prozessor oben) -
