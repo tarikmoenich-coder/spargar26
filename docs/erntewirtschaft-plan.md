@@ -483,7 +483,7 @@ Laderegler-Zustand, aus dem Pflichtenheft), `roh jsonb`,
 `unique(maschine_id, zeitpunkt)`.
 
 **`ernte_konfig`** — `schluessel text pk`, `wert text`, `beschreibung`. Seed:
-`tara_kg_standard`, `schicht_timeout_min`, `kiste_faellig_bis='22:00'`
+`tara_kg_standard`, `schicht_timeout_min`, `kiste_faellig_bis='23:00'`
 (ersetzt `kiste_offen_warn_h`, siehe `ernte_kette_luecken` unten - feste
 Tagesend-Uhrzeit statt rollierender Stundenzahl), `position_rate_s`,
 `batterie_melde_intervall_min=10` (Entscheidung 2026-09-23, siehe oben - nicht
@@ -530,7 +530,7 @@ Erkennung), damit sie ohne Deploy nachjustierbar bleiben statt hart codiert.
   „eingeloggt, nichts geerntet", implausibles Nettogewicht.
   **Nutzer-Vorgabe 2026-09-23: Kisten müssen immer am selben Tag an der
   Waage ankommen** - deshalb Fälligkeit an eine feste Tagesend-Uhrzeit
-  koppeln (`ernte_konfig.kiste_faellig_bis='22:00'`, ersetzt/ergänzt das
+  koppeln (`ernte_konfig.kiste_faellig_bis='23:00'`, ersetzt/ergänzt das
   bisherige `kiste_offen_warn_h`, das als rollierende Stundenzahl eine um
   17 Uhr befüllte Kiste schon um 19 Uhr fälschlich als „fehlt" markiert
   hätte), nicht an eine rollierende Stundenzahl seit Befüllung.
