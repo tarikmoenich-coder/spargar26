@@ -378,8 +378,9 @@ gewogen nach N Stunden.
 `ereignis text` ('person_login' | 'kiste' | 'gewicht' | 'batterie' | 'heartbeat'),
 `zeitpunkt timestamptz` (Geräte-Zeit), `lat/lng`, `gewicht_kg numeric`,
 `roh jsonb`, `verarbeitet_am timestamptz`, `verarbeitung_fehler text`.
-Index `(verarbeitet_am) where verarbeitet_am is null`, `(quelle, zeitpunkt desc)`.
-Alles Abgeleitete ist hieraus reprozessierbar.
+Index `(verarbeitet_am) where verarbeitet_am is null`, `(quelle, zeitpunkt desc)`,
+`(tag_uid, ereignis, verarbeitet_am desc)` (für die Sperrzeit-Prüfung, siehe
+Processor unten). Alles Abgeleitete ist hieraus reprozessierbar.
 
 **`ernte_waage`** — Hofwaage(n): `id identity pk`, `name`, `standort`,
 `reader_uid text`, `aktiv boolean`, timestamps.
@@ -400,7 +401,9 @@ Laderegler-Zustand, aus dem Pflichtenheft), `roh jsonb`,
 **`ernte_konfig`** — `schluessel text pk`, `wert text`, `beschreibung`. Seed:
 `tara_kg_standard`, `schicht_timeout_min`, `kiste_offen_warn_h`, `position_rate_s`,
 `batterie_melde_intervall_min=10` (Entscheidung 2026-09-23, siehe oben - nicht
-die native VE.Direct-Rate 1:1 durchreichen), `offline_warn_min=5`,
+die native VE.Direct-Rate 1:1 durchreichen), `sperrzeit_tag_s=15`
+(Entscheidung 2026-09-23, siehe Processor unten - gegen Mehrfach-Lesungen
+desselben Tags), `offline_warn_min=5`,
 `offline_alarm_min=10`, `batterie_warn_v=24`,
 `batterie_alarm_v=22`, `pause_max_meter=2`, `pause_fenster_min=5` — alle
 Schwellen 1:1 aus dem Pflichtenheft (Ampel Online/Offline, Batterie, Pausen-
@@ -459,7 +462,30 @@ Erkennung), damit sie ohne Deploy nachjustierbar bleiben statt hart codiert.
 
 ### Processor (pg_cron, jede Minute)
 
-plpgsql-Funktion faltet `ernte_scan where verarbeitet_am is null`:
+**Sperrzeit gegen Mehrfach-Lesungen (Nutzer-Frage 2026-09-23, WICHTIG):** Ein
+UHF-Reader im Dauerscan meldet denselben Tag typischerweise mehrmals pro
+Sekunde, solange er in Reichweite bleibt - hält der Fahrer eine Kiste 2 s vor
+den Reader, kommen leicht 5-10 Einzel-Lesungen desselben Tags in `ernte_scan`
+an, nicht eine. Für `person_login` fängt das die bestehende Regel „neue
+Schicht nur, wenn heute noch keine offen" bereits zufällig ab. Für `kiste`
+NICHT - ohne Sperrzeit würde jede der 5-10 Lesungen denselben Zyklus erneut
+schließen/neu öffnen und die Kette zerreißen. Deshalb zusätzlich zur
+Reader-seitigen Drosselung (falls unterstützt, z. B. „Tag erst nach X s
+erneut melden" - beim Reader-/Pilottest mit prüfen, spart auch Datenvolumen):
+**Der Processor ignoriert eine `kiste`- oder `person_login`-Lesung, wenn für
+denselben `tag_uid` bereits eine Lesung desselben `ereignis`-Typs innerhalb
+der letzten `sperrzeit_tag_s` Sekunden verarbeitet wurde** (neuer
+`ernte_konfig`-Schlüssel `sperrzeit_tag_s=15` - Startwert, im Pilottest
+gegenprüfen: lang genug für eine Kisten-Übergabe, kurz genug, um eine
+schnell aufeinanderfolgende zweite Kiste nicht zu verschlucken). Ignorierte
+Lesungen bekommen trotzdem `verarbeitet_am = now()` (damit der Processor sie
+nicht erneut anfasst), aber keine Wirkung auf `ernte_schicht`/
+`ernte_kiste_zyklus` - das Rohprotokoll in `ernte_scan` bleibt vollständig
+erhalten, nur die Geschäftslogik reagiert einmal statt mehrfach. Dafür ein
+Index `(tag_uid, ereignis, verarbeitet_am desc)` auf `ernte_scan`.
+
+plpgsql-Funktion faltet `ernte_scan where verarbeitet_am is null`, je Zeile
+zuerst die Sperrzeit-Prüfung oben, danach:
 - `person_login` → `ernte_schicht` (neue Schicht, wenn nicht schon heute offen für
   Maschine+Fahrer).
 - `kiste` an Maschine M → jüngsten offenen Zyklus für M schließen (`voll_am`,
