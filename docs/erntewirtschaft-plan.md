@@ -210,24 +210,87 @@ Drei Ströme, **getrennt geführt**:
 Supabase Edge Function (Deno). Auth: `Authorization: Bearer <ERNTE_INGEST_TOKEN>`.
 **Dumm** — nur validieren + je Ereignis eine `ernte_scan`-Zeile schreiben
 (Idempotenz-Key = Hash aus `quelle|typ|ts|tag` → `on conflict do nothing`).
-Business-Logik macht der Processor (Teil E, pg_cron).
+Business-Logik (Zyklen öffnen/schließen, Schichten anlegen) macht weiterhin
+der Processor (Teil E, pg_cron, einmal pro Minute) - **außer der schnellen
+Klassifizierung unten**, die dafür zu langsam wäre.
+
+**Klassifizierung Person/Kiste (Nutzer-Vorgabe 2026-09-23): nur Personen
+werden angelernt, alles andere gilt automatisch als Kiste.** `ernte_tag`
+muss deshalb NICHT für jeden der tausenden Kisten-Tags einen Datensatz
+haben - nur für die ~140-200 Mitarbeiter-Badges (optional zusätzlich
+einzelne Kisten, falls mal eine besonders markiert werden soll). Ein Tag,
+der beim Scan nicht in `ernte_tag` als `art='person'` gefunden wird, ist
+per Default eine Kiste - kein Onboarding-Schritt für neue Kisten-Tags
+nötig.
+
+**Sicherheitsnetz gegen den Fall „unbekannter Mitarbeiter" (Nutzer-Frage
+2026-09-23):** Ohne Weiteres würde ein noch nicht angelerntes
+Mitarbeiter-Badge einfach als Kiste durchlaufen - ein Zyklus würde
+geöffnet, nie gewogen, und es fällt erst auf, wenn am Monatsende Stunden
+fehlen. Deshalb: **der erste Scan eines Tags an einer Maschine an einem
+Tag gilt immer als Login-Versuch**, unabhängig vom Ergebnis der
+Klassifizierung.
+- Tag ist als `person` registriert → normaler Login (`ernte_schicht`).
+- Tag ist NICHT registriert → **kein** Kisten-Zyklus wird angelegt,
+  stattdessen `ernte_scan.verarbeitung_fehler = 'unbekannter_mitarbeiter_tag'`
+  (eigene Fehlerkategorie, sichtbar in der App, kein stiller Datenverlust).
+- Jeder weitere Scan desselben Tages an dieser Maschine, der nicht
+  registriert ist, gilt regulär als Kiste (Verwechslungsrisiko dort gering,
+  da Kisten viel häufiger sind als neue Mitarbeiter).
+- Annahme dahinter: der Fahrer scannt morgens immer zuerst sein Badge,
+  bevor er eine Kiste anfasst. Falls sich das im Pilottest als unsicher
+  erweist, wäre ein physischer Taster nur für den Login-Scan die
+  Alternative - erstmal ohne zusätzliche Hardware versucht.
+
+**Erfolgston am Gerät (Nutzer-Vorschlag 2026-09-23):** Die Ingest-Antwort
+gibt den Klassifizierungs-Typ direkt zurück (siehe unten), damit das Skript
+auf dem TRB246 (dasselbe, das auch die Sperrzeit prüft, siehe Teil D) sofort
+nach erfolgreicher Übertragung einen passenden Ton auslösen kann - **erst
+nach der Serverantwort, nicht schon beim reinen Lesen des Tags**, weil nur
+das wirklich bestätigt, dass die Daten sicher angekommen sind. Auch eine
+durch die Sperrzeit verworfene Wiederholung gilt dabei als Erfolg (der
+Server hat sie ja erhalten) - stumm bleibt es nur bei echten
+Übertragungsfehlern. Töne: „Person" / „Kiste" / „unbekannter Mitarbeiter"
+(siehe Sicherheitsnetz oben) - je ein einfacher Piezo-Summer an einem
+Digitalausgang des TRB246, unterschiedliche Muster je Ereignis.
 
 Payload Maschine (TRB246):
 ```json
 {
   "box": "<IMEI/Serial>",
   "events": [
-    {"typ":"person_login","tag":"E280...","ts":"2026-04-18T05:32:11Z","lat":51.2,"lng":6.8},
-    {"typ":"kiste","tag":"E280...","ts":"2026-04-18T05:41:03Z","lat":51.2,"lng":6.8},
+    {"typ":"scan","tag":"E280...","ts":"2026-04-18T05:32:11Z","lat":51.2,"lng":6.8},
+    {"typ":"scan","tag":"E280...","ts":"2026-04-18T05:41:03Z","lat":51.2,"lng":6.8},
     {"typ":"batterie","soc":78,"u":12.9,"i":-4.2,"ts":"2026-04-18T05:45:00Z"}
   ]
 }
 ```
+`typ:"scan"` ersetzt die bisherige Unterscheidung `person_login`/`kiste` im
+Payload - die Box weiß das ja gerade NICHT mehr im Voraus, das entscheidet
+erst die Ingest-Funktion per Klassifizierung.
+
 Payload Waage (Hof-Agent):
 ```json
 {"waage":"hofwaage-1","tag":"E280...","gewicht_kg":9.42,"ts":"2026-04-18T13:07:55Z"}
 ```
-Antwort: `200 {"angenommen": n, "dubletten": m}`.
+Antwort: `200 {"angenommen": n, "dubletten": m, "klassifizierung":
+[{"tag":"E280...", "typ": "person"|"kiste"|"unbekannter_mitarbeiter_tag"}]}`
+- das `typ` je Tag ist neu, für den Erfolgston am Gerät.
+
+**Offene Frage Stromausfall (Nutzer-Frage 2026-09-23):** Schaltet die
+Maschine nach Feierabend die komplette Stromversorgung ab (nicht nur
+Zündung), verliert der TRB246 sofort allen RAM-Inhalt - inklusive einer
+eventuell noch nicht gesendeten Offline-Warteschlange. Ob Teltonikas
+„Data to Server"-Warteschlange auf Flash (übersteht Stromausfall) oder RAM
+(verloren) liegt, ist in der öffentlichen Doku nicht eindeutig zu finden -
+**vor dem Pilottest direkt testen**: Gerät mit wartenden Meldungen in der
+Warteschlange stromlos machen, wieder einschalten, prüfen ob nachgesendet
+wird. Falls nicht: entweder eine kurze Abschaltverzögerung
+(Zündungs-/Kondensator-Pufferung, wie bei Fahrzeugelektronik üblich) oder
+eine selbst gebaute, flash-basierte Warteschlange im Custom Script
+vorsehen. Die Sperrzeit-Merkliste (siehe Teil D) selbst darf dagegen
+bewusst im RAM bleiben (siehe dortige Begründung) - das ist ein anderes,
+unkritischeres Problem als verlorene Nutzdaten.
 
 ## Teil D — Waagen-Agent (`tools/ernte-waage-agent/`)
 
@@ -348,6 +411,11 @@ Monats-Partitionierung + Retention-Job (~400 Tage).
 **`ernte_tag`** — Transponder-Register: `uid text pk`,
 `art text check (art in ('person','kiste'))`, `employee_id → employees`,
 `kiste_nr text`, `aktiv boolean default true`, `notiz`, timestamps.
+**Enthält seit 2026-09-23 nur noch die ~140-200 Mitarbeiter-Badges** (siehe
+Teil C) - ein Tag ohne Eintrag hier gilt automatisch als Kiste, braucht
+also keine eigene Zeile mehr. `kiste_nr` bleibt nutzbar, falls doch mal eine
+einzelne Kiste manuell markiert werden soll (z. B. eine reparierte/
+markierte Testkiste), ist aber im Regelfall leer.
 
 **`ernte_schicht`** — Tages-Login: `id identity pk`, `maschine_id → ernte_maschine`,
 `employee_id → employees` (aus Tag aufgelöst, nullbar), `tag_uid text`,
@@ -466,15 +534,16 @@ Erkennung), damit sie ohne Deploy nachjustierbar bleiben statt hart codiert.
 UHF-Reader im Dauerscan meldet denselben Tag typischerweise mehrmals pro
 Sekunde, solange er in Reichweite bleibt - hält der Fahrer eine Kiste 2 s vor
 den Reader, kommen leicht 5-10 Einzel-Lesungen desselben Tags in `ernte_scan`
-an, nicht eine. Für `person_login` fängt das die bestehende Regel „neue
-Schicht nur, wenn heute noch keine offen" bereits zufällig ab. Für `kiste`
-NICHT - ohne Sperrzeit würde jede der 5-10 Lesungen denselben Zyklus erneut
-schließen/neu öffnen und die Kette zerreißen. Deshalb zusätzlich zur
+an, nicht eine. Für einen Login fängt das die bestehende Regel „neue
+Schicht nur, wenn heute noch keine offen" bereits zufällig ab. Für eine
+Kiste NICHT - ohne Sperrzeit würde jede der 5-10 Lesungen denselben Zyklus
+erneut schließen/neu öffnen und die Kette zerreißen. Deshalb zusätzlich zur
 Reader-seitigen Drosselung (falls unterstützt, z. B. „Tag erst nach X s
 erneut melden" - beim Reader-/Pilottest mit prüfen, spart auch Datenvolumen):
-**Der Processor ignoriert eine `kiste`- oder `person_login`-Lesung, wenn für
-denselben `tag_uid` bereits eine Lesung desselben `ereignis`-Typs innerhalb
-der letzten `sperrzeit_tag_s` Sekunden verarbeitet wurde** (neuer
+**Der Processor ignoriert eine Lesung, wenn für denselben `tag_uid` bereits
+eine Lesung mit demselben Klassifizierungs-Ergebnis (Person-Login oder
+Kiste, siehe Teil C) innerhalb der letzten `sperrzeit_tag_s` Sekunden
+verarbeitet wurde** (neuer
 `ernte_konfig`-Schlüssel `sperrzeit_tag_s=15` - Startwert, im Pilottest
 gegenprüfen: lang genug für eine Kisten-Übergabe, kurz genug, um eine
 schnell aufeinanderfolgende zweite Kiste nicht zu verschlucken). Ignorierte
@@ -484,13 +553,21 @@ nicht erneut anfasst), aber keine Wirkung auf `ernte_schicht`/
 erhalten, nur die Geschäftslogik reagiert einmal statt mehrfach. Dafür ein
 Index `(tag_uid, ereignis, verarbeitet_am desc)` auf `ernte_scan`.
 
-plpgsql-Funktion faltet `ernte_scan where verarbeitet_am is null`, je Zeile
-zuerst die Sperrzeit-Prüfung oben, danach:
-- `person_login` → `ernte_schicht` (neue Schicht, wenn nicht schon heute offen für
-  Maschine+Fahrer).
-- `kiste` an Maschine M → jüngsten offenen Zyklus für M schließen (`voll_am`,
-  `voll_lat/lng`), neuen Zyklus `offen` anlegen (`befuellt_*`, `schicht_id` aus
-  aktiver Schicht an M, Spatial-Join `ernte_feld` → `feld`/`kultur`).
+plpgsql-Funktion faltet `ernte_scan where verarbeitet_am is null`. Die
+Klassifizierung (Person/Kiste/unbekannter Mitarbeiter) ist bereits in der
+Ingest-Funktion passiert (Teil C, schnell genug für den Erfolgston) und
+steht am `ernte_scan`-Datensatz; der Processor übernimmt nur noch die
+zeitaufwändigere Geschäftslogik. Je Zeile zuerst die Sperrzeit-Prüfung oben,
+danach:
+- Login (Tag als `person` klassifiziert) → `ernte_schicht` (neue Schicht,
+  wenn nicht schon heute offen für Maschine+Fahrer).
+- Erster Tag des Tages an Maschine M, NICHT als `person` klassifiziert →
+  `verarbeitung_fehler = 'unbekannter_mitarbeiter_tag'`, **kein**
+  Kisten-Zyklus (siehe Teil C, Sicherheitsnetz).
+- Kiste (jeder weitere nicht als `person` klassifizierte Tag) an Maschine M
+  → jüngsten offenen Zyklus für M schließen (`voll_am`, `voll_lat/lng`),
+  neuen Zyklus `offen` anlegen (`befuellt_*`, `schicht_id` aus aktiver
+  Schicht an M, Spatial-Join `ernte_feld` → `feld`/`kultur`).
 - `gewicht` (Tag T) → jüngsten offenen Zyklus für T → `gewogen_am`,
   `gewicht_brutto_kg`, `tara_kg` aus Konfig, `status='gewogen'`; kein Treffer →
   `ungeklaert`-Zyklus.
