@@ -1,9 +1,46 @@
 # Erntewirtschaft — Architektur- und Umsetzungsplan
 
 Stand: 2026-09-04, Frequenz-Entscheidung 2026-09-22 (UHF→HF), TECTUS-Rückmeldung
-2026-09-22 (HF→LF). Arbeitsdokument (wie `unterkunft-plan.md`), damit der
-Planungsstand einen Konsolen-Neustart übersteht. Noch **kein Code** — wartet
-auf die Hardware-Entscheidungen unten.
+2026-09-22 (HF→LF), Präzisionsanforderung präzisiert 2026-09-23 (RTK
+voraussichtlich verzichtbar). Arbeitsdokument (wie `unterkunft-plan.md`),
+damit der Planungsstand einen Konsolen-Neustart übersteht. Noch **kein
+Code** — wartet auf die Hardware-Entscheidungen unten.
+
+**Präzisionsanforderung geklärt (2026-09-23): RTK voraussichtlich NICHT
+nötig.** Die ursprüngliche „±1 m"-Vorgabe (Klärung 2026-09-03/04) stammte aus
+einem Testaufbau mit RTK, ohne dass der tatsächliche Verwendungszweck der
+Position dagegen geprüft wurde. Jetzt konkretisiert:
+- **Gefahrene Strecke je Maschine/Tag/Stunde:** Streckenlänge reagiert primär
+  auf Punkt-zu-Punkt-Rauschen (Zittern), kaum auf eine langsam wandernde
+  Gesamtverschiebung - normales GNSS (2,5-5 m) plus ein Mindestabstands-/
+  Bewegungsfilter (ohnehin als Logging-Option unten vorgesehen) reicht.
+- **Ertrag pro Laufmeter als grobe Heatmap** - Beispiel des Nutzers: „auf der
+  Ostseite die letzten 30 m gibt es kaum noch Spargel". Gesucht ist eine
+  Auflösung im Bereich von zig Metern, NICHT reihengenau (1,80 m
+  Reihenabstand). Normales GNSS liegt damit 5-10× genauer als nötig -
+  komfortabler Sicherheitsabstand, anders als bei einer reihengenauen
+  Auswertung, wo Fehler (2,5-5 m) und Reihenabstand (1,80 m) gefährlich nah
+  beieinander lägen.
+- Ein Praxistest des Nutzers 2026-09 (Router+Antenne im Betrieb, Reihen
+  „kerzengerade", keine Überschneidung bei 1,80 m Abstand) zeigte gute
+  Ergebnisse - als alleiniger Beleg für absolute Genauigkeit aber mit
+  Vorsicht zu genießen (gerade Spuren zeigen v.a. NIEDRIGES Rauschen, nicht
+  zwingend eine korrekte absolute Position - eine langsam wandernde
+  Verschiebung sieht in einer einzelnen Aufzeichnung trotzdem glatt aus).
+  Für den jetzt bestätigten Verwendungszweck (Zig-Meter-Auflösung) ist der
+  Sicherheitsabstand aber so groß, dass dieser Vorbehalt hier nicht mehr
+  entscheidend ist.
+- **Konsequenz:** RTK (F9P, Multiband-Antenne, NTRIP/SAPOS) entfällt
+  voraussichtlich. Das spart ~250-450 €/Box (× 140 ≈ 35.000-63.000 €
+  Hardware) UND macht den zuvor errechneten hohen Datenverbrauch (NTRIP war
+  der dominante Treiber, ~4-8 GB/Saison/Maschine) hinfällig - übrig bleiben
+  nur die reinen Positionsdaten, ca. 150 MB/Saison/Maschine. Die günstigen
+  100 SIM-Karten (500 MB/5 Jahre, siehe [[fahrzeuge-traccar]]) könnten dafür
+  sogar ausreichen, statt einer separaten teureren IoT-SIM.
+  Alle RTK-spezifischen Abschnitte unten (Hardware-Tabelle, Teil A Schritt 4,
+  `fix_qualitaet`-Spalte etc.) bleiben im Dokument stehen für den Fall, dass
+  sich der Bedarf später doch ändert - gelten aber bis auf Weiteres als
+  **nicht mehr Pflicht**, nur noch optional.
 
 **Frequenz-Verlauf 2026-09-22 - noch nicht final, Pilottest offen:**
 1. Erste Entscheidung: Kisten-/Badge-Scan weg von UHF, hin zu HF (13,56 MHz).
@@ -54,7 +91,7 @@ Lückenlose Kette von der Erntearbeit auf dem Feld bis zum gewogenen Ertrag am H
 um einen echten Realitätscheck über die Arbeitseffizienz zu bekommen:
 
 ```
-Feld:      Spargelspinne (SpidertrackBox: LTE + RTK-GPS + LF-RFID + Batterie)
+Feld:      Spargelspinne (SpidertrackBox: LTE + GNSS (ohne RTK, s.o.) + LF-RFID + Batterie)
              Fahrer scannt morgens 1× seinen Badge          → ernte_schicht
              Fahrer scannt leere Kiste, erntet rein          → ernte_kiste_zyklus (offen)
              Fahrer scannt nächste Kiste                     → vorige implizit "voll"
@@ -94,9 +131,10 @@ Ergebnis:  pro Kiste: Maschine · Fahrer · Feld/Flur (aus GPS) · Zeit · netto
   300-kg-Kisten vorgesehen. Die **Waage selbst kommt noch** (siehe Teil D
   für das gewählte Modell
   RHEWA 84vario).
-- **±1 m Präzision** wird gebraucht (im Testaufbau mit einem Board der
-  Entwicklungsfirma erreicht — das hatte RTK). Interne TRB246-GNSS schafft das
-  **nicht** (2,5–5 m).
+- **±1 m Präzision (RTK)** — ursprüngliche Vorgabe, seit 2026-09-23
+  voraussichtlich NICHT mehr nötig, siehe „Präzisionsanforderung geklärt"
+  oben. Interne TRB246-GNSS liegt bei 2,5–5 m, für den jetzt bestätigten
+  Verwendungszweck (Zig-Meter-Heatmap, Streckenlänge) ausreichend.
 - **SIM:** whereversim IoT-M2M-Datenkarten, monatlich aktiv/inaktiv schaltbar
   (passt zur Saison).
 - **Fahrer wählt nichts.** Feld/Flur kommt aus der GPS-Position (Spatial-Join).
@@ -123,7 +161,7 @@ Ergebnis:  pro Kiste: Maschine · Fahrer · Feld/Flur (aus GPS) · Zeit · netto
 | Thema | Optionen | Empfehlung |
 |---|---|---|
 | **Kisten-Scan an der Maschine** (2026-09-22: UHF→HF→LF, siehe Hinweis oben, Pilottest offen) | LF-Reader-Modul (seriell, TECTUS-Empfehlung), Ethernet-HF-Modul, oder erst der Pilottest entscheidet | Aktuell favorisiert: LF mit seriellem Reader (RS232/RS485 an den ohnehin vorhandenen TRB246), bis 60 cm Reichweite, robust bei Nässe, günstiger als Ethernet-Reader für 140 Boxen. Vor Bestellung: Pilottest mit TECTUS-LF-Testhardware unter Feldbedingungen. Die bereits gekauften UHF-Tags/der UHF-Reader (TECTUS MAGNUM 4077) werden für 300-kg-Rohware-/Fertigware-Kisten weiterverwendet, nicht verworfen. |
-| **±1 m** | RTK-Empfänger (u-blox **ZED-F9P**-Klasse, Multiband L1/L2/L5) + NTRIP-Korrektur + Multiband-Antenne. TRB246 als NTRIP-Client reicht RTCM an den F9P durch; F9P → NMEA (GGA Fix-Qualität 4) → TRB246 → Traccar | F9P + **SAPOS** (in mehreren Bundesländern für Landwirtschaft günstig/kostenlos), sonst **PPP** (u-blox PointPerfect, kein Basisstations-Betrieb). Combo-Antenne bleibt für LTE/WLAN, separate GNSS-Multiband-Antenne dazu. Mehrkosten grob **+250–450 €/Box** + NTRIP-Gebühr. |
+| **±1 m (RTK)** — voraussichtlich verzichtbar, siehe Hinweis oben (2026-09-23) | Ohne RTK: normale TRB246-GNSS (2,5–5 m) reicht für Zig-Meter-Heatmap + Streckenlänge. Mit RTK weiterhin möglich, falls doch reihengenau gebraucht: u-blox **ZED-F9P**-Klasse + NTRIP + Multiband-Antenne | **Kein RTK** — spart ~250–450 €/Box + NTRIP-Gebühr/-Datenvolumen (× 140 Boxen erheblich). Nur bei späterem Bedarf an reihengenauer Auswertung nachrüsten. |
 | **Positions-Lograte** | 1 s / 5 s / on-move+min-distance | **1 s** in der Traccar-PostgreSQL (kurze Retention), **5 s** heruntergerechnet nach `ernte_position`. |
 | **Feld-Geometrien** | aus Pachtwesen2026 importieren / in Spargar neu pflegen | `ernte_feld` mit PostGIS in der Spargar-DB; Erstbefüllung als Import, danach kleiner Karten-Editor. |
 | **Scan-Processor** | pg_cron-plpgsql / Modul im systemd-Poller | **pg_cron** — DB-intern, unabhängig davon ob die Poller-Box läuft; Faltung ist mengenbasiertes SQL. |
