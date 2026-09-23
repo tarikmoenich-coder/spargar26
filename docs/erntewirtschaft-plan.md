@@ -575,19 +575,35 @@ Ingest-Funktion passiert (Teil C, schnell genug für den Erfolgston) und
 steht am `ernte_scan`-Datensatz; der Processor übernimmt nur noch die
 zeitaufwändigere Geschäftslogik. Je Zeile zuerst die Sperrzeit-Prüfung oben,
 danach:
-- Login (Tag als `person` klassifiziert) → `ernte_schicht` (neue Schicht,
-  wenn nicht schon heute offen für Maschine+Fahrer).
-- Kiste (jeder nicht als `person` klassifizierte Tag - das ist der
+- **Login (Tag als `person` klassifiziert) → `ernte_schicht`** (neue
+  Schicht, wenn nicht schon heute offen für Maschine+Fahrer). **Ein-
+  Maschine-Regel (Nutzer-Vorgabe 2026-09-23):** Vor dem Öffnen der neuen
+  Schicht wird geprüft, ob dieselbe Person noch eine offene Schicht an
+  einer ANDEREN Maschine hat - falls ja, wird diese sofort geschlossen
+  (`ende = zeitpunkt` des neuen Logins). Eine Person kann also nie
+  gleichzeitig auf zwei Maschinen als aktiv gelten; ein Wechsel (auch
+  Vormittag/Nachmittag) schaltet nahtlos um, ohne manuellen Logout.
+- **Kiste (jeder nicht als `person` klassifizierte Tag - das ist der
   Normalfall für jede Kiste, siehe Klassifizierungs-Entscheidung oben) an
-  Maschine M → jüngsten offenen Zyklus für M schließen (`voll_am`,
-  `voll_lat/lng`), neuen Zyklus `offen` anlegen (`befuellt_*`, `schicht_id`
-  aus aktiver Schicht an M, Spatial-Join `ernte_feld` → `feld`/`kultur`).
+  Maschine M** → jüngsten offenen Zyklus für M schließen (`voll_am`,
+  `voll_lat/lng`), neuen Zyklus `offen` anlegen (`befuellt_*`, Spatial-Join
+  `ernte_feld` → `feld`/`kultur` - **das Feld/der Ursprung ist immer
+  eindeutig, unabhängig von der Mitarbeiter-Zuordnung**). `schicht_id`/
+  `employee_id` kommen aus der aktiven Schicht an M, **falls keine offen
+  ist, bleiben beide NULL** - Nutzer-Entscheidung 2026-09-23: kein
+  Mitarbeiter registriert/angemeldet heißt „Kiste ohne Zuordnung", nicht
+  „Fehler". Ursprung (Feld) bleibt vollständig, die Person kann jederzeit
+  im Nachhinein nachgetragen werden (`ernte_kiste_zyklus.employee_id` ist
+  update-bar für admin/hr, siehe RLS oben).
   **Keine** scanweise Sonderbehandlung für „erster Scan" mehr (siehe Teil C,
-  Sicherheitsnetz - diese frühere Idee wurde verworfen, weil sie bei jeder
-  Kiste-vor-Badge-Reihenfolge falschen Alarm geschlagen hätte). Stattdessen
-  einmal täglich: Maschinen mit Kisten-Aktivität, aber ohne erkannten Login
-  an diesem Tag, in einem Report/auf dem Dashboard auflisten (Hinweis auf
-  ein noch nicht angelerntes Mitarbeiter-Badge).
+  Sicherheitsnetz-Verlauf - diese frühere Idee wurde verworfen, weil sie
+  bei jeder Kiste-vor-Badge-Reihenfolge falschen Alarm geschlagen hätte).
+  Stattdessen **live sichtbar auf `/erntewirtschaft`** (nicht nur einmal
+  täglich im Report, siehe Teil F): laufende „Kisten ohne Zuordnung" je
+  Maschine, damit das Problem sofort auffällt, während noch gearbeitet
+  wird - Nutzer-Erwartung: die Mitarbeiter sorgen selbst zeitnah für die
+  Behebung (Badge anlernen lassen), wenn sie sehen, dass ihre Kisten nicht
+  zugeordnet werden.
 - `gewicht` (Tag T) → jüngsten offenen Zyklus für T → `gewogen_am`,
   `gewicht_brutto_kg`, `tara_kg` aus Konfig, `status='gewogen'`; kein Treffer →
   `ungeklaert`-Zyklus.
@@ -601,11 +617,19 @@ danach:
 - `components/ErntewirtschaftTabs.tsx`.
 - **`/erntewirtschaft`** — Überblick: Karte mit den Spinnen (Live-Position, Farbe
   nach Fix-Qualität RTK/Float/GPS, Klick → Maschine + aktuelle Schicht + kg heute),
-  Tages-Kacheln (Kisten heute, kg heute, Ø kg/h, offene Ketten-Lücken). Karten-
-  Muster aus `FahrzeugKarte` (ggf. zu gemeinsamem `GpsKarte` verallgemeinern).
+  Tages-Kacheln (Kisten heute, kg heute, Ø kg/h, offene Ketten-Lücken,
+  **„Kisten ohne Zuordnung heute"** - Nutzer-Vorgabe 2026-09-23: live sichtbar,
+  nicht erst im Tagesreport, siehe Processor oben - Maschinen mit
+  Kisten-Aktivität ohne aktive Schicht farblich hervorheben, damit
+  Mitarbeiter/Vorarbeiter das noch während der Arbeit selbst beheben
+  können). Karten-Muster aus `FahrzeugKarte` (ggf. zu gemeinsamem
+  `GpsKarte` verallgemeinern).
 - **`/erntewirtschaft/ernte`** — Kisten-Zyklen: Datumsfilter, Tabelle (befüllt ·
-  Maschine · Fahrer · Feld · netto kg · gewogen · Status), Filter „nur Lücken",
-  CSV-Export.
+  Maschine · Fahrer · Feld · netto kg · gewogen · Status), Filter „nur Lücken"
+  und **„nur ohne Zuordnung"** (`employee_id is null`, siehe Prozessor oben) -
+  hier auch das **nachträgliche Zuordnen** einer Person zu bereits
+  entstandenen Kisten (admin/hr, `ernte_kiste_zyklus.employee_id` per Klick
+  setzen), CSV-Export.
 - **`/erntewirtschaft/effizienz`** — Realitätscheck: je Schicht/Fahrer/Maschine/
   Feld kg, Stunden (Schicht vs. `work_entries`), kg/h; Ertragsdichte-Heatmap aus
   `ernte_kiste_zyklus`-Positionen (gewichtet mit netto kg); Zeitraum-Wähler; Export.
