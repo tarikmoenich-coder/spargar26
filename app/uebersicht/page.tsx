@@ -191,6 +191,15 @@ export default function UebersichtPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [jahr]);
 
+  // Auswahl auch beim Wechsel des Gruppenfilters zurücksetzen (Nutzer-Meldung
+  // 2026-09-24: "ignoriert meinen Gruppenfilter") - sonst blieben Personen
+  // aus einer vorher gewählten (jetzt ausgeblendeten) Gruppe unsichtbar
+  // markiert und flossen z.B. in den Druck mit ein, obwohl der Filter etwas
+  // anderes zeigte.
+  useEffect(() => {
+    setAusgewaehlt(new Set());
+  }, [gruppeFilter]);
+
   useEffect(() => {
     async function ladeGruppen() {
       const supabase = getSupabaseClient();
