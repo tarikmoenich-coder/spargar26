@@ -113,6 +113,21 @@ export default function UebersichtPage() {
   const [druckMonat, setDruckMonat] = useState<{
     mitAusgezahlten: boolean;
   } | null>(null);
+  // Stunden-/Vorschussübersicht für die per Checkbox ausgewählten Personen,
+  // nach Monaten gegliedert (Nutzer-Vorgabe 2026-09-24) - unabhängig vom
+  // Monatsfilter oben, deckt immer die ganze Saison ab. Gleiches Druck-Muster
+  // wie druckMonat: erst Daten laden, dann per Effekt window.print() auslösen.
+  const [stundenVorschussDaten, setStundenVorschussDaten] = useState<
+    {
+      employeeId: string;
+      personalNr: string;
+      name: string;
+      vorname: string;
+      monate: { monat: number; stunden: number; vorschuss: number }[];
+    }[] | null
+  >(null);
+  const [stundenVorschussLaeuft, setStundenVorschussLaeuft] = useState(false);
+
   // Sortierung der Monats-Filter-Liste (wirkt auf Bildschirm UND Druck, damit
   // die Buchhaltung vor dem Druck die gewünschte Reihenfolge sieht).
   const [monatSort, setMonatSort] = useState<
@@ -262,6 +277,77 @@ export default function UebersichtPage() {
     }
     window.addEventListener("afterprint", handleAfterPrint);
     return () => window.removeEventListener("afterprint", handleAfterPrint);
+  }, []);
+
+  // Lädt Stunden (season_summary_monat, alle Monate) + Vorschüsse
+  // (employee_vorschuss_historie, client-seitig je Monat summiert) für die
+  // ausgewählten Personen und löst danach den Druck aus.
+  async function stundenVorschussDrucken() {
+    if (ausgewaehlt.size === 0) return;
+    setStundenVorschussLaeuft(true);
+    const ids = Array.from(ausgewaehlt);
+    const supabase = getSupabaseClient();
+    const [{ data: monatsDaten }, { data: vorschussDaten }] = await Promise.all([
+      supabase
+        .from("season_summary_monat")
+        .select("employee_id, monat, gesamt_stunden")
+        .eq("saison_jahr", jahr)
+        .in("employee_id", ids),
+      supabase
+        .from("employee_vorschuss_historie")
+        .select("employee_id, datum, betrag, storniert")
+        .in("employee_id", ids)
+        .eq("storniert", false),
+    ]);
+
+    const stundenProPerson = new Map<string, Map<number, number>>();
+    for (const r of (monatsDaten as { employee_id: string; monat: number; gesamt_stunden: number }[]) ?? []) {
+      const m = stundenProPerson.get(r.employee_id) ?? new Map<number, number>();
+      m.set(r.monat, r.gesamt_stunden);
+      stundenProPerson.set(r.employee_id, m);
+    }
+    const vorschussProPerson = new Map<string, Map<number, number>>();
+    for (const r of (vorschussDaten as { employee_id: string; datum: string; betrag: number }[]) ?? []) {
+      const datum = new Date(r.datum + "T00:00:00");
+      if (datum.getFullYear() !== jahr) continue; // andere Saison/Kalenderjahr
+      const monat = datum.getMonth() + 1;
+      const m = vorschussProPerson.get(r.employee_id) ?? new Map<number, number>();
+      m.set(monat, (m.get(monat) ?? 0) + Number(r.betrag));
+      vorschussProPerson.set(r.employee_id, m);
+    }
+
+    const ergebnis = ids
+      .map((id) => rows.find((r) => r.employee_id === id))
+      .filter((r): r is SeasonSummaryRow => !!r)
+      .sort((a, b) => a.personal_nr.localeCompare(b.personal_nr, "de", { numeric: true }))
+      .map((r) => ({
+        employeeId: r.employee_id,
+        personalNr: r.personal_nr,
+        name: r.name,
+        vorname: r.vorname,
+        monate: MONATSNAMEN.map((_, i) => ({
+          monat: i + 1,
+          stunden: stundenProPerson.get(r.employee_id)?.get(i + 1) ?? 0,
+          vorschuss: vorschussProPerson.get(r.employee_id)?.get(i + 1) ?? 0,
+        })),
+      }));
+
+    setStundenVorschussLaeuft(false);
+    setStundenVorschussDaten(ergebnis);
+  }
+
+  useEffect(() => {
+    if (!stundenVorschussDaten) return;
+    const id = setTimeout(() => window.print(), 50);
+    return () => clearTimeout(id);
+  }, [stundenVorschussDaten]);
+
+  useEffect(() => {
+    function handleAfterPrintStundenVorschuss() {
+      setStundenVorschussDaten(null);
+    }
+    window.addEventListener("afterprint", handleAfterPrintStundenVorschuss);
+    return () => window.removeEventListener("afterprint", handleAfterPrintStundenVorschuss);
   }, []);
 
   async function monatAbschliessen() {
@@ -817,6 +903,19 @@ export default function UebersichtPage() {
             {ausgewaehlt.size > 0
               ? `${ausgewaehlt.size} Person(en) jetzt abrechnen`
               : "Jetzt Abrechnen"}
+          </button>
+        )}
+        {monatFilter === 0 && canEdit && (
+          <button
+            type="button"
+            className="btn-secondary"
+            disabled={ausgewaehlt.size === 0 || stundenVorschussLaeuft}
+            onClick={stundenVorschussDrucken}
+            title="Für die ausgewählten Personen eine nach Monaten gegliederte Stunden-/Vorschussübersicht drucken"
+          >
+            {stundenVorschussLaeuft
+              ? "Lädt…"
+              : "Stunden-/Vorschussübersicht drucken"}
           </button>
         )}
         {monatFilter === 0 && abrechnenFehler && (
@@ -1577,6 +1676,53 @@ export default function UebersichtPage() {
             </div>
           );
         })()}
+
+      {/* Druckansicht der Stunden-/Vorschussübersicht - je ausgewählter Person
+          ein eigener Block mit Seitenumbruch, nach Monaten gegliedert. */}
+      {stundenVorschussDaten && (
+        <div className="hidden print:block">
+          {stundenVorschussDaten.map((p, i) => {
+            const summeStunden = p.monate.reduce((acc, m) => acc + m.stunden, 0);
+            const summeVorschuss = p.monate.reduce((acc, m) => acc + m.vorschuss, 0);
+            return (
+              <div key={p.employeeId} className={i > 0 ? "print-page-break" : ""}>
+                <h2 className="text-xl font-semibold">
+                  Stunden-/Vorschussübersicht {jahr}
+                </h2>
+                <p className="mt-1 text-base">
+                  {p.personalNr} · {p.name}, {p.vorname} · Datum:{" "}
+                  {formatDatumDE(new Date().toISOString())}
+                </p>
+                <table className="mt-4 print-form-table print-dense-table">
+                  <thead>
+                    <tr>
+                      <th>Monat</th>
+                      <th>Std.</th>
+                      <th>Vorschüsse €</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {p.monate.map((m) => (
+                      <tr key={m.monat}>
+                        <td>{MONATSNAMEN[m.monat - 1]}</td>
+                        <td>{m.stunden ? fmt(m.stunden) : "—"}</td>
+                        <td>{m.vorschuss ? fmt(m.vorschuss) : "—"}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                  <tfoot>
+                    <tr>
+                      <td className="text-right font-semibold">Summe {jahr}</td>
+                      <td className="font-semibold">{fmt(summeStunden)}</td>
+                      <td className="font-semibold">{fmt(summeVorschuss)}</td>
+                    </tr>
+                  </tfoot>
+                </table>
+              </div>
+            );
+          })}
+        </div>
+      )}
 
     </div>
   );
