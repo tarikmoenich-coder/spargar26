@@ -308,7 +308,11 @@ export default function UebersichtPage() {
     }
     const vorschussProPerson = new Map<string, Map<number, number>>();
     for (const r of (vorschussDaten as { employee_id: string; datum: string; betrag: number }[]) ?? []) {
-      const datum = new Date(r.datum + "T00:00:00");
+      // advances.datum ist timestamptz, kommt also schon als vollständiger
+      // ISO-Zeitstempel - direkt parsen, nicht wie ein reines Datum behandeln
+      // (frührer Fehler: "T00:00:00" angehängt -> ungültiges Datum -> jede
+      // Zeile wurde stillschweigend übersprungen, Vorschuss stand überall 0).
+      const datum = new Date(r.datum);
       if (datum.getFullYear() !== jahr) continue; // andere Saison/Kalenderjahr
       const monat = datum.getMonth() + 1;
       const m = vorschussProPerson.get(r.employee_id) ?? new Map<number, number>();
