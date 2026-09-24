@@ -113,17 +113,18 @@ export default function UebersichtPage() {
   const [druckMonat, setDruckMonat] = useState<{
     mitAusgezahlten: boolean;
   } | null>(null);
-  // Stunden-/Vorschussübersicht für die per Checkbox ausgewählten Personen,
-  // nach Monaten gegliedert (Nutzer-Vorgabe 2026-09-24) - unabhängig vom
-  // Monatsfilter oben, deckt immer die ganze Saison ab. Gleiches Druck-Muster
-  // wie druckMonat: erst Daten laden, dann per Effekt window.print() auslösen.
+  // Stunden-/Vorschussübersicht für die per Checkbox ausgewählten Personen -
+  // tagegenau (Nutzer-Vorgabe 2026-09-24: "tagegenau, nur mit monatlicher
+  // Hervorhebung für die Übersichtlichkeit"), unabhängig vom Monatsfilter
+  // oben, deckt immer die ganze Saison ab. Gleiches Druck-Muster wie
+  // druckMonat: erst Daten laden, dann per Effekt window.print() auslösen.
   const [stundenVorschussDaten, setStundenVorschussDaten] = useState<
     {
       employeeId: string;
       personalNr: string;
       name: string;
       vorname: string;
-      monate: { monat: number; stunden: number; vorschuss: number }[];
+      tage: { datum: string; stunden: number | null; vorschuss: number }[];
     }[] | null
   >(null);
   const [stundenVorschussLaeuft, setStundenVorschussLaeuft] = useState(false);
@@ -279,20 +280,24 @@ export default function UebersichtPage() {
     return () => window.removeEventListener("afterprint", handleAfterPrint);
   }, []);
 
-  // Lädt Stunden (season_summary_monat, alle Monate) + Vorschüsse
-  // (employee_vorschuss_historie, client-seitig je Monat summiert) für die
-  // ausgewählten Personen und löst danach den Druck aus.
+  // Lädt Stunden (work_entries, tagegenau) + Vorschüsse (employee_vorschuss_
+  // historie, tagegenau) für die ausgewählten Personen und löst danach den
+  // Druck aus. Tagegenau statt Monatssummen (Nutzer-Vorgabe 2026-09-24) -
+  // die Monatsgliederung passiert erst beim Rendern (Zwischenüberschrift je
+  // Monat), nicht mehr schon beim Laden.
   async function stundenVorschussDrucken() {
     if (ausgewaehlt.size === 0) return;
     setStundenVorschussLaeuft(true);
     const ids = Array.from(ausgewaehlt);
     const supabase = getSupabaseClient();
-    const [{ data: monatsDaten }, { data: vorschussDaten }] = await Promise.all([
+    const vonBis = { von: `${jahr}-01-01`, bis: `${jahr}-12-31` };
+    const [{ data: stundenDaten }, { data: vorschussDaten }] = await Promise.all([
       supabase
-        .from("season_summary_monat")
-        .select("employee_id, monat, gesamt_stunden")
-        .eq("saison_jahr", jahr)
-        .in("employee_id", ids),
+        .from("work_entries")
+        .select("employee_id, datum, stunden")
+        .in("employee_id", ids)
+        .gte("datum", vonBis.von)
+        .lte("datum", vonBis.bis),
       supabase
         .from("employee_vorschuss_historie")
         .select("employee_id, datum, betrag, storniert")
@@ -300,41 +305,51 @@ export default function UebersichtPage() {
         .eq("storniert", false),
     ]);
 
-    const stundenProPerson = new Map<string, Map<number, number>>();
-    for (const r of (monatsDaten as { employee_id: string; monat: number; gesamt_stunden: number }[]) ?? []) {
-      const m = stundenProPerson.get(r.employee_id) ?? new Map<number, number>();
-      m.set(r.monat, r.gesamt_stunden);
-      stundenProPerson.set(r.employee_id, m);
+    // Je Person eine Map datum -> {stunden, vorschuss}; beide Quellen tragen
+    // in dieselbe Zeile ein, damit ein Tag mit sowohl Stunden als auch einem
+    // Vorschuss nicht doppelt auftaucht.
+    const proPerson = new Map<string, Map<string, { stunden: number | null; vorschuss: number }>>();
+    const zeile = (employeeId: string, datum: string) => {
+      const m = proPerson.get(employeeId) ?? new Map<string, { stunden: number | null; vorschuss: number }>();
+      proPerson.set(employeeId, m);
+      const z = m.get(datum) ?? { stunden: null, vorschuss: 0 };
+      m.set(datum, z);
+      return z;
+    };
+
+    for (const r of (stundenDaten as { employee_id: string; datum: string; stunden: number | null }[]) ?? []) {
+      if (r.stunden === null) continue; // nur echte Stundeneinträge, keine bloße Markierung
+      zeile(r.employee_id, r.datum).stunden = r.stunden;
     }
-    const vorschussProPerson = new Map<string, Map<number, number>>();
     for (const r of (vorschussDaten as { employee_id: string; datum: string; betrag: number }[]) ?? []) {
       // advances.datum ist timestamptz, kommt also schon als vollständiger
       // ISO-Zeitstempel - direkt parsen, nicht wie ein reines Datum behandeln
       // (frührer Fehler: "T00:00:00" angehängt -> ungültiges Datum -> jede
       // Zeile wurde stillschweigend übersprungen, Vorschuss stand überall 0).
-      const datum = new Date(r.datum);
-      if (datum.getFullYear() !== jahr) continue; // andere Saison/Kalenderjahr
-      const monat = datum.getMonth() + 1;
-      const m = vorschussProPerson.get(r.employee_id) ?? new Map<number, number>();
-      m.set(monat, (m.get(monat) ?? 0) + Number(r.betrag));
-      vorschussProPerson.set(r.employee_id, m);
+      const datumObj = new Date(r.datum);
+      if (datumObj.getFullYear() !== jahr) continue; // andere Saison/Kalenderjahr
+      const datum = `${datumObj.getFullYear()}-${String(datumObj.getMonth() + 1).padStart(2, "0")}-${String(datumObj.getDate()).padStart(2, "0")}`;
+      const z = zeile(r.employee_id, datum);
+      z.vorschuss += Number(r.betrag);
     }
 
     const ergebnis = ids
       .map((id) => rows.find((r) => r.employee_id === id))
       .filter((r): r is SeasonSummaryRow => !!r)
       .sort((a, b) => a.personal_nr.localeCompare(b.personal_nr, "de", { numeric: true }))
-      .map((r) => ({
-        employeeId: r.employee_id,
-        personalNr: r.personal_nr,
-        name: r.name,
-        vorname: r.vorname,
-        monate: MONATSNAMEN.map((_, i) => ({
-          monat: i + 1,
-          stunden: stundenProPerson.get(r.employee_id)?.get(i + 1) ?? 0,
-          vorschuss: vorschussProPerson.get(r.employee_id)?.get(i + 1) ?? 0,
-        })),
-      }));
+      .map((r) => {
+        const tageMap = proPerson.get(r.employee_id) ?? new Map();
+        const tage = [...tageMap.entries()]
+          .map(([datum, w]) => ({ datum, stunden: w.stunden, vorschuss: w.vorschuss }))
+          .sort((a, b) => a.datum.localeCompare(b.datum));
+        return {
+          employeeId: r.employee_id,
+          personalNr: r.personal_nr,
+          name: r.name,
+          vorname: r.vorname,
+          tage,
+        };
+      });
 
     setStundenVorschussLaeuft(false);
     setStundenVorschussDaten(ergebnis);
@@ -1246,6 +1261,20 @@ export default function UebersichtPage() {
                   <td>{fmt(anzeige(r, "kleidung_betrag"))}</td>
                   <td className="font-medium">
                     {fmt(anzeige(r, "auszahlungsbetrag"))}
+                    {(() => {
+                      // Effektiver Stundenlohn "auf die Hand" (Nutzer-Vorgabe
+                      // 2026-09-24) - Auszahlungsbetrag und Stunden aus
+                      // derselben Quelle (live oder eingefrorener Snapshot),
+                      // damit das Verhältnis in sich stimmig bleibt.
+                      const betrag = Number(anzeige(r, "auszahlungsbetrag"));
+                      const stunden = Number(anzeige(r, "gesamt_stunden"));
+                      if (!Number.isFinite(betrag) || !(stunden > 0)) return null;
+                      return (
+                        <span className="ml-1 text-xs font-normal text-neutral-500">
+                          ({fmt(betrag / stunden)} €/Std.)
+                        </span>
+                      );
+                    })()}
                     {weichtAb(r) && (
                       <span
                         className="ml-1 text-amber-600"
@@ -1682,12 +1711,45 @@ export default function UebersichtPage() {
         })()}
 
       {/* Druckansicht der Stunden-/Vorschussübersicht - je ausgewählter Person
-          ein eigener Block mit Seitenumbruch, nach Monaten gegliedert. */}
+          ein eigener Block mit Seitenumbruch, tagegenau mit einer
+          hervorgehobenen Zwischenüberschrift + Zwischensumme je Monat
+          (Nutzer-Vorgabe 2026-09-24). */}
       {stundenVorschussDaten && (
         <div className="hidden print:block">
           {stundenVorschussDaten.map((p, i) => {
-            const summeStunden = p.monate.reduce((acc, m) => acc + m.stunden, 0);
-            const summeVorschuss = p.monate.reduce((acc, m) => acc + m.vorschuss, 0);
+            const summeStunden = p.tage.reduce((acc, t) => acc + (t.stunden ?? 0), 0);
+            const summeVorschuss = p.tage.reduce((acc, t) => acc + t.vorschuss, 0);
+
+            // Baut die Zeilenliste: vor jedem Monatswechsel eine hervorgehobene
+            // Zwischenüberschrift, nach dem letzten Tag eines Monats eine
+            // Zwischensumme - reine Anzeigelogik, keine Datenänderung.
+            type ZeilenTyp =
+              | { art: "monat"; monat: number }
+              | { art: "tag"; datum: string; stunden: number | null; vorschuss: number }
+              | { art: "zwischensumme"; monat: number; stunden: number; vorschuss: number };
+            const zeilen: ZeilenTyp[] = [];
+            let laufenderMonat = -1;
+            let monatStunden = 0;
+            let monatVorschuss = 0;
+            for (const t of p.tage) {
+              const monat = Number(t.datum.slice(5, 7));
+              if (monat !== laufenderMonat) {
+                if (laufenderMonat !== -1) {
+                  zeilen.push({ art: "zwischensumme", monat: laufenderMonat, stunden: monatStunden, vorschuss: monatVorschuss });
+                }
+                zeilen.push({ art: "monat", monat });
+                laufenderMonat = monat;
+                monatStunden = 0;
+                monatVorschuss = 0;
+              }
+              monatStunden += t.stunden ?? 0;
+              monatVorschuss += t.vorschuss;
+              zeilen.push({ art: "tag", datum: t.datum, stunden: t.stunden, vorschuss: t.vorschuss });
+            }
+            if (laufenderMonat !== -1) {
+              zeilen.push({ art: "zwischensumme", monat: laufenderMonat, stunden: monatStunden, vorschuss: monatVorschuss });
+            }
+
             return (
               <div key={p.employeeId} className={i > 0 ? "print-page-break" : ""}>
                 <h2 className="text-xl font-semibold">
@@ -1700,19 +1762,42 @@ export default function UebersichtPage() {
                 <table className="mt-4 print-form-table print-dense-table">
                   <thead>
                     <tr>
-                      <th>Monat</th>
+                      <th>Datum</th>
                       <th>Std.</th>
                       <th>Vorschüsse €</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {p.monate.map((m) => (
-                      <tr key={m.monat}>
-                        <td>{MONATSNAMEN[m.monat - 1]}</td>
-                        <td>{m.stunden ? fmt(m.stunden) : "—"}</td>
-                        <td>{m.vorschuss ? fmt(m.vorschuss) : "—"}</td>
+                    {zeilen.length === 0 && (
+                      <tr>
+                        <td colSpan={3}>Keine Stunden/Vorschüsse in {jahr} erfasst.</td>
                       </tr>
-                    ))}
+                    )}
+                    {zeilen.map((z) => {
+                      if (z.art === "monat") {
+                        return (
+                          <tr key={`m-${z.monat}`} className="bg-emerald-50 font-semibold">
+                            <td colSpan={3}>{MONATSNAMEN[z.monat - 1]} {jahr}</td>
+                          </tr>
+                        );
+                      }
+                      if (z.art === "zwischensumme") {
+                        return (
+                          <tr key={`s-${z.monat}`} className="italic">
+                            <td className="text-right">Zwischensumme {MONATSNAMEN[z.monat - 1]}</td>
+                            <td>{fmt(z.stunden)}</td>
+                            <td>{fmt(z.vorschuss)}</td>
+                          </tr>
+                        );
+                      }
+                      return (
+                        <tr key={z.datum}>
+                          <td>{formatDatumDE(z.datum)}</td>
+                          <td>{z.stunden !== null ? fmt(z.stunden) : "—"}</td>
+                          <td>{z.vorschuss ? fmt(z.vorschuss) : "—"}</td>
+                        </tr>
+                      );
+                    })}
                   </tbody>
                   <tfoot>
                     <tr>
