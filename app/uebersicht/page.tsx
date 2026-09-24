@@ -125,7 +125,7 @@ export default function UebersichtPage() {
       personalNr: string;
       name: string;
       vorname: string;
-      tage: { datum: string; stunden: number | null; vorschuss: number }[];
+      tage: { datum: string; stunden: number | null; urlaub: boolean; vorschuss: number }[];
     }[] | null
   >(null);
   const [stundenVorschussLaeuft, setStundenVorschussLaeuft] = useState(false);
@@ -308,11 +308,11 @@ export default function UebersichtPage() {
     // die korrekte Summe zeigte - die Zeilen dieser Personen lagen einfach
     // hinter der 1000er-Grenze und kamen nie an).
     const [stundenDaten, vorschussDaten] = await Promise.all([
-      ladeAlleSeiten<{ employee_id: string; datum: string; stunden: number | null }>(
+      ladeAlleSeiten<{ employee_id: string; datum: string; stunden: number | null; markierung: string | null }>(
         (von, bis) =>
           supabase
             .from("work_entries")
-            .select("employee_id, datum, stunden")
+            .select("employee_id, datum, stunden, markierung")
             .in("employee_id", ids)
             .gte("datum", vonBis.von)
             .lte("datum", vonBis.bis)
@@ -332,21 +332,32 @@ export default function UebersichtPage() {
       ),
     ]);
 
-    // Je Person eine Map datum -> {stunden, vorschuss}; beide Quellen tragen
-    // in dieselbe Zeile ein, damit ein Tag mit sowohl Stunden als auch einem
-    // Vorschuss nicht doppelt auftaucht.
-    const proPerson = new Map<string, Map<string, { stunden: number | null; vorschuss: number }>>();
+    // Je Person eine Map datum -> {stunden, urlaub, vorschuss}; beide Quellen
+    // tragen in dieselbe Zeile ein, damit ein Tag mit sowohl Stunden als auch
+    // einem Vorschuss nicht doppelt auftaucht. "stunden" ist bereits die
+    // EFFEKTIVE Stundenzahl inkl. Urlaubsanrechnung (siehe unten) - dieselbe
+    // Formel wie in season_summary/season_summary_monat, damit die gedruckte
+    // Summe zur Lohnübersicht passt.
+    const proPerson = new Map<string, Map<string, { stunden: number | null; urlaub: boolean; vorschuss: number }>>();
     const zeile = (employeeId: string, datum: string) => {
-      const m = proPerson.get(employeeId) ?? new Map<string, { stunden: number | null; vorschuss: number }>();
+      const m = proPerson.get(employeeId) ?? new Map<string, { stunden: number | null; urlaub: boolean; vorschuss: number }>();
       proPerson.set(employeeId, m);
-      const z = m.get(datum) ?? { stunden: null, vorschuss: 0 };
+      const z = m.get(datum) ?? { stunden: null, urlaub: false, vorschuss: 0 };
       m.set(datum, z);
       return z;
     };
 
+    // Nutzer-Meldung 2026-09-24: ein Urlaubstag (markierung 'U') zählt an
+    // anderer Stelle der App (Lohnübersicht-Summen) pauschal mit 8 Stunden,
+    // auch ohne eigenen Stundenwert - das wurde hier bisher übersprungen und
+    // tauchte nur als "—" statt "U" auf, die Summe fiel dadurch zu niedrig
+    // aus. Gleiche Formel wie dort: coalesce(stunden,0) + (U ? 8 : 0).
     for (const r of stundenDaten) {
-      if (r.stunden === null) continue; // nur echte Stundeneinträge, keine bloße Markierung
-      zeile(r.employee_id, r.datum).stunden = r.stunden;
+      const istUrlaub = r.markierung === "U";
+      if (r.stunden === null && !istUrlaub) continue; // an diesem Tag wirklich nichts erfasst
+      const z = zeile(r.employee_id, r.datum);
+      z.stunden = Number(r.stunden ?? 0) + (istUrlaub ? 8 : 0);
+      z.urlaub = istUrlaub;
     }
     for (const r of vorschussDaten) {
       // advances.datum ist timestamptz, kommt also schon als vollständiger
@@ -367,7 +378,7 @@ export default function UebersichtPage() {
       .map((r) => {
         const tageMap = proPerson.get(r.employee_id) ?? new Map();
         const tage = [...tageMap.entries()]
-          .map(([datum, w]) => ({ datum, stunden: w.stunden, vorschuss: w.vorschuss }))
+          .map(([datum, w]) => ({ datum, stunden: w.stunden, urlaub: w.urlaub, vorschuss: w.vorschuss }))
           .sort((a, b) => a.datum.localeCompare(b.datum));
         return {
           employeeId: r.employee_id,
@@ -1749,7 +1760,7 @@ export default function UebersichtPage() {
             // Je aktivem Monat eine Map Tag-im-Monat -> Werte; maxTag ist der
             // höchste vorkommende Tag über alle Monate hinweg (gemeinsame
             // Zeilenzahl fürs Raster).
-            const monate = new Map<number, Map<number, { stunden: number | null; vorschuss: number }>>();
+            const monate = new Map<number, Map<number, { stunden: number | null; urlaub: boolean; vorschuss: number }>>();
             let maxTag = 1;
             for (const t of p.tage) {
               const monat = Number(t.datum.slice(5, 7));
@@ -1757,7 +1768,7 @@ export default function UebersichtPage() {
               maxTag = Math.max(maxTag, tag);
               const mMap = monate.get(monat) ?? new Map();
               monate.set(monat, mMap);
-              mMap.set(tag, { stunden: t.stunden, vorschuss: t.vorschuss });
+              mMap.set(tag, { stunden: t.stunden, urlaub: t.urlaub, vorschuss: t.vorschuss });
             }
             const aktiveMonate = [...monate.keys()].sort((a, b) => a - b);
             const summeStunden = p.tage.reduce((acc, t) => acc + (t.stunden ?? 0), 0);
@@ -1800,9 +1811,23 @@ export default function UebersichtPage() {
                           <td className="font-medium">{tag}.</td>
                           {aktiveMonate.map((m) => {
                             const w = monate.get(m)?.get(tag);
+                            // Reiner Urlaubstag (die Standard-8-Std.-Anrechnung ohne
+                            // eigenen Stundenwert) zeigt nur "U" statt "8,00" - macht
+                            // sofort sichtbar, dass hier nicht gearbeitet wurde, auch
+                            // wenn die Stunde in der Summe mitzählt. Ein Mischfall
+                            // (Urlaub + eigene Stunden am selben Tag, ungewöhnlich)
+                            // zeigt beides.
+                            const anzeige =
+                              w?.stunden == null
+                                ? "—"
+                                : w.urlaub && w.stunden === 8
+                                  ? "U"
+                                  : w.urlaub
+                                    ? `${fmt(w.stunden)} U`
+                                    : fmt(w.stunden);
                             return (
                               <Fragment key={m}>
-                                <td>{w?.stunden != null ? fmt(w.stunden) : "—"}</td>
+                                <td>{anzeige}</td>
                                 <td>{w?.vorschuss ? fmt(w.vorschuss) : "—"}</td>
                               </Fragment>
                             );
