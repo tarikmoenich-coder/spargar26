@@ -2,6 +2,7 @@
 
 import { Fragment, useEffect, useState } from "react";
 import { getSupabaseClient } from "@/lib/supabase/client";
+import { ladeAlleSeiten } from "@/lib/ladeAlle";
 import { useProfile } from "@/lib/useProfile";
 import {
   ABRECHNUNGSART_LABELS,
@@ -300,18 +301,35 @@ export default function UebersichtPage() {
     const ids = Array.from(ausgewaehlt);
     const supabase = getSupabaseClient();
     const vonBis = { von: `${jahr}-01-01`, bis: `${jahr}-12-31` };
-    const [{ data: stundenDaten }, { data: vorschussDaten }] = await Promise.all([
-      supabase
-        .from("work_entries")
-        .select("employee_id, datum, stunden")
-        .in("employee_id", ids)
-        .gte("datum", vonBis.von)
-        .lte("datum", vonBis.bis),
-      supabase
-        .from("employee_vorschuss_historie")
-        .select("employee_id, datum, betrag, storniert")
-        .in("employee_id", ids)
-        .eq("storniert", false),
+    // Seitenweise laden (lib/ladeAlle.ts) - sonst schneidet PostgREST bei
+    // ~1000 Zeilen ab. Bei mehreren ausgewählten Personen über eine ganze
+    // Saison ist das schnell überschritten (Nutzer-Meldung 2026-09-24: bei
+    // manchen Personen stand überall 0 Stunden, obwohl die Lohnübersicht
+    // die korrekte Summe zeigte - die Zeilen dieser Personen lagen einfach
+    // hinter der 1000er-Grenze und kamen nie an).
+    const [stundenDaten, vorschussDaten] = await Promise.all([
+      ladeAlleSeiten<{ employee_id: string; datum: string; stunden: number | null }>(
+        (von, bis) =>
+          supabase
+            .from("work_entries")
+            .select("employee_id, datum, stunden")
+            .in("employee_id", ids)
+            .gte("datum", vonBis.von)
+            .lte("datum", vonBis.bis)
+            .order("employee_id")
+            .order("datum")
+            .range(von, bis)
+      ),
+      ladeAlleSeiten<{ employee_id: string; datum: string; betrag: number }>((von, bis) =>
+        supabase
+          .from("employee_vorschuss_historie")
+          .select("employee_id, datum, betrag, storniert")
+          .in("employee_id", ids)
+          .eq("storniert", false)
+          .order("employee_id")
+          .order("datum")
+          .range(von, bis)
+      ),
     ]);
 
     // Je Person eine Map datum -> {stunden, vorschuss}; beide Quellen tragen
@@ -326,11 +344,11 @@ export default function UebersichtPage() {
       return z;
     };
 
-    for (const r of (stundenDaten as { employee_id: string; datum: string; stunden: number | null }[]) ?? []) {
+    for (const r of stundenDaten) {
       if (r.stunden === null) continue; // nur echte Stundeneinträge, keine bloße Markierung
       zeile(r.employee_id, r.datum).stunden = r.stunden;
     }
-    for (const r of (vorschussDaten as { employee_id: string; datum: string; betrag: number }[]) ?? []) {
+    for (const r of vorschussDaten) {
       // advances.datum ist timestamptz, kommt also schon als vollständiger
       // ISO-Zeitstempel - direkt parsen, nicht wie ein reines Datum behandeln
       // (frührer Fehler: "T00:00:00" angehängt -> ungültiges Datum -> jede
