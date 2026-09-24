@@ -191,6 +191,29 @@ input[type="number"]::-webkit-inner-spin-button {
   }
 }
 
+/* Monatsraster für die gedruckte Stunden-/Vorschussübersicht der Lohnübersicht
+   (Nutzer-Vorgabe 2026-09-24: "nicht mehr als 1 Seite" - Zeile = Tag im
+   Monat, Spalte = Std./€ je aktivem Monat). Schmalere Zahlenspalten als
+   .print-wochenraster, weil hier bei mehreren aktiven Monaten deutlich mehr
+   Spalten nebeneinanderstehen als bei den 7 Wochentagen dort. */
+@media print {
+  .print-form-table.print-dense-table.print-monatsraster th,
+  .print-form-table.print-dense-table.print-monatsraster td {
+    text-align: center;
+    padding-left: 0.15rem;
+    padding-right: 0.15rem;
+  }
+  .print-form-table.print-dense-table.print-monatsraster td:first-child {
+    text-align: right;
+  }
+  .print-form-table.print-dense-table.print-monatsraster
+    th:not(:first-child),
+  .print-form-table.print-dense-table.print-monatsraster
+    td:not(:first-child) {
+    min-width: 1.9rem;
+  }
+}
+
 /* Schmalere erste Spalte für Belege, deren erste Spalte die Personal-
    nummer ist (kurzer Inhalt, z.B. "a1023") statt eines Datums (das
    generische .print-dense-table braucht die volle Breite für Datumsangaben

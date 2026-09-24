@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { Fragment, useEffect, useState } from "react";
 import { getSupabaseClient } from "@/lib/supabase/client";
 import { useProfile } from "@/lib/useProfile";
 import {
@@ -1711,44 +1711,30 @@ export default function UebersichtPage() {
         })()}
 
       {/* Druckansicht der Stunden-/Vorschussübersicht - je ausgewählter Person
-          ein eigener Block mit Seitenumbruch, tagegenau mit einer
-          hervorgehobenen Zwischenüberschrift + Zwischensumme je Monat
-          (Nutzer-Vorgabe 2026-09-24). */}
+          EIN kompaktes Raster (Nutzer-Vorgabe 2026-09-24: "verbraucht zu viel
+          Platz", max. 1 Seite/Person): Zeile = Tag im Monat (1..31), Spalte =
+          nur die Monate mit tatsächlichen Einträgen (je Monat ein schmales
+          Std.- und ein €-Feld) - dadurch unabhängig von der Saisonlänge auf
+          maximal ~31 Zeilen begrenzt, statt einer Zeile je Arbeitstag. */}
       {stundenVorschussDaten && (
         <div className="hidden print:block">
           {stundenVorschussDaten.map((p, i) => {
-            const summeStunden = p.tage.reduce((acc, t) => acc + (t.stunden ?? 0), 0);
-            const summeVorschuss = p.tage.reduce((acc, t) => acc + t.vorschuss, 0);
-
-            // Baut die Zeilenliste: vor jedem Monatswechsel eine hervorgehobene
-            // Zwischenüberschrift, nach dem letzten Tag eines Monats eine
-            // Zwischensumme - reine Anzeigelogik, keine Datenänderung.
-            type ZeilenTyp =
-              | { art: "monat"; monat: number }
-              | { art: "tag"; datum: string; stunden: number | null; vorschuss: number }
-              | { art: "zwischensumme"; monat: number; stunden: number; vorschuss: number };
-            const zeilen: ZeilenTyp[] = [];
-            let laufenderMonat = -1;
-            let monatStunden = 0;
-            let monatVorschuss = 0;
+            // Je aktivem Monat eine Map Tag-im-Monat -> Werte; maxTag ist der
+            // höchste vorkommende Tag über alle Monate hinweg (gemeinsame
+            // Zeilenzahl fürs Raster).
+            const monate = new Map<number, Map<number, { stunden: number | null; vorschuss: number }>>();
+            let maxTag = 1;
             for (const t of p.tage) {
               const monat = Number(t.datum.slice(5, 7));
-              if (monat !== laufenderMonat) {
-                if (laufenderMonat !== -1) {
-                  zeilen.push({ art: "zwischensumme", monat: laufenderMonat, stunden: monatStunden, vorschuss: monatVorschuss });
-                }
-                zeilen.push({ art: "monat", monat });
-                laufenderMonat = monat;
-                monatStunden = 0;
-                monatVorschuss = 0;
-              }
-              monatStunden += t.stunden ?? 0;
-              monatVorschuss += t.vorschuss;
-              zeilen.push({ art: "tag", datum: t.datum, stunden: t.stunden, vorschuss: t.vorschuss });
+              const tag = Number(t.datum.slice(8, 10));
+              maxTag = Math.max(maxTag, tag);
+              const mMap = monate.get(monat) ?? new Map();
+              monate.set(monat, mMap);
+              mMap.set(tag, { stunden: t.stunden, vorschuss: t.vorschuss });
             }
-            if (laufenderMonat !== -1) {
-              zeilen.push({ art: "zwischensumme", monat: laufenderMonat, stunden: monatStunden, vorschuss: monatVorschuss });
-            }
+            const aktiveMonate = [...monate.keys()].sort((a, b) => a - b);
+            const summeStunden = p.tage.reduce((acc, t) => acc + (t.stunden ?? 0), 0);
+            const summeVorschuss = p.tage.reduce((acc, t) => acc + t.vorschuss, 0);
 
             return (
               <div key={p.employeeId} className={i > 0 ? "print-page-break" : ""}>
@@ -1759,54 +1745,67 @@ export default function UebersichtPage() {
                   {p.personalNr} · {p.name}, {p.vorname} · Datum:{" "}
                   {formatDatumDE(new Date().toISOString())}
                 </p>
-                <table className="mt-4 print-form-table print-dense-table">
-                  <thead>
-                    <tr>
-                      <th>Datum</th>
-                      <th>Std.</th>
-                      <th>Vorschüsse €</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {zeilen.length === 0 && (
+                {aktiveMonate.length === 0 ? (
+                  <p className="mt-2 text-sm">Keine Stunden/Vorschüsse in {jahr} erfasst.</p>
+                ) : (
+                  <table className="mt-4 print-form-table print-dense-table print-monatsraster">
+                    <thead>
                       <tr>
-                        <td colSpan={3}>Keine Stunden/Vorschüsse in {jahr} erfasst.</td>
+                        <th rowSpan={2}>Tag</th>
+                        {aktiveMonate.map((m) => (
+                          <th key={m} colSpan={2}>
+                            {MONATSNAMEN[m - 1]}
+                          </th>
+                        ))}
                       </tr>
-                    )}
-                    {zeilen.map((z) => {
-                      if (z.art === "monat") {
-                        return (
-                          <tr key={`m-${z.monat}`} className="bg-emerald-50 font-semibold">
-                            <td colSpan={3}>{MONATSNAMEN[z.monat - 1]} {jahr}</td>
-                          </tr>
-                        );
-                      }
-                      if (z.art === "zwischensumme") {
-                        return (
-                          <tr key={`s-${z.monat}`} className="italic">
-                            <td className="text-right">Zwischensumme {MONATSNAMEN[z.monat - 1]}</td>
-                            <td>{fmt(z.stunden)}</td>
-                            <td>{fmt(z.vorschuss)}</td>
-                          </tr>
-                        );
-                      }
-                      return (
-                        <tr key={z.datum}>
-                          <td>{formatDatumDE(z.datum)}</td>
-                          <td>{z.stunden !== null ? fmt(z.stunden) : "—"}</td>
-                          <td>{z.vorschuss ? fmt(z.vorschuss) : "—"}</td>
+                      <tr>
+                        {aktiveMonate.map((m) => (
+                          <Fragment key={m}>
+                            <th>Std.</th>
+                            <th>€</th>
+                          </Fragment>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {Array.from({ length: maxTag }, (_, i2) => i2 + 1).map((tag) => (
+                        <tr key={tag}>
+                          <td className="font-medium">{tag}.</td>
+                          {aktiveMonate.map((m) => {
+                            const w = monate.get(m)?.get(tag);
+                            return (
+                              <Fragment key={m}>
+                                <td>{w?.stunden != null ? fmt(w.stunden) : "—"}</td>
+                                <td>{w?.vorschuss ? fmt(w.vorschuss) : "—"}</td>
+                              </Fragment>
+                            );
+                          })}
                         </tr>
-                      );
-                    })}
-                  </tbody>
-                  <tfoot>
-                    <tr>
-                      <td className="text-right font-semibold">Summe {jahr}</td>
-                      <td className="font-semibold">{fmt(summeStunden)}</td>
-                      <td className="font-semibold">{fmt(summeVorschuss)}</td>
-                    </tr>
-                  </tfoot>
-                </table>
+                      ))}
+                    </tbody>
+                    <tfoot>
+                      <tr>
+                        <td className="text-right font-semibold">Summe</td>
+                        {aktiveMonate.map((m) => {
+                          const werte = [...(monate.get(m)?.values() ?? [])];
+                          const mStunden = werte.reduce((acc, w) => acc + (w.stunden ?? 0), 0);
+                          const mVorschuss = werte.reduce((acc, w) => acc + w.vorschuss, 0);
+                          return (
+                            <Fragment key={m}>
+                              <td className="font-semibold">{fmt(mStunden)}</td>
+                              <td className="font-semibold">{fmt(mVorschuss)}</td>
+                            </Fragment>
+                          );
+                        })}
+                      </tr>
+                    </tfoot>
+                  </table>
+                )}
+                {aktiveMonate.length > 1 && (
+                  <p className="mt-1 text-right text-sm font-semibold">
+                    Gesamt {jahr}: {fmt(summeStunden)} Std. · {fmt(summeVorschuss)} €
+                  </p>
+                )}
               </div>
             );
           })}
