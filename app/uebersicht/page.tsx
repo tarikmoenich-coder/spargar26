@@ -1326,6 +1326,13 @@ export default function UebersichtPage() {
                   </td>
                   <td>
                     {r.aktiv ? "aktiv" : "inaktiv"}
+                    <br />
+                    <a
+                      href={`/uebersicht/beleg?id=${r.employee_id}&jahr=${r.saison_jahr}`}
+                      className="text-xs text-emerald-700 underline print:hidden"
+                    >
+                      Beleg
+                    </a>
                     {r.abgerechnet_am && (
                       <>
                         <br />
