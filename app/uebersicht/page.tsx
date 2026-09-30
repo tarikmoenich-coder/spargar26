@@ -167,6 +167,23 @@ export default function UebersichtPage() {
   const [korrekturVerpflegungLaeuft, setKorrekturVerpflegungLaeuft] = useState<
     string | null
   >(null);
+  // Gleiches Muster, eigener State je Kaution - Korrektur der Fahrer-/
+  // Zimmerkaution nach dem Abrechnen (Nutzer-Vorgabe 2026-09-30: "analog zu
+  // Netto und Verpfl. freie Tage").
+  const [korrigierenFahrerkautionKey, setKorrigierenFahrerkautionKey] =
+    useState<string | null>(null);
+  const [korrekturFahrerkaution, setKorrekturFahrerkaution] = useState<
+    Record<string, string>
+  >({});
+  const [korrekturFahrerkautionLaeuft, setKorrekturFahrerkautionLaeuft] =
+    useState<string | null>(null);
+  const [korrigierenZimmerkautionKey, setKorrigierenZimmerkautionKey] =
+    useState<string | null>(null);
+  const [korrekturZimmerkaution, setKorrekturZimmerkaution] = useState<
+    Record<string, string>
+  >({});
+  const [korrekturZimmerkautionLaeuft, setKorrekturZimmerkautionLaeuft] =
+    useState<string | null>(null);
 
   const canEdit =
     profile?.role === "admin" || profile?.role === "lohnabrechnung";
@@ -712,6 +729,71 @@ export default function UebersichtPage() {
       return;
     }
     setKorrigierenVerpflegungKey(null);
+    load();
+  }
+
+  // Gleiches Muster wie nettoKorrigieren/verpflegungKorrigieren, für
+  // "Fahrerkaution" NACH dem Abrechnen (Nutzer-Vorgabe 2026-09-30).
+  async function fahrerkautionKorrigieren(row: SeasonSummaryRow) {
+    const key = `${row.employee_id}-${row.saison_jahr}`;
+    const neuerWert = korrekturFahrerkaution[key];
+    if (!neuerWert || neuerWert.trim() === "") return;
+    const neuerBetrag = Number(neuerWert);
+    if (Number.isNaN(neuerBetrag)) return;
+    const alterBetrag = Number(anzeige(row, "fahrer_kaution") ?? 0);
+    if (neuerBetrag === alterBetrag) return; // keine Änderung
+    const grund = window.prompt(
+      `Grund für die Korrektur von ${fmt(alterBetrag)} € auf ${fmt(
+        neuerBetrag
+      )} € (Fahrerkaution) bei ${row.name}, ${row.vorname} (Pflichtfeld, wird protokolliert):`
+    );
+    if (!grund) return;
+    setKorrekturFahrerkautionLaeuft(key);
+    const supabase = getSupabaseClient();
+    const { error } = await supabase.rpc("abrechnung_fahrerkaution_korrigieren", {
+      p_employee_id: row.employee_id,
+      p_saison_jahr: row.saison_jahr,
+      p_neue_fahrer_kaution: neuerBetrag,
+      p_grund: grund,
+    });
+    setKorrekturFahrerkautionLaeuft(null);
+    if (error) {
+      window.alert(`Korrektur fehlgeschlagen: ${error.message}`);
+      return;
+    }
+    setKorrigierenFahrerkautionKey(null);
+    load();
+  }
+
+  // Gleiches Muster, für "Zimmerkaution" NACH dem Abrechnen.
+  async function zimmerkautionKorrigieren(row: SeasonSummaryRow) {
+    const key = `${row.employee_id}-${row.saison_jahr}`;
+    const neuerWert = korrekturZimmerkaution[key];
+    if (!neuerWert || neuerWert.trim() === "") return;
+    const neuerBetrag = Number(neuerWert);
+    if (Number.isNaN(neuerBetrag)) return;
+    const alterBetrag = Number(anzeige(row, "zimmer_kaution") ?? 0);
+    if (neuerBetrag === alterBetrag) return; // keine Änderung
+    const grund = window.prompt(
+      `Grund für die Korrektur von ${fmt(alterBetrag)} € auf ${fmt(
+        neuerBetrag
+      )} € (Zimmerkaution) bei ${row.name}, ${row.vorname} (Pflichtfeld, wird protokolliert):`
+    );
+    if (!grund) return;
+    setKorrekturZimmerkautionLaeuft(key);
+    const supabase = getSupabaseClient();
+    const { error } = await supabase.rpc("abrechnung_zimmerkaution_korrigieren", {
+      p_employee_id: row.employee_id,
+      p_saison_jahr: row.saison_jahr,
+      p_neue_zimmer_kaution: neuerBetrag,
+      p_grund: grund,
+    });
+    setKorrekturZimmerkautionLaeuft(null);
+    if (error) {
+      window.alert(`Korrektur fehlgeschlagen: ${error.message}`);
+      return;
+    }
+    setKorrigierenZimmerkautionKey(null);
     load();
   }
 
@@ -1263,8 +1345,64 @@ export default function UebersichtPage() {
                     )}
                   </td>
                   <td>
-                    {!canEdit || r.abgerechnet_am ? (
+                    {!canEdit ? (
                       fmt(anzeige(r, "fahrer_kaution"))
+                    ) : r.abgerechnet_am ? (
+                      (() => {
+                        const key = `${r.employee_id}-${r.saison_jahr}`;
+                        return korrigierenFahrerkautionKey === key ? (
+                          <div className="flex flex-col gap-1">
+                            <input
+                              type="number"
+                              step="0.01"
+                              className="w-20"
+                              placeholder="0,00"
+                              value={korrekturFahrerkaution[key] ?? ""}
+                              onChange={(e) =>
+                                setKorrekturFahrerkaution((prev) => ({
+                                  ...prev,
+                                  [key]: e.target.value,
+                                }))
+                              }
+                            />
+                            <div className="flex gap-1">
+                              <button
+                                type="button"
+                                className="btn-secondary text-xs"
+                                disabled={korrekturFahrerkautionLaeuft === key}
+                                onClick={() => fahrerkautionKorrigieren(r)}
+                              >
+                                Speichern
+                              </button>
+                              <button
+                                type="button"
+                                className="btn-secondary text-xs"
+                                onClick={() => setKorrigierenFahrerkautionKey(null)}
+                              >
+                                Abbrechen
+                              </button>
+                            </div>
+                          </div>
+                        ) : (
+                          <>
+                            {fmt(anzeige(r, "fahrer_kaution"))}{" "}
+                            <button
+                              type="button"
+                              className="text-xs text-emerald-700 underline"
+                              title="Nachträgliche Korrektur - wird mit Grund protokolliert"
+                              onClick={() => {
+                                setKorrekturFahrerkaution((prev) => ({
+                                  ...prev,
+                                  [key]: String(anzeige(r, "fahrer_kaution") ?? ""),
+                                }));
+                                setKorrigierenFahrerkautionKey(key);
+                              }}
+                            >
+                              korrigieren
+                            </button>
+                          </>
+                        );
+                      })()
                     ) : (
                       <input
                         type="number"
@@ -1280,8 +1418,64 @@ export default function UebersichtPage() {
                     )}
                   </td>
                   <td>
-                    {!canEdit || r.abgerechnet_am ? (
+                    {!canEdit ? (
                       fmt(anzeige(r, "zimmer_kaution"))
+                    ) : r.abgerechnet_am ? (
+                      (() => {
+                        const key = `${r.employee_id}-${r.saison_jahr}`;
+                        return korrigierenZimmerkautionKey === key ? (
+                          <div className="flex flex-col gap-1">
+                            <input
+                              type="number"
+                              step="0.01"
+                              className="w-20"
+                              placeholder="0,00"
+                              value={korrekturZimmerkaution[key] ?? ""}
+                              onChange={(e) =>
+                                setKorrekturZimmerkaution((prev) => ({
+                                  ...prev,
+                                  [key]: e.target.value,
+                                }))
+                              }
+                            />
+                            <div className="flex gap-1">
+                              <button
+                                type="button"
+                                className="btn-secondary text-xs"
+                                disabled={korrekturZimmerkautionLaeuft === key}
+                                onClick={() => zimmerkautionKorrigieren(r)}
+                              >
+                                Speichern
+                              </button>
+                              <button
+                                type="button"
+                                className="btn-secondary text-xs"
+                                onClick={() => setKorrigierenZimmerkautionKey(null)}
+                              >
+                                Abbrechen
+                              </button>
+                            </div>
+                          </div>
+                        ) : (
+                          <>
+                            {fmt(anzeige(r, "zimmer_kaution"))}{" "}
+                            <button
+                              type="button"
+                              className="text-xs text-emerald-700 underline"
+                              title="Nachträgliche Korrektur - wird mit Grund protokolliert"
+                              onClick={() => {
+                                setKorrekturZimmerkaution((prev) => ({
+                                  ...prev,
+                                  [key]: String(anzeige(r, "zimmer_kaution") ?? ""),
+                                }));
+                                setKorrigierenZimmerkautionKey(key);
+                              }}
+                            >
+                              korrigieren
+                            </button>
+                          </>
+                        );
+                      })()
                     ) : (
                       <input
                         type="number"
