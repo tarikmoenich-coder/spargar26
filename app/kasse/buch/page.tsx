@@ -22,6 +22,7 @@ import KassenbuchTabs from "@/components/KassenbuchTabs";
 import PageHeader from "@/components/PageHeader";
 import { BookOpen } from "lucide-react";
 import UmbuchungForm from "@/components/UmbuchungForm";
+import KassenSaldoKarte from "@/components/KassenSaldoKarte";
 
 const CURRENT_YEAR = new Date().getFullYear();
 const JAHRE = [CURRENT_YEAR, CURRENT_YEAR - 1, CURRENT_YEAR - 2];
@@ -239,6 +240,14 @@ function BuchJournalInner() {
       ) : (
         <>
           <PageHeader icon={BookOpen} titel={`${buch.bezeichnung} – Journal`} beschreibung="Einnahmen und Ausgaben chronologisch mit laufendem Saldo ab dem Jahres-Eröffnungssaldo. Umbuchungen von/zu anderen Kassenbüchern erscheinen als eigene Zeile. Kassenprüfungen erscheinen als eigene, hervorgehobene Trennzeile mit ihrem damaligen Soll/Ist-Stand." />
+
+          {/* Nutzer-Vorgabe 2026-09-30: "Aktueller Kassensaldo" auch hier wie
+              im Lohnkasse-Journal, nicht nur bei der Kassenprüfung - gleiche
+              Karte, gleicher Hinweistext wie dort (app/kasse-pruefung). */}
+          <KassenSaldoKarte
+            kassenbuchId={buchId}
+            hinweis="Eröffnungssaldo + Einnahmen − Ausgaben (inklusive Umbuchungen), ohne stornierte Buchungen."
+          />
 
           {fehler && <p className="text-sm text-beere-600">⚠ {fehler}</p>}
 
