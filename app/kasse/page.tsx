@@ -87,6 +87,10 @@ interface JournalZeile {
   // Nur bei einer Kassenprüfungs-Trennzeile gesetzt (siehe CashCheckZeile
   // oben) - eigene, breite Darstellung statt der normalen Spalten.
   pruefung: CashCheckZeile | null;
+  // Nur bei einer Einzahlung gesetzt (Nutzer-Meldung 2026-09-30: "falsches
+  // Kassenbuch eingetragen, bekomme sie nicht mehr heraus") - ermöglicht das
+  // Stornieren direkt aus dieser Zeile heraus, siehe einzahlungStornieren().
+  einzahlungId: number | null;
 }
 
 export default function KassenbuchJournalPage() {
@@ -251,6 +255,37 @@ export default function KassenbuchJournalPage() {
     load();
   }
 
+  // Stornieren einer Einzahlung (Nutzer-Meldung 2026-09-30: "ins falsche
+  // Kassenbuch eingetragen, bekomme sie nicht mehr heraus") - bisher gab es
+  // dafür keine Aktion in der Oberfläche, obwohl cash_deposits die Spalten
+  // dafür längst hat (storniert/storniert_am/storniert_von/storno_grund) und
+  // der laufende Saldo eine stornierte Einzahlung bereits korrekt mit 0
+  // rechnet (siehe bewegungsZeilen oben). Direktes Update statt einer neuen
+  // RPC-Funktion - die RLS-Policy "cash_deposits_update" erlaubt das für
+  // admin/kasse bereits, solange der Tag nicht durch eine freigegebene
+  // Kassenprüfung gesperrt ist (ist_kassenpruefung_gesperrt).
+  async function einzahlungStornieren(z: JournalZeile) {
+    if (!z.einzahlungId) return;
+    const grund = window.prompt(
+      `Einzahlung ${z.belegnummer} stornieren – Grund:`
+    );
+    if (grund == null || grund.trim() === "") return;
+    const { error: updateError } = await getSupabaseClient()
+      .from("cash_deposits")
+      .update({
+        storniert: true,
+        storniert_am: new Date().toISOString(),
+        storniert_von: profile?.id ?? null,
+        storno_grund: grund.trim(),
+      })
+      .eq("id", z.einzahlungId);
+    if (updateError) {
+      setError(updateError.message);
+      return;
+    }
+    load();
+  }
+
   // Baut das Journal: "echte" Bewegungen zuerst aufsteigend nach Datum
   // sortiert, laufenden Saldo dabei fortschreiben, danach Korrektur-Zeilen
   // an der richtigen chronologischen Stelle einsortieren (ohne eigenen
@@ -269,6 +304,7 @@ export default function KassenbuchJournalPage() {
       bearbeiter_id: d.bearbeiter_id,
       laufenderSaldo: null,
       pruefung: null,
+      einzahlungId: d.id,
     })),
     ...barVorschuesse.map((a) => ({
       key: `vorschuss-${a.id}`,
@@ -282,6 +318,7 @@ export default function KassenbuchJournalPage() {
       bearbeiter_id: a.bearbeiter_id,
       laufenderSaldo: null,
       pruefung: null,
+      einzahlungId: null,
     })),
     ...auszahlungenBar.map((ab) => ({
       key: `auszahlung-${ab.id}`,
@@ -295,6 +332,7 @@ export default function KassenbuchJournalPage() {
       bearbeiter_id: ab.erstellt_von,
       laufenderSaldo: null,
       pruefung: null,
+      einzahlungId: null,
     })),
     ...kautionsuebergaben.map((k) => ({
       key: `kaution-${k.id}`,
@@ -308,6 +346,7 @@ export default function KassenbuchJournalPage() {
       bearbeiter_id: k.erstellt_von,
       laufenderSaldo: null,
       pruefung: null,
+      einzahlungId: null,
     })),
     ...umbuchungen.map((u) => ({
       key: `umbuchung-${u.id}`,
@@ -325,6 +364,7 @@ export default function KassenbuchJournalPage() {
       bearbeiter_id: u.bearbeiter_id,
       laufenderSaldo: null,
       pruefung: null,
+      einzahlungId: null,
     })),
   ].sort((a, b) => (a.datum < b.datum ? -1 : 1));
 
@@ -343,6 +383,7 @@ export default function KassenbuchJournalPage() {
     bearbeiter_id: b.bearbeiter_id,
     laufenderSaldo: null,
     pruefung: null,
+    einzahlungId: null,
   }));
 
   let laufend = eroeffnungssaldo ?? 0;
@@ -378,6 +419,7 @@ export default function KassenbuchJournalPage() {
     bearbeiter_id: null,
     laufenderSaldo: null,
     pruefung: p,
+    einzahlungId: null,
   }));
 
   const journal = [...zeilenMitSaldo, ...korrekturZeilen, ...pruefungZeilen]
@@ -470,6 +512,7 @@ export default function KassenbuchJournalPage() {
                 <th>Laufender Saldo €</th>
                 <th>Anwender</th>
                 <th>Hinweis</th>
+                <th>Aktion</th>
               </tr>
             </thead>
             <tbody>
@@ -478,13 +521,13 @@ export default function KassenbuchJournalPage() {
                   Eröffnungssaldo {jahr} (Stand 1.1.)
                 </td>
                 <td>{formatMenge(eroeffnungssaldo ?? 0, 2)}</td>
-                <td colSpan={2}></td>
+                <td colSpan={3}></td>
               </tr>
               {journal.map((z) =>
                 z.pruefung ? (
                   <tr key={z.key} className="bg-emerald-50">
                     <td
-                      colSpan={8}
+                      colSpan={9}
                       className="py-2 text-center text-sm font-semibold text-emerald-800"
                     >
                       🔍 Kassenprüfung {new Date(z.datum).toLocaleString(
@@ -538,12 +581,23 @@ export default function KassenbuchJournalPage() {
                     {z.bearbeiter_id ? namenVon[z.bearbeiter_id] ?? "—" : "—"}
                   </td>
                   <td className="text-neutral-500">{z.hinweis ?? ""}</td>
+                  <td>
+                    {canWrite && z.einzahlungId && !z.storniert && (
+                      <button
+                        type="button"
+                        onClick={() => einzahlungStornieren(z)}
+                        className="text-xs text-beere-600 hover:underline"
+                      >
+                        Stornieren
+                      </button>
+                    )}
+                  </td>
                 </tr>
                 )
               )}
               {journal.length === 0 && (
                 <tr>
-                  <td colSpan={8} className="text-center text-neutral-500">
+                  <td colSpan={9} className="text-center text-neutral-500">
                     Keine Bewegungen in {jahr}.
                   </td>
                 </tr>
@@ -556,7 +610,7 @@ export default function KassenbuchJournalPage() {
                   {jahr === CURRENT_YEAR && " (= aktueller Kassensaldo)"}
                 </td>
                 <td>{formatMenge(endsaldo ?? 0, 2)}</td>
-                <td colSpan={2}></td>
+                <td colSpan={3}></td>
               </tr>
             </tfoot>
           </table>
