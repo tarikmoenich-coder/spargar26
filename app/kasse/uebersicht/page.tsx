@@ -6,7 +6,7 @@
 // sobald das Buch eine freigegebene Kassenprüfung hat).
 
 import { useCallback, useEffect, useState } from "react";
-import { formatMenge } from "@/lib/format";
+import { formatDatumDE, formatMenge } from "@/lib/format";
 import Link from "next/link";
 import { getSupabaseClient } from "@/lib/supabase/client";
 import { useProfile } from "@/lib/useProfile";
@@ -22,6 +22,14 @@ export default function KassenbuecherUebersichtPage() {
 
   const [buecher, setBuecher] = useState<Kassenbuch[]>([]);
   const [salden, setSalden] = useState<Record<number, number>>({});
+  // Letzte Kassenprüfung je Buch + Anzahl Bewegungen seitdem (Nutzer-Vorgabe
+  // 2026-09-30) - null = noch keine Kassenprüfung für dieses Buch.
+  const [letztePruefungen, setLetztePruefungen] = useState<
+    Record<number, { checkZeit: string; ist: number } | null>
+  >({});
+  const [bewegungenSeit, setBewegungenSeit] = useState<Record<number, number>>(
+    {}
+  );
   const [loading, setLoading] = useState(true);
   const [editId, setEditId] = useState<number | null>(null);
   const [editWert, setEditWert] = useState("");
@@ -44,6 +52,37 @@ export default function KassenbuecherUebersichtPage() {
       )
     );
     setSalden(Object.fromEntries(eintraege));
+
+    // Letzte Kassenprüfung je Buch - eine Abfrage über alle Bücher, danach
+    // je Buch den zeitlich neuesten Eintrag herausgreifen (Ergebnis kommt
+    // absteigend sortiert, also gewinnt der erste Treffer je Buch).
+    const { data: pruefungenRoh } = await supabase
+      .from("cash_checks")
+      .select("kassenbuch_id, check_zeit, ist")
+      .order("check_zeit", { ascending: false });
+    const letzte: Record<number, { checkZeit: string; ist: number } | null> =
+      {};
+    for (const b of liste) letzte[b.id] = null;
+    for (const p of (pruefungenRoh as { kassenbuch_id: number; check_zeit: string; ist: number }[]) ?? []) {
+      if (letzte[p.kassenbuch_id] === null) {
+        letzte[p.kassenbuch_id] = { checkZeit: p.check_zeit, ist: Number(p.ist) };
+      }
+    }
+    setLetztePruefungen(letzte);
+
+    const bewegungsEintraege = await Promise.all(
+      liste.map(async (b) => {
+        const lp = letzte[b.id];
+        if (!lp) return [b.id, 0] as const;
+        const { data: n } = await supabase.rpc("kassenbuch_bewegungen_seit", {
+          p_kassenbuch_id: b.id,
+          p_seit: lp.checkZeit,
+        });
+        return [b.id, n == null ? 0 : Number(n)] as const;
+      })
+    );
+    setBewegungenSeit(Object.fromEntries(bewegungsEintraege));
+
     setLoading(false);
   }, []);
 
@@ -83,7 +122,10 @@ export default function KassenbuecherUebersichtPage() {
         <>
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
             {buecher.map((b) => (
-              <div key={b.id} className="card flex flex-col gap-1">
+              <div
+                key={b.id}
+                className="card flex min-h-[260px] flex-col gap-2"
+              >
                 <div className="flex items-center justify-between">
                   <span className="font-semibold text-emerald-900">
                     {b.bezeichnung}
@@ -98,6 +140,23 @@ export default function KassenbuecherUebersichtPage() {
                     ? "inkl. Vorschüsse / Auszahlungen / Kautionen"
                     : `Eröffnungssaldo ${formatMenge(b.eroeffnungssaldo, 2)} €`}
                 </span>
+
+                <div className="mt-1 border-t border-linie pt-2 text-xs text-neutral-500">
+                  <div className="mb-1 font-medium text-neutral-700">
+                    Letzte Kassenprüfung
+                  </div>
+                  {letztePruefungen[b.id] ? (
+                    <ul className="flex flex-col gap-0.5">
+                      <li>Datum: {formatDatumDE(letztePruefungen[b.id]!.checkZeit)}</li>
+                      <li>
+                        Kassenbestand: {formatMenge(letztePruefungen[b.id]!.ist, 2)} €
+                      </li>
+                      <li>Kassenbewegungen seitdem: {bewegungenSeit[b.id] ?? 0}</li>
+                    </ul>
+                  ) : (
+                    <p>Noch keine Kassenprüfung erfolgt.</p>
+                  )}
+                </div>
 
                 {isAdmin && b.typ === "allgemein" && (
                   <div className="mt-1">
@@ -142,7 +201,7 @@ export default function KassenbuecherUebersichtPage() {
 
                 <Link
                   href={b.typ === "lohnkasse" ? "/kasse" : `/kasse/buch?id=${b.id}`}
-                  className="mt-1 text-sm text-emerald-700 underline"
+                  className="mt-auto pt-1 text-sm text-emerald-700 underline"
                 >
                   Journal öffnen
                 </Link>

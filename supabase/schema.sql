@@ -3997,6 +3997,33 @@ returns numeric language sql stable as $$
 $$;
 grant execute on function kassenbuch_saldo_bis(bigint, timestamptz) to authenticated;
 
+-- Anzahl Kassenbewegungen seit einem Zeitpunkt je Buch (Nutzer-Vorgabe
+-- 2026-09-30, Kassenbücher-Übersicht: "Kassenbewegungen seitdem" unter der
+-- letzten Kassenprüfung) - dieselbe lohnkasse/allgemein-Unterscheidung wie
+-- kassenbuch_saldo_bis, aber COUNT(*) statt SUM(). Zählt auch stornierte
+-- Buchungen mit (reine Aktivitätszahl, keine Betragssumme - eine Buchung
+-- wurde ja trotzdem angelegt).
+create or replace function kassenbuch_bewegungen_seit(
+  p_kassenbuch_id bigint,
+  p_seit timestamptz
+)
+returns int language sql stable as $$
+  select
+    coalesce((
+      select count(*) from kassenbuch_buchung b
+      where b.kassenbuch_id = kb.id and b.datum >= p_seit
+    ), 0)
+    + case when kb.typ = 'lohnkasse' then (
+        coalesce((select count(*) from cash_deposits where datum >= p_seit), 0)
+        + coalesce((select count(*) from advances where zahlungsart = 'BAR' and datum >= p_seit), 0)
+        + coalesce((select count(*) from auszahlungsbeleg_summary where zahlungsart = 'BAR' and erstellt_am >= p_seit), 0)
+        + coalesce((select count(*) from kautionsuebergaben where erstellt_am >= p_seit), 0)
+      ) else 0 end
+  from kassenbuch kb
+  where kb.id = p_kassenbuch_id;
+$$;
+grant execute on function kassenbuch_bewegungen_seit(bigint, timestamptz) to authenticated;
+
 -- Belegnummer je Buch: <kuerzel>-<YYMM>-<lfd>, eigener Zähler je (Buch, Monat).
 create or replace function kassenbuch_naechste_belegnummer(p_kassenbuch_id bigint)
 returns text language plpgsql security definer set search_path = public as $$
