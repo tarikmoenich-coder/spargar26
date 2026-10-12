@@ -38,13 +38,20 @@ Dann: Gewicht auf die Waage legen, ENTER drücken, Ausgabe prüfen. Danach in
 Supabase `select * from ernte_scan order by id desc` - die Zeile sollte da
 sein.
 
-## Einrichtung auf dem Hetzner-Server (Dauerbetrieb)
+## Einrichtung am Hof (Dauerbetrieb) - NICHT auf dem Hetzner-Server
 
-Analog zu `tools/fahrzeug-poller/`, aber als Dienst (`Restart=always`), nicht
-als Timer - der Agent läuft dauerhaft und wartet auf Scans:
+**Wichtig, anders als beim `fahrzeug-poller`:** Dieser Agent muss auf einem
+Gerät **im selben LAN wie die Waage** laufen (z. B. Mini-PC/Raspberry Pi am
+Hof, siehe Plan Teil D) - der Hetzner-Server erreicht `192.168.2.x` nicht.
+Der fahrzeug-poller darf auf Hetzner laufen, weil dort Traccar selbst der
+Server ist, den die Tracker über eine echte Internet-SIM erreichen - die
+Waage ist dagegen nur lokal im Hofnetz ansprechbar.
+
+Als systemd-Dienst (`Restart=always`), nicht als Timer - der Agent läuft
+dauerhaft und wartet auf Scans:
 
 ```bash
-cd /home/tarik/projekte/spargar26 && git pull
+cd /pfad/zum/repo && git pull
 cd tools/ernte-waage-agent && npm ci
 sudo install -m 600 /dev/null /etc/ernte-waage-agent.env
 sudo nano /etc/ernte-waage-agent.env   # Inhalt: siehe .env.example

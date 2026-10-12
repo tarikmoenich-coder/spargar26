@@ -6,10 +6,12 @@ Wants=network-online.target
 [Service]
 # Anders als der fahrzeug-poller (Type=oneshot/Timer): der Agent laeuft
 # dauerhaft und wartet auf Scans - kein periodischer Cron-Takt.
+# WICHTIG: läuft auf einem Geraet IM HOFNETZ (Mini-PC/RPi), NICHT auf dem
+# Hetzner-Server - User/WorkingDirectory unten an dieses Geraet anpassen.
 Type=simple
 User=tarik
 EnvironmentFile=/etc/ernte-waage-agent.env
-WorkingDirectory=/home/tarik/projekte/spargar26/tools/ernte-waage-agent
+WorkingDirectory=/pfad/zum/repo/tools/ernte-waage-agent
 ExecStart=/usr/bin/node index.mjs
 Restart=always
 RestartSec=5
