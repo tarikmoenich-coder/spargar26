@@ -3,6 +3,8 @@ node_modules/
 .env.local
 .env
 tools/fahrzeug-poller/.env
+tools/ernte-waage-agent/.env
+tools/ernte-waage-agent/*.sqlite*
 # tsc-Inkrementell-Cache, entsteht lokal bei jedem "npx tsc --noEmit"
 tsconfig.tsbuildinfo
 

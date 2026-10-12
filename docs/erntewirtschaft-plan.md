@@ -440,18 +440,51 @@ für ein anderes Modell/82c).
   Datum (TT.MM.JJJJ), Uhrzeit (HH:MM:SS), Wägebrücken-Nr, Wägebereich,
   Stückzahl, Gewichtseinheit (kg), Brutto, Tara, Netto (je 8-stellig,
   rechtsbündig, Dezimalpunkt).
-  **Offene Frage Tara:** „Netto" ist Brutto minus dem, was zuletzt per `<FT>`/
-  `<FH..>` am Gerät als Tara gesetzt wurde - bei unbeaufsichtigtem Betrieb
-  (keine Person tariert je Kiste am Terminal) bräuchte das entweder eine feste
-  Plattform-Tara (leere Palette dauerhaft aufgesetzt) oder wir tarieren
-  überhaupt nicht am Gerät und lesen stattdessen **Brutto**, ziehen das
-  bekannte Kisten-Leergewicht (je Kistentyp, aus `ernte_tag`/Stammdaten) selbst
-  im Backend ab. Zweiteres ist robuster (kein Risiko einer veraltet stehen
-  gebliebenen Geräte-Tara) - vorbehaltlich Rückfrage/Praxistest.
+  **Praxistest erfolgreich (2026-10-12), erste echte Wägung per `<FP0>`
+  über TCP/IP** (`docs/waage_test.py`/`.ps1`): Antwort hat **ein Feld mehr
+  als oben beschrieben** - vor der laufenden Nummer steht noch eine leere
+  Satzkennung (`;<lfd.Nr.>;<Datum>;...`). Beide Testskripte entsprechend
+  korrigiert. Beispiel-Antwort: lfd. Nr. 1 (erste Wägung seit
+  Inbetriebnahme), Wägebrücke/-bereich 1/1, Stückzahl 0, Brutto 2,560 kg,
+  Tara 0,000 kg, Netto 2,560 kg - stimmig. Ethernet-Schnittstelle war ohne
+  Probleme ansprechbar (Freischaltung war also schon vorhanden/nicht
+  nötig).
+  ~~Offene Frage Tara~~ — **geklärt (2026-10-12):** Am Hof wird **immer an
+  der Waage selbst tariert** (Person tariert je Kiste/Vorgang am Terminal,
+  kein unbeaufsichtigter Betrieb). Der Agent liest deshalb einfach das
+  **Netto-Feld direkt aus `<FP0>`** und übernimmt es 1:1 - kein
+  Brutto-minus-Kisten-Leergewicht im Backend nötig, die ursprünglich
+  erwogene Alternative (feste Plattform-Tara/Backend-Abzug) entfällt damit.
 - Ablauf im Agenten: Kisten-Tag-Scan kommt rein → kurz warten (Kiste steht auf
   der Waage) → TCP-Verbindung öffnen → `<FP0>` senden → Antwort parsen (Erfolg
   → Netto+laufende Nummer weiter wie bisher geplant; `<FP!>`/Timeout →
   verwerfen bzw. `ungeklaert`, siehe Teil E) → Verbindung schließen.
+
+**Erster Baustein gebaut (2026-10-12): `tools/ernte-waage-agent/`.** Noch
+nicht die komplette Teil-D-Kette, bewusst als erste testbare Scheibe:
+- Schreibt direkt per **Service-Key in `ernte_scan`** (Muster wie
+  `tools/fahrzeug-poller/`, **keine** `ernte-ingest`-Edge-Function nötig für
+  diesen Pfad - der Agent läuft vertrauenswürdig am Hof, genau wie der
+  Fahrzeug-Poller).
+- **Scanner-Quelle austauschbar** (globaler Schalter `SCANNER_QUELLE` in der
+  `.env`, kein DB-Flag - dem Nutzer reicht ein globaler Schalter): `simuliert`
+  (Fake-Codes `K-TEST-0001…`, Trigger = ENTER-Taste - zum Testen mit echten
+  Gewichten auf der echten Waage, ohne echten Scanner), `stdin` (echte
+  Codes/späterer USB-HID-Scanner), `seriell` (RS232, Platzhalter bis ein
+  Scanner-Modell feststeht).
+- Waage-Client mit der korrigierten Feldreihenfolge (Satzkennung, s. o.),
+  gegen die echten Praxistest-Bytes vom 2026-10-12 verifiziert.
+- Lokale SQLite-Warteschlange + Retry bei Supabase-Ausfall, wie geplant.
+- Migration `migration_2026-10-12_erntewirtschaft_waage_grundlage.sql`
+  bisher nur `ernte_waage`/`ernte_tag`/`ernte_scan` (+RLS) - bewusst ohne
+  `ernte_maschine`/`ernte_position`/`ernte_kiste_zyklus`/`ernte_konfig`/
+  Sichten/pg_cron-Processor, die hängen an der SpidertrackBox-Seite und
+  folgen in einer eigenen Migration.
+- **Noch offen/nicht gebaut:** `ernte-ingest`-Edge-Function (für den
+  SpidertrackBox-Pfad), Traccar→PostgreSQL (Teil A), Poller-Erweiterung mit
+  Positions-Quelle-Adapter (Teil G), restliche DB-Migration + Processor
+  (Teil E), Frontend-Modul (Teil F), Traccar-Bulk-Anlage der 140
+  Maschinen-Geräte.
 
 **Reader — TECTUS MAGNUM 4077, Handbuch V1.1 (Klärung 2026-09-21) — seit
 2026-09-22 umgewidmet auf die 300-kg-Rohware-/Fertigware-Kisten, siehe
@@ -847,8 +880,8 @@ Spatial-Join `ernte_feld` → `flurstueck_id`/`feld`. Retention/Downsample-Job.
    Impuls)? Rechner am Hof für den Agenten vorhanden oder Teil des Projekts (RPi)?
 4. ~~`work_entries`-Kopplung~~ — **geklärt** (Pflichtenheft): der Stundenzettel
    bleibt führend, die Maschinenzeit ist Kontroll-/Differenzgröße.
-5. **Tara:** feste Konstante je Kistentyp (welcher Wert?), oder werden Kisten auch
-   leer gewogen?
+5. ~~**Tara**~~ — **geklärt (2026-10-12):** es wird immer an der Waage selbst
+   tariert, der Agent übernimmt das Netto-Feld direkt (siehe Teil D).
 6. **Mitbestimmung:** die Kette Fahrer→Kiste→kg→Stunden ist personenscharfe
    Leistungserfassung — vor Scharfschaltung mit den Fahrern/Betriebsrat klären.
 7. **Laufmeter-Stammdaten:** woher kommt `ernte_feld.laufmeter_gesamt`

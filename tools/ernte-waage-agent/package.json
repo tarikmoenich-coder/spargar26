@@ -1,0 +1,15 @@
+{
+  "name": "ernte-waage-agent",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Liest Scanner-Code + Waagen-Gewicht, paart beide und schreibt sie nach Supabase (laeuft am Hof neben der RHEWA 84vario).",
+  "scripts": {
+    "start": "node index.mjs"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.45.4",
+    "better-sqlite3": "^11.3.0",
+    "dotenv": "^16.4.5"
+  }
+}
