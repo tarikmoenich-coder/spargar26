@@ -67,6 +67,16 @@ export async function gn7Lesen(ip, port) {
 }
 
 /**
+ * Wie gn7Lesen(), aber als Zahl geparst (z.B. "   2.560<GN>" -> 2.56).
+ * NaN, wenn die Antwort keine brauchbare Zahl enthaelt (z.B. Fehlerquittung).
+ */
+export async function gn7Gewicht(ip, port) {
+  const roh = await gn7Lesen(ip, port);
+  const zahlTeil = roh.split("<")[0]?.trim() ?? "";
+  return Number(zahlTeil);
+}
+
+/**
  * Kompletter eichfaehiger EDV1-Datensatz. Die Waage wartet GERAETESEITIG
  * bis zu 30s auf Ruhelage - hier als "stabiles Gewicht"-Trigger genutzt,
  * keine eigene Stabilitaets-Pruefung im Agenten noetig (siehe Plan Teil D).

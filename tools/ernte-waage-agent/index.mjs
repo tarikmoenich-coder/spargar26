@@ -1,11 +1,14 @@
 // Waagen-Agent - siehe docs/erntewirtschaft-plan.md Teil D.
-// Ablauf je Scan: Kisten-/Test-Code kommt rein -> kurz warten (Kiste steht
-// auf der Waage) -> <FP0> an die Waage -> Antwort parsen -> Zeile in
-// ernte_scan schreiben (direkt per Service-Key, wie beim fahrzeug-poller -
-// keine ernte-ingest Edge Function noetig fuer diesen Pfad).
+// Ablauf je Scan: Kisten-/Test-Code kommt rein -> per <GN7> pollen, bis
+// wirklich ein neues Gewicht aufliegt (der Scanner haengt mit Abstand und
+// erkennt die Kiste evtl., bevor sie auf der Waage steht - ein fester
+// Delay waere hier ein Ratespiel) -> erst DANN <FP0> fuer den eichfaehigen,
+// garantiert stabilen Wert -> Zeile in ernte_scan schreiben (direkt per
+// Service-Key, wie beim fahrzeug-poller - keine ernte-ingest Edge Function
+// noetig fuer diesen Pfad).
 import "dotenv/config";
 import { createClient } from "@supabase/supabase-js";
-import { fp0Lesen } from "./waage-client.mjs";
+import { fp0Lesen, gn7Gewicht } from "./waage-client.mjs";
 import { scannerQuelle } from "./scanner-quelle.mjs";
 import { einreihen, wartendeHolen, schreibeZurueck } from "./queue.mjs";
 
@@ -16,7 +19,12 @@ const WAAGE_IP = env("WAAGE_IP");
 const WAAGE_PORT = envNumber("WAAGE_PORT", 8000);
 const WAAGE_ID = envNumber("WAAGE_ID", 1);
 const SCANNER_QUELLE_NAME = env("SCANNER_QUELLE", "simuliert");
-const KISTE_STEHT_WARTE_MS = envNumber("KISTE_STEHT_WARTE_MS", 1500);
+// Ab welchem Gewicht gilt "da liegt wirklich eine Kiste" (nicht nur Rauschen/
+// Nullpunkt-Drift der leeren Waage). Auf die LEICHTESTE realistisch befuellte
+// Kiste abstimmen - mit Luft nach unten, aber klar ueber dem Leergewicht.
+const MINDESTGEWICHT_KG = envNumber("MINDESTGEWICHT_KG", 2);
+const GEWICHT_POLL_INTERVALL_MS = envNumber("GEWICHT_POLL_INTERVALL_MS", 400);
+const WARTE_AUF_GEWICHT_TIMEOUT_MS = envNumber("WARTE_AUF_GEWICHT_TIMEOUT_MS", 20_000);
 const RETRY_INTERVALL_MS = envNumber("RETRY_INTERVALL_MS", 30_000);
 const QUEUE_DATEI = env("QUEUE_DATEI", "./ernte-waage-agent-queue.jsonl");
 
@@ -67,10 +75,36 @@ async function wartendeAbarbeiten() {
   schreibeZurueck(QUEUE_DATEI, nochOffen);
 }
 
-async function kisteWiegen(tagUid) {
-  console.log(`Code gescannt: ${tagUid} - warte ${KISTE_STEHT_WARTE_MS}ms, dann <FP0> ...`);
-  await warte(KISTE_STEHT_WARTE_MS);
+/**
+ * Pollt <GN7>, bis ein Gewicht >= MINDESTGEWICHT_KG auftaucht (= es liegt
+ * jetzt wirklich etwas auf der Waage), oder gibt nach dem Timeout auf.
+ * Verhindert, dass <FP0> zu frueh abgefragt wird und eine "stabile" 0 kg
+ * (oder eine liegengebliebene alte Kiste) als Ergebnis durchgeht.
+ */
+async function wartetBisGewichtAufliegt(tagUid) {
+  const start = Date.now();
+  while (Date.now() - start < WARTE_AUF_GEWICHT_TIMEOUT_MS) {
+    let gewicht;
+    try {
+      gewicht = await gn7Gewicht(WAAGE_IP, WAAGE_PORT);
+    } catch (e) {
+      console.error(`  -> <GN7> fehlgeschlagen: ${e.message}`);
+      return false;
+    }
+    if (Number.isFinite(gewicht) && gewicht >= MINDESTGEWICHT_KG) return true;
+    await warte(GEWICHT_POLL_INTERVALL_MS);
+  }
+  console.warn(
+    `  -> ${tagUid}: nach ${WARTE_AUF_GEWICHT_TIMEOUT_MS}ms kein Gewicht >= ${MINDESTGEWICHT_KG} kg erkannt - Kiste nie aufgelegt?`,
+  );
+  return false;
+}
 
+async function kisteWiegen(tagUid) {
+  console.log(`Code gescannt: ${tagUid} - warte auf Gewicht auf der Waage ...`);
+  if (!(await wartetBisGewichtAufliegt(tagUid))) return;
+
+  console.log("  -> Gewicht erkannt, frage <FP0> fuer den eichfaehigen Wert ab ...");
   let ergebnis;
   try {
     ergebnis = await fp0Lesen(WAAGE_IP, WAAGE_PORT);
