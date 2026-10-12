@@ -15,6 +15,7 @@ const BEREICHE: [string, string][] = [
   ["/praemien/zuckermais", "/praemien/zuckermais"],
   ["/anbau/erdbeeren", "/anbau/erdbeeren"],
   ["/statistik/zuckermais", "/statistik/zuckermais"],
+  ["/erntewirtschaft/waage", "/erntewirtschaft/waage"],
 ];
 
 export default function ErntewirtschaftPage() {

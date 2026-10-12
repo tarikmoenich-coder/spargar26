@@ -145,6 +145,16 @@ export const MENUE_RECHTE: Record<string, UserRole[]> = {
     "management",
     "erntewirtschaft",
   ],
+  // Rollen hier 1:1 wie die RLS-Select-Policy auf ernte_scan/ernte_waage
+  // (migration_2026-10-12_erntewirtschaft_waage_grundlage.sql) - sonst
+  // sieht eine Rolle den Menüpunkt, aber nie Daten.
+  "/erntewirtschaft/waage": [
+    "admin",
+    "hr",
+    "zeiterfassung",
+    "management",
+    "erntewirtschaft",
+  ],
   "/kasse": ["admin", "kasse", "pruefer", "management"],
   "/management": ["admin", "hr", "management"],
   "/aenderungsprotokoll": ["admin"],
