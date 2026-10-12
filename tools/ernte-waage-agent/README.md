@@ -6,7 +6,9 @@ siehe `docs/erntewirtschaft-plan.md`, Teil D.
 
 Ablauf je Scan: Code kommt rein -> kurz warten (Kiste steht auf der Waage) ->
 `<FP0>` an die Waage -> Antwort parsen -> Netto-Gewicht + Code nach Supabase.
-Bei Supabase-Ausfall: lokale SQLite-Warteschlange, automatischer Retry.
+Bei Supabase-Ausfall: lokale Warteschlange (einfache JSON-Zeilen-Datei,
+bewusst kein natives Binary wie SQLite - siehe `queue.mjs`), automatischer
+Retry.
 
 ## Scanner-Quelle (heute: Testdaten, echte Hardware folgt)
 

@@ -1,42 +1,38 @@
-// Lokale Warteschlange (SQLite-Datei) fuer ernte_scan-Zeilen, die wegen
-// Netzausfall/Supabase-Fehler nicht sofort geschrieben werden konnten -
-// siehe docs/erntewirtschaft-plan.md Teil D ("lokale SQLite-Queue + Retry").
-import Database from "better-sqlite3";
+// Lokale Warteschlange fuer ernte_scan-Zeilen, die wegen Netzausfall/
+// Supabase-Fehler nicht sofort geschrieben werden konnten - siehe
+// docs/erntewirtschaft-plan.md Teil D ("lokale Warteschlange + Retry").
+//
+// Bewusst eine einfache JSON-Zeilen-Datei statt SQLite: better-sqlite3
+// braucht ein natives Binary passend zur Node-Version/Plattform - auf
+// einem frischen Windows-Rechner ohne vorhandenes Binary (z. B. sehr neue
+// Node-Version) versucht npm, es selbst zu kompilieren, und scheitert
+// ohne Visual-Studio-Build-Tools/funktionierendes Python. Bei der
+// erwarteten Menge (einzelne Wiegungen, nicht tausende/Sekunde) reicht
+// eine simple Datei völlig.
+import fs from "node:fs";
 
-export function oeffneQueue(pfad) {
-  const db = new Database(pfad);
-  db.pragma("journal_mode = WAL");
-  db.exec(`
-    create table if not exists warteschlange (
-      id integer primary key autoincrement,
-      erstellt_am text not null default (datetime('now')),
-      payload text not null,
-      versuche integer not null default 0,
-      letzter_fehler text
-    )
-  `);
-  return db;
+export function einreihen(pfad, payload) {
+  fs.appendFileSync(pfad, `${JSON.stringify(payload)}\n`);
 }
 
-export function einreihen(db, payload) {
-  db.prepare("insert into warteschlange (payload) values (?)").run(JSON.stringify(payload));
+export function wartendeHolen(pfad) {
+  if (!fs.existsSync(pfad)) return [];
+  return fs
+    .readFileSync(pfad, "utf8")
+    .split("\n")
+    .filter((zeile) => zeile.trim().length > 0)
+    .map((zeile) => JSON.parse(zeile));
 }
 
-export function wartendeHolen(db, limit = 50) {
-  return db.prepare("select * from warteschlange order by id limit ?").all(limit);
+/** Ersetzt die Datei durch genau die Eintraege, die noch offen sind (leer -> Datei weg). */
+export function schreibeZurueck(pfad, payloads) {
+  if (payloads.length === 0) {
+    fs.rmSync(pfad, { force: true });
+    return;
+  }
+  fs.writeFileSync(pfad, payloads.map((p) => JSON.stringify(p)).join("\n") + "\n");
 }
 
-export function entfernen(db, id) {
-  db.prepare("delete from warteschlange where id = ?").run(id);
-}
-
-export function fehlerVermerken(db, id, fehler) {
-  db.prepare("update warteschlange set versuche = versuche + 1, letzter_fehler = ? where id = ?").run(
-    String(fehler),
-    id,
-  );
-}
-
-export function anzahlWartend(db) {
-  return db.prepare("select count(*) as n from warteschlange").get().n;
+export function anzahlWartend(pfad) {
+  return wartendeHolen(pfad).length;
 }

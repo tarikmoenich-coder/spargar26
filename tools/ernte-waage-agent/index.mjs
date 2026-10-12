@@ -7,7 +7,7 @@ import "dotenv/config";
 import { createClient } from "@supabase/supabase-js";
 import { fp0Lesen } from "./waage-client.mjs";
 import { scannerQuelle } from "./scanner-quelle.mjs";
-import { oeffneQueue, einreihen, wartendeHolen, entfernen, fehlerVermerken, anzahlWartend } from "./queue.mjs";
+import { einreihen, wartendeHolen, schreibeZurueck } from "./queue.mjs";
 
 const env = (name, fallback) => process.env[name] ?? fallback;
 const envNumber = (name, fallback) => Number(process.env[name] ?? fallback);
@@ -18,7 +18,7 @@ const WAAGE_ID = envNumber("WAAGE_ID", 1);
 const SCANNER_QUELLE_NAME = env("SCANNER_QUELLE", "simuliert");
 const KISTE_STEHT_WARTE_MS = envNumber("KISTE_STEHT_WARTE_MS", 1500);
 const RETRY_INTERVALL_MS = envNumber("RETRY_INTERVALL_MS", 30_000);
-const QUEUE_DATEI = env("QUEUE_DATEI", "./ernte-waage-agent-queue.sqlite");
+const QUEUE_DATEI = env("QUEUE_DATEI", "./ernte-waage-agent-queue.jsonl");
 
 if (!WAAGE_IP) {
   console.error("WAAGE_IP fehlt - siehe .env.example");
@@ -30,7 +30,6 @@ if (!env("SUPABASE_URL") || !env("SUPABASE_SERVICE_ROLE_KEY")) {
 }
 
 const supabase = createClient(env("SUPABASE_URL"), env("SUPABASE_SERVICE_ROLE_KEY"));
-const queue = oeffneQueue(QUEUE_DATEI);
 
 function warte(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -47,24 +46,25 @@ async function schreibenMitQueueFallback(zeile) {
     console.log(`  -> ernte_scan geschrieben (${zeile.tag_uid}, ${zeile.gewicht_kg} kg)`);
   } catch (e) {
     console.error(`  -> Supabase-Fehler, lege lokal in die Warteschlange: ${e.message}`);
-    einreihen(queue, zeile);
+    einreihen(QUEUE_DATEI, zeile);
   }
 }
 
 async function wartendeAbarbeiten() {
-  const n = anzahlWartend(queue);
-  if (n === 0) return;
-  console.log(`Warteschlange: ${n} ausstehend, versuche erneut zu senden ...`);
-  for (const eintrag of wartendeHolen(queue)) {
+  const wartende = wartendeHolen(QUEUE_DATEI);
+  if (wartende.length === 0) return;
+  console.log(`Warteschlange: ${wartende.length} ausstehend, versuche erneut zu senden ...`);
+  const nochOffen = [];
+  for (const payload of wartende) {
     try {
-      await schreiben(JSON.parse(eintrag.payload));
-      entfernen(queue, eintrag.id);
-      console.log(`  -> Nachtrag ok (Warteschlange-Id ${eintrag.id})`);
+      await schreiben(payload);
+      console.log("  -> Nachtrag ok");
     } catch (e) {
-      fehlerVermerken(queue, eintrag.id, e.message);
-      console.error(`  -> Nachtrag fehlgeschlagen (Warteschlange-Id ${eintrag.id}): ${e.message}`);
+      console.error(`  -> Nachtrag fehlgeschlagen: ${e.message}`);
+      nochOffen.push(payload);
     }
   }
+  schreibeZurueck(QUEUE_DATEI, nochOffen);
 }
 
 async function kisteWiegen(tagUid) {

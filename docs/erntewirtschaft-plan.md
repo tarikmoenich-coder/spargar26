@@ -403,7 +403,10 @@ Kleiner Node/Python-Dienst auf einem Mini-PC/RPi am Hof (Muster wie
 - liest Gewicht von der **Waage** — „stabiles Gewicht" als Trigger;
 - **paart**: stabiles Gewicht ≠ 0 + frische Code-Lesung innerhalb von N Sekunden →
   ein `{waage, code, gewicht_kg, ts}` → POST an `ernte-ingest`;
-- lokale SQLite-Queue + Retry bei Netzausfall;
+- lokale Warteschlange + Retry bei Netzausfall (umgesetzt als einfache
+  JSON-Zeilen-Datei statt SQLite - kein natives Binary, siehe Baustein-Stand
+  unten: auf einem Windows-Testrechner mit sehr neuer Node-Version scheiterte
+  `better-sqlite3` ohne Build-Tools/Python);
 - Config: Scanner-Schnittstelle (USB/seriell), Waagen-Port, Ingest-URL/Token,
   Paarungsfenster, Mindestgewicht.
 
@@ -474,7 +477,14 @@ nicht die komplette Teil-D-Kette, bewusst als erste testbare Scheibe:
   Scanner-Modell feststeht).
 - Waage-Client mit der korrigierten Feldreihenfolge (Satzkennung, s. o.),
   gegen die echten Praxistest-Bytes vom 2026-10-12 verifiziert.
-- Lokale SQLite-Warteschlange + Retry bei Supabase-Ausfall, wie geplant.
+- Lokale Warteschlange + Retry bei Supabase-Ausfall, wie geplant - **nicht
+  SQLite** (ursprünglich so geplant): `better-sqlite3` braucht ein natives
+  Binary passend zu Node-Version/Plattform, und scheiterte beim Praxistest
+  auf einem Windows-Rechner mit sehr neuer Node-Version (kein fertiges
+  Binary, Kompilieren schlug mangels Build-Tools/funktionierendem Python
+  fehl). Stattdessen eine einfache JSON-Zeilen-Datei (`queue.mjs`) - bei der
+  erwarteten Menge (einzelne Wiegungen) völlig ausreichend, läuft überall
+  ohne Build-Schritt.
 - Migration `migration_2026-10-12_erntewirtschaft_waage_grundlage.sql`
   bisher nur `ernte_waage`/`ernte_tag`/`ernte_scan` (+RLS) - bewusst ohne
   `ernte_maschine`/`ernte_position`/`ernte_kiste_zyklus`/`ernte_konfig`/
