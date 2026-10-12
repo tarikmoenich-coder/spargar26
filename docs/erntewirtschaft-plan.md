@@ -458,10 +458,18 @@ für ein anderes Modell/82c).
   **Netto-Feld direkt aus `<FP0>`** und übernimmt es 1:1 - kein
   Brutto-minus-Kisten-Leergewicht im Backend nötig, die ursprünglich
   erwogene Alternative (feste Plattform-Tara/Backend-Abzug) entfällt damit.
-- Ablauf im Agenten: Kisten-Tag-Scan kommt rein → kurz warten (Kiste steht auf
-  der Waage) → TCP-Verbindung öffnen → `<FP0>` senden → Antwort parsen (Erfolg
+- Ablauf im Agenten: Kisten-Tag-Scan kommt rein → **per `<GN7>` pollen, bis
+  wirklich ein Gewicht ≥ `MINDESTGEWICHT_KG` aufliegt** (nicht einfach fest
+  warten - Nutzer-Einwand 2026-10-12: hängt der Scanner mit Abstand, kann
+  der Scan feuern, bevor die Kiste physisch auf der Waage steht; ein fester
+  Delay riskiert, dass `<FP0>` eine "stabile" 0 kg vorfindet, kein Fehler,
+  nur eine falsche Zahl) → erst dann `<FP0>` senden → Antwort parsen (Erfolg
   → Netto+laufende Nummer weiter wie bisher geplant; `<FP!>`/Timeout →
   verwerfen bzw. `ungeklaert`, siehe Teil E) → Verbindung schließen.
+  **Bekannte Grenze, im Pilottest zu prüfen:** Steht noch die vorige Kiste
+  auf der Waage, wenn der nächste Scan kommt, erkennt das Polling sofort
+  "Gewicht da" und könnte den alten Wert liefern - setzt voraus, dass die
+  Waage zwischen zwei Kisten zuverlässig leer wird.
 
 **Erster Baustein gebaut (2026-10-12): `tools/ernte-waage-agent/`.** Noch
 nicht die komplette Teil-D-Kette, bewusst als erste testbare Scheibe:
