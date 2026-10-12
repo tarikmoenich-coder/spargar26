@@ -1,11 +1,13 @@
 // Waagen-Agent - siehe docs/erntewirtschaft-plan.md Teil D.
-// Ablauf je Scan: Kisten-/Test-Code kommt rein -> per <GN7> pollen, bis
-// wirklich ein neues Gewicht aufliegt (der Scanner haengt mit Abstand und
-// erkennt die Kiste evtl., bevor sie auf der Waage steht - ein fester
-// Delay waere hier ein Ratespiel) -> erst DANN <FP0> fuer den eichfaehigen,
-// garantiert stabilen Wert -> Zeile in ernte_scan schreiben (direkt per
-// Service-Key, wie beim fahrzeug-poller - keine ernte-ingest Edge Function
-// noetig fuer diesen Pfad).
+// Ablauf je Scan: Kisten-/Test-Code kommt rein -> Gewicht beim Scan merken
+// (egal ob 0 oder noch die vorige Kiste - Ueberschneidungen beim
+// Kistenwechsel sind laut Nutzer normal) -> per <GN7> pollen, bis sich der
+// Wert MERKLICH aendert (= es tut sich etwas auf der Waage, unabhaengig
+// davon, ob zwischendurch kurz beide Kisten teilweise aufliegen) -> erst
+// DANN <FP0> fuer den eichfaehigen Wert, der selbst auf die neue Ruhelage
+// wartet -> Zeile in ernte_scan schreiben (direkt per Service-Key, wie
+// beim fahrzeug-poller - keine ernte-ingest Edge Function noetig fuer
+// diesen Pfad).
 import "dotenv/config";
 import { createClient } from "@supabase/supabase-js";
 import { fp0Lesen, gn7Gewicht } from "./waage-client.mjs";
@@ -19,9 +21,12 @@ const WAAGE_IP = env("WAAGE_IP");
 const WAAGE_PORT = envNumber("WAAGE_PORT", 8000);
 const WAAGE_ID = envNumber("WAAGE_ID", 1);
 const SCANNER_QUELLE_NAME = env("SCANNER_QUELLE", "simuliert");
-// Ab welchem Gewicht gilt "da liegt wirklich eine Kiste" (nicht nur Rauschen/
-// Nullpunkt-Drift der leeren Waage). Auf die LEICHTESTE realistisch befuellte
-// Kiste abstimmen - mit Luft nach unten, aber klar ueber dem Leergewicht.
+// Ab welcher Aenderung gilt "da tut sich was" (Kiste wird gewechselt) -
+// knapp ueber dem normalen Wackeln/Rauschen der Waage, aber klar drunter,
+// was zwei unterschiedlich befuellte Kisten realistisch ausmacht.
+const GEWICHT_AENDERUNG_KG = envNumber("GEWICHT_AENDERUNG_KG", 0.3);
+// Nachtraegliche Plausi-Pruefung auf den fertigen <FP0>-Wert (nur Warnung,
+// die Zeile wird trotzdem gespeichert - Rohdaten bleiben immer vollstaendig).
 const MINDESTGEWICHT_KG = envNumber("MINDESTGEWICHT_KG", 2);
 const GEWICHT_POLL_INTERVALL_MS = envNumber("GEWICHT_POLL_INTERVALL_MS", 400);
 const WARTE_AUF_GEWICHT_TIMEOUT_MS = envNumber("WARTE_AUF_GEWICHT_TIMEOUT_MS", 20_000);
@@ -76,38 +81,68 @@ async function wartendeAbarbeiten() {
 }
 
 /**
- * Pollt <GN7>, bis ein Gewicht >= MINDESTGEWICHT_KG auftaucht (= es liegt
- * jetzt wirklich etwas auf der Waage), oder gibt nach dem Timeout auf.
- * Verhindert, dass <FP0> zu frueh abgefragt wird und eine "stabile" 0 kg
- * (oder eine liegengebliebene alte Kiste) als Ergebnis durchgeht.
+ * Merkt sich das Gewicht im Moment des Scans (egal was das ist - 0, die
+ * vorige Kiste, mitten im Wechsel) und pollt per <GN7>, bis sich der Wert
+ * um mindestens GEWICHT_AENDERUNG_KG davon unterscheidet. Das erkennt einen
+ * Kistenwechsel auch dann, wenn die alte Kiste beim Scan noch (stabil) auf
+ * der Waage steht - ein einfacher Schwellwert-Check ("Gewicht >= X") wuerde
+ * das faelschlich sofort als "fertig" werten und moeglicherweise noch den
+ * ALTEN Wert an <FP0> liefern.
  */
-async function wartetBisGewichtAufliegt(tagUid) {
+async function wartetAufVeraenderung(tagUid) {
+  let vorher;
+  try {
+    vorher = await gn7Gewicht(WAAGE_IP, WAAGE_PORT);
+  } catch (e) {
+    console.error(`  -> <GN7> fehlgeschlagen: ${e.message}`);
+    return false;
+  }
+  if (!Number.isFinite(vorher)) vorher = 0;
+
   const start = Date.now();
   while (Date.now() - start < WARTE_AUF_GEWICHT_TIMEOUT_MS) {
-    let gewicht;
+    await warte(GEWICHT_POLL_INTERVALL_MS);
+    let aktuell;
     try {
-      gewicht = await gn7Gewicht(WAAGE_IP, WAAGE_PORT);
+      aktuell = await gn7Gewicht(WAAGE_IP, WAAGE_PORT);
     } catch (e) {
       console.error(`  -> <GN7> fehlgeschlagen: ${e.message}`);
       return false;
     }
-    if (Number.isFinite(gewicht) && gewicht >= MINDESTGEWICHT_KG) return true;
-    await warte(GEWICHT_POLL_INTERVALL_MS);
+    if (Number.isFinite(aktuell) && Math.abs(aktuell - vorher) >= GEWICHT_AENDERUNG_KG) return true;
   }
   console.warn(
-    `  -> ${tagUid}: nach ${WARTE_AUF_GEWICHT_TIMEOUT_MS}ms kein Gewicht >= ${MINDESTGEWICHT_KG} kg erkannt - Kiste nie aufgelegt?`,
+    `  -> ${tagUid}: nach ${WARTE_AUF_GEWICHT_TIMEOUT_MS}ms keine Gewichtsaenderung erkannt (Stand beim Scan: ${vorher} kg) - Kiste nie gewechselt?`,
   );
   return false;
 }
 
-async function kisteWiegen(tagUid) {
-  console.log(`Code gescannt: ${tagUid} - warte auf Gewicht auf der Waage ...`);
-  if (!(await wartetBisGewichtAufliegt(tagUid))) return;
+/**
+ * Fragt <FP0> zweimal hintereinander ab und akzeptiert nur, wenn beide
+ * Male (fast) dasselbe rauskommt. Absicherung gegen ein falsch-stabiles
+ * Zwischenplateau waehrend eines ueberlappenden Kistenwechsels - wie
+ * robust der Geraete-eigene Ruhelage-Algorithmus das selbst abfaengt,
+ * wissen wir ohne Pilottest nicht, diese Gegenprobe ist billig.
+ */
+async function fp0LesenBestaetigt() {
+  const erste = await fp0Lesen(WAAGE_IP, WAAGE_PORT);
+  if (!erste) return { ergebnis: null, bestaetigt: true };
 
-  console.log("  -> Gewicht erkannt, frage <FP0> fuer den eichfaehigen Wert ab ...");
-  let ergebnis;
+  const zweite = await fp0Lesen(WAAGE_IP, WAAGE_PORT);
+  if (!zweite) return { ergebnis: erste, bestaetigt: false };
+
+  const bestaetigt = Math.abs(zweite.nettoKg - erste.nettoKg) < 0.05;
+  return { ergebnis: zweite, bestaetigt };
+}
+
+async function kisteWiegen(tagUid) {
+  console.log(`Code gescannt: ${tagUid} - warte auf Gewichtswechsel auf der Waage ...`);
+  if (!(await wartetAufVeraenderung(tagUid))) return;
+
+  console.log("  -> Aenderung erkannt, frage <FP0> zweimal ab (muss uebereinstimmen) ...");
+  let ergebnis, bestaetigt;
   try {
-    ergebnis = await fp0Lesen(WAAGE_IP, WAAGE_PORT);
+    ({ ergebnis, bestaetigt } = await fp0LesenBestaetigt());
   } catch (e) {
     console.error(`  -> Waage nicht erreichbar/Fehler: ${e.message}`);
     return;
@@ -118,6 +153,17 @@ async function kisteWiegen(tagUid) {
     return;
   }
 
+  if (!bestaetigt) {
+    console.warn(
+      `  -> Zweite <FP0>-Abfrage wich vom ersten Wert ab (wahrscheinlich noch im Kistenwechsel) - speichere trotzdem den zweiten Wert (${ergebnis.nettoKg} kg) zur Kontrolle.`,
+    );
+  }
+
+  if (ergebnis.nettoKg < MINDESTGEWICHT_KG) {
+    console.warn(
+      `  -> Netto ${ergebnis.nettoKg} kg liegt unter dem erwarteten Mindestgewicht (${MINDESTGEWICHT_KG} kg) - wird trotzdem gespeichert, zur Kontrolle.`,
+    );
+  }
   console.log(`  -> Netto ${ergebnis.nettoKg} kg (Brutto ${ergebnis.bruttoKg}, Tara ${ergebnis.taraKg})`);
 
   await schreibenMitQueueFallback({
