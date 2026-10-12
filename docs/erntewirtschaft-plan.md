@@ -2,9 +2,46 @@
 
 Stand: 2026-09-04, Frequenz-Entscheidung 2026-09-22 (UHF→HF), TECTUS-Rückmeldung
 2026-09-22 (HF→LF), Präzisionsanforderung präzisiert 2026-09-23 (RTK
-voraussichtlich verzichtbar). Arbeitsdokument (wie `unterkunft-plan.md`),
+voraussichtlich verzichtbar), **Kurswechsel 2026-10-12: Kisten-/Badge-Scan
+weg von RFID, hin zu QR-Codes** (siehe Abschnitt direkt unter diesem). Arbeitsdokument (wie `unterkunft-plan.md`),
 damit der Planungsstand einen Konsolen-Neustart übersteht. Noch **kein
 Code** — wartet auf die Hardware-Entscheidungen unten.
+
+**Kurswechsel 2026-10-12: RFID → QR-Codes für Kisten- und Badge-Scan.**
+Nach drei Frequenz-Wechseln (UHF→HF→LF, siehe „Frequenz-Verlauf" unten) hat
+sich der Nutzer aus praktischen und vor allem wirtschaftlichen Gründen
+gegen RFID und für **QR-Codes auf Hartplastik-Karten** entschieden (nicht
+zum Kleben) — sowohl für die Kisten als auch für die Mitarbeiter-Badges.
+Risiko beschädigter/verschmutzter Codes wird bewusst in Kauf genommen: bei
+ausreichender Größe und hoher Fehlerkorrekturstufe verkraften QR-Codes bis
+zu ~30 % Flächenverlust und bleiben trotzdem lesbar.
+- **Scanner statt Reader:** ein fest verbautes **2D-Scan-Modul mit
+  TTL/UART- bzw. RS232-Ausgang** je Maschine, im Presentation-Mode (löst
+  automatisch beim Erkennen eines Codes aus, kein Knopfdruck). Nutzt
+  dieselbe serielle Schnittstelle des TRB246, die vorher für den
+  RFID-Reader vorgesehen war — an der SpidertrackBox-Verkabelung ändert
+  sich dadurch nichts. Empfehlung: Markenmodul (Honeywell/Newland) statt
+  No-Name, analog zur schon früher geäußerten Qualitätssorge bei günstigen
+  RFID-Readern. An der Hofwaage genügt ein einzelnes fertiges
+  Desktop-Präsentationsgerät (z. B. Zebra DS457/DS9208) statt eines
+  Einbau-Moduls, da nur einmal benötigt.
+- **Typ-Präfix im Code selbst, statt Rate-Heuristik:** Mitarbeiter-Karten
+  beginnen mit `P-`, Kisten-Karten mit `K-` (z. B. `P-00042`, `K-10293`).
+  Die Ingest-Funktion weiß damit **sofort und zweifelsfrei** beim Scan, ob
+  es eine Person oder eine Kiste ist, ohne erst nachschlagen zu müssen, ob
+  der Code bekannt ist. Das macht die komplette „unbekannter
+  Mitarbeiter"-Rateheuristik aus Teil C (Stand bis 2026-10-11, unten als
+  überholt markiert) überflüssig.
+- **UHF-Material (TECTUS MAGNUM 4077 + Tags) bleibt wie schon länger geplant
+  für die 300-kg-Rohware-/Fertigware-Kisten reserviert** — daran ändert der
+  Kurswechsel nichts, siehe Absatz weiter unten.
+- Pilottest bleibt Pflicht, jetzt für QR statt LF: verschmutzter/nasser
+  Code, Handschuhe, Karte in Bewegung — vor einer 140er-Bestellung mit 2-3
+  Mustern durchspielen.
+- Alle RFID-/Frequenz-spezifischen Abschnitte unten (Frequenz-Verlauf,
+  LF-Reader-Empfehlung, `ernte_tag`-Klassifizierungslogik) bleiben als
+  Entscheidungshistorie stehen, gelten für den Kisten-/Badge-Scan aber als
+  **überholt**, nicht gelöscht.
 
 **Präzisionsanforderung geklärt (2026-09-23): RTK voraussichtlich NICHT
 nötig.** Die ursprüngliche „±1 m"-Vorgabe (Klärung 2026-09-03/04) stammte aus
@@ -101,44 +138,54 @@ Lückenlose Kette von der Erntearbeit auf dem Feld bis zum gewogenen Ertrag am H
 um einen echten Realitätscheck über die Arbeitseffizienz zu bekommen:
 
 ```
-Feld:      Spargelspinne (SpidertrackBox: LTE + GNSS (ohne RTK, s.o.) + LF-RFID + Batterie)
-             Fahrer scannt morgens 1× seinen Badge          → ernte_schicht
-             Fahrer scannt leere Kiste, erntet rein          → ernte_kiste_zyklus (offen)
-             Fahrer scannt nächste Kiste                     → vorige implizit "voll"
+Feld:      Spargelspinne (SpidertrackBox: LTE + GNSS (ohne RTK, s.o.) + QR-Scanner + Batterie)
+             Fahrer scannt morgens 1× seine Badge-Karte (P-…) → ernte_schicht
+             Fahrer scannt leere Kiste (K-…), erntet rein      → ernte_kiste_zyklus (offen)
+             Fahrer scannt nächste Kiste                       → vorige implizit "voll"
 LKW:       holt volle Kisten ab, fährt zum Hof              (LKW schon im Fahrzeug-Modul)
-Hof:       Waage + stationärer LF-Leser scannt die Kiste    → Zyklus: gewogen_am, kg
+Hof:       Waage + QR-Scanner liest die Kisten-Karte        → Zyklus: gewogen_am, kg
 Ergebnis:  pro Kiste: Maschine · Fahrer · Feld/Flur (aus GPS) · Zeit · netto kg
            → kg/Personenstunde, kg/Maschinenstunde, Ertragsdichte-Karte,
              gebuchte Stunden (work_entries) vs. Maschine-aktiv-Zeit
 ```
+*(Stand bis 2026-10-11 hier: LF-RFID statt QR — siehe Kurswechsel oben.)*
 
 ## Feststehende Fakten (aus der Klärung 2026-09-03/04)
 
 - **140 Erntemaschinen = die Spargelspinnen.** 1 Person pro Maschine.
-- Fahrer **registriert sich 1×/Tag** per RFID-Badge an der Maschine.
+- Fahrer **registriert sich 1×/Tag** per Badge-Karte (QR, `P-…`) an der Maschine.
+- **Neu seit 2026-10-12: Kisten-/Badge-Scan per QR statt RFID**, siehe
+  Kurswechsel-Abschnitt ganz oben. Die folgenden Punkte bis zum Ende dieses
+  Abschnitts beschreiben den RFID-Stand bis 2026-10-11 — als
+  Entscheidungshistorie stehen gelassen, für den Kisten-/Badge-Scan aber
+  überholt. Einzig der TECTUS MAGNUM 4077 + die UHF-Tags bleiben wie dort
+  beschrieben für die 300-kg-Kisten reserviert.
 - **Kisten-Transponder sind schon gekauft, aber seit 2026-09-22 umgewidmet:**
   *Transponder Square, UHF Tag Chip U8, 865–868 MHz, 69×23×7 mm, ABS+PC,
   IP68.* Für den Kisten-/Badge-Scan an der Maschine wird stattdessen LF
   favorisiert (siehe Frequenz-Verlauf oben, Pilottest offen) - diese
   UHF-Tags gehen an die 300-kg-Rohware-/Fertigware-Kisten.
-- Für den Kisten-/Badge-Scan wird jetzt ein **LF-Reader mit seriellem
-  Anschluss** favorisiert (konkretes Modell offen, siehe Frequenz-Verlauf
-  oben) - die **SpidertrackBox-Teileliste ist ohnehin noch NICHT gekauft**
-  (`docs/…BOM…xlsx`), kann also direkt danach geplant werden. Enthielt
-  vorher: Teltonika **TRB246** (IoT-Gateway, RutOS, LTE + GNSS + RS232 +
-  RS485 + I/O - die seriellen Schnittstellen passen zum LF-Reader),
-  Teltonika Combo-Dachantenne (Mobil/GNSS/WLAN), Netronix MW-R4G (RFID
-  13,56 MHz HF - ursprünglich für die Kiste vorgesehen, dann wegen der
-  UHF-Tags verworfen, durch die HF-Zwischenentscheidung kurz wieder passend,
-  jetzt durch die LF-Empfehlung erneut zu ersetzen), VE.Direct-Kabel +
-  MAX3232 (liest Victron-Batteriedaten), Gehäuse/Hutschiene/Klemmen.
+- Für den Kisten-/Badge-Scan war hier bis 2026-10-11 ein **LF-Reader mit
+  seriellem Anschluss** favorisiert (siehe Frequenz-Verlauf oben) - seit dem
+  Kurswechsel ganz oben stattdessen ein **2D-QR-Scan-Modul mit
+  TTL/UART- bzw. RS232-Ausgang** (Empfehlung: Honeywell/Newland-Markenmodul,
+  Presentation-Mode). Die **SpidertrackBox-Teileliste ist ohnehin noch NICHT
+  gekauft** (`docs/…BOM…xlsx`), kann also direkt mit dem QR-Modul geplant
+  werden. Aktuelle Liste: Teltonika **TRB246** (IoT-Gateway, RutOS,
+  LTE + GNSS + RS232 + RS485 + I/O - die seriellen Schnittstellen passen
+  zum QR-Modul genauso wie vorher zum RFID-Reader geplant),
+  Teltonika Combo-Dachantenne (Mobil/GNSS/WLAN), das QR-Scan-Modul (ersetzt
+  den zuletzt favorisierten LF-Reader bzw. den zuvor schon wieder verworfenen
+  Netronix MW-R4G HF-Reader), VE.Direct-Kabel + MAX3232 (liest
+  Victron-Batteriedaten), Gehäuse/Hutschiene/Klemmen (braucht jetzt zusätzlich
+  ein kleines, vor Regen geschütztes Sichtfenster für die Scan-Optik).
 - **Waage am Hof - Reader jetzt umgewidmet (siehe oben):** stationärer Leser
   *MAGNUM, UHF, Long Range, Ethernet/WLAN/RS232/RS485, 1 int./2 ext.
   Antennen* - Hersteller laut Typenschild **TECTUS Technology GmbH**
   (tec-tus.de) P/N `MAGNUM 4077-01-000-00`, Versorgung 12-36 V/2,5 A - wird
-  nicht mehr für den laufenden Kisten-Scan an der Waage gebraucht (dafür ein
-  neuer, noch zu wählender LF-Reader, TECTUS-Empfehlung), sondern für die
-  300-kg-Kisten vorgesehen. Die **Waage selbst kommt noch** (siehe Teil D
+  nicht mehr für den laufenden Kisten-Scan an der Waage gebraucht (dafür seit
+  2026-10-12 ein QR-Desktop-Scanner, z. B. Zebra DS457/DS9208), sondern für
+  die 300-kg-Kisten vorgesehen. Die **Waage selbst kommt noch** (siehe Teil D
   für das gewählte Modell
   RHEWA 84vario).
 - **±1 m Präzision (RTK)** — ursprüngliche Vorgabe, seit 2026-09-23
@@ -170,7 +217,7 @@ Ergebnis:  pro Kiste: Maschine · Fahrer · Feld/Flur (aus GPS) · Zeit · netto
 
 | Thema | Optionen | Empfehlung |
 |---|---|---|
-| **Kisten-Scan an der Maschine** (2026-09-22: UHF→HF→LF, siehe Hinweis oben, Pilottest offen) | LF-Reader-Modul (seriell, TECTUS-Empfehlung), Ethernet-HF-Modul, oder erst der Pilottest entscheidet | Aktuell favorisiert: LF mit seriellem Reader (RS232/RS485 an den ohnehin vorhandenen TRB246), bis 60 cm Reichweite, robust bei Nässe, günstiger als Ethernet-Reader für 140 Boxen. Vor Bestellung: Pilottest mit TECTUS-LF-Testhardware unter Feldbedingungen. Die bereits gekauften UHF-Tags/der UHF-Reader (TECTUS MAGNUM 4077) werden für 300-kg-Rohware-/Fertigware-Kisten weiterverwendet, nicht verworfen. |
+| **Kisten-/Badge-Scan an der Maschine** (2026-09-22: UHF→HF→LF; 2026-10-12: RFID→QR, siehe Kurswechsel oben) | 2D-QR-Scan-Modul (TTL/UART bzw. RS232, Honeywell/Newland), No-Name-Modul, oder RFID (verworfen) | **QR-Scan-Modul im Presentation-Mode**, am seriellen Anschluss des ohnehin vorhandenen TRB246 (dieselbe Schnittstelle, die vorher für den RFID-Reader vorgesehen war). Markenmodul statt No-Name wegen Qualitätsrisiko bei 140 Dauereinsatz-Geräten. Karten (Kisten + Mitarbeiter-Badges) auf Hartplastik, nicht geklebt, mit Typ-Präfix `P-`/`K-` im Code. Vor Bestellung: Pilottest mit 2-3 Mustern unter Feldbedingungen (nass, dreckig, Handschuhe). Die bereits gekauften UHF-Tags/der UHF-Reader (TECTUS MAGNUM 4077) werden weiterhin für 300-kg-Rohware-/Fertigware-Kisten verwendet, nicht verworfen. |
 | **±1 m (RTK)** — voraussichtlich verzichtbar, siehe Hinweis oben (2026-09-23) | Ohne RTK: normale TRB246-GNSS (2,5–5 m) reicht für Zig-Meter-Heatmap + Streckenlänge. Mit RTK weiterhin möglich, falls doch reihengenau gebraucht: u-blox **ZED-F9P**-Klasse + NTRIP + Multiband-Antenne | **Kein RTK** — spart ~250–450 €/Box + NTRIP-Gebühr/-Datenvolumen (× 140 Boxen erheblich). Nur bei späterem Bedarf an reihengenauer Auswertung nachrüsten. |
 | **Positions-Lograte** | 1 s / 5 s / on-move+min-distance | **1 s** in der Traccar-PostgreSQL (kurze Retention), **5 s** heruntergerechnet nach `ernte_position`. |
 | **Feld-Geometrien** | aus Pachtwesen2026 importieren / in Spargar neu pflegen | `ernte_feld` mit PostGIS in der Spargar-DB; Erstbefüllung als Import, danach kleiner Karten-Editor. |
@@ -199,11 +246,13 @@ Drei Ströme, **getrennt geführt**:
 1. **Position** → TRB246 (bzw. F9P-NMEA über TRB246) → **Traccar 5027** → Poller →
    `ernte_position` (throttled 5 s, mit `fix_qualitaet`). Nicht in
    `fahrzeug_position` (anderes Volumenprofil).
-2. **RFID-Scans (Badge + Kisten) + Batterie (VE.Direct)** → TRB246 „Data to
-   Server" (HTTPS-POST JSON, auf Event, mit Offline-Queue/Retry) → Edge Function
-   **`ernte-ingest`** → Rohtabelle `ernte_scan`. **Nicht** über Traccar.
-3. **Waage** → lokaler **Waagen-Agent** am Hof paart Tag-Lesung (MAGNUM UHF, TCP)
-   + Gewicht (Schnittstelle TBD) → POST an denselben `ernte-ingest`-Endpunkt.
+2. **QR-Scans (Badge + Kisten, seit 2026-10-12 statt RFID) + Batterie
+   (VE.Direct)** → TRB246 „Data to Server" (HTTPS-POST JSON, auf Event, mit
+   Offline-Queue/Retry) → Edge Function **`ernte-ingest`** → Rohtabelle
+   `ernte_scan`. **Nicht** über Traccar.
+3. **Waage** → lokaler **Waagen-Agent** am Hof paart QR-Lesung (Desktop-Scanner,
+   seit 2026-10-12 statt MAGNUM UHF) + Gewicht (Schnittstelle TBD) → POST an
+   denselben `ernte-ingest`-Endpunkt.
 
 ## Teil C — Ingest Edge Function `ernte-ingest`
 
@@ -213,6 +262,66 @@ Supabase Edge Function (Deno). Auth: `Authorization: Bearer <ERNTE_INGEST_TOKEN>
 Business-Logik (Zyklen öffnen/schließen, Schichten anlegen) macht weiterhin
 der Processor (Teil E, pg_cron, einmal pro Minute) - **außer der schnellen
 Klassifizierung unten**, die dafür zu langsam wäre.
+
+**Klassifizierung Person/Kiste — seit 2026-10-12 per Typ-Präfix im QR-Code,
+kein Raten mehr nötig.** Mitarbeiter-Badges beginnen mit `P-`, Kisten mit
+`K-` (z. B. `P-00042`, `K-10293`). Die Ingest-Funktion liest nur das Präfix
+und weiß damit sofort, ohne Datenbank-Lookup, ob es eine Person oder eine
+Kiste ist:
+- `P-…` → Lookup in `ernte_tag` (weiterhin nötig, um den Code mit
+  `employee_id` zu verknüpfen — neue Mitarbeiter-Badges müssen also weiterhin
+  einmalig angelernt werden).
+- `K-…` → immer eindeutig eine Kiste, **kein Lookup nötig** - `ernte_tag`
+  muss für Kisten nicht befüllt werden, außer man will eine einzelne Kiste
+  manuell markieren.
+
+Das macht die komplette Rate-Heuristik des RFID-Standes (siehe „Stand bis
+2026-10-11", unten eingeklappt) überflüssig: Ein noch nicht angelerntes
+Mitarbeiter-Badge sieht jetzt **nicht mehr identisch aus wie eine Kiste** -
+das `P-`-Präfix sagt sofort „das ist ein Mensch", auch wenn der
+`employee_id`-Lookup fehlschlägt. Der Fehlerfall ist also sofort erkennbar
+(kein stiller Fall mehr, der erst am Monatsende aus fehlenden Stunden
+auffällt): Scan wird trotzdem als `ernte_scan`-Zeile gespeichert (nichts
+geht verloren), aber mit `employee_id = null` und einem eigenen
+Klassifizierungs-Typ (`person_unbekannt`), der **sofort** eine Meldung
+auslösen kann statt erst über eine tägliche Rückschau.
+
+**Erfolgston am Gerät:** jetzt wieder drei klare, verwechslungsfreie Töne
+möglich, ohne das frühere Fehlalarm-Risiko: „Person erkannt" / „Kiste" /
+„Badge unbekannt" (`P-`-Präfix, aber kein Treffer in `ernte_tag`) - je ein
+einfacher Piezo-Summer an einem Digitalausgang des TRB246, unterschiedliche
+Muster je Ereignis. Ton erst **nach der Serverantwort**, nicht schon beim
+reinen Lesen des Codes, weil nur das wirklich bestätigt, dass die Daten
+sicher angekommen sind. Eine durch die Sperrzeit verworfene Wiederholung
+gilt dabei als Erfolg (der Server hat sie ja erhalten) - stumm bleibt es
+nur bei echten Übertragungsfehlern.
+
+Payload Maschine (TRB246):
+```json
+{
+  "box": "<IMEI/Serial>",
+  "events": [
+    {"typ":"scan","code":"K-10293","ts":"2026-04-18T05:32:11Z","lat":51.2,"lng":6.8},
+    {"typ":"scan","code":"K-10294","ts":"2026-04-18T05:41:03Z","lat":51.2,"lng":6.8},
+    {"typ":"batterie","soc":78,"u":12.9,"i":-4.2,"ts":"2026-04-18T05:45:00Z"}
+  ]
+}
+```
+`typ:"scan"` + Feld `code` (QR-Codewert `P-…`/`K-…`, vorher `tag` mit
+RFID-UID wie `E280...`) - die Box weiß dank Präfix zwar grundsätzlich schon,
+ob Person oder Kiste, schickt aber bewusst nur den rohen Code; die
+eigentliche Klassifizierung (inkl. `employee_id`-Auflösung) bleibt
+serverseitig in der Ingest-Funktion.
+
+Payload Waage (Hof-Agent):
+```json
+{"waage":"hofwaage-1","code":"K-10293","gewicht_kg":9.42,"ts":"2026-04-18T13:07:55Z"}
+```
+Antwort: `200 {"angenommen": n, "dubletten": m, "klassifizierung":
+[{"code":"K-10293", "typ": "person"|"kiste"|"person_unbekannt"}]}`
+
+<details>
+<summary>Stand bis 2026-10-11 (RFID-Klassifizierung, überholt — siehe Kurswechsel ganz oben)</summary>
 
 **Klassifizierung Person/Kiste (Nutzer-Vorgabe 2026-09-23): nur Personen
 werden angelernt, alles andere gilt automatisch als Kiste.** `ernte_tag`
@@ -254,21 +363,7 @@ nur für den Login-Scan bliebe eine Option, falls sich „vergessene
 Registrierung" in der Praxis häufiger zeigt, als eine tägliche Rückschau
 verträgt - erstmal bewusst ohne zusätzliche Hardware.
 
-**Erfolgston am Gerät (Nutzer-Vorschlag 2026-09-23):** Die Ingest-Antwort
-gibt den Klassifizierungs-Typ direkt zurück (siehe unten), damit das Skript
-auf dem TRB246 (dasselbe, das auch die Sperrzeit prüft, siehe Teil D) sofort
-nach erfolgreicher Übertragung einen passenden Ton auslösen kann - **erst
-nach der Serverantwort, nicht schon beim reinen Lesen des Tags**, weil nur
-das wirklich bestätigt, dass die Daten sicher angekommen sind. Auch eine
-durch die Sperrzeit verworfene Wiederholung gilt dabei als Erfolg (der
-Server hat sie ja erhalten) - stumm bleibt es nur bei echten
-Übertragungsfehlern. Nur noch zwei Töne: „Person" / „Kiste" (das frühere
-dritte „unbekannter Mitarbeiter"-Signal entfällt, siehe Sicherheitsnetz
-oben - dieser Fall wird jetzt über die tägliche Rückschau erkannt, nicht
-scanweise) - je ein einfacher Piezo-Summer an einem
-Digitalausgang des TRB246, unterschiedliche Muster je Ereignis.
-
-Payload Maschine (TRB246):
+Payload Maschine (TRB246), RFID-Stand:
 ```json
 {
   "box": "<IMEI/Serial>",
@@ -279,19 +374,8 @@ Payload Maschine (TRB246):
   ]
 }
 ```
-`typ:"scan"` ersetzt die bisherige Unterscheidung `person_login`/`kiste` im
-Payload - die Box weiß das ja gerade NICHT mehr im Voraus, das entscheidet
-erst die Ingest-Funktion per Klassifizierung.
 
-Payload Waage (Hof-Agent):
-```json
-{"waage":"hofwaage-1","tag":"E280...","gewicht_kg":9.42,"ts":"2026-04-18T13:07:55Z"}
-```
-Antwort: `200 {"angenommen": n, "dubletten": m, "klassifizierung":
-[{"tag":"E280...", "typ": "person"|"kiste"}]}`
-- das `typ` je Tag ist neu, für den Erfolgston am Gerät (immer eines von
-beiden, da ein nicht registrierter Tag laut Entscheidung oben als Kiste
-gilt - siehe Sicherheitsnetz für den Umgang mit vergessenen Registrierungen).
+</details>
 
 **Offene Frage Stromausfall (Nutzer-Frage 2026-09-23):** Schaltet die
 Maschine nach Feierabend die komplette Stromversorgung ab (nicht nur
@@ -313,12 +397,15 @@ unkritischeres Problem als verlorene Nutzdaten.
 Kleiner Node/Python-Dienst auf einem Mini-PC/RPi am Hof (Muster wie
 `tools/fahrzeug-poller/`):
 
-- liest Kisten-Tag vom **MAGNUM UHF** über TCP (bzw. Reader pusht zum Agenten);
+- liest den Kisten-Code vom **QR-Desktop-Scanner** (seit 2026-10-12 statt
+  MAGNUM UHF/TCP) - üblicherweise USB-HID/seriell, gibt den Code direkt als
+  Text aus, sobald die Kiste vor den Scanner gehalten wird;
 - liest Gewicht von der **Waage** — „stabiles Gewicht" als Trigger;
-- **paart**: stabiles Gewicht ≠ 0 + frische Tag-Lesung innerhalb von N Sekunden →
-  ein `{waage, tag, gewicht_kg, ts}` → POST an `ernte-ingest`;
+- **paart**: stabiles Gewicht ≠ 0 + frische Code-Lesung innerhalb von N Sekunden →
+  ein `{waage, code, gewicht_kg, ts}` → POST an `ernte-ingest`;
 - lokale SQLite-Queue + Retry bei Netzausfall;
-- Config: Reader-IP, Waagen-Port, Ingest-URL/Token, Paarungsfenster, Mindestgewicht.
+- Config: Scanner-Schnittstelle (USB/seriell), Waagen-Port, Ingest-URL/Token,
+  Paarungsfenster, Mindestgewicht.
 
 **Waage — Modell entschieden (Klärung 2026-09-18): RHEWA 84vario**, Anbindung
 per **Ethernet/TCP/IP direkt** (nicht über die RHEWA-eigene Windows-Software
@@ -424,14 +511,17 @@ PostGIS aktivieren (`create extension if not exists postgis`).
 `unique(traccar_unique_id, zeitpunkt)`, Index `(maschine_id, zeitpunkt desc)`.
 Monats-Partitionierung + Retention-Job (~400 Tage).
 
-**`ernte_tag`** — Transponder-Register: `uid text pk`,
+**`ernte_tag`** — Badge-/Kisten-Register: `uid text pk` (der QR-Codewert,
+`P-…`/`K-…`, seit 2026-10-12 statt RFID-UID),
 `art text check (art in ('person','kiste'))`, `employee_id → employees`,
 `kiste_nr text`, `aktiv boolean default true`, `notiz`, timestamps.
-**Enthält seit 2026-09-23 nur noch die ~140-200 Mitarbeiter-Badges** (siehe
-Teil C) - ein Tag ohne Eintrag hier gilt automatisch als Kiste, braucht
-also keine eigene Zeile mehr. `kiste_nr` bleibt nutzbar, falls doch mal eine
-einzelne Kiste manuell markiert werden soll (z. B. eine reparierte/
-markierte Testkiste), ist aber im Regelfall leer.
+**Enthält faktisch nur noch die ~140-200 Mitarbeiter-Badges** (siehe
+Teil C) - ein `K-…`-Code braucht wegen des Typ-Präfixes strukturell nie
+eine eigene Zeile (nicht nur „per Vorgabe" wie beim RFID-Stand bis
+2026-09-23/10-11, sondern weil die Klassifizierung gar nicht mehr hier
+nachschlägt). `kiste_nr` bleibt nutzbar, falls doch mal eine einzelne Kiste
+manuell markiert werden soll (z. B. eine reparierte/markierte Testkiste),
+ist aber im Regelfall leer.
 
 **`ernte_schicht`** — Tages-Login: `id identity pk`, `maschine_id → ernte_maschine`,
 `employee_id → employees` (aus Tag aufgelöst, nullbar), `tag_uid text`,
@@ -559,16 +649,18 @@ Erkennung), damit sie ohne Deploy nachjustierbar bleiben statt hart codiert.
 
 ### Processor (pg_cron, jede Minute)
 
-**Sperrzeit gegen Mehrfach-Lesungen (Nutzer-Frage 2026-09-23, WICHTIG):** Ein
-UHF-Reader im Dauerscan meldet denselben Tag typischerweise mehrmals pro
-Sekunde, solange er in Reichweite bleibt - hält der Fahrer eine Kiste 2 s vor
-den Reader, kommen leicht 5-10 Einzel-Lesungen desselben Tags in `ernte_scan`
-an, nicht eine. Für einen Login fängt das die bestehende Regel „neue
+**Sperrzeit gegen Mehrfach-Lesungen (Nutzer-Frage 2026-09-23, WICHTIG — gilt
+unverändert auch für QR seit dem Kurswechsel 2026-10-12):** Ein Scanner im
+Dauerscan/Presentation-Mode meldet denselben Code typischerweise mehrmals
+pro Sekunde, solange er im Lesefeld bleibt - hält der Fahrer eine Kiste 2 s
+vor den Scanner, kommen leicht 5-10 Einzel-Lesungen desselben Codes in
+`ernte_scan` an, nicht eine (bei RFID genauso wie bei einem QR-Modul im
+Presentation-Mode). Für einen Login fängt das die bestehende Regel „neue
 Schicht nur, wenn heute noch keine offen" bereits zufällig ab. Für eine
 Kiste NICHT - ohne Sperrzeit würde jede der 5-10 Lesungen denselben Zyklus
 erneut schließen/neu öffnen und die Kette zerreißen. Deshalb zusätzlich zur
-Reader-seitigen Drosselung (falls unterstützt, z. B. „Tag erst nach X s
-erneut melden" - beim Reader-/Pilottest mit prüfen, spart auch Datenvolumen):
+scannerseitigen Drosselung (falls unterstützt, z. B. „Code erst nach X s
+erneut melden" - beim Pilottest mit prüfen, spart auch Datenvolumen):
 **Der Processor ignoriert eine Lesung, wenn für denselben `tag_uid` bereits
 eine Lesung mit demselben Klassifizierungs-Ergebnis (Person-Login oder
 Kiste, siehe Teil C) innerhalb der letzten `sperrzeit_tag_s` Sekunden
@@ -652,19 +744,26 @@ danach:
 - **`/erntewirtschaft/stammdaten`** — Maschinen-CRUD, Waagen, Felder (Karten-
   Editor / Import), Konfig-Konstanten. **Excel-/CSV-Import für die 140 Maschinen**
   (siehe unten).
-- **`/erntewirtschaft/transponder`** — Tag-Verwaltung: Liste + Suche;
-  „Tag anlernen" (letzter unbekannter `ernte_scan` → Art wählen → Person/Kiste
-  zuordnen); **Excel-/CSV-Import für die Kisten-Transponder** (siehe unten).
-  Tagesgeschäft fürs Onboarding neuer Kisten/Badges.
+- **`/erntewirtschaft/transponder`** — seit dem QR-Kurswechsel (2026-10-12)
+  nur noch **Mitarbeiter-Badge-Verwaltung**, kein Kisten-Onboarding mehr
+  nötig (jeder `K-…`-Code ist automatisch eine Kiste, siehe Teil C): Liste +
+  Suche der ~140-200 `P-…`-Badges; „Badge zuordnen" für den Fehlerfall
+  `person_unbekannt` (ein gescannter `P-…`-Code ohne Treffer in `ernte_tag` →
+  Person nachträglich zuordnen); **Excel-/CSV-Import nur noch für die
+  Mitarbeiter-Badges** (siehe unten, Kisten brauchen keinen Import mehr).
 
 ### Excel-/CSV-Import (Maschinen und Transponder)
 
-Bulk-Import, weil 140 Maschinen + tausende Kisten-Tags niemand von Hand tippt.
+Bulk-Import, weil 140 Maschinen niemand von Hand tippt. Für die
+Mitarbeiter-Badges (seit 2026-10-12 nur noch diese, siehe oben) sind es nur
+~140-200 Zeilen - lohnt sich trotzdem als Import, da sie vor Saisonstart auf
+einmal anfallen.
 
 - **Maschinen:** Spalten `nummer`, `bezeichnung`, `box_seriennummer`,
   `traccar_unique_id` (IMEI). Upsert auf `nummer`.
-- **Transponder:** Spalten `uid`, `art` (`person`/`kiste`, Default `kiste`),
-  `kiste_nr`. Upsert auf `uid`.
+- **Mitarbeiter-Badges:** Spalten `uid` (der `P-…`-Code von der Karte),
+  `employee_id`. Upsert auf `uid`. `art` ist für neue Zeilen immer `person`
+  (Kisten brauchen seit dem QR-Kurswechsel keinen `ernte_tag`-Eintrag mehr).
 - **Vorschau vor dem Schreiben:** erkannte Zeilen, Dubletten, Fehler; erst dann
   „Importieren".
 - **Umschalter „aktiv / inaktiv" für den ganzen Import, Default `inaktiv`** — die
@@ -719,14 +818,14 @@ Spatial-Join `ernte_feld` → `flurstueck_id`/`feld`. Retention/Downsample-Job.
 
 ## Teil H — Deploy-Reihenfolge (Nutzer)
 
-1. Hardware-Entscheidungen oben treffen (UHF-Reader an der Maschine, RTK-Kette,
+1. Hardware-Entscheidungen oben treffen (QR-Scan-Modul an der Maschine, RTK-Kette,
    NTRIP-Quelle) — **vor** dem Kauf der SpidertrackBox-Teile.
 2. Traccar auf PostgreSQL umstellen.
 3. Migration `erntewirtschaft` in Supabase; PostGIS aktivieren; `ernte_feld`
    befüllen.
 4. Edge Function `ernte-ingest` deployen; `ERNTE_INGEST_TOKEN` setzen.
 5. pg_cron-Processor einrichten.
-6. Eine Spinne als Pilot komplett aufbauen (RTK + UHF + Data-to-Server), End-to-End
+6. Eine Spinne als Pilot komplett aufbauen (RTK + QR-Scan-Modul + Data-to-Server), End-to-End
    testen (Badge → Kiste → LKW → Waage → `ernte_kiste_zyklus` gewogen).
 7. Waagen-Agent am Hof aufsetzen, sobald die Waage da ist.
 8. Rollout auf die 140 Maschinen; whereversim je Maschine zur Saison aktivieren.
@@ -739,10 +838,11 @@ Spatial-Join `ernte_feld` → `flurstueck_id`/`feld`. Retention/Downsample-Job.
    Supabase-DB (Pachtwesen2026), oder importieren/neu pflegen? PostGIS im
    Supabase-Projekt schon aktiv?
 2. **Lesetiefe/-punkt an der Maschine:** gibt es an der Spinne einen
-   definierten Scan-Punkt (Halterung/Tasche), an dem der Fahrer die leere
-   Kiste vorhält? Bei LF (bis 60 cm mit größerer Reader-Antenne laut TECTUS)
-   weniger kritisch als bei UHF/HF mit kleinem Tag, aber erst der Pilottest
-   zeigt die reale Reichweite mit echter Antennengröße/-einbaulage.
+   definierten Scan-Punkt (Halterung/Tasche), an dem der Fahrer die
+   Hartplastik-Karte vor den QR-Scanner hält? Bei QR braucht es direkten
+   Sichtkontakt (anders als bei RFID, das auch durch leichten Dreck/Winkel
+   noch liest) — der Pilottest muss deshalb auch die praktische Handhabung
+   am Scan-Punkt prüfen (Erreichbarkeit vom Fahrersitz, Ausleuchtung).
 3. **Waage:** sobald das Modell feststeht — Schnittstelle (RS232 / Ethernet /
    Impuls)? Rechner am Hof für den Agenten vorhanden oder Teil des Projekts (RPi)?
 4. ~~`work_entries`-Kopplung~~ — **geklärt** (Pflichtenheft): der Stundenzettel
