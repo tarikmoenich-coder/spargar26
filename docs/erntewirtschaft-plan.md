@@ -220,7 +220,7 @@ Ergebnis:  pro Kiste: Maschine · Fahrer · Feld/Flur (aus GPS) · Zeit · netto
 | **Kisten-/Badge-Scan an der Maschine** (2026-09-22: UHF→HF→LF; 2026-10-12: RFID→QR, siehe Kurswechsel oben) | 2D-QR-Scan-Modul (TTL/UART bzw. RS232, Honeywell/Newland), No-Name-Modul, oder RFID (verworfen) | **QR-Scan-Modul im Presentation-Mode**, am seriellen Anschluss des ohnehin vorhandenen TRB246 (dieselbe Schnittstelle, die vorher für den RFID-Reader vorgesehen war). Markenmodul statt No-Name wegen Qualitätsrisiko bei 140 Dauereinsatz-Geräten. Karten (Kisten + Mitarbeiter-Badges) auf Hartplastik, nicht geklebt, mit Typ-Präfix `P-`/`K-` im Code. Vor Bestellung: Pilottest mit 2-3 Mustern unter Feldbedingungen (nass, dreckig, Handschuhe). Die bereits gekauften UHF-Tags/der UHF-Reader (TECTUS MAGNUM 4077) werden weiterhin für 300-kg-Rohware-/Fertigware-Kisten verwendet, nicht verworfen. |
 | **±1 m (RTK)** — voraussichtlich verzichtbar, siehe Hinweis oben (2026-09-23) | Ohne RTK: normale TRB246-GNSS (2,5–5 m) reicht für Zig-Meter-Heatmap + Streckenlänge. Mit RTK weiterhin möglich, falls doch reihengenau gebraucht: u-blox **ZED-F9P**-Klasse + NTRIP + Multiband-Antenne | **Kein RTK** — spart ~250–450 €/Box + NTRIP-Gebühr/-Datenvolumen (× 140 Boxen erheblich). Nur bei späterem Bedarf an reihengenauer Auswertung nachrüsten. |
 | **Positions-Lograte** | 1 s / 5 s / on-move+min-distance | **1 s** in der Traccar-PostgreSQL (kurze Retention), **5 s** heruntergerechnet nach `ernte_position`. |
-| **Feld-Geometrien** | aus Pachtwesen2026 importieren / in Spargar neu pflegen | `ernte_feld` mit PostGIS in der Spargar-DB; Erstbefüllung als Import, danach kleiner Karten-Editor. |
+| **Feld-Geometrien** | aus Pachtwesen2026 importieren / in Spargar neu pflegen | **Entschieden (Migration 2026-10-19):** generisches `feld` mit PostGIS in der Spargar-DB (kulturübergreifend, nicht nur Erntewirtschaft); Erstbefüllung per `anon`-RPC-Import aus Pachtwesen2026 (Schlag-Ebene) oder Karten-Editor (reuse Satellitenbild-Umschalter aus `FahrzeugKarte`). |
 | **Scan-Processor** | pg_cron-plpgsql / Modul im systemd-Poller | **pg_cron** — DB-intern, unabhängig davon ob die Poller-Box läuft; Faltung ist mengenbasiertes SQL. |
 | **Ingest-Auth** | ein Fleet-Token / Token je Box | v1: **ein Fleet-Token**; Token-je-Box später. |
 | **Einschränkung** | Unter Folientunnel/Vlies verliert RTK ggf. den Fix | akzeptiert; im offenen Feld stabil. Fix-Qualität wird je Punkt gespeichert. |
@@ -558,7 +558,9 @@ PostGIS aktivieren (`create extension if not exists postgis`).
 `maschine_id → ernte_maschine`, `traccar_unique_id text`, `zeitpunkt timestamptz`,
 `lat/lng double precision`, `hoehe_m`, `speed_kmh`, `kurs`,
 `fix_qualitaet smallint` (0 kein, 1 GPS, 2 DGPS, 4 RTK-Fix, 5 RTK-Float),
-`hdop`, `flurstueck_id bigint`, `feld text` (Spatial-Join, denorm.),
+`hdop`, `feld_id bigint references feld(id)` (Spatial-Join gegen
+`feld.geometrie` - seit Migration 2026-10-19 ein echter FK statt der
+ursprünglich skizzierten losen `flurstueck_id`/`feld text`-Spalten),
 `unique(traccar_unique_id, zeitpunkt)`, Index `(maschine_id, zeitpunkt desc)`.
 Monats-Partitionierung + Retention-Job (~400 Tage).
 
@@ -585,7 +587,9 @@ Index `(maschine_id, beginn desc)`.
 `schicht_id → ernte_schicht`, `employee_id → employees` (denorm.),
 `befuellt_am timestamptz`, `befuellt_lat/lng`, `voll_am timestamptz`
 (= Zeitpunkt des nächsten Kisten-Scans an derselben Maschine, implizites
-Schließen), `voll_lat/lng`, `flurstueck_id bigint`, `feld text`, `kultur text`,
+Schließen), `voll_lat/lng`, `feld_id bigint references feld(id)` (Spatial-Join,
+echter FK seit Migration 2026-10-19 - `kultur` kommt bei Bedarf per Join aus
+`feld.kultur`, nicht mehr denormalisiert),
 `gewogen_am timestamptz`, `gewicht_brutto_kg numeric(7,2)`, `tara_kg numeric(6,2)`
 (aus `ernte_konfig`), `gewicht_netto_kg` (Sicht/Generated),
 `waage_id → ernte_waage`,
@@ -610,12 +614,20 @@ Processor unten). Alles Abgeleitete ist hieraus reprozessierbar.
 **`ernte_waage`** — Hofwaage(n): `id identity pk`, `name`, `standort`,
 `reader_uid text`, `aktiv boolean`, timestamps.
 
-**`ernte_feld`** — Feld-/Schlaggeometrien: `id identity pk`, `name`, `flur`,
-`gemarkung`, `kultur text`, `geom geometry(MultiPolygon,4326)`,
-`laufmeter_gesamt numeric(9,1)` (Summe Dammlänge/Reihen des Feldes — Stammdatum
-fürs Pflichtenheft-Feature „Arbeitsfortschritt in %", Quelle noch offen, siehe
-unten), `aktiv boolean default true`, timestamps. GIST-Index auf `geom`.
-Erstbefüllung Import aus Pachtwesen2026 (falls dort verfügbar), sonst Karten-Editor.
+**`ernte_feld` — ERSETZT durch das generische `feld` (Migration
+2026-10-19, siehe `supabase/migration_2026-10-19_feld_anbau_schema.sql`).**
+Keine eigene Erntewirtschaft-Tabelle mehr: `ernte_position`/
+`ernte_kiste_zyklus` referenzieren künftig `feld.id` (Spalte `feld_id`) statt
+der hier ursprünglich skizzierten losen `flurstueck_id`/`feld text`-Spalten.
+`laufmeter_gesamt` entfällt als eigenes Feld — wird jetzt aus
+`feld_anbau_abschnitt` berechnet (Summe Reihenlänge × Reihenzahl der
+laufenden Saison, Sicht `feld_anbau_uebersicht.laufende_meter`), siehe offene
+Frage 7 unten. `kultur` lebt jetzt auf `feld.kultur` (kulturübergreifend:
+Erdbeeren/Spargel/Grünspargel/Sonstiges). Geometrie-Erstbefüllung per Import
+aus Pachtwesen2026 (Schlag-Ebene, `anon`-RPC `schlaege_bewirtschaftet_fuer_jahr`
+— noch zu bauen) oder Karten-Editor in spargar26 (reuse des
+Satellitenbild-Umschalters aus `components/FahrzeugKarte.tsx`), siehe offene
+Frage 1 unten.
 
 **`ernte_maschine_energie`** (v1.1) — VE.Direct-Telemetrie: `id`, `maschine_id`,
 `zeitpunkt`, `soc_prozent`, `spannung_v`, `strom_a`,
@@ -661,8 +673,10 @@ Erkennung), damit sie ohne Deploy nachjustierbar bleiben statt hart codiert.
 - **`ernte_laufmeter_tag`** — je (Tag, Maschine, Feld): aus `ernte_position`
   aufsummierte Distanz zwischen aufeinanderfolgenden Punkten (Haversine, nur
   während Bewegung/RTK-Fix, Ausreißer/Sprünge gekappt) = „Laufmeter heute".
-  Kumuliert über die Saison vs. `ernte_feld.laufmeter_gesamt` → Fortschritt in
-  % fürs Dashboard (inkl. Summe letzte 48 h laut Pflichtenheft).
+  Kumuliert über die Saison vs. `feld_anbau_uebersicht.laufende_meter` (für
+  die laufende Saison, aus der Anbau-Planung berechnet statt separat
+  gepflegt - siehe offene Frage 7) → Fortschritt in % fürs Dashboard (inkl.
+  Summe letzte 48 h laut Pflichtenheft).
 - **`ernte_kette_luecken`** — Reconciliation: „befüllt, nie gewogen"
   (`status='offen'` und Tagesende erreicht, siehe unten),
   „gewogen ohne Befüllung" (`status='ungeklaert'` - Kiste zum ersten Mal an
@@ -686,7 +700,7 @@ Erkennung), damit sie ohne Deploy nachjustierbar bleiben statt hart codiert.
 - `select` auf alle `ernte_*`-Tabellen + Sichten: `admin`, `hr`, `management`,
   `erntewirtschaft`, **`zeiterfassung`** (= „Mitarbeiter"/„Techniker" im
   Pflichtenheft — Dashboard, Maschinenliste, Belegungen).
-- `ernte_maschine`, `ernte_tag`, `ernte_waage`, `ernte_feld`, `ernte_konfig`:
+- `ernte_maschine`, `ernte_tag`, `ernte_waage`, `ernte_konfig`:
   `for all` `admin`, `hr`; laufende Korrekturen (Maschine↔Feld/Mitarbeiter
   manuell überschreiben) zusätzlich `erntewirtschaft`, `zeiterfassung` — analog
   zu `praemien/zuckermais`, wo dieselben zwei Rollen mit-editieren dürfen.
@@ -743,7 +757,7 @@ danach:
   Normalfall für jede Kiste, siehe Klassifizierungs-Entscheidung oben) an
   Maschine M** → jüngsten offenen Zyklus für M schließen (`voll_am`,
   `voll_lat/lng`), neuen Zyklus `offen` anlegen (`befuellt_*`, Spatial-Join
-  `ernte_feld` → `feld`/`kultur` - **das Feld/der Ursprung ist immer
+  gegen `feld.geometrie` → `feld_id` - **das Feld/der Ursprung ist immer
   eindeutig, unabhängig von der Mitarbeiter-Zuordnung**). `schicht_id`/
   `employee_id` kommen aus der aktiven Schicht an M, **falls keine offen
   ist, bleiben beide NULL** - Nutzer-Entscheidung 2026-09-23: kein
@@ -865,15 +879,16 @@ Abrechnungssystem — das beantwortet den Pflichtenheft-Punkt „Abrechnung Lohn
 Neues Modul im systemd-Poller (oder zweite Instanz): liest die Spinne-Geräte aus
 Traccar (Gruppe/Namensschema), schreibt gedrosselt `ernte_position` (jeder Punkt
 mit `position_rate_s`-Raster; bei Fix-Abfall unter RTK jeden Punkt, für QA),
-Spatial-Join `ernte_feld` → `flurstueck_id`/`feld`. Retention/Downsample-Job.
+Spatial-Join gegen `feld.geometrie` → `feld_id`. Retention/Downsample-Job.
 
 ## Teil H — Deploy-Reihenfolge (Nutzer)
 
 1. Hardware-Entscheidungen oben treffen (QR-Scan-Modul an der Maschine, RTK-Kette,
    NTRIP-Quelle) — **vor** dem Kauf der SpidertrackBox-Teile.
 2. Traccar auf PostgreSQL umstellen.
-3. Migration `erntewirtschaft` in Supabase; PostGIS aktivieren; `ernte_feld`
-   befüllen.
+3. Migration `erntewirtschaft` in Supabase (PostGIS ist bereits seit Migration
+   2026-10-19 aktiviert); `feld` befüllen (Import aus Pachtwesen2026 oder
+   Karten-Editor, siehe Phase 2/3 des Feld/Anbau-Plans).
 4. Edge Function `ernte-ingest` deployen; `ERNTE_INGEST_TOKEN` setzen.
 5. pg_cron-Processor einrichten.
 6. Eine Spinne als Pilot komplett aufbauen (RTK + QR-Scan-Modul + Data-to-Server), End-to-End
@@ -885,9 +900,10 @@ Spatial-Join `ernte_feld` → `flurstueck_id`/`feld`. Retention/Downsample-Job.
 
 ## Offene Fragen an den Nutzer
 
-1. **Feld-Geometrien:** liegen die Flurstück-/Schlag-Polygone schon in derselben
-   Supabase-DB (Pachtwesen2026), oder importieren/neu pflegen? PostGIS im
-   Supabase-Projekt schon aktiv?
+1. ~~**Feld-Geometrien**~~ — **geklärt (2026-10-19):** eigenes,
+   kulturübergreifendes `feld` in der Spargar-DB (PostGIS aktiv), Erstbefüllung
+   per `anon`-RPC-Import aus Pachtwesen2026 auf Schlag-Ebene (idempotent, lässt
+   bereits verfeinerte Geometrien unangetastet) oder Karten-Editor.
 2. **Lesetiefe/-punkt an der Maschine:** gibt es an der Spinne einen
    definierten Scan-Punkt (Halterung/Tasche), an dem der Fahrer die
    Hartplastik-Karte vor den QR-Scanner hält? Bei QR braucht es direkten
@@ -902,9 +918,10 @@ Spatial-Join `ernte_feld` → `flurstueck_id`/`feld`. Retention/Downsample-Job.
    tariert, der Agent übernimmt das Netto-Feld direkt (siehe Teil D).
 6. **Mitbestimmung:** die Kette Fahrer→Kiste→kg→Stunden ist personenscharfe
    Leistungserfassung — vor Scharfschaltung mit den Fahrern/Betriebsrat klären.
-7. **Laufmeter-Stammdaten:** woher kommt `ernte_feld.laufmeter_gesamt`
-   (Dammlänge/Reihen je Feld) — aus Pachtwesen2026 ableitbar (Geometrie ×
-   Dammabstand), oder muss das separat gepflegt werden?
+7. ~~**Laufmeter-Stammdaten**~~ — **geklärt (2026-10-19):** nicht separat
+   gepflegt, sondern aus der generischen Anbau-Planung berechnet
+   (`feld_anbau_abschnitt`: Reihenlänge × Reihenzahl je Abschnitt, aufsummiert
+   in `feld_anbau_uebersicht.laufende_meter` für die laufende Saison).
 8. **Feldstufen-Algorithmus:** wie soll der „dünne Stangen"-Fall (wenig kg UND
    wenig Laufmeter) bewertet werden — fester Kg-Preis je Stufe reicht erstmal,
    der im Pflichtenheft skizzierte kg/h↔Lfm/h-Schieber ist vertagt, bis eine
