@@ -19,6 +19,18 @@
 -- waagenbasiertes Modell) - nur ihre Fremdschlüssel-Spalte wird von
 -- parzelle_id auf feld_id umgehängt.
 --
+-- Korrektur gegenüber dem ersten Anlauf dieser Migration (Fehler beim
+-- Einspielen): erdbeeren_praemie_tag/_statistik_tag/_gruppenkosten_tag
+-- werden NICHT gedroppt - season_summary (Lohnabrechnung) UND die Funktion
+-- auszahlungsbeleg_zeile_delta_anwenden(...) hängen an erdbeeren_praemie_tag
+-- ("cannot drop view ... because other objects depend on it"). Da sich die
+-- Ausgabespalten nicht ändern, werden sie per CREATE OR REPLACE VIEW
+-- umgeschrieben (erdbeeren_praemie_tag) bzw. gar nicht angefasst
+-- (erdbeeren_statistik_tag/erdbeeren_gruppenkosten_tag referenzieren
+-- ohnehin nur erdbeeren_praemie_tag, nie erdbeeren_parzellen direkt - ihre
+-- Bodies brauchen keine Änderung). Gleiches Muster wie bereits in
+-- migration_2026-10-10_erdbeeren_praemie_storno.sql verwendet.
+--
 -- In der Supabase SQL-Konsole ausführen (ein Zug). PostGIS muss im
 -- Supabase-Dashboard aktiv sein (Database -> Extensions), bevor diese
 -- Migration läuft.
@@ -29,6 +41,9 @@ create extension if not exists postgis;
 -- ----------------------------------------------------------------------
 -- 1) Views droppen, die erdbeeren_anbau/_tunnel/_bepflanzung referenzieren
 --    (Kind zu Eltern, sonst scheitert DROP TABLE wegen Abhängigkeiten).
+--    Nichts anderes hängt an diesen dreien (geprüft) - sie werden unten
+--    durch neu benannte Views ersetzt, nicht per CREATE OR REPLACE
+--    umgeschrieben.
 -- ----------------------------------------------------------------------
 drop view if exists erdbeeren_bestellung_uebersicht;
 drop view if exists erdbeeren_anbau_uebersicht;
@@ -49,24 +64,15 @@ drop table if exists erdbeeren_tunnel;
 drop table if exists erdbeeren_anbau;
 
 -- ----------------------------------------------------------------------
--- 4) Prämien-Views droppen, die direkt auf erdbeeren_parzellen zeigen.
---    season_summary bleibt UNANGETASTET - sie liest nur
---    employee_id/datum/praemie aus erdbeeren_praemie_tag, nie parzelle_id.
--- ----------------------------------------------------------------------
-drop view if exists erdbeeren_gruppenkosten_tag;
-drop view if exists erdbeeren_statistik_tag;
-drop view if exists erdbeeren_praemie_tag;
-
--- ----------------------------------------------------------------------
--- 5) erdbeeren_parzellen_saetze/erdbeeren_rohdaten bleiben als Tabellen
+-- 4) erdbeeren_parzellen_saetze/erdbeeren_rohdaten bleiben als Tabellen
 --    bestehen (Prämienlogik bleibt Erdbeeren-spezifisch) - nur die Spalte
---    umbenennen, die FKs werden unten (Schritt 7) umgehängt.
+--    umbenennen, die FKs werden unten (Schritt 6) umgehängt.
 -- ----------------------------------------------------------------------
 alter table erdbeeren_parzellen_saetze rename column parzelle_id to feld_id;
 alter table erdbeeren_rohdaten rename column parzelle_id to feld_id;
 
 -- ----------------------------------------------------------------------
--- 6) Neue, kulturübergreifende Tabellen.
+-- 5) Neue, kulturübergreifende Tabellen.
 -- ----------------------------------------------------------------------
 create table feld (
   id bigint generated always as identity primary key,
@@ -152,26 +158,14 @@ create trigger trg_feld_anbau_abschnitt_updated_at before update on feld_anbau_a
   for each row execute function set_updated_at();
 
 -- ----------------------------------------------------------------------
--- 7) Alte FKs auf erdbeeren_parzellen droppen, neue auf feld anlegen, dann
---    erdbeeren_parzellen droppen (jetzt sicher, nichts zeigt mehr drauf).
--- ----------------------------------------------------------------------
-alter table erdbeeren_parzellen_saetze
-  drop constraint erdbeeren_parzellen_saetze_parzelle_id_fkey,
-  add constraint erdbeeren_parzellen_saetze_feld_id_fkey
-    foreign key (feld_id) references feld (id) on delete restrict;
-alter table erdbeeren_rohdaten
-  drop constraint erdbeeren_rohdaten_parzelle_id_fkey,
-  add constraint erdbeeren_rohdaten_feld_id_fkey
-    foreign key (feld_id) references feld (id) on delete restrict;
-
-drop table if exists erdbeeren_parzellen;
-
--- ----------------------------------------------------------------------
--- 8) Prämien-Views neu anlegen - lesen jetzt von feld statt
---    erdbeeren_parzellen, behalten aber EXAKT dieselben Ausgabespalten
+-- 6) erdbeeren_praemie_tag JETZT auf "feld" umstellen (CREATE OR REPLACE,
+--    kein DROP) - muss passieren, BEVOR erdbeeren_parzellen unten
+--    gedroppt wird, sonst hängt die alte Fassung dieser View noch daran
+--    und blockiert den Drop. Ausgabespalten bleiben exakt gleich
 --    (parzelle_id/parzelle_name), damit erdbeeren_statistik_tag,
---    erdbeeren_gruppenkosten_tag, season_summary, app/suche,
---    app/dashboard unverändert weiterlaufen.
+--    erdbeeren_gruppenkosten_tag, season_summary, app/suche, app/dashboard
+--    unverändert weiterlaufen - ihre Bodies werden deshalb gar nicht
+--    angefasst.
 -- ----------------------------------------------------------------------
 create or replace view erdbeeren_praemie_tag as
 select
@@ -209,73 +203,25 @@ left join lateral (
 alter view erdbeeren_praemie_tag set (security_invoker = true);
 grant select on erdbeeren_praemie_tag to authenticated;
 
--- Unverändert gegenüber dem bisherigen Stand (schema.sql) - referenziert
--- ohnehin nur erdbeeren_praemie_tag, nie erdbeeren_parzellen direkt; wird
--- hier nur neu angelegt, weil Schritt 4 sie wegen der Drop-Reihenfolge
--- entfernen musste. Security-definer (Eigentümerrechte) + eigener
--- Rollen-Check bleiben wie bisher (Sicherheitsfix 2026-08-12).
-create or replace view erdbeeren_statistik_tag as
-select
-  p.datum,
-  p.parzelle_id,
-  p.parzelle_name,
-  sum(p.steigen) as summe_steigen,
-  sum(p.sut) as summe_sut,
-  sum(p.stunden) as summe_stunden,
-  sum(p.praemie) as summe_praemie,
-  case when sum(p.stunden) > 0 then sum(p.steigen) / sum(p.stunden) else null end
-    as steigen_pro_stunde,
-  case when sum(p.steigen) > 0 and v.mindestlohn is not null
-    then (v.mindestlohn * sum(p.stunden) + sum(p.praemie)) / sum(p.steigen)
-    else null
-  end as kosten_pro_steige,
-  v.mindestlohn
-from erdbeeren_praemie_tag p
-left join verpflegungssaetze v
-  on v.saison_jahr = extract(year from p.datum)::int
-where current_role_name() in
-  ('admin', 'hr', 'lohnabrechnung', 'management', 'erntewirtschaft')
-group by p.datum, p.parzelle_id, p.parzelle_name, v.mindestlohn
-order by p.datum desc;
-alter view erdbeeren_statistik_tag reset (security_invoker);
-grant select on erdbeeren_statistik_tag to authenticated;
+-- ----------------------------------------------------------------------
+-- 7) Alte FKs auf erdbeeren_parzellen droppen, neue auf feld anlegen, dann
+--    erdbeeren_parzellen droppen (jetzt sicher - erdbeeren_praemie_tag
+--    zeigt seit Schritt 6 schon auf "feld", nichts referenziert
+--    erdbeeren_parzellen mehr).
+-- ----------------------------------------------------------------------
+alter table erdbeeren_parzellen_saetze
+  drop constraint erdbeeren_parzellen_saetze_parzelle_id_fkey,
+  add constraint erdbeeren_parzellen_saetze_feld_id_fkey
+    foreign key (feld_id) references feld (id) on delete restrict;
+alter table erdbeeren_rohdaten
+  drop constraint erdbeeren_rohdaten_parzelle_id_fkey,
+  add constraint erdbeeren_rohdaten_feld_id_fkey
+    foreign key (feld_id) references feld (id) on delete restrict;
 
--- Ebenfalls unverändert - referenziert nur erdbeeren_praemie_tag +
--- work_entries/arbeitsgruppen, nie erdbeeren_parzellen direkt.
-create or replace view erdbeeren_gruppenkosten_tag as
-select
-  d.datum,
-  d.summe_steigen,
-  v.mindestlohn,
-  gs.gruppen_stunden,
-  case when d.summe_steigen > 0 and v.mindestlohn is not null and gs.gruppen_stunden is not null
-    then (v.mindestlohn * gs.gruppen_stunden + d.summe_praemie) / d.summe_steigen
-    else null
-  end as kosten_pro_steige_gruppen,
-  d.summe_praemie
-from (
-  select datum, sum(steigen) as summe_steigen, sum(praemie) as summe_praemie
-  from erdbeeren_praemie_tag
-  group by datum
-) d
-left join verpflegungssaetze v
-  on v.saison_jahr = extract(year from d.datum)::int
-left join lateral (
-  select sum(we.stunden) as gruppen_stunden
-  from work_entries we
-  join employees e on e.id = we.employee_id
-  join arbeitsgruppen ag on ag.gruppe_nr = e.gruppe_nr
-  where ag.kultur = 'erdbeeren'
-    and we.datum = d.datum
-    and we.stunden is not null
-) gs on true
-where current_role_name() in
-  ('admin', 'hr', 'lohnabrechnung', 'management', 'erntewirtschaft')
-order by d.datum desc;
-grant select on erdbeeren_gruppenkosten_tag to authenticated;
+drop table if exists erdbeeren_parzellen;
 
 -- ----------------------------------------------------------------------
--- 9) Neue berechnete Views (ersetzen erdbeeren_bepflanzung_berechnet /
+-- 8) Neue berechnete Views (ersetzen erdbeeren_bepflanzung_berechnet /
 --    erdbeeren_anbau_uebersicht), erdbeeren_bestellung_uebersicht neu auf
 --    die neue Quelle zeigen lassen - MIT Kultur-Filter, sonst verfälschen
 --    künftige Spargel-Pflanzungen die Erdbeeren-Bestellmengen.
@@ -372,8 +318,8 @@ alter view erdbeeren_bestellung_uebersicht set (security_invoker = true);
 grant select on erdbeeren_bestellung_uebersicht to authenticated;
 
 -- ----------------------------------------------------------------------
--- 10) Neue RPCs (crop-agnostisch - funktioniert identisch für Erdbeerens
---     Jahreswechsel wie für Spargels "8 Jahre unverändert übernehmen").
+-- 9) Neue RPCs (crop-agnostisch - funktioniert identisch für Erdbeerens
+--    Jahreswechsel wie für Spargels "8 Jahre unverändert übernehmen").
 -- ----------------------------------------------------------------------
 create or replace function feld_anbau_abschnitt_sammelanlage(
   p_feld_anbau_id bigint,
@@ -482,7 +428,7 @@ $$;
 grant execute on function feld_geometrie_setzen(bigint, text) to authenticated;
 
 -- ----------------------------------------------------------------------
--- 11) RLS. Breiter als die alte Erdbeeren-Regel: "feld" wird jetzt auch
+-- 10) RLS. Breiter als die alte Erdbeeren-Regel: "feld" wird jetzt auch
 --     vom Erntewirtschaft-Modul gebraucht (docs/erntewirtschaft-plan.md
 --     sah für "ernte_feld" admin/hr-Schreibrecht + erntewirtschaft/
 --     zeiterfassung für laufende Korrekturen vor).
