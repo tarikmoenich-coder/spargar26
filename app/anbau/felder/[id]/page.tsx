@@ -14,19 +14,8 @@ import { getSupabaseClient } from "@/lib/supabase/client";
 import { useProfile } from "@/lib/useProfile";
 import ErntewirtschaftTabs from "@/components/ErntewirtschaftTabs";
 import FeldKarte from "@/components/FeldKarte";
-import { FELD_KULTUR_LABELS, type FeldKultur } from "@/lib/types";
-
-interface FeldGeojson {
-  id: number;
-  bezeichnung: string;
-  kultur: FeldKultur | null;
-  aktiv: boolean;
-  geometrie_geojson: string | null;
-  pachtwesen_schlag_id: string | null;
-  pachtwesen_geometrie_hash: string | null;
-  pachtwesen_geometrie_hash_neu: string | null;
-  pachtwesen_geometrie_geojson_neu: string | null;
-}
+import { FELD_KULTUR_LABELS, type FeldGeojson } from "@/lib/types";
+import { formatMenge } from "@/lib/format";
 
 export default function FeldDetailPage() {
   const params = useParams<{ id: string }>();
@@ -120,7 +109,8 @@ export default function FeldDetailPage() {
         <>
           <p className="text-sm text-neutral-500">
             Kultur: {feld.kultur ? FELD_KULTUR_LABELS[feld.kultur] : "—"} ·{" "}
-            {feld.aktiv ? "aktiv" : "inaktiv"}
+            {feld.aktiv ? "aktiv" : "inaktiv"} · Brutto{" "}
+            {feld.flaeche_brutto_ha != null ? `${formatMenge(feld.flaeche_brutto_ha, 4)} ha` : "— (keine Geometrie)"}
             {feld.pachtwesen_schlag_id && " · Geometrie-Ursprung: Pachtwesen2026"}
           </p>
 

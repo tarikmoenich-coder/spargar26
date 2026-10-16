@@ -10,7 +10,7 @@
 
 import PageHeader from "@/components/PageHeader";
 import { Sprout } from "lucide-react";
-import { Fragment, useEffect, useState } from "react";
+import { Fragment, useEffect, useRef, useState } from "react";
 import { getSupabaseClient } from "@/lib/supabase/client";
 import { useProfile } from "@/lib/useProfile";
 import ErntewirtschaftTabs from "@/components/ErntewirtschaftTabs";
@@ -32,6 +32,14 @@ export default function AnbauSpargelPage() {
   const [uebersicht, setUebersicht] = useState<FeldAnbauUebersicht[]>([]);
   const [abschnitte, setAbschnitte] = useState<Record<number, FeldAnbauAbschnitt[]>>({});
   const [laeuft, setLaeuft] = useState(false);
+
+  // Für den "Länge aus Fläche schätzen"-Knopf: liest die aktuell im Feld
+  // stehenden Werte (Reihenzahl/-abstand) direkt aus dem DOM, ohne diese
+  // Inputs in kontrollierte React-State umzubauen (gleiches Muster wie der
+  // Rest der Seite: unkontrollierte Inputs + onBlur).
+  const reihenRefs = useRef<Record<number, HTMLInputElement | null>>({});
+  const abstandRefs = useRef<Record<number, HTMLInputElement | null>>({});
+  const laengeRefs = useRef<Record<number, HTMLInputElement | null>>({});
 
   async function load() {
     setLoading(true);
@@ -152,6 +160,32 @@ export default function AnbauSpargelPage() {
     load();
   }
 
+  // "Länge aus Fläche schätzen" (Nutzer-Vorgabe 2026-10-20): bei stark
+  // verwinkelten Feldern mit vielen unterschiedlich langen Reihen ist eine
+  // einzelne, repräsentative Reihenlänge kaum sinnvoll einzutippen -
+  // Brutto-Fläche (aus der echten Geometrie) ÷ Reihenabstand ergibt die
+  // gesamte Laufmeter-Summe unabhängig von der genauen Form des Feldes;
+  // geteilt durch die (echte) Reihenzahl ergibt eine effektive
+  // Durchschnittslänge, die in die bestehende Formel
+  // (Reihenzahl × Reihenlänge = laufende Meter) passt.
+  function laengeAusFlaecheSchaetzen(a: FeldAnbauAbschnitt, brutoHa: number | null) {
+    if (!brutoHa) {
+      setFehler("Für dieses Feld ist keine Brutto-Fläche hinterlegt (Geometrie fehlt).");
+      return;
+    }
+    const reihen = Number(reihenRefs.current[a.id]?.value || a.reihen_anzahl || 0);
+    const abstand = Number(abstandRefs.current[a.id]?.value || a.reihenabstand_m || 0);
+    if (!reihen || !abstand) {
+      setFehler("Bitte zuerst Reihenzahl und Reihenabstand eintragen.");
+      return;
+    }
+    const laufmeterGesamt = (brutoHa * 10000) / abstand;
+    const laenge = Math.round((laufmeterGesamt / reihen) * 100) / 100;
+    const input = laengeRefs.current[a.id];
+    if (input) input.value = String(laenge);
+    abschnittAendern(a.id, "reihenlaenge_m", String(laenge));
+  }
+
   async function abschnittHinzufuegen(anbauId: number) {
     const bezeichnung = window.prompt(
       "Bezeichnung für den zusätzlichen Abschnitt (z.B. bei unterschiedlichem Standjahr auf demselben Feld):",
@@ -236,10 +270,17 @@ export default function AnbauSpargelPage() {
               <tr>
                 <th>Feld</th>
                 <th>Reihen</th>
-                <th>Länge m</th>
+                <th>
+                  Länge m
+                  <br />
+                  <span className="text-xs font-normal text-neutral-400">⌀, s. 📐</span>
+                </th>
                 <th title="Abstand zwischen den Reihen - treibt die Netto-Hektarfläche">Abstand m</th>
                 <th title="Pflanzen je laufendem Meter (optional)">Pfl./lfm</th>
                 <th>Standjahr</th>
+                <th title="Aus der echten Geometrie (ST_Area), unabhängig von der Reihen-Planung">
+                  Brutto ha
+                </th>
                 <th title="Aus Reihen × Länge × Abstand">Netto ha</th>
                 <th>Pflanzen</th>
                 <th>Erntefenster</th>
@@ -255,7 +296,7 @@ export default function AnbauSpargelPage() {
                     {liste.length === 0 ? (
                       <tr>
                         <td className="font-medium">{u.feld_bezeichnung}</td>
-                        <td colSpan={9} className="text-sm text-neutral-500">
+                        <td colSpan={11} className="text-sm text-neutral-500">
                           Noch kein Abschnitt angelegt.{" "}
                           {canEdit && (
                             <button
@@ -276,6 +317,9 @@ export default function AnbauSpargelPage() {
                           </td>
                           <td>
                             <input
+                              ref={(el) => {
+                                reihenRefs.current[a.id] = el;
+                              }}
                               type="number"
                               defaultValue={a.reihen_anzahl ?? ""}
                               disabled={!canEdit}
@@ -284,17 +328,35 @@ export default function AnbauSpargelPage() {
                             />
                           </td>
                           <td>
-                            <input
-                              type="number"
-                              step="0.01"
-                              defaultValue={a.reihenlaenge_m ?? ""}
-                              disabled={!canEdit}
-                              className="w-20"
-                              onBlur={(e) => abschnittAendern(a.id, "reihenlaenge_m", e.target.value)}
-                            />
+                            <div className="flex items-center gap-1">
+                              <input
+                                ref={(el) => {
+                                  laengeRefs.current[a.id] = el;
+                                }}
+                                type="number"
+                                step="0.01"
+                                defaultValue={a.reihenlaenge_m ?? ""}
+                                disabled={!canEdit}
+                                className="w-20"
+                                onBlur={(e) => abschnittAendern(a.id, "reihenlaenge_m", e.target.value)}
+                              />
+                              {canEdit && i === 0 && (
+                                <button
+                                  type="button"
+                                  className="text-neutral-400 hover:text-emerald-700"
+                                  title="Effektive Durchschnittslänge aus Brutto-Fläche ÷ Reihenabstand ÷ Reihenzahl schätzen - praktisch bei stark verwinkelten Feldern mit vielen unterschiedlich langen Reihen"
+                                  onClick={() => laengeAusFlaecheSchaetzen(a, u.flaeche_brutto_ha)}
+                                >
+                                  📐
+                                </button>
+                              )}
+                            </div>
                           </td>
                           <td>
                             <input
+                              ref={(el) => {
+                                abstandRefs.current[a.id] = el;
+                              }}
                               type="number"
                               step="0.01"
                               defaultValue={a.reihenabstand_m ?? ""}
@@ -324,6 +386,9 @@ export default function AnbauSpargelPage() {
                           </td>
                           {i === 0 ? (
                             <>
+                              <td>
+                                {u.flaeche_brutto_ha != null ? formatMenge(u.flaeche_brutto_ha, 4) : "—"}
+                              </td>
                               <td>{formatMenge(u.netto_ha, 4)}</td>
                               <td>{formatZahlDE(u.anzahl_pflanzen)}</td>
                               <td className="text-xs">
@@ -354,7 +419,7 @@ export default function AnbauSpargelPage() {
                               </td>
                             </>
                           ) : (
-                            <td colSpan={4}></td>
+                            <td colSpan={5}></td>
                           )}
                           <td>
                             <div className="flex items-center gap-2">

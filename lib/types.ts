@@ -1255,7 +1255,26 @@ export interface FeldAnbauUebersicht {
   laufende_meter: number;
   anzahl_pflanzen: number;
   netto_ha: number;
+  // Brutto-Fläche aus feld.geometrie (Migration 2026-10-20) - zum Vergleich
+  // mit netto_ha (die aus Reihen × Länge × Abstand gerechnete Fläche).
+  flaeche_brutto_ha: number | null;
   sorten: string | null;
+}
+
+// Aus der Sicht feld_geojson (Migration 2026-10-19, Brutto-Fläche ergänzt
+// 2026-10-20) - feld.geometrie als GeoJSON-Text + Brutto-Hektarfläche, da
+// PostgREST eine PostGIS-geometry-Spalte nicht direkt ausliefern kann.
+export interface FeldGeojson {
+  id: number;
+  bezeichnung: string;
+  kultur: FeldKultur | null;
+  aktiv: boolean;
+  geometrie_geojson: string | null;
+  flaeche_brutto_ha: number | null;
+  pachtwesen_schlag_id: string | null;
+  pachtwesen_geometrie_hash: string | null;
+  pachtwesen_geometrie_hash_neu: string | null;
+  pachtwesen_geometrie_geojson_neu: string | null;
 }
 
 export interface ErdbeerenBestellung {

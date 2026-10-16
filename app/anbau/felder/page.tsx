@@ -17,10 +17,10 @@ import ErntewirtschaftTabs from "@/components/ErntewirtschaftTabs";
 import {
   FELD_KULTUREN,
   FELD_KULTUR_LABELS,
-  type Feld,
+  type FeldGeojson,
   type FeldKultur,
 } from "@/lib/types";
-import { formatZahlDE } from "@/lib/format";
+import { formatMenge, formatZahlDE } from "@/lib/format";
 
 const CURRENT_YEAR = new Date().getFullYear();
 
@@ -44,7 +44,7 @@ export default function AnbauFelderPage() {
   const canEdit =
     profile?.role === "admin" || profile?.role === "erntewirtschaft";
 
-  const [felder, setFelder] = useState<Feld[]>([]);
+  const [felder, setFelder] = useState<FeldGeojson[]>([]);
   const [planung, setPlanung] = useState<Record<number, PlanungsInfo[]>>({});
   const [loading, setLoading] = useState(true);
   const [fehler, setFehler] = useState<string | null>(null);
@@ -66,12 +66,12 @@ export default function AnbauFelderPage() {
     setLoading(true);
     const supabase = getSupabaseClient();
     const [{ data: fData }, { data: pData }] = await Promise.all([
-      supabase.from("feld").select("*").order("bezeichnung"),
+      supabase.from("feld_geojson").select("*").order("bezeichnung"),
       supabase
         .from("feld_anbau_uebersicht")
         .select("feld_id, saison_jahr, anzahl_abschnitte, anzahl_pflanzen"),
     ]);
-    setFelder((fData as Feld[]) ?? []);
+    setFelder((fData as FeldGeojson[]) ?? []);
     const pMap: Record<number, PlanungsInfo[]> = {};
     ((pData as PlanungsInfo[]) ?? []).forEach((p) => {
       if (!pMap[p.feld_id]) pMap[p.feld_id] = [];
@@ -205,7 +205,7 @@ export default function AnbauFelderPage() {
     }
   }
 
-  async function geometrieUebernehmen(f: Feld) {
+  async function geometrieUebernehmen(f: FeldGeojson) {
     if (!f.pachtwesen_geometrie_geojson_neu || !f.pachtwesen_geometrie_hash_neu) return;
     setFehler(null);
     const supabase = getSupabaseClient();
@@ -366,6 +366,9 @@ export default function AnbauFelderPage() {
               <tr>
                 <th>Bezeichnung</th>
                 <th>Kultur</th>
+                <th title="Fläche aus der Geometrie (ST_Area), nicht aus der Reihen-Planung">
+                  Brutto ha
+                </th>
                 <th title="In welchen Saisons für dieses Feld eine Planung besteht">
                   Geplant
                 </th>
@@ -404,6 +407,9 @@ export default function AnbauFelderPage() {
                           </option>
                         ))}
                       </select>
+                    </td>
+                    <td className="text-neutral-600">
+                      {f.flaeche_brutto_ha != null ? formatMenge(f.flaeche_brutto_ha, 4) : "—"}
                     </td>
                     <td className="text-xs">
                       {p.length === 0 ? (

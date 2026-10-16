@@ -502,6 +502,9 @@ export default function AnbauErdbeerenPage() {
                 <th>Tunnel</th>
                 <th title="Summe Länge × Reihen aller Bepflanzungen">lfm</th>
                 <th>Pflanzen</th>
+                <th title="Aus der echten Geometrie (ST_Area), unabhängig von der Reihen-Planung">
+                  Brutto ha
+                </th>
                 <th title="Aus Reihen × Länge × Reihenabstand">Netto ha</th>
                 <th>Sorten</th>
                 <th>Erntefenster</th>
@@ -518,6 +521,7 @@ export default function AnbauErdbeerenPage() {
                       <td>{u.anzahl_abschnitte}</td>
                       <td>{formatZahlDE(u.laufende_meter)}</td>
                       <td>{formatZahlDE(u.anzahl_pflanzen)}</td>
+                      <td>{u.flaeche_brutto_ha != null ? formatZahlDE(u.flaeche_brutto_ha) : "—"}</td>
                       <td>{formatZahlDE(u.netto_ha)}</td>
                       <td className="text-sm">{u.sorten ?? "—"}</td>
                       <td className="text-xs">
