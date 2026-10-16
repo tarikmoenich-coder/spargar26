@@ -1129,30 +1129,48 @@ export interface ZuckermaisAnnahmeQuote {
   personal_nr: string | null;
 }
 
-// Prämien Erdbeeren (Nutzer-Vorgabe 2026-08-09) - Norm/Bonus je Parzelle
-// UND Tag statt global (anders als Zuckermais), da auf mehreren Parzellen
-// mit sehr unterschiedlichen Gegebenheiten gleichzeitig gepflückt wird.
-export interface ErdbeerenParzelle {
+// ---------------------------------------------------------------------------
+// Feld/Anbau (Migration 2026-10-19) - generisches, kulturübergreifendes
+// Feld-Konzept mit echter Geometrie. Löst die Erdbeeren-spezifische Kette
+// (ErdbeerenParzelle/Anbau/Tunnel/Bepflanzung) ab, bedient aber auch Spargel
+// (aktuell nur ein manueller Saisonbetrag, app/praemien/spargel) und den
+// Spatial-Join-Bedarf des Erntewirtschaft-Moduls (docs/erntewirtschaft-plan.md,
+// dort vorher als eigenständiges "ernte_feld" skizziert - jetzt dasselbe
+// "feld" statt einer zweiten Tabelle).
+// ---------------------------------------------------------------------------
+export const FELD_KULTUREN = [
+  'erdbeeren',
+  'spargel',
+  'gruenspargel',
+  'sonstiges',
+] as const;
+export type FeldKultur = (typeof FELD_KULTUREN)[number];
+export const FELD_KULTUR_LABELS: Record<FeldKultur, string> = {
+  erdbeeren: 'Erdbeeren',
+  spargel: 'Spargel',
+  gruenspargel: 'Grünspargel',
+  sonstiges: 'Sonstiges',
+};
+
+export interface Feld {
   id: number;
-  name: string;
-  groesse_ha: number | null;
-  // Kurzangaben aus der Zeit vor der Anbauplanung (Stand 2026-08-11).
-  // Gepflegt wird das jetzt unter "Anbau" je Tunnel und Sorte - diese
-  // beiden Felder bleiben nur, um bestehende Einträge nicht zu verlieren.
-  sorte: string | null;
-  anzahl_pflanzen: number | null;
+  bezeichnung: string;
+  // nullable: frisch importierte Felder (aus Pachtwesen2026) kennen ihre
+  // Kultur noch nicht.
+  kultur: FeldKultur | null;
   aktiv: boolean;
+  // geometrie (PostGIS) fehlt bewusst hier, analog zur Lücke bei
+  // Pachtwesen2026s database.types.ts - select("*") liefert sie trotzdem.
+  pachtwesen_schlag_id: string | null;
+  pachtwesen_geometrie_hash: string | null;
+  pachtwesen_geometrie_hash_neu: string | null;
+  pachtwesen_geometrie_geojson_neu: string | null;
   erstellt_von: string | null;
   erstellt_am: string;
   updated_by: string | null;
   updated_at: string;
 }
 
-// ---------------------------------------------------------------------------
-// Erdbeeren-Anbauplanung (Nutzer-Vorgabe 2026-08-11, Menüpunkt "Anbau" -
-// nur admin/erntewirtschaft). Ersetzt die Excel "Erdbeerpflanzplanung".
-// Struktur: Feld > Anbau-Jahrgang > Tunnel > Bepflanzung, siehe schema.sql.
-// ---------------------------------------------------------------------------
 export const PFLANZTYPEN = [
   'frigo',
   'gruenpflanze',
@@ -1170,76 +1188,73 @@ export const PFLANZTYP_LABELS: Record<Pflanztyp, string> = {
   sonstiges: 'Sonstiges',
 };
 
-export interface ErdbeerenAnbau {
+// Ein Feld + eine Saison, generalisiert ErdbeerenAnbau.
+export interface FeldAnbau {
   id: number;
-  parzelle_id: number;
+  feld_id: number;
   saison_jahr: number;
   erntefenster_von: string | null;
   erntefenster_bis: string | null;
-  ertrag_erwartet_steigen: number | null;
+  ertrag_erwartet: number | null;
+  ertrag_einheit: string | null;
   rodung_geplant: string | null;
   notiz: string | null;
 }
 
-export interface ErdbeerenTunnel {
+// Eine benannte, physisch zusammenhängende Pflanzreihe + ihre Sorte -
+// kollabiert ErdbeerenTunnel + ErdbeerenBepflanzung zu einer Ebene. Spargel
+// bekommt i.d.R. genau eine Zeile je Anbau-Jahrgang; Erdbeeren eine Zeile je
+// Tunnel (zwei Zeilen mit gleicher bezeichnung bei geteilter Sorte im selben
+// Tunnel).
+export interface FeldAnbauAbschnitt {
   id: number;
-  anbau_id: number;
-  nummer: string;
-  laenge_m: number | null;
+  feld_anbau_id: number;
+  bezeichnung: string;
   reihen_anzahl: number | null;
-  // Pflanzen je laufendem Meter - daraus rechnet sich die Pflanzenzahl
-  // (in der Excel Spalte I: 4,37 im Feld, 8 im Glashaus).
+  reihenlaenge_m: number | null;
+  reihenabstand_m: number | null;
   pflanzen_pro_lfm: number | null;
-  // Rollennummer der Folie; eigenes Folien-Register kommt später.
-  cotura_nr: string | null;
-  notiz: string | null;
-  // Reihenfolge in der Liste = räumliche Anordnung auf dem Feld
-  // (Nutzer-Vorgabe 2026-08-11) - frei sortierbar, bewusst unabhängig von
-  // der Tunnelnummer.
-  position: number | null;
-}
-
-export interface ErdbeerenBepflanzung {
-  id: number;
-  tunnel_id: number;
-  sorte: string;
-  // Leer = alle Reihen des Tunnels (der häufige Fall mit einer Sorte).
-  reihen_anzahl: number | null;
+  sorte: string | null;
   pflanzdatum: string | null;
   standjahr: number | null;
   pflanztyp: Pflanztyp | null;
+  cotura_nr: string | null;
+  position: number | null;
   notiz: string | null;
 }
 
-// Aus der Sicht erdbeeren_bepflanzung_berechnet - laufende Meter und
-// Pflanzenzahl gerechnet statt getippt.
-export interface ErdbeerenBepflanzungBerechnet extends ErdbeerenBepflanzung {
-  anbau_id: number;
-  parzelle_id: number;
+// Aus der Sicht feld_anbau_abschnitt_berechnet - laufende Meter, Pflanzenzahl
+// und Netto-Hektarfläche gerechnet statt getippt. Netto-Fläche ist bewusst
+// etwas anderes als die Brutto-Geometriefläche des Feldes (Wege/Vorgewende
+// zählen nicht mit).
+export interface FeldAnbauAbschnittBerechnet extends FeldAnbauAbschnitt {
+  feld_id: number;
+  feld_bezeichnung: string;
+  kultur: FeldKultur | null;
   saison_jahr: number;
-  parzelle_name: string;
-  tunnel_nummer: string;
-  laenge_m: number | null;
-  cotura_nr: string | null;
   laufende_meter: number;
   anzahl_pflanzen: number;
+  netto_flaeche_m2: number;
+  netto_ha: number;
 }
 
-// Aus der Sicht erdbeeren_anbau_uebersicht - Kennzahlen je Feld und Saison.
-export interface ErdbeerenAnbauUebersicht {
+// Aus der Sicht feld_anbau_uebersicht - Kennzahlen je Feld und Saison.
+export interface FeldAnbauUebersicht {
   anbau_id: number;
-  parzelle_id: number;
-  parzelle_name: string;
-  groesse_ha: number | null;
+  feld_id: number;
+  feld_bezeichnung: string;
+  kultur: FeldKultur | null;
   saison_jahr: number;
   erntefenster_von: string | null;
   erntefenster_bis: string | null;
-  ertrag_erwartet_steigen: number | null;
+  ertrag_erwartet: number | null;
+  ertrag_einheit: string | null;
   rodung_geplant: string | null;
   notiz: string | null;
-  anzahl_tunnel: number;
+  anzahl_abschnitte: number;
   laufende_meter: number;
   anzahl_pflanzen: number;
+  netto_ha: number;
   sorten: string | null;
 }
 
@@ -1271,7 +1286,7 @@ export interface ErdbeerenBestellungUebersicht {
 
 export interface ErdbeerenParzellenSatz {
   id: number;
-  parzelle_id: number;
+  feld_id: number;
   gueltig_ab: string;
   norm_steigen_pro_stunde: number;
   bonus_pro_steige: number;
@@ -1282,7 +1297,7 @@ export interface ErdbeerenParzellenSatz {
 export interface ErdbeerenRohdatenEintrag {
   id: number;
   employee_id: string;
-  parzelle_id: number;
+  feld_id: number;
   datum: string;
   steigen: number;
   stunden: number;

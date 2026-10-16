@@ -3,10 +3,13 @@
 // "Anbau → Erdbeeren" (Nutzer-Vorgabe 2026-08-11, nur admin/erntewirtschaft).
 // Löst die Excel "Erdbeerpflanzplanung.xlsx" ab.
 //
-// Aufbau bewusst als Baum Feld → Tunnel → Bepflanzung: in der Excel ist eine
-// Zeile mal ein ganzes Feld, mal nur ein Teilstück davon (weil sich
-// unterschiedlich lange Tunnel dort nicht abbilden lassen), und die neun
-// Sorten sind Spalten. Beides verschwindet mit dieser Struktur.
+// Seit Migration 2026-10-19 auf dem generischen Feld/Anbau-Schema: ein
+// "Tunnel" ist jetzt eine Gruppe von feld_anbau_abschnitt-Zeilen mit
+// gleicher bezeichnung (normalerweise genau eine - zwei nur bei geteilter
+// Sorte im selben Tunnel). Länge/Reihenabstand/Pfl.-pro-lfm/Cotura gelten
+// als physische Eigenschaft des Tunnels und werden beim Bearbeiten auf ALLE
+// Zeilen der Gruppe angewendet; Sorte/Reihenzahl/Standjahr/Pflanztyp sind
+// je Zeile (= je Sorte) eigene Werte.
 //
 // Pflanzenzahlen und laufende Meter werden gerechnet, nicht getippt -
 // Länge × Reihen × Pflanzen-pro-lfm, wie in der Excel Spalte I (4,37 im
@@ -21,15 +24,50 @@ import ErntewirtschaftTabs from "@/components/ErntewirtschaftTabs";
 import {
   PFLANZTYPEN,
   PFLANZTYP_LABELS,
-  type ErdbeerenAnbauUebersicht,
-  type ErdbeerenBepflanzungBerechnet,
-  type ErdbeerenParzelle,
-  type ErdbeerenTunnel,
+  type Feld,
+  type FeldAnbauAbschnitt,
+  type FeldAnbauUebersicht,
   type Pflanztyp,
 } from "@/lib/types";
 import { formatDatumDE, formatZahlDE } from "@/lib/format";
 
 const CURRENT_YEAR = new Date().getFullYear();
+
+interface Gruppe {
+  bezeichnung: string;
+  rows: FeldAnbauAbschnitt[];
+}
+
+function vergleicheBezeichnung(a: string, b: string): number {
+  return a.localeCompare(b, "de", { numeric: true });
+}
+
+// Gruppiert die flache Abschnitt-Liste eines Anbau-Jahrgangs nach
+// bezeichnung (= "Tunnel") - normalerweise 1 Zeile je Gruppe, 2 bei
+// geteilter Sorte. Sortiert nach der frei gewählten Position (bildet die
+// räumliche Anordnung auf dem Feld ab); ohne Position hilfsweise natürlich
+// nach bezeichnung.
+function gruppieren(rows: FeldAnbauAbschnitt[]): Gruppe[] {
+  const byBezeichnung = new Map<string, FeldAnbauAbschnitt[]>();
+  for (const r of rows) {
+    const liste = byBezeichnung.get(r.bezeichnung) ?? [];
+    liste.push(r);
+    byBezeichnung.set(r.bezeichnung, liste);
+  }
+  const gruppen: Gruppe[] = [...byBezeichnung.entries()].map(([bezeichnung, rs]) => ({
+    bezeichnung,
+    rows: rs,
+  }));
+  gruppen.sort((a, b) => {
+    const posA = a.rows[0]?.position;
+    const posB = b.rows[0]?.position;
+    if (posA != null && posB != null) return posA - posB;
+    if (posA != null) return -1;
+    if (posB != null) return 1;
+    return vergleicheBezeichnung(a.bezeichnung, b.bezeichnung);
+  });
+  return gruppen;
+}
 
 export default function AnbauErdbeerenPage() {
   const { profile } = useProfile();
@@ -40,26 +78,18 @@ export default function AnbauErdbeerenPage() {
   const [loading, setLoading] = useState(true);
   const [fehler, setFehler] = useState<string | null>(null);
 
-  const [parzellen, setParzellen] = useState<ErdbeerenParzelle[]>([]);
-  const [uebersicht, setUebersicht] = useState<ErdbeerenAnbauUebersicht[]>([]);
-  const [tunnel, setTunnel] = useState<Record<number, ErdbeerenTunnel[]>>({});
-  const [bepflanzung, setBepflanzung] = useState<
-    Record<number, ErdbeerenBepflanzungBerechnet[]>
-  >({});
+  const [felder, setFelder] = useState<Feld[]>([]);
+  const [uebersicht, setUebersicht] = useState<FeldAnbauUebersicht[]>([]);
+  const [abschnitte, setAbschnitte] = useState<Record<number, FeldAnbauAbschnitt[]>>({});
 
   const [offenesFeld, setOffenesFeld] = useState<number | null>(null);
 
-  // Zweite Sorte in einem Tunnel: eigenes kleines Formular je Tunnel, weil
-  // hier - anders als beim Bereichs-Werkzeug - die Reihenzahl mit angegeben
-  // werden muss. Ohne sie würden sich zwei Sorten denselben Tunnel voll
-  // anrechnen und die Pflanzenzahl doppelt zählen.
-  const [sortenFormularTunnel, setSortenFormularTunnel] = useState<
-    number | null
-  >(null);
+  // Zweite Sorte in einer Gruppe: eigenes kleines Formular je Gruppe, weil
+  // hier die Reihenzahl mit angegeben werden muss.
+  const [sortenFormularGruppe, setSortenFormularGruppe] = useState<string | null>(null);
 
   // Gezogene Zeile beim Umsortieren. Zusätzlich gibt es Pfeiltasten je
-  // Zeile - Ziehen funktioniert auf Tablets nicht zuverlässig, und die
-  // Planung wird auch mal unterwegs angesehen.
+  // Zeile - Ziehen funktioniert auf Tablets nicht zuverlässig.
   const [ziehtIndex, setZiehtIndex] = useState<number | null>(null);
   const [nsSorte, setNsSorte] = useState("");
   const [nsReihen, setNsReihen] = useState("");
@@ -72,6 +102,7 @@ export default function AnbauErdbeerenPage() {
   const [saBis, setSaBis] = useState("10");
   const [saLaenge, setSaLaenge] = useState("");
   const [saReihen, setSaReihen] = useState("8");
+  const [saAbstand, setSaAbstand] = useState("");
   const [saPflLfm, setSaPflLfm] = useState("4.37");
 
   // Sorte für Tunnelbereich
@@ -91,64 +122,39 @@ export default function AnbauErdbeerenPage() {
   async function load() {
     setLoading(true);
     const supabase = getSupabaseClient();
-    const [{ data: pData }, { data: uData }, { data: bData }] =
-      await Promise.all([
-        supabase
-          .from("erdbeeren_parzellen")
-          .select("*")
-          .eq("aktiv", true)
-          .order("name"),
-        supabase
-          .from("erdbeeren_anbau_uebersicht")
-          .select("*")
-          .eq("saison_jahr", jahr)
-          .order("parzelle_name"),
-        supabase
-          .from("erdbeeren_bepflanzung_berechnet")
-          .select("*")
-          .eq("saison_jahr", jahr),
-      ]);
-    setParzellen((pData as ErdbeerenParzelle[]) ?? []);
-    const ueb = (uData as ErdbeerenAnbauUebersicht[]) ?? [];
+    const [{ data: fData }, { data: uData }] = await Promise.all([
+      supabase
+        .from("feld")
+        .select("*")
+        .eq("aktiv", true)
+        .eq("kultur", "erdbeeren")
+        .order("bezeichnung"),
+      supabase
+        .from("feld_anbau_uebersicht")
+        .select("*")
+        .eq("saison_jahr", jahr)
+        .eq("kultur", "erdbeeren")
+        .order("feld_bezeichnung"),
+    ]);
+    setFelder((fData as Feld[]) ?? []);
+    const ueb = (uData as FeldAnbauUebersicht[]) ?? [];
     setUebersicht(ueb);
 
-    // Tunnel je Anbau-Jahrgang nachladen (nur für die vorhandenen Jahrgänge).
     const anbauIds = ueb.map((u) => u.anbau_id);
     if (anbauIds.length > 0) {
-      const { data: tData } = await supabase
-        .from("erdbeeren_tunnel")
+      const { data: aData } = await supabase
+        .from("feld_anbau_abschnitt")
         .select("*")
-        .in("anbau_id", anbauIds);
-      const tMap: Record<number, ErdbeerenTunnel[]> = {};
-      ((tData as ErdbeerenTunnel[]) ?? []).forEach((t) => {
-        if (!tMap[t.anbau_id]) tMap[t.anbau_id] = [];
-        tMap[t.anbau_id].push(t);
+        .in("feld_anbau_id", anbauIds);
+      const aMap: Record<number, FeldAnbauAbschnitt[]> = {};
+      ((aData as FeldAnbauAbschnitt[]) ?? []).forEach((a) => {
+        if (!aMap[a.feld_anbau_id]) aMap[a.feld_anbau_id] = [];
+        aMap[a.feld_anbau_id].push(a);
       });
-      // Nach der frei gewählten Position sortieren - sie bildet die
-      // räumliche Anordnung auf dem Feld ab (Nutzer-Vorgabe 2026-08-11).
-      // Ohne Position (Altbestand) hilfsweise nach Nummer, natürlich
-      // sortiert ("2" vor "10"), da sie Text ist.
-      Object.values(tMap).forEach((liste) =>
-        liste.sort((a, b) => {
-          if (a.position != null && b.position != null) {
-            return a.position - b.position;
-          }
-          if (a.position != null) return -1;
-          if (b.position != null) return 1;
-          return a.nummer.localeCompare(b.nummer, "de", { numeric: true });
-        })
-      );
-      setTunnel(tMap);
+      setAbschnitte(aMap);
     } else {
-      setTunnel({});
+      setAbschnitte({});
     }
-
-    const bMap: Record<number, ErdbeerenBepflanzungBerechnet[]> = {};
-    ((bData as ErdbeerenBepflanzungBerechnet[]) ?? []).forEach((b) => {
-      if (!bMap[b.tunnel_id]) bMap[b.tunnel_id] = [];
-      bMap[b.tunnel_id].push(b);
-    });
-    setBepflanzung(bMap);
     setLoading(false);
   }
 
@@ -157,13 +163,13 @@ export default function AnbauErdbeerenPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [jahr]);
 
-  async function anbauAnlegen(parzelleId: number) {
+  async function anbauAnlegen(feldId: number) {
     setLaeuft(true);
     setFehler(null);
     const supabase = getSupabaseClient();
     const { error } = await supabase
-      .from("erdbeeren_anbau")
-      .insert({ parzelle_id: parzelleId, saison_jahr: jahr });
+      .from("feld_anbau")
+      .insert({ feld_id: feldId, saison_jahr: jahr });
     if (error) setFehler(error.message);
     setLaeuft(false);
     load();
@@ -181,10 +187,10 @@ export default function AnbauErdbeerenPage() {
     setLaeuft(true);
     setFehler(null);
     const supabase = getSupabaseClient();
-    const { data, error } = await supabase.rpc(
-      "erdbeeren_anbau_vorjahr_uebernehmen",
-      { p_saison_jahr: jahr, p_quelle_jahr: jahr - 1 }
-    );
+    const { data, error } = await supabase.rpc("feld_anbau_vorjahr_uebernehmen", {
+      p_saison_jahr: jahr,
+      p_quelle_jahr: jahr - 1,
+    });
     if (error) setFehler(error.message);
     else window.alert(`${data ?? 0} Feld(er) übernommen.`);
     setLaeuft(false);
@@ -201,42 +207,36 @@ export default function AnbauErdbeerenPage() {
     setLaeuft(true);
     setFehler(null);
     const supabase = getSupabaseClient();
-    const { data, error } = await supabase.rpc(
-      "erdbeeren_tunnel_sammelanlage",
-      {
-        p_anbau_id: anbauId,
-        p_von: von,
-        p_bis: bis,
-        p_laenge_m: saLaenge ? Number(saLaenge) : null,
-        p_reihen_anzahl: saReihen ? Number(saReihen) : null,
-        p_pflanzen_pro_lfm: saPflLfm ? Number(saPflLfm) : null,
-      }
-    );
+    const { data, error } = await supabase.rpc("feld_anbau_abschnitt_sammelanlage", {
+      p_feld_anbau_id: anbauId,
+      p_von: von,
+      p_bis: bis,
+      p_reihenlaenge_m: saLaenge ? Number(saLaenge) : null,
+      p_reihen_anzahl: saReihen ? Number(saReihen) : null,
+      p_pflanzen_pro_lfm: saPflLfm ? Number(saPflLfm) : null,
+      p_reihenabstand_m: saAbstand ? Number(saAbstand) : null,
+    });
     if (error) setFehler(error.message);
     else window.alert(`${data ?? 0} Tunnel angelegt.`);
     setLaeuft(false);
     load();
   }
 
-  // Tunnel eines Feldes im Nummernbereich - Basis für Sorten-Zuweisung und
-  // Verschieben, damit bei 182 Tunneln nicht jeder einzeln angefasst wird.
-  function tunnelImBereich(
-    anbauId: number,
-    von: string,
-    bis: string
-  ): ErdbeerenTunnel[] {
-    const liste = tunnel[anbauId] ?? [];
+  // Gruppen (= Tunnel) eines Feldes im Nummernbereich - Basis für
+  // Sorten-Zuweisung und Verschieben.
+  function gruppenImBereich(anbauId: number, von: string, bis: string): Gruppe[] {
+    const liste = gruppieren(abschnitte[anbauId] ?? []);
     const v = Number(von);
     const b = Number(bis);
     if (!Number.isFinite(v) || !Number.isFinite(b)) return [];
-    return liste.filter((t) => {
-      const n = Number(t.nummer);
+    return liste.filter((g) => {
+      const n = Number(g.bezeichnung);
       return Number.isFinite(n) && n >= v && n <= b;
     });
   }
 
   async function sorteFuerBereich(anbauId: number) {
-    const treffer = tunnelImBereich(anbauId, sbVon, sbBis);
+    const treffer = gruppenImBereich(anbauId, sbVon, sbBis);
     if (treffer.length === 0) {
       setFehler("Keine Tunnel in diesem Nummernbereich gefunden.");
       return;
@@ -248,21 +248,25 @@ export default function AnbauErdbeerenPage() {
     setLaeuft(true);
     setFehler(null);
     const supabase = getSupabaseClient();
-    const { error } = await supabase.from("erdbeeren_bepflanzung").insert(
-      treffer.map((t) => ({
-        tunnel_id: t.id,
+    // Setzt die Sorte auf die ERSTE Zeile jeder Gruppe (der Normalfall: eine
+    // Sorte je Tunnel). Für eine zweite Sorte im selben Tunnel "+ Sorte"
+    // nutzen.
+    const ids = treffer.map((g) => g.rows[0].id);
+    const { error } = await supabase
+      .from("feld_anbau_abschnitt")
+      .update({
         sorte: sbSorte.trim(),
         standjahr: sbStandjahr ? Number(sbStandjahr) : null,
         pflanztyp: sbPflanztyp || null,
-      }))
-    );
+      })
+      .in("id", ids);
     if (error) setFehler(error.message);
     setLaeuft(false);
     load();
   }
 
   async function tunnelVerschieben(anbauId: number) {
-    const treffer = tunnelImBereich(anbauId, verschiebeVon, verschiebeBis);
+    const treffer = gruppenImBereich(anbauId, verschiebeVon, verschiebeBis);
     if (treffer.length === 0) {
       setFehler("Keine Tunnel in diesem Nummernbereich gefunden.");
       return;
@@ -274,107 +278,80 @@ export default function AnbauErdbeerenPage() {
     setLaeuft(true);
     setFehler(null);
     const supabase = getSupabaseClient();
+    const ids = treffer.flatMap((g) => g.rows.map((r) => r.id));
     const { error } = await supabase
-      .from("erdbeeren_tunnel")
-      .update({ anbau_id: Number(verschiebeZiel) })
-      .in(
-        "id",
-        treffer.map((t) => t.id)
-      );
-    if (error) {
-      // Häufigster Fall: im Zielfeld gibt es die Nummer schon.
-      setFehler(
-        error.message.includes("erdbeeren_tunnel_anbau_id_nummer_key")
-          ? "Im Zielfeld gibt es bereits einen Tunnel mit dieser Nummer - bitte dort zuerst umbenennen."
-          : error.message
-      );
-    }
+      .from("feld_anbau_abschnitt")
+      .update({ feld_anbau_id: Number(verschiebeZiel) })
+      .in("id", ids);
+    if (error) setFehler(error.message);
     setLaeuft(false);
     load();
   }
 
-  async function tunnelAendern(
-    id: number,
-    feld: keyof ErdbeerenTunnel,
+  // Bearbeitung der physischen Tunnel-Eigenschaften (Länge/Reihenabstand/
+  // Pfl.-pro-lfm/Cotura) - gilt für ALLE Zeilen der Gruppe, damit sie bei
+  // einer geteilten Sorte nicht auseinanderlaufen.
+  async function gruppeAendern(
+    gruppe: Gruppe,
+    feld: "reihenlaenge_m" | "reihenabstand_m" | "pflanzen_pro_lfm" | "cotura_nr",
     wert: string
   ) {
     const supabase = getSupabaseClient();
-    const zahlFelder = ["laenge_m", "reihen_anzahl", "pflanzen_pro_lfm"];
+    const istZahlfeld = feld !== "cotura_nr";
     const { error } = await supabase
-      .from("erdbeeren_tunnel")
-      .update({
-        [feld]: zahlFelder.includes(feld as string)
-          ? wert
-            ? Number(wert)
-            : null
-          : wert || null,
-      })
-      .eq("id", id);
+      .from("feld_anbau_abschnitt")
+      .update({ [feld]: istZahlfeld ? (wert ? Number(wert) : null) : wert || null })
+      .in(
+        "id",
+        gruppe.rows.map((r) => r.id)
+      );
     if (error) setFehler(error.message);
     load();
   }
 
-  // Schreibt die Reihenfolge einer Tunnel-Liste als fortlaufende Positionen
-  // zurück. Bewusst alle Zeilen neu durchnummeriert statt nur die bewegten
-  // zu tauschen - das hält die Werte lückenlos und ist bei ~20 Tunneln je
-  // Feld unproblematisch.
-  async function reihenfolgeSpeichern(liste: ErdbeerenTunnel[]) {
+  // Schreibt die Reihenfolge der Gruppen als fortlaufende Positionen zurück
+  // (alle Zeilen einer Gruppe bekommen Positionen in Folge, damit sie
+  // beieinander bleiben).
+  async function reihenfolgeSpeichern(anbauId: number, liste: Gruppe[]) {
     const supabase = getSupabaseClient();
-    // Sofort anzeigen, nicht erst nach dem Speichern - sonst "springt" die
-    // Zeile beim Ziehen sichtbar zurück.
-    setTunnel((prev) => ({ ...prev, [liste[0].anbau_id]: liste }));
-    // Bewusst über eine Funktion statt per upsert: erdbeeren_tunnel hat
-    // NOT-NULL-Spalten (anbau_id, nummer), ein upsert mit nur id+position
-    // würde als INSERT scheitern (Vorfall 2026-08-11).
-    const { error } = await supabase.rpc(
-      "erdbeeren_tunnel_reihenfolge_setzen",
-      { p_ids: liste.map((t) => t.id) }
-    );
+    // Sofort anzeigen, nicht erst nach dem Speichern.
+    setAbschnitte((prev) => ({ ...prev, [anbauId]: liste.flatMap((g) => g.rows) }));
+    const alleIds = liste.flatMap((g) => g.rows.map((r) => r.id));
+    const { error } = await supabase.rpc("feld_anbau_abschnitt_reihenfolge_setzen", {
+      p_ids: alleIds,
+    });
     if (error) {
       setFehler(`Reihenfolge konnte nicht gespeichert werden: ${error.message}`);
       load();
     }
   }
 
-  function verschiebeInListe(
-    liste: ErdbeerenTunnel[],
-    vonIndex: number,
-    nachIndex: number
-  ): ErdbeerenTunnel[] {
+  function verschiebeInListe<T>(liste: T[], vonIndex: number, nachIndex: number): T[] {
     const kopie = [...liste];
     const [bewegt] = kopie.splice(vonIndex, 1);
     kopie.splice(nachIndex, 0, bewegt);
     return kopie;
   }
 
-  async function tunnelVerschiebenUm(anbauId: number, index: number, delta: number) {
-    const liste = tunnel[anbauId] ?? [];
+  async function gruppeVerschiebenUm(anbauId: number, gruppen: Gruppe[], index: number, delta: number) {
     const ziel = index + delta;
-    if (ziel < 0 || ziel >= liste.length) return;
-    await reihenfolgeSpeichern(verschiebeInListe(liste, index, ziel));
+    if (ziel < 0 || ziel >= gruppen.length) return;
+    await reihenfolgeSpeichern(anbauId, verschiebeInListe(gruppen, index, ziel));
   }
 
-  // Belegte Reihen eines Tunnels - leer gelassene Reihenzahl zählt als
-  // "alle Reihen" (siehe View), deshalb hier genauso behandeln.
-  function belegteReihen(t: ErdbeerenTunnel): number {
-    return (bepflanzung[t.id] ?? []).reduce(
-      (s, b) => s + (b.reihen_anzahl ?? t.reihen_anzahl ?? 0),
-      0
-    );
-  }
-
-  function sortenFormularOeffnen(t: ErdbeerenTunnel) {
-    setSortenFormularTunnel(t.id);
+  function sortenFormularOeffnen(gruppe: Gruppe) {
+    setSortenFormularGruppe(gruppe.bezeichnung);
     setNsSorte("");
-    // Vorschlag: die noch freien Reihen des Tunnels.
-    const frei = (t.reihen_anzahl ?? 0) - belegteReihen(t);
+    const belegt = gruppe.rows.reduce((s, r) => s + (r.reihen_anzahl ?? 0), 0);
+    const gesamt = gruppe.rows[0]?.reihen_anzahl ?? 0;
+    const frei = gesamt - belegt;
     setNsReihen(frei > 0 ? String(frei) : "");
     setNsStandjahr("1");
     setNsPflanztyp("");
     setNsPflanzdatum("");
   }
 
-  async function bepflanzungAnlegen(t: ErdbeerenTunnel) {
+  async function sorteHinzufuegen(anbauId: number, gruppe: Gruppe) {
     if (!nsSorte.trim()) {
       setFehler("Bitte eine Sorte angeben.");
       return;
@@ -382,8 +359,15 @@ export default function AnbauErdbeerenPage() {
     setLaeuft(true);
     setFehler(null);
     const supabase = getSupabaseClient();
-    const { error } = await supabase.from("erdbeeren_bepflanzung").insert({
-      tunnel_id: t.id,
+    const vorlage = gruppe.rows[0];
+    const { error } = await supabase.from("feld_anbau_abschnitt").insert({
+      feld_anbau_id: anbauId,
+      bezeichnung: gruppe.bezeichnung,
+      reihenlaenge_m: vorlage.reihenlaenge_m,
+      reihenabstand_m: vorlage.reihenabstand_m,
+      pflanzen_pro_lfm: vorlage.pflanzen_pro_lfm,
+      cotura_nr: vorlage.cotura_nr,
+      position: vorlage.position,
       sorte: nsSorte.trim(),
       reihen_anzahl: nsReihen ? Number(nsReihen) : null,
       standjahr: nsStandjahr ? Number(nsStandjahr) : null,
@@ -391,12 +375,12 @@ export default function AnbauErdbeerenPage() {
       pflanzdatum: nsPflanzdatum || null,
     });
     if (error) setFehler(error.message);
-    else setSortenFormularTunnel(null);
+    else setSortenFormularGruppe(null);
     setLaeuft(false);
     load();
   }
 
-  async function bepflanzungAendern(
+  async function zeileAendern(
     id: number,
     feld: "sorte" | "reihen_anzahl" | "standjahr" | "pflanzdatum",
     wert: string
@@ -404,33 +388,32 @@ export default function AnbauErdbeerenPage() {
     const supabase = getSupabaseClient();
     const zahlFelder = ["reihen_anzahl", "standjahr"];
     const { error } = await supabase
-      .from("erdbeeren_bepflanzung")
+      .from("feld_anbau_abschnitt")
       .update({
-        [feld]: zahlFelder.includes(feld)
-          ? wert
-            ? Number(wert)
-            : null
-          : wert || null,
+        [feld]: zahlFelder.includes(feld) ? (wert ? Number(wert) : null) : wert || null,
       })
       .eq("id", id);
     if (error) setFehler(error.message);
     load();
   }
 
-  async function bepflanzungLoeschen(id: number) {
+  async function zeileLoeschen(id: number) {
     if (!window.confirm("Diese Bepflanzung wirklich entfernen?")) return;
     const supabase = getSupabaseClient();
-    await supabase.from("erdbeeren_bepflanzung").delete().eq("id", id);
+    await supabase.from("feld_anbau_abschnitt").delete().eq("id", id);
     load();
   }
 
-  async function tunnelLoeschen(id: number) {
-    if (!window.confirm("Tunnel samt Bepflanzung wirklich löschen?")) return;
+  async function tunnelLoeschen(gruppe: Gruppe) {
+    if (!window.confirm("Tunnel samt Bepflanzung(en) wirklich löschen?")) return;
     const supabase = getSupabaseClient();
     const { error } = await supabase
-      .from("erdbeeren_tunnel")
+      .from("feld_anbau_abschnitt")
       .delete()
-      .eq("id", id);
+      .in(
+        "id",
+        gruppe.rows.map((r) => r.id)
+      );
     if (error) setFehler(error.message);
     load();
   }
@@ -438,18 +421,13 @@ export default function AnbauErdbeerenPage() {
   // Das aktuell gewählte Feld - sein Tunnel-Block steht unter der
   // Feldtabelle, damit die Übersicht erhalten bleibt.
   const gewaehlt = uebersicht.find((u) => u.anbau_id === offenesFeld) ?? null;
-  const gewaehltTunnel: ErdbeerenTunnel[] = gewaehlt
-    ? (tunnel[gewaehlt.anbau_id] ?? [])
-    : [];
+  const gewaehlteGruppen: Gruppe[] = gewaehlt ? gruppieren(abschnitte[gewaehlt.anbau_id] ?? []) : [];
 
-  const geplanteIds = new Set(uebersicht.map((u) => u.parzelle_id));
-  const nochNichtGeplant = parzellen.filter((p) => !geplanteIds.has(p.id));
+  const geplanteIds = new Set(uebersicht.map((u) => u.feld_id));
+  const nochNichtGeplant = felder.filter((f) => !geplanteIds.has(f.id));
 
-  const gesamtPflanzen = uebersicht.reduce(
-    (s, u) => s + (u.anzahl_pflanzen ?? 0),
-    0
-  );
-  const gesamtTunnel = uebersicht.reduce((s, u) => s + (u.anzahl_tunnel ?? 0), 0);
+  const gesamtPflanzen = uebersicht.reduce((s, u) => s + (u.anzahl_pflanzen ?? 0), 0);
+  const gesamtAbschnitte = uebersicht.reduce((s, u) => s + (u.anzahl_abschnitte ?? 0), 0);
 
   return (
     <div className="flex flex-col gap-4">
@@ -464,9 +442,6 @@ export default function AnbauErdbeerenPage() {
           <strong>Zwei Sorten in einem Tunnel:</strong> in der Spalte
           „Bepflanzung" auf „+ Sorte" klicken und die Reihenzahl angeben, die
           diese Sorte belegt – z.B. 4 und 4 bei einem Tunnel mit 8 Reihen.
-          Bleibt das Reihen-Feld leer, gilt die Sorte für alle Reihen; das ist
-          der Normalfall mit nur einer Sorte. Sind zusammen mehr Reihen
-          belegt, als der Tunnel hat, erscheint eine Warnung.
           <br />
           <strong>Reihenfolge:</strong> die Tunnel lassen sich per Ziehen
           (oder mit den Pfeilen ▲▼) umsortieren – so, wie sie auf dem Feld
@@ -494,13 +469,13 @@ export default function AnbauErdbeerenPage() {
             className="btn-secondary text-xs"
             onClick={vorjahrUebernehmen}
             disabled={laeuft}
-            title={`Felder, Tunnel und Maße aus ${jahr - 1} übernehmen - ersetzt das Copy/Paste zwischen den Excel-Blättern`}
+            title={`Felder, Tunnel und Maße aus ${jahr - 1} übernehmen`}
           >
             Aus {jahr - 1} übernehmen
           </button>
         )}
         <span className="text-neutral-500">
-          {uebersicht.length} Feld(er) · {formatZahlDE(gesamtTunnel)} Tunnel ·{" "}
+          {uebersicht.length} Feld(er) · {formatZahlDE(gesamtAbschnitte)} Tunnel ·{" "}
           {formatZahlDE(gesamtPflanzen)} Pflanzen
         </span>
       </div>
@@ -524,10 +499,10 @@ export default function AnbauErdbeerenPage() {
             <thead>
               <tr>
                 <th>Feld</th>
-                <th>ha</th>
                 <th>Tunnel</th>
                 <th title="Summe Länge × Reihen aller Bepflanzungen">lfm</th>
                 <th>Pflanzen</th>
+                <th title="Aus Reihen × Länge × Reihenabstand">Netto ha</th>
                 <th>Sorten</th>
                 <th>Erntefenster</th>
                 <th></th>
@@ -536,19 +511,14 @@ export default function AnbauErdbeerenPage() {
             <tbody>
               {uebersicht.map((u) => {
                 const offen = offenesFeld === u.anbau_id;
-                const gewaehltTunnel = tunnel[u.anbau_id] ?? [];
                 return (
                   <Fragment key={u.anbau_id}>
-                    <tr
-                      className={
-                        offen ? "bg-emerald-50 font-medium" : ""
-                      }
-                    >
-                      <td className="font-medium">{u.parzelle_name}</td>
-                      <td>{u.groesse_ha ?? "—"}</td>
-                      <td>{u.anzahl_tunnel}</td>
+                    <tr className={offen ? "bg-emerald-50 font-medium" : ""}>
+                      <td className="font-medium">{u.feld_bezeichnung}</td>
+                      <td>{u.anzahl_abschnitte}</td>
                       <td>{formatZahlDE(u.laufende_meter)}</td>
                       <td>{formatZahlDE(u.anzahl_pflanzen)}</td>
+                      <td>{formatZahlDE(u.netto_ha)}</td>
                       <td className="text-sm">{u.sorten ?? "—"}</td>
                       <td className="text-xs">
                         {u.erntefenster_von || u.erntefenster_bis
@@ -559,9 +529,7 @@ export default function AnbauErdbeerenPage() {
                         <button
                           type="button"
                           className="btn-secondary text-xs"
-                          onClick={() =>
-                            setOffenesFeld(offen ? null : u.anbau_id)
-                          }
+                          onClick={() => setOffenesFeld(offen ? null : u.anbau_id)}
                         >
                           {offen ? "Ausgewählt" : "Tunnel"}
                         </button>
@@ -575,15 +543,11 @@ export default function AnbauErdbeerenPage() {
         </div>
       )}
 
-      {/* Tunnel des gewählten Feldes - bewusst UNTER der Feldtabelle statt
-          als aufgeklappte Zeile mittendrin (Nutzer-Hinweis 2026-08-11: beim
-          Aufklappen ging die Übersicht verloren). So bleibt die Feldliste
-          immer vollständig sichtbar. */}
       {gewaehlt && (
         <div className="flex flex-col gap-4 rounded border border-emerald-300 bg-sand p-3">
           <div className="flex items-center justify-between">
             <h2 className="text-base font-semibold text-emerald-800">
-              Tunnel: {gewaehlt.parzelle_name}
+              Tunnel: {gewaehlt.feld_bezeichnung}
             </h2>
             <button
               type="button"
@@ -594,584 +558,439 @@ export default function AnbauErdbeerenPage() {
             </button>
           </div>
 
-          {/* Fehler auch hier zeigen, nicht nur ganz oben - beim Sortieren
-              und Bearbeiten schaut man in diesen Bereich und würde eine
-              Meldung am Seitenanfang schlicht nicht sehen (Nutzer-Meldung
-              2026-08-11: "es passiert einfach nichts"). */}
           {fehler && (
             <p className="rounded border border-beere-300 bg-beere-50 p-2 text-sm text-beere-700">
               {fehler}
             </p>
           )}
 
-              {canEdit && (
-                <div className="flex flex-col gap-3 rounded border border-linie bg-white p-3 text-xs">
-                  <div className="flex flex-wrap items-end gap-2">
-                    <span className="font-medium">
-                      Tunnel anlegen:
-                    </span>
-                    <label>
-                      von{" "}
-                      <input
-                        type="number"
-                        value={saVon}
-                        onChange={(e) => setSaVon(e.target.value)}
-                        className="w-16"
-                      />
-                    </label>
-                    <label>
-                      bis{" "}
-                      <input
-                        type="number"
-                        value={saBis}
-                        onChange={(e) => setSaBis(e.target.value)}
-                        className="w-16"
-                      />
-                    </label>
-                    <label>
-                      Länge m{" "}
-                      <input
-                        type="number"
-                        step="0.01"
-                        value={saLaenge}
-                        onChange={(e) =>
-                          setSaLaenge(e.target.value)
-                        }
-                        className="w-20"
-                      />
-                    </label>
-                    <label>
-                      Reihen{" "}
-                      <input
-                        type="number"
-                        value={saReihen}
-                        onChange={(e) =>
-                          setSaReihen(e.target.value)
-                        }
-                        className="w-16"
-                      />
-                    </label>
-                    <label
-                      title="Pflanzen je laufendem Meter - in der bisherigen Excel Spalte I (4,37 im Feld, 8 im Glashaus)"
-                    >
-                      Pfl./lfm{" "}
-                      <input
-                        type="number"
-                        step="0.01"
-                        value={saPflLfm}
-                        onChange={(e) =>
-                          setSaPflLfm(e.target.value)
-                        }
-                        className="w-20"
-                      />
-                    </label>
-                    <button
-                      type="button"
-                      className="btn text-xs"
-                      disabled={laeuft}
-                      onClick={() => sammelanlage(gewaehlt.anbau_id)}
-                    >
-                      Anlegen
-                    </button>
-                  </div>
+          {canEdit && (
+            <div className="flex flex-col gap-3 rounded border border-linie bg-white p-3 text-xs">
+              <div className="flex flex-wrap items-end gap-2">
+                <span className="font-medium">Tunnel anlegen:</span>
+                <label>
+                  von{" "}
+                  <input
+                    type="number"
+                    value={saVon}
+                    onChange={(e) => setSaVon(e.target.value)}
+                    className="w-16"
+                  />
+                </label>
+                <label>
+                  bis{" "}
+                  <input
+                    type="number"
+                    value={saBis}
+                    onChange={(e) => setSaBis(e.target.value)}
+                    className="w-16"
+                  />
+                </label>
+                <label>
+                  Länge m{" "}
+                  <input
+                    type="number"
+                    step="0.01"
+                    value={saLaenge}
+                    onChange={(e) => setSaLaenge(e.target.value)}
+                    className="w-20"
+                  />
+                </label>
+                <label>
+                  Reihen{" "}
+                  <input
+                    type="number"
+                    value={saReihen}
+                    onChange={(e) => setSaReihen(e.target.value)}
+                    className="w-16"
+                  />
+                </label>
+                <label title="Abstand zwischen den Reihen - treibt die Netto-Hektarfläche">
+                  Abstand m{" "}
+                  <input
+                    type="number"
+                    step="0.01"
+                    value={saAbstand}
+                    onChange={(e) => setSaAbstand(e.target.value)}
+                    className="w-20"
+                  />
+                </label>
+                <label title="Pflanzen je laufendem Meter - in der bisherigen Excel Spalte I (4,37 im Feld, 8 im Glashaus)">
+                  Pfl./lfm{" "}
+                  <input
+                    type="number"
+                    step="0.01"
+                    value={saPflLfm}
+                    onChange={(e) => setSaPflLfm(e.target.value)}
+                    className="w-20"
+                  />
+                </label>
+                <button
+                  type="button"
+                  className="btn text-xs"
+                  disabled={laeuft}
+                  onClick={() => sammelanlage(gewaehlt.anbau_id)}
+                >
+                  Anlegen
+                </button>
+              </div>
 
-                  <div className="flex flex-wrap items-end gap-2">
-                    <span className="font-medium">
-                      Sorte für Tunnel:
-                    </span>
-                    <label>
-                      von{" "}
-                      <input
-                        type="number"
-                        value={sbVon}
-                        onChange={(e) => setSbVon(e.target.value)}
-                        className="w-16"
-                      />
-                    </label>
-                    <label>
-                      bis{" "}
-                      <input
-                        type="number"
-                        value={sbBis}
-                        onChange={(e) => setSbBis(e.target.value)}
-                        className="w-16"
-                      />
-                    </label>
-                    <input
-                      placeholder="Sorte"
-                      value={sbSorte}
-                      onChange={(e) => setSbSorte(e.target.value)}
-                      className="w-32"
-                    />
-                    <label>
-                      Standjahr{" "}
-                      <input
-                        type="number"
-                        value={sbStandjahr}
-                        onChange={(e) =>
-                          setSbStandjahr(e.target.value)
-                        }
-                        className="w-16"
-                      />
-                    </label>
-                    <select
-                      value={sbPflanztyp}
-                      onChange={(e) =>
-                        setSbPflanztyp(
-                          e.target.value as Pflanztyp | ""
-                        )
-                      }
-                    >
-                      <option value="">Pflanztyp …</option>
-                      {PFLANZTYPEN.map((t) => (
-                        <option key={t} value={t}>
-                          {PFLANZTYP_LABELS[t]}
-                        </option>
-                      ))}
-                    </select>
-                    <button
-                      type="button"
-                      className="btn text-xs"
-                      disabled={laeuft}
-                      onClick={() => sorteFuerBereich(gewaehlt.anbau_id)}
-                    >
-                      Zuweisen
-                    </button>
-                  </div>
+              <div className="flex flex-wrap items-end gap-2">
+                <span className="font-medium">Sorte für Tunnel:</span>
+                <label>
+                  von{" "}
+                  <input
+                    type="number"
+                    value={sbVon}
+                    onChange={(e) => setSbVon(e.target.value)}
+                    className="w-16"
+                  />
+                </label>
+                <label>
+                  bis{" "}
+                  <input
+                    type="number"
+                    value={sbBis}
+                    onChange={(e) => setSbBis(e.target.value)}
+                    className="w-16"
+                  />
+                </label>
+                <input
+                  placeholder="Sorte"
+                  value={sbSorte}
+                  onChange={(e) => setSbSorte(e.target.value)}
+                  className="w-32"
+                />
+                <label>
+                  Standjahr{" "}
+                  <input
+                    type="number"
+                    value={sbStandjahr}
+                    onChange={(e) => setSbStandjahr(e.target.value)}
+                    className="w-16"
+                  />
+                </label>
+                <select
+                  value={sbPflanztyp}
+                  onChange={(e) => setSbPflanztyp(e.target.value as Pflanztyp | "")}
+                >
+                  <option value="">Pflanztyp …</option>
+                  {PFLANZTYPEN.map((t) => (
+                    <option key={t} value={t}>
+                      {PFLANZTYP_LABELS[t]}
+                    </option>
+                  ))}
+                </select>
+                <button
+                  type="button"
+                  className="btn text-xs"
+                  disabled={laeuft}
+                  onClick={() => sorteFuerBereich(gewaehlt.anbau_id)}
+                >
+                  Zuweisen
+                </button>
+              </div>
 
-                  <div className="flex flex-wrap items-end gap-2">
-                    <span
-                      className="font-medium"
-                      title="Tunnel auf ein anderes Feld umziehen - z.B. in Vorbereitung auf die Cotura"
-                    >
-                      Tunnel verschieben:
-                    </span>
-                    <label>
-                      von{" "}
-                      <input
-                        type="number"
-                        value={verschiebeVon}
-                        onChange={(e) =>
-                          setVerschiebeVon(e.target.value)
-                        }
-                        className="w-16"
-                      />
-                    </label>
-                    <label>
-                      bis{" "}
-                      <input
-                        type="number"
-                        value={verschiebeBis}
-                        onChange={(e) =>
-                          setVerschiebeBis(e.target.value)
-                        }
-                        className="w-16"
-                      />
-                    </label>
-                    <select
-                      value={verschiebeZiel}
-                      onChange={(e) =>
-                        setVerschiebeZiel(e.target.value)
-                      }
-                    >
-                      <option value="">Zielfeld …</option>
-                      {uebersicht
-                        .filter((z) => z.anbau_id !== gewaehlt.anbau_id)
-                        .map((z) => (
-                          <option
-                            key={z.anbau_id}
-                            value={z.anbau_id}
-                          >
-                            {z.parzelle_name}
-                          </option>
-                        ))}
-                    </select>
-                    <button
-                      type="button"
-                      className="btn-secondary text-xs"
-                      disabled={laeuft}
-                      onClick={() =>
-                        tunnelVerschieben(gewaehlt.anbau_id)
-                      }
-                    >
-                      Verschieben
-                    </button>
-                  </div>
-                </div>
-              )}
+              <div className="flex flex-wrap items-end gap-2">
+                <span
+                  className="font-medium"
+                  title="Tunnel auf ein anderes Feld umziehen - z.B. in Vorbereitung auf die Cotura"
+                >
+                  Tunnel verschieben:
+                </span>
+                <label>
+                  von{" "}
+                  <input
+                    type="number"
+                    value={verschiebeVon}
+                    onChange={(e) => setVerschiebeVon(e.target.value)}
+                    className="w-16"
+                  />
+                </label>
+                <label>
+                  bis{" "}
+                  <input
+                    type="number"
+                    value={verschiebeBis}
+                    onChange={(e) => setVerschiebeBis(e.target.value)}
+                    className="w-16"
+                  />
+                </label>
+                <select value={verschiebeZiel} onChange={(e) => setVerschiebeZiel(e.target.value)}>
+                  <option value="">Zielfeld …</option>
+                  {uebersicht
+                    .filter((z) => z.anbau_id !== gewaehlt.anbau_id)
+                    .map((z) => (
+                      <option key={z.anbau_id} value={z.anbau_id}>
+                        {z.feld_bezeichnung}
+                      </option>
+                    ))}
+                </select>
+                <button
+                  type="button"
+                  className="btn-secondary text-xs"
+                  disabled={laeuft}
+                  onClick={() => tunnelVerschieben(gewaehlt.anbau_id)}
+                >
+                  Verschieben
+                </button>
+              </div>
+            </div>
+          )}
 
-              {gewaehltTunnel.length === 0 ? (
-                <p className="text-sm text-neutral-500">
-                  Noch keine Tunnel angelegt.
-                </p>
-              ) : (
-                <table>
-                  <thead>
-                    <tr>
+          {gewaehlteGruppen.length === 0 ? (
+            <p className="text-sm text-neutral-500">Noch keine Tunnel angelegt.</p>
+          ) : (
+            <table>
+              <thead>
+                <tr>
+                  {canEdit && (
+                    <th title="Zeile anfassen und ziehen, oder Pfeile benutzen - die Reihenfolge bildet die Anordnung auf dem Feld ab">
+                      ↕
+                    </th>
+                  )}
+                  <th>Tunnel</th>
+                  <th>Länge m</th>
+                  <th title="Abstand zwischen den Reihen">Abstand m</th>
+                  <th title="Pflanzen je laufendem Meter">Pfl./lfm</th>
+                  <th title="Rollennummer der Folie">Cotura</th>
+                  <th>Bepflanzung</th>
+                  <th>Pflanzen</th>
+                  {canEdit && <th></th>}
+                </tr>
+              </thead>
+              <tbody>
+                {gewaehlteGruppen.map((gruppe, index) => {
+                  const vorlage = gruppe.rows[0];
+                  const summeReihen = gruppe.rows.reduce((s, r) => s + (r.reihen_anzahl ?? 0), 0);
+                  return (
+                    <tr
+                      key={gruppe.bezeichnung}
+                      draggable={canEdit}
+                      onDragStart={(e) => {
+                        setZiehtIndex(index);
+                        e.dataTransfer.effectAllowed = "move";
+                        e.dataTransfer.setData("text/plain", gruppe.bezeichnung);
+                      }}
+                      onDragEnd={() => setZiehtIndex(null)}
+                      onDragOver={(e) => {
+                        e.preventDefault();
+                        e.dataTransfer.dropEffect = "move";
+                      }}
+                      onDrop={() => {
+                        if (ziehtIndex === null || ziehtIndex === index) return;
+                        reihenfolgeSpeichern(
+                          gewaehlt.anbau_id,
+                          verschiebeInListe(gewaehlteGruppen, ziehtIndex, index)
+                        );
+                        setZiehtIndex(null);
+                      }}
+                      className={ziehtIndex === index ? "opacity-40" : undefined}
+                    >
                       {canEdit && (
-                        <th title="Zeile anfassen und ziehen, oder Pfeile benutzen - die Reihenfolge bildet die Anordnung auf dem Feld ab">
-                          ↕
-                        </th>
+                        <td className="whitespace-nowrap">
+                          <span className="cursor-grab text-neutral-400" title="Zum Umsortieren ziehen">
+                            ⠿
+                          </span>
+                          <button
+                            type="button"
+                            className="px-1 text-neutral-500 hover:text-emerald-700 disabled:opacity-30"
+                            disabled={index === 0}
+                            title="Nach oben"
+                            onClick={() => gruppeVerschiebenUm(gewaehlt.anbau_id, gewaehlteGruppen, index, -1)}
+                          >
+                            ▲
+                          </button>
+                          <button
+                            type="button"
+                            className="px-1 text-neutral-500 hover:text-emerald-700 disabled:opacity-30"
+                            disabled={index === gewaehlteGruppen.length - 1}
+                            title="Nach unten"
+                            onClick={() => gruppeVerschiebenUm(gewaehlt.anbau_id, gewaehlteGruppen, index, 1)}
+                          >
+                            ▼
+                          </button>
+                        </td>
                       )}
-                      <th>Tunnel</th>
-                      <th>Länge m</th>
-                      <th>Reihen</th>
-                      <th title="Pflanzen je laufendem Meter">
-                        Pfl./lfm
-                      </th>
-                      <th title="Rollennummer der Folie">
-                        Cotura
-                      </th>
-                      <th>Bepflanzung</th>
-                      <th>Pflanzen</th>
-                      {canEdit && <th></th>}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {gewaehltTunnel.map((t, index) => {
-                      const bList = bepflanzung[t.id] ?? [];
-                      return (
-                        <tr
-                          key={t.id}
-                          draggable={canEdit}
-                          onDragStart={(e) => {
-                            setZiehtIndex(index);
-                            // Ohne gesetzte Daten startet Firefox den
-                            // Ziehvorgang gar nicht erst.
-                            e.dataTransfer.effectAllowed = "move";
-                            e.dataTransfer.setData("text/plain", String(t.id));
-                          }}
-                          onDragEnd={() => setZiehtIndex(null)}
-                          // Ohne preventDefault lehnt der Browser das
-                          // Fallenlassen ab.
-                          onDragOver={(e) => {
-                            e.preventDefault();
-                            e.dataTransfer.dropEffect = "move";
-                          }}
-                          onDrop={() => {
-                            if (ziehtIndex === null || ziehtIndex === index) {
-                              return;
-                            }
-                            reihenfolgeSpeichern(
-                              verschiebeInListe(
-                                gewaehltTunnel,
-                                ziehtIndex,
-                                index
-                              )
-                            );
-                            setZiehtIndex(null);
-                          }}
-                          className={
-                            ziehtIndex === index ? "opacity-40" : undefined
-                          }
-                        >
-                          {canEdit && (
-                            <td className="whitespace-nowrap">
-                              <span
-                                className="cursor-grab text-neutral-400"
-                                title="Zum Umsortieren ziehen"
-                              >
-                                ⠿
+                      <td className="font-medium">{gruppe.bezeichnung}</td>
+                      <td>
+                        <input
+                          type="number"
+                          step="0.01"
+                          defaultValue={vorlage.reihenlaenge_m ?? ""}
+                          disabled={!canEdit}
+                          className="w-20"
+                          onBlur={(e) => gruppeAendern(gruppe, "reihenlaenge_m", e.target.value)}
+                        />
+                      </td>
+                      <td>
+                        <input
+                          type="number"
+                          step="0.01"
+                          defaultValue={vorlage.reihenabstand_m ?? ""}
+                          disabled={!canEdit}
+                          className="w-20"
+                          onBlur={(e) => gruppeAendern(gruppe, "reihenabstand_m", e.target.value)}
+                        />
+                      </td>
+                      <td>
+                        <input
+                          type="number"
+                          step="0.01"
+                          defaultValue={vorlage.pflanzen_pro_lfm ?? ""}
+                          disabled={!canEdit}
+                          className="w-20"
+                          onBlur={(e) => gruppeAendern(gruppe, "pflanzen_pro_lfm", e.target.value)}
+                        />
+                      </td>
+                      <td>
+                        <input
+                          defaultValue={vorlage.cotura_nr ?? ""}
+                          disabled={!canEdit}
+                          className="w-20"
+                          onBlur={(e) => gruppeAendern(gruppe, "cotura_nr", e.target.value)}
+                        />
+                      </td>
+                      <td className="text-xs">
+                        <div className="flex flex-col gap-1">
+                          {gruppe.rows.map((r) => (
+                            <div key={r.id} className="flex flex-wrap items-center gap-1">
+                              <input
+                                defaultValue={r.sorte ?? ""}
+                                placeholder="Sorte"
+                                disabled={!canEdit}
+                                className="w-28"
+                                onBlur={(e) => zeileAendern(r.id, "sorte", e.target.value)}
+                              />
+                              <input
+                                type="number"
+                                defaultValue={r.reihen_anzahl ?? ""}
+                                disabled={!canEdit}
+                                className="w-14"
+                                placeholder="Reihen"
+                                title="Wie viele Reihen diese Sorte belegt"
+                                onBlur={(e) => zeileAendern(r.id, "reihen_anzahl", e.target.value)}
+                              />
+                              <span className="text-neutral-500">
+                                R.
+                                {r.standjahr && ` · ${r.standjahr}. Stj.`}
+                                {r.pflanztyp && ` · ${PFLANZTYP_LABELS[r.pflanztyp]}`}
                               </span>
-                              <button
-                                type="button"
-                                className="px-1 text-neutral-500 hover:text-emerald-700 disabled:opacity-30"
-                                disabled={index === 0}
-                                title="Nach oben"
-                                onClick={() =>
-                                  tunnelVerschiebenUm(
-                                    gewaehlt.anbau_id,
-                                    index,
-                                    -1
-                                  )
-                                }
-                              >
-                                ▲
-                              </button>
-                              <button
-                                type="button"
-                                className="px-1 text-neutral-500 hover:text-emerald-700 disabled:opacity-30"
-                                disabled={index === gewaehltTunnel.length - 1}
-                                title="Nach unten"
-                                onClick={() =>
-                                  tunnelVerschiebenUm(
-                                    gewaehlt.anbau_id,
-                                    index,
-                                    1
-                                  )
-                                }
-                              >
-                                ▼
-                              </button>
-                            </td>
-                          )}
-                          <td className="font-medium">
-                            {t.nummer}
-                          </td>
-                          <td>
-                            <input
-                              type="number"
-                              step="0.01"
-                              defaultValue={t.laenge_m ?? ""}
-                              disabled={!canEdit}
-                              className="w-20"
-                              onBlur={(e) =>
-                                tunnelAendern(
-                                  t.id,
-                                  "laenge_m",
-                                  e.target.value
-                                )
-                              }
-                            />
-                          </td>
-                          <td>
-                            <input
-                              type="number"
-                              defaultValue={t.reihen_anzahl ?? ""}
-                              disabled={!canEdit}
-                              className="w-16"
-                              onBlur={(e) =>
-                                tunnelAendern(
-                                  t.id,
-                                  "reihen_anzahl",
-                                  e.target.value
-                                )
-                              }
-                            />
-                          </td>
-                          <td>
-                            <input
-                              type="number"
-                              step="0.01"
-                              defaultValue={
-                                t.pflanzen_pro_lfm ?? ""
-                              }
-                              disabled={!canEdit}
-                              className="w-20"
-                              onBlur={(e) =>
-                                tunnelAendern(
-                                  t.id,
-                                  "pflanzen_pro_lfm",
-                                  e.target.value
-                                )
-                              }
-                            />
-                          </td>
-                          <td>
-                            <input
-                              defaultValue={t.cotura_nr ?? ""}
-                              disabled={!canEdit}
-                              className="w-20"
-                              onBlur={(e) =>
-                                tunnelAendern(
-                                  t.id,
-                                  "cotura_nr",
-                                  e.target.value
-                                )
-                              }
-                            />
-                          </td>
-                          <td className="text-xs">
-                            <div className="flex flex-col gap-1">
-                              {bList.map((b) => (
-                                <div
-                                  key={b.id}
-                                  className="flex flex-wrap items-center gap-1"
+                              {canEdit && (
+                                <button
+                                  type="button"
+                                  className="text-neutral-400 hover:text-beere-600"
+                                  title="Entfernen"
+                                  onClick={() => zeileLoeschen(r.id)}
                                 >
-                                  <input
-                                    defaultValue={b.sorte}
-                                    disabled={!canEdit}
-                                    className="w-28"
-                                    onBlur={(e) =>
-                                      bepflanzungAendern(
-                                        b.id,
-                                        "sorte",
-                                        e.target.value
-                                      )
-                                    }
-                                  />
-                                  <input
-                                    type="number"
-                                    defaultValue={
-                                      b.reihen_anzahl ?? ""
-                                    }
-                                    disabled={!canEdit}
-                                    className="w-14"
-                                    placeholder="alle"
-                                    title="Wie viele Reihen des Tunnels diese Sorte belegt. Leer = alle Reihen."
-                                    onBlur={(e) =>
-                                      bepflanzungAendern(
-                                        b.id,
-                                        "reihen_anzahl",
-                                        e.target.value
-                                      )
-                                    }
-                                  />
-                                  <span className="text-neutral-500">
-                                    R.
-                                    {b.standjahr &&
-                                      ` · ${b.standjahr}. Stj.`}
-                                    {b.pflanztyp &&
-                                      ` · ${PFLANZTYP_LABELS[b.pflanztyp]}`}
-                                  </span>
-                                  {canEdit && (
-                                    <button
-                                      type="button"
-                                      className="text-neutral-400 hover:text-beere-600"
-                                      title="Entfernen"
-                                      onClick={() =>
-                                        bepflanzungLoeschen(b.id)
-                                      }
-                                    >
-                                      ✕
-                                    </button>
-                                  )}
-                                </div>
-                              ))}
-
-                              {/* Reihen-Kontrolle: zwei Sorten
-                                  dürfen zusammen nicht mehr
-                                  Reihen belegen als der Tunnel
-                                  hat - sonst wäre die
-                                  Pflanzenzahl zu hoch. */}
-                              {t.reihen_anzahl != null &&
-                                belegteReihen(t) >
-                                  t.reihen_anzahl && (
-                                  <span className="font-medium text-beere-600">
-                                    ⚠ {belegteReihen(t)} von{" "}
-                                    {t.reihen_anzahl} Reihen
-                                    belegt
-                                  </span>
-                                )}
-
-                              {canEdit &&
-                                (sortenFormularTunnel === t.id ? (
-                                  <div className="flex flex-wrap items-center gap-1 rounded border border-emerald-300 bg-emerald-50 p-1">
-                                    <input
-                                      placeholder="Sorte"
-                                      value={nsSorte}
-                                      onChange={(e) =>
-                                        setNsSorte(e.target.value)
-                                      }
-                                      className="w-28"
-                                      autoFocus
-                                    />
-                                    <input
-                                      type="number"
-                                      placeholder="Reihen"
-                                      value={nsReihen}
-                                      onChange={(e) =>
-                                        setNsReihen(
-                                          e.target.value
-                                        )
-                                      }
-                                      className="w-16"
-                                      title="Wie viele Reihen diese Sorte belegt - vorgeschlagen sind die noch freien"
-                                    />
-                                    <input
-                                      type="number"
-                                      placeholder="Stj."
-                                      value={nsStandjahr}
-                                      onChange={(e) =>
-                                        setNsStandjahr(
-                                          e.target.value
-                                        )
-                                      }
-                                      className="w-14"
-                                    />
-                                    <select
-                                      value={nsPflanztyp}
-                                      onChange={(e) =>
-                                        setNsPflanztyp(
-                                          e.target
-                                            .value as Pflanztyp | ""
-                                        )
-                                      }
-                                    >
-                                      <option value="">
-                                        Typ …
-                                      </option>
-                                      {PFLANZTYPEN.map((pt) => (
-                                        <option
-                                          key={pt}
-                                          value={pt}
-                                        >
-                                          {PFLANZTYP_LABELS[pt]}
-                                        </option>
-                                      ))}
-                                    </select>
-                                    <input
-                                      type="date"
-                                      value={nsPflanzdatum}
-                                      onChange={(e) =>
-                                        setNsPflanzdatum(
-                                          e.target.value
-                                        )
-                                      }
-                                      title="Pflanzdatum"
-                                    />
-                                    <button
-                                      type="button"
-                                      className="btn text-xs"
-                                      disabled={laeuft}
-                                      onClick={() =>
-                                        bepflanzungAnlegen(t)
-                                      }
-                                    >
-                                      Speichern
-                                    </button>
-                                    <button
-                                      type="button"
-                                      className="btn-secondary text-xs"
-                                      onClick={() =>
-                                        setSortenFormularTunnel(
-                                          null
-                                        )
-                                      }
-                                    >
-                                      Abbrechen
-                                    </button>
-                                  </div>
-                                ) : (
-                                  <button
-                                    type="button"
-                                    className="self-start text-emerald-700 underline"
-                                    onClick={() =>
-                                      sortenFormularOeffnen(t)
-                                    }
-                                  >
-                                    + Sorte
-                                  </button>
-                                ))}
+                                  ✕
+                                </button>
+                              )}
                             </div>
-                          </td>
-                          <td>
-                            {formatZahlDE(
-                              bList.reduce(
-                                (s, b) => s + b.anzahl_pflanzen,
-                                0
-                              )
-                            )}
-                          </td>
-                          {canEdit && (
-                            <td>
+                          ))}
+
+                          {gruppe.rows.length > 1 && (
+                            <span className="text-neutral-400">ΣReihen: {summeReihen}</span>
+                          )}
+
+                          {canEdit &&
+                            (sortenFormularGruppe === gruppe.bezeichnung ? (
+                              <div className="flex flex-wrap items-center gap-1 rounded border border-emerald-300 bg-emerald-50 p-1">
+                                <input
+                                  placeholder="Sorte"
+                                  value={nsSorte}
+                                  onChange={(e) => setNsSorte(e.target.value)}
+                                  className="w-28"
+                                  autoFocus
+                                />
+                                <input
+                                  type="number"
+                                  placeholder="Reihen"
+                                  value={nsReihen}
+                                  onChange={(e) => setNsReihen(e.target.value)}
+                                  className="w-16"
+                                  title="Wie viele Reihen diese Sorte belegt"
+                                />
+                                <input
+                                  type="number"
+                                  placeholder="Stj."
+                                  value={nsStandjahr}
+                                  onChange={(e) => setNsStandjahr(e.target.value)}
+                                  className="w-14"
+                                />
+                                <select
+                                  value={nsPflanztyp}
+                                  onChange={(e) => setNsPflanztyp(e.target.value as Pflanztyp | "")}
+                                >
+                                  <option value="">Typ …</option>
+                                  {PFLANZTYPEN.map((pt) => (
+                                    <option key={pt} value={pt}>
+                                      {PFLANZTYP_LABELS[pt]}
+                                    </option>
+                                  ))}
+                                </select>
+                                <input
+                                  type="date"
+                                  value={nsPflanzdatum}
+                                  onChange={(e) => setNsPflanzdatum(e.target.value)}
+                                  title="Pflanzdatum"
+                                />
+                                <button
+                                  type="button"
+                                  className="btn text-xs"
+                                  disabled={laeuft}
+                                  onClick={() => sorteHinzufuegen(gewaehlt.anbau_id, gruppe)}
+                                >
+                                  Speichern
+                                </button>
+                                <button
+                                  type="button"
+                                  className="btn-secondary text-xs"
+                                  onClick={() => setSortenFormularGruppe(null)}
+                                >
+                                  Abbrechen
+                                </button>
+                              </div>
+                            ) : (
                               <button
                                 type="button"
-                                className="btn-danger text-xs"
-                                onClick={() =>
-                                  tunnelLoeschen(t.id)
-                                }
+                                className="self-start text-emerald-700 underline"
+                                onClick={() => sortenFormularOeffnen(gruppe)}
                               >
-                                Löschen
+                                + Sorte
                               </button>
-                            </td>
-                          )}
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              )}
+                            ))}
+                        </div>
+                      </td>
+                      <td>
+                        {formatZahlDE(
+                          gruppe.rows.reduce(
+                            (s, r) =>
+                              s +
+                              Math.round(
+                                (r.reihenlaenge_m ?? 0) * (r.reihen_anzahl ?? 0) * (r.pflanzen_pro_lfm ?? 0)
+                              ),
+                            0
+                          )
+                        )}
+                      </td>
+                      {canEdit && (
+                        <td>
+                          <button
+                            type="button"
+                            className="btn-danger text-xs"
+                            onClick={() => tunnelLoeschen(gruppe)}
+                          >
+                            Löschen
+                          </button>
+                        </td>
+                      )}
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          )}
         </div>
       )}
 
@@ -1181,15 +1000,15 @@ export default function AnbauErdbeerenPage() {
             Feld für {jahr} hinzufügen
           </h2>
           <div className="flex flex-wrap gap-2">
-            {nochNichtGeplant.map((p) => (
+            {nochNichtGeplant.map((f) => (
               <button
-                key={p.id}
+                key={f.id}
                 type="button"
                 className="btn-secondary text-xs"
                 disabled={laeuft}
-                onClick={() => anbauAnlegen(p.id)}
+                onClick={() => anbauAnlegen(f.id)}
               >
-                + {p.name}
+                + {f.bezeichnung}
               </button>
             ))}
           </div>

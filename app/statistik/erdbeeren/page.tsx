@@ -30,8 +30,8 @@ import ErntewirtschaftTabs from "@/components/ErntewirtschaftTabs";
 import { formatDatumDE, formatMenge } from "@/lib/format";
 import type {
   ErdbeerenGruppenkostenTag,
-  ErdbeerenParzelle,
   ErdbeerenStatistikTag,
+  Feld,
 } from "@/lib/types";
 
 const CURRENT_YEAR = new Date().getFullYear();
@@ -52,7 +52,7 @@ interface ParzellenSumme {
 
 export default function StatistikErdbeerenPage() {
   const [jahr, setJahr] = useState(CURRENT_YEAR);
-  const [parzellen, setParzellen] = useState<ErdbeerenParzelle[]>([]);
+  const [felder, setFelder] = useState<Feld[]>([]);
   const [parzelleFilter, setParzelleFilter] = useState<number | "">("");
   const [zeilen, setZeilen] = useState<ErdbeerenStatistikTag[]>([]);
   const [gruppenZeilen, setGruppenZeilen] = useState<ErdbeerenGruppenkostenTag[]>([]);
@@ -61,8 +61,12 @@ export default function StatistikErdbeerenPage() {
   async function load() {
     setLoading(true);
     const supabase = getSupabaseClient();
-    const [{ data: p }, { data }, { data: gz }] = await Promise.all([
-      supabase.from("erdbeeren_parzellen").select("*").order("name"),
+    const [{ data: f }, { data }, { data: gz }] = await Promise.all([
+      supabase
+        .from("feld")
+        .select("*")
+        .eq("kultur", "erdbeeren")
+        .order("bezeichnung"),
       supabase
         .from("erdbeeren_statistik_tag")
         .select("*")
@@ -76,7 +80,7 @@ export default function StatistikErdbeerenPage() {
         .lte("datum", `${jahr}-12-31`)
         .order("datum", { ascending: false }),
     ]);
-    setParzellen((p as ErdbeerenParzelle[]) ?? []);
+    setFelder((f as Feld[]) ?? []);
     setZeilen((data as ErdbeerenStatistikTag[]) ?? []);
     setGruppenZeilen((gz as ErdbeerenGruppenkostenTag[]) ?? []);
     setLoading(false);
@@ -183,7 +187,7 @@ export default function StatistikErdbeerenPage() {
           />
         </label>
         <label className="text-sm">
-          Parzelle{" "}
+          Feld{" "}
           <select
             value={parzelleFilter}
             onChange={(e) =>
@@ -191,9 +195,9 @@ export default function StatistikErdbeerenPage() {
             }
           >
             <option value="">Alle</option>
-            {parzellen.map((p) => (
-              <option key={p.id} value={p.id}>
-                {p.name}
+            {felder.map((f) => (
+              <option key={f.id} value={f.id}>
+                {f.bezeichnung}
               </option>
             ))}
           </select>
@@ -206,7 +210,7 @@ export default function StatistikErdbeerenPage() {
         <>
           <div>
             <h2 className="mb-2 text-base font-semibold text-emerald-800">
-              Saison-Summe je Parzelle {jahr}
+              Saison-Summe je Feld {jahr}
             </h2>
             {parzellenSummen.length === 0 ? (
               <p className="text-neutral-500">Keine Einträge für {jahr}.</p>
@@ -215,7 +219,7 @@ export default function StatistikErdbeerenPage() {
                 <table>
                   <thead>
                     <tr>
-                      <th>Parzelle</th>
+                      <th>Feld</th>
                       <th>Summe Steigen</th>
                       <th>Ertrag kg</th>
                       <th>Summe Sut</th>
@@ -252,7 +256,7 @@ export default function StatistikErdbeerenPage() {
                   <thead>
                     <tr>
                       <th>Datum</th>
-                      <th>Parzelle</th>
+                      <th>Feld</th>
                       <th>Summe Steigen</th>
                       <th>Summe Sut</th>
                       <th>Summe Stunden</th>

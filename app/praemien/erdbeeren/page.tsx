@@ -2,14 +2,18 @@
 
 // Prämien Erdbeeren (Nutzer-Vorgabe 2026-08-09) - gleiches Grundmuster wie
 // Zuckermais (Strichliste je Mitarbeiter/Tag: Steigen, Stunden), aber mit
-// einem wichtigen Unterschied: es wird auf mehreren Parzellen gleichzeitig
+// einem wichtigen Unterschied: es wird auf mehreren Feldern gleichzeitig
 // gepflückt, mit sehr unterschiedlichen Gegebenheiten (Sorte, Alter,
 // Boden) - Norm (Steigen/Std.) und Bonus (€/Steige über Norm) sind daher
-// JE PARZELLE UND TAG eigenständig einstellbar, nicht global. Zusätzlich
+// JE FELD UND TAG eigenständig einstellbar, nicht global. Zusätzlich
 // wird "Sut" (Abfall/nicht vermarktungsfähige Ware) erfasst - zählt nicht
 // zur Prämie, dient nur der Ertrags-/Kostenstatistik. Die Saison-Summe
 // fließt automatisch (live) in die Lohnübersicht/Auszahlung ein, wie bei
 // Zuckermais.
+//
+// Seit Migration 2026-10-19 auf dem generischen Feld-Schema (vorher
+// erdbeeren_parzellen) - die Sätze/Rohdaten-Tabellen selbst bleiben
+// Erdbeeren-spezifisch, nur ihre Fremdschlüssel-Spalte heißt jetzt feld_id.
 
 import PageHeader from "@/components/PageHeader";
 import { Award } from "lucide-react";
@@ -21,9 +25,9 @@ import { formatDatumDE, formatMenge } from "@/lib/format";
 import type {
   Arbeitsgruppe,
   Employee,
-  ErdbeerenParzelle,
   ErdbeerenParzellenSatz,
   ErdbeerenRohdatenEintrag,
+  Feld,
 } from "@/lib/types";
 
 function heuteIso() {
@@ -50,8 +54,8 @@ export default function PraemienErdbeerenPage() {
   const isAdmin = profile?.role === "admin";
 
   const [datum, setDatum] = useState(heuteIso());
-  const [parzellen, setParzellen] = useState<ErdbeerenParzelle[]>([]);
-  const [parzelleId, setParzelleId] = useState<number | null>(null);
+  const [felder, setFelder] = useState<Feld[]>([]);
+  const [feldId, setFeldId] = useState<number | null>(null);
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [gruppen, setGruppen] = useState<Arbeitsgruppe[]>([]);
   const [gruppeFilter, setGruppeFilter] = useState("");
@@ -69,39 +73,38 @@ export default function PraemienErdbeerenPage() {
   const [fehler, setFehler] = useState<string | null>(null);
   const [druckModus, setDruckModus] = useState(false);
 
-  // Die Felder selbst werden seit 2026-08-11 unter "Anbau → Felder"
-  // gepflegt, nicht mehr hier (Nutzer-Vorgabe: in Prämien gehören nur die
-  // Sätze hin, weil die Anbauplanung woanders stattfindet). Hier werden
-  // sie nur noch zur Auswahl geladen.
+  // Die Felder selbst werden unter "Anbau → Felder" gepflegt, nicht mehr
+  // hier. Hier werden sie nur noch zur Auswahl geladen (nur Erdbeeren-Felder).
 
-  // Neuen Satz für die aktuell gewählte Parzelle anlegen (nur admin)
+  // Neuen Satz für das aktuell gewählte Feld anlegen (nur admin)
   const [neuGueltigAb, setNeuGueltigAb] = useState(heuteIso());
   const [neuNorm, setNeuNorm] = useState("");
   const [neuBonus, setNeuBonus] = useState("");
   const [satzSpeichern, setSatzSpeichern] = useState(false);
   const [satzFehler, setSatzFehler] = useState<string | null>(null);
 
-  async function ladeParzellen() {
+  async function ladeFelder() {
     const supabase = getSupabaseClient();
     const { data } = await supabase
-      .from("erdbeeren_parzellen")
+      .from("feld")
       .select("*")
       .eq("aktiv", true)
-      .order("name");
-    const liste = (data as ErdbeerenParzelle[]) ?? [];
-    setParzellen(liste);
-    if (parzelleId === null && liste.length > 0) {
-      setParzelleId(liste[0].id);
+      .eq("kultur", "erdbeeren")
+      .order("bezeichnung");
+    const liste = (data as Feld[]) ?? [];
+    setFelder(liste);
+    if (feldId === null && liste.length > 0) {
+      setFeldId(liste[0].id);
     }
   }
 
   useEffect(() => {
-    ladeParzellen();
+    ladeFelder();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   async function load() {
-    if (parzelleId === null) {
+    if (feldId === null) {
       setLoading(false);
       return;
     }
@@ -127,11 +130,11 @@ export default function PraemienErdbeerenPage() {
           .from("erdbeeren_rohdaten")
           .select("*")
           .eq("datum", datum)
-          .eq("parzelle_id", parzelleId),
+          .eq("feld_id", feldId),
         supabase
           .from("erdbeeren_parzellen_saetze")
           .select("*")
-          .eq("parzelle_id", parzelleId)
+          .eq("feld_id", feldId)
           .lte("gueltig_ab", datum)
           .order("gueltig_ab", { ascending: false })
           .limit(1)
@@ -149,12 +152,12 @@ export default function PraemienErdbeerenPage() {
   }
 
   async function ladeSaetze() {
-    if (parzelleId === null) return;
+    if (feldId === null) return;
     const supabase = getSupabaseClient();
     const { data } = await supabase
       .from("erdbeeren_parzellen_saetze")
       .select("*")
-      .eq("parzelle_id", parzelleId)
+      .eq("feld_id", feldId)
       .order("gueltig_ab", { ascending: false });
     setAlleSaetze((data as ErdbeerenParzellenSatz[]) ?? []);
   }
@@ -163,12 +166,12 @@ export default function PraemienErdbeerenPage() {
     load();
     setEntwurf({});
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [datum, parzelleId]);
+  }, [datum, feldId]);
 
   useEffect(() => {
     ladeSaetze();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [parzelleId]);
+  }, [feldId]);
 
   function werteFuer(empId: string): Entwurf {
     if (entwurf[empId]) return entwurf[empId];
@@ -187,9 +190,9 @@ export default function PraemienErdbeerenPage() {
     }));
   }
 
-  // Live-Vorschau der Prämie mit dem für "datum"+"parzelleId" aktuell
-  // gültigen Satz - exakt dieselbe Formel wie die Sicht
-  // erdbeeren_praemie_tag. "Sut" zählt bewusst nicht zur Prämie.
+  // Live-Vorschau der Prämie mit dem für "datum"+"feldId" aktuell gültigen
+  // Satz - exakt dieselbe Formel wie die Sicht erdbeeren_praemie_tag. "Sut"
+  // zählt bewusst nicht zur Prämie.
   function praemieVorschau(werte: Entwurf): number | null {
     if (!aktuellerSatz) return null;
     const steigen = Number(werte.steigen) || 0;
@@ -202,18 +205,18 @@ export default function PraemienErdbeerenPage() {
   // angefassten, siehe entwurf) in einem einzigen Upsert. Zeilen, die auf
   // 0/0/0 zurückgesetzt wurden, werden - falls vorher schon ein Eintrag
   // bestand - stattdessen GELÖSCHT statt stillschweigend übersprungen
-  // (Nutzer-Vorgabe 2026-08-09: versehentlich am falschen Tag/an der
-  // falschen Parzelle eingetragene Werte müssen wieder rauszubekommen
-  // sein). Unberührte Zeilen ohne vorherigen Eintrag bleiben unangetastet.
+  // (Nutzer-Vorgabe 2026-08-09: versehentlich am falschen Tag/am falschen
+  // Feld eingetragene Werte müssen wieder rauszubekommen sein). Unberührte
+  // Zeilen ohne vorherigen Eintrag bleiben unangetastet.
   async function alleSpeichern() {
-    if (parzelleId === null) return;
+    if (feldId === null) return;
     setSpeichernAlle(true);
     setFehler(null);
     const supabase = getSupabaseClient();
 
     const zuSpeichern: {
       employee_id: string;
-      parzelle_id: number;
+      feld_id: number;
       datum: string;
       steigen: number;
       stunden: number;
@@ -234,7 +237,7 @@ export default function PraemienErdbeerenPage() {
       }
       zuSpeichern.push({
         employee_id: emp.id,
-        parzelle_id: parzelleId,
+        feld_id: feldId,
         datum,
         steigen,
         stunden,
@@ -262,7 +265,7 @@ export default function PraemienErdbeerenPage() {
     if (zuSpeichern.length > 0) {
       const { error } = await supabase
         .from("erdbeeren_rohdaten")
-        .upsert(zuSpeichern, { onConflict: "employee_id,parzelle_id,datum" });
+        .upsert(zuSpeichern, { onConflict: "employee_id,feld_id,datum" });
       if (error) {
         setSpeichernAlle(false);
         setFehler(error.message);
@@ -342,7 +345,7 @@ export default function PraemienErdbeerenPage() {
 
   function einzelStornieren(e: ErdbeerenRohdatenEintrag, name: string) {
     const grund = stornoGrundAbfragen(
-      `Erdbeer-Prämie von ${name} (${aktuelleParzelle?.name ?? "Parzelle"}, ` +
+      `Erdbeer-Prämie von ${name} (${aktuellesFeld?.bezeichnung ?? "Feld"}, ` +
         `${formatDatumDE(datum)}) stornieren.`
     );
     if (grund) praemieStornieren([e.id], grund);
@@ -351,7 +354,7 @@ export default function PraemienErdbeerenPage() {
   function tagStornieren() {
     if (tagOffen.length === 0) return;
     const grund = stornoGrundAbfragen(
-      `Erdbeer-Prämie für ${aktuelleParzelle?.name ?? "diese Parzelle"} am ` +
+      `Erdbeer-Prämie für ${aktuellesFeld?.bezeichnung ?? "dieses Feld"} am ` +
         `${formatDatumDE(datum)} bei ${tagOffen.length} Person(en) ` +
         `stornieren${gruppeFilter ? " (nur gefilterte Gruppe)" : ""}.`
     );
@@ -363,7 +366,7 @@ export default function PraemienErdbeerenPage() {
   }
 
   async function neuenSatzSpeichern() {
-    if (parzelleId === null) return;
+    if (feldId === null) return;
     if (!neuNorm || !neuBonus) {
       setSatzFehler("Norm und Bonus/Steige sind Pflichtfelder.");
       return;
@@ -372,7 +375,7 @@ export default function PraemienErdbeerenPage() {
     setSatzFehler(null);
     const supabase = getSupabaseClient();
     const { error } = await supabase.from("erdbeeren_parzellen_saetze").insert({
-      parzelle_id: parzelleId,
+      feld_id: feldId,
       gueltig_ab: neuGueltigAb,
       norm_steigen_pro_stunde: Number(neuNorm),
       bonus_pro_steige: Number(neuBonus),
@@ -392,9 +395,9 @@ export default function PraemienErdbeerenPage() {
     (e) => !gruppeFilter || e.gruppe_nr === gruppeFilter
   );
   const gruppenByNr = new Map(gruppen.map((g) => [g.gruppe_nr, g]));
-  const aktuelleParzelle = parzellen.find((p) => p.id === parzelleId) ?? null;
+  const aktuellesFeld = felder.find((f) => f.id === feldId) ?? null;
 
-  // Erfasste Zeilen des gewählten Tages + der gewählten Parzelle (respektiert
+  // Erfasste Zeilen des gewählten Tages + des gewählten Feldes (respektiert
   // den Gruppenfilter) - Grundlage für "Prämien stornieren" / "Storno
   // aufheben" in der Werkzeugleiste.
   const tagEintraege = gefiltert
@@ -445,9 +448,9 @@ export default function PraemienErdbeerenPage() {
       <div className="print:hidden">
         <PageHeader icon={Award} titel="Prämien – Erdbeeren" />
         <p className="text-sm text-neutral-500">
-          Pro Mitarbeiter, Parzelle und Tag Steigen, Stunden und Sut (Abfall/
+          Pro Mitarbeiter, Feld und Tag Steigen, Stunden und Sut (Abfall/
           nicht vermarktungsfähige Ware) erfassen. Norm und Bonus gelten je
-          Parzelle (nicht global wie bei Zuckermais) und fließen live in die
+          Feld (nicht global wie bei Zuckermais) und fließen live in die
           Lohnübersicht (Brutto-Spalte) ein. Sut zählt nicht zur Prämie.
           Feld leeren/auf 0 setzen und „Alle speichern" klicken entfernt
           einen versehentlich eingetragenen Wert wieder komplett - das
@@ -456,10 +459,10 @@ export default function PraemienErdbeerenPage() {
         </p>
       </div>
 
-      {parzellen.length === 0 && !loading ? (
+      {felder.length === 0 && !loading ? (
         <p className="rounded border border-amber-300 bg-amber-50 px-3 py-2 text-sm font-medium text-amber-800 print:hidden">
-          ⚠ Noch keine Parzelle angelegt - weiter unten unter „Parzellen
-          verwalten" eine anlegen, bevor Prämien erfasst werden können.
+          ⚠ Noch kein Feld angelegt - weiter unten unter „Anbau → Felder"
+          eins anlegen, bevor Prämien erfasst werden können.
         </p>
       ) : (
         <div className="sticky top-[calc(3.5rem+var(--subtabs-h,2.5rem))] z-30 flex flex-wrap items-center gap-3 bg-sand py-2 print:hidden">
@@ -472,14 +475,14 @@ export default function PraemienErdbeerenPage() {
             />
           </label>
           <label className="text-sm">
-            Parzelle{" "}
+            Feld{" "}
             <select
-              value={parzelleId ?? ""}
-              onChange={(e) => setParzelleId(Number(e.target.value))}
+              value={feldId ?? ""}
+              onChange={(e) => setFeldId(Number(e.target.value))}
             >
-              {parzellen.map((p) => (
-                <option key={p.id} value={p.id}>
-                  {p.name}
+              {felder.map((f) => (
+                <option key={f.id} value={f.id}>
+                  {f.bezeichnung}
                 </option>
               ))}
             </select>
@@ -521,7 +524,7 @@ export default function PraemienErdbeerenPage() {
             className="btn-secondary"
             disabled={stornoLaeuft || tagOffen.length === 0}
             onClick={tagStornieren}
-            title="Tagesprämie aller erfassten Personen dieser Parzelle/dieses Tages stornieren (mit Begründung)"
+            title="Tagesprämie aller erfassten Personen dieses Feldes/Tages stornieren (mit Begründung)"
           >
             Prämien stornieren{" "}
             {tagOffen.length > 0 ? `(${tagOffen.length})` : ""}
@@ -532,7 +535,7 @@ export default function PraemienErdbeerenPage() {
               className="btn-secondary"
               disabled={stornoLaeuft}
               onClick={() => stornoAufheben(tagStorniert.map((e) => e.id))}
-              title="Storno für alle stornierten Zeilen dieser Parzelle/dieses Tages aufheben"
+              title="Storno für alle stornierten Zeilen dieses Feldes/Tages aufheben"
             >
               Storno aufheben ({tagStorniert.length})
             </button>
@@ -540,12 +543,12 @@ export default function PraemienErdbeerenPage() {
         </div>
       )}
 
-      {/* Sätze-Verwaltung für die aktuell gewählte Parzelle (nur admin). */}
-      {isAdmin && parzelleId !== null && (
+      {/* Sätze-Verwaltung für das aktuell gewählte Feld (nur admin). */}
+      {isAdmin && feldId !== null && (
         <div className="rounded border border-linie bg-white p-3 print:hidden">
           <h2 className="text-sm font-semibold text-emerald-800">
-            Sätze verwalten für {aktuelleParzelle?.name} (Norm/Bonus, ändert
-            sich je Parzelle und Saisonverlauf)
+            Sätze verwalten für {aktuellesFeld?.bezeichnung} (Norm/Bonus,
+            ändert sich je Feld und Saisonverlauf)
           </h2>
           <div className="mt-2 flex flex-wrap items-end gap-2">
             <label className="text-sm">
@@ -611,10 +614,10 @@ export default function PraemienErdbeerenPage() {
         </div>
       )}
 
-      {parzellen.length > 0 && !aktuellerSatz && !loading && (
+      {felder.length > 0 && !aktuellerSatz && !loading && (
         <p className="rounded border border-amber-300 bg-amber-50 px-3 py-2 text-sm font-medium text-amber-800 print:hidden">
-          ⚠ Für {aktuelleParzelle?.name} am {formatDatumDE(datum)} ist noch
-          kein Satz (Norm/Bonus) hinterlegt - weiter oben unter „Sätze
+          ⚠ Für {aktuellesFeld?.bezeichnung} am {formatDatumDE(datum)} ist
+          noch kein Satz (Norm/Bonus) hinterlegt - weiter oben unter „Sätze
           verwalten" nachtragen, sonst wird die Prämie mit 0 € berechnet.
         </p>
       )}
@@ -633,7 +636,7 @@ export default function PraemienErdbeerenPage() {
         </p>
       )}
 
-      {parzellen.length > 0 &&
+      {felder.length > 0 &&
         (loading ? (
           <p className="text-neutral-500 print:hidden">Lädt…</p>
         ) : gefiltert.length === 0 ? (
@@ -767,7 +770,7 @@ export default function PraemienErdbeerenPage() {
       {druckModus && (
         <div className="hidden print:block">
           <h2 className="text-xl font-semibold">
-            Prämien Erdbeeren – {aktuelleParzelle?.name} –{" "}
+            Prämien Erdbeeren – {aktuellesFeld?.bezeichnung} –{" "}
             {formatDatumDE(datum)}
           </h2>
           <table className="mt-4 print-form-table">
