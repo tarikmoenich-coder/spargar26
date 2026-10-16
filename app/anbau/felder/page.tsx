@@ -2,11 +2,12 @@
 
 // "Anbau → Felder" (Migration 2026-10-19): Stammdaten ALLER Felder,
 // kulturübergreifend (vorher nur Erdbeeren, erdbeeren_parzellen). Geometrie
-// (Brutto-Fläche, Pachtwesen2026-Import) kommt in einer späteren Ausbaustufe
-// dazu - hier erstmal Bezeichnung/Kultur/Status, wie zuvor bewusst schlank:
-// Reihen/Pflanzenzahl/Netto-ha ergeben sich aus der Planung je Saison unter
-// "Anbau".
+// (Brutto-Fläche) kommt entweder per Import aus Pachtwesen2026 (Knopf unten)
+// oder über den Zeichnen-Editor auf der Detail-Seite (Link "Karte" je Zeile)
+// - hier bleibt die Liste bewusst schlank: Reihen/Pflanzenzahl/Netto-ha
+// ergeben sich aus der Planung je Saison unter "Anbau".
 
+import Link from "next/link";
 import PageHeader from "@/components/PageHeader";
 import { MapPin } from "lucide-react";
 import { useEffect, useState } from "react";
@@ -370,6 +371,7 @@ export default function AnbauFelderPage() {
                 </th>
                 <th>Aktiv</th>
                 <th title="Geometrie aus Pachtwesen2026 importiert?">Herkunft</th>
+                <th></th>
               </tr>
             </thead>
             <tbody>
@@ -449,6 +451,11 @@ export default function AnbauFelderPage() {
                       ) : (
                         <span className="text-neutral-300">—</span>
                       )}
+                    </td>
+                    <td>
+                      <Link href={`/anbau/felder/${f.id}`} className="text-xs text-emerald-700 underline">
+                        Karte
+                      </Link>
                     </td>
                   </tr>
                 );
