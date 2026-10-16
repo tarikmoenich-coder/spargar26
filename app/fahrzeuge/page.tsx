@@ -10,9 +10,11 @@ import {
   FAHRZEUG_TYP_LABELS,
   fahrzeugTypLabel,
   type FahrzeugGeofence,
+  type FahrzeugHofStatus,
   type FahrzeugTracker,
   type FahrzeugUebersicht,
 } from "@/lib/types";
+import { fahrzeugAlarmBerechnen } from "@/lib/fahrzeugAlarme";
 import FahrzeugeTabs from "@/components/FahrzeugeTabs";
 import FahrzeugKarte from "@/components/FahrzeugKarte";
 import PageHeader from "@/components/PageHeader";
@@ -39,6 +41,7 @@ export default function FahrzeugeUebersichtPage() {
   const [fahrzeuge, setFahrzeuge] = useState<FahrzeugUebersicht[]>([]);
   const [offeneTracker, setOffeneTracker] = useState<FahrzeugTracker[]>([]);
   const [geofences, setGeofences] = useState<FahrzeugGeofence[]>([]);
+  const [hofStatus, setHofStatus] = useState<FahrzeugHofStatus[]>([]);
   const [bilder, setBilder] = useState<Record<number, string>>({});
   const [alarmHeute, setAlarmHeute] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -64,7 +67,7 @@ export default function FahrzeugeUebersichtPage() {
     const supabase = getSupabaseClient();
     const tagesbeginn = new Date();
     tagesbeginn.setHours(0, 0, 0, 0);
-    const [f, t, g, al] = await Promise.all([
+    const [f, t, g, al, h] = await Promise.all([
       supabase.from("fahrzeug_uebersicht").select("*").order("bezeichnung"),
       supabase
         .from("fahrzeug_tracker")
@@ -77,11 +80,13 @@ export default function FahrzeugeUebersichtPage() {
         .select("traccar_event_id", { count: "exact", head: true })
         .eq("alarm_relevant", true)
         .gte("zeitpunkt", tagesbeginn.toISOString()),
+      supabase.from("fahrzeug_hof_status").select("*"),
     ]);
     setFahrzeuge((f.data as FahrzeugUebersicht[]) ?? []);
     setOffeneTracker((t.data as FahrzeugTracker[]) ?? []);
     setGeofences((g.data as FahrzeugGeofence[]) ?? []);
     setAlarmHeute(al.count ?? 0);
+    setHofStatus((h.data as FahrzeugHofStatus[]) ?? []);
     setLoading(false);
   }, []);
 
@@ -115,6 +120,18 @@ export default function FahrzeugeUebersichtPage() {
     (t) => vorhandeneTypen.has(t) || t === typFilter
   );
   const abgemeldeteAnzahl = fahrzeuge.filter((f) => !f.aktiv).length;
+  // Tracker-Alarme (Nutzer-Vorgabe 2026-10-16): gleiche Einstufung wie auf
+  // der Stammdaten-Seite, siehe lib/fahrzeugAlarme.ts.
+  const hofStatusByFahrzeug = new Map(hofStatus.map((h) => [h.fahrzeug_id, h]));
+  const trackerAlarmAnzahl = fahrzeuge.filter(
+    (f) =>
+      fahrzeugAlarmBerechnen({
+        typ: f.typ,
+        aktiv: f.aktiv,
+        zuletztGesehen: f.tracker_zuletzt_gesehen,
+        letztesHofEreignis: hofStatusByFahrzeug.get(f.id)?.letztes_hof_ereignis,
+      }) !== null
+  ).length;
   const sucheNorm = suche.trim().toLowerCase();
   const sichtbar = fahrzeuge.filter((f) => {
     if (!zeigeAbgemeldete && !f.aktiv) return false;
@@ -198,6 +215,15 @@ export default function FahrzeugeUebersichtPage() {
           </span>
         </div>
         <div className="flex items-center gap-2">
+          {trackerAlarmAnzahl > 0 && (
+            <Link
+              href="/fahrzeuge/stammdaten"
+              className="badge badge-danger"
+              title="Tracker ohne Signal (Hof verlassen & nicht zurück, oder allgemein länger still)"
+            >
+              🔴 {trackerAlarmAnzahl} Tracker-Alarm{trackerAlarmAnzahl === 1 ? "" : "e"}
+            </Link>
+          )}
           {alarmHeute > 0 && (
             <Link
               href="/fahrzeuge/ereignisse"

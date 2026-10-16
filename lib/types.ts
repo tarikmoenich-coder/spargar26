@@ -2167,6 +2167,15 @@ export interface FahrzeugHofzeitTag {
   auffaellig: boolean | null;
 }
 
+// Aus der Sicht fahrzeug_hof_status (Migration 2026-10-19) - letztes Ereignis
+// je Fahrzeug an einer "Hof"-Geofence, Grundlage für die Tracker-Alarme
+// (siehe lib/fahrzeugAlarme.ts).
+export interface FahrzeugHofStatus {
+  fahrzeug_id: number;
+  letztes_hof_ereignis: string; // 'geofenceEnter' | 'geofenceExit'
+  letztes_hof_ereignis_zeitpunkt: string;
+}
+
 // Firmenhandy-Nummernpool (Migration 2026-09-17) - Nummer + aktueller
 // Inhaber, wird per CardDAV in ein Nextcloud-Adressbuch gespiegelt (siehe
 // app/api/firmenhandy-sync).
