@@ -21,6 +21,16 @@ import {
 } from "@/lib/types";
 import { formatZahlDE } from "@/lib/format";
 
+const CURRENT_YEAR = new Date().getFullYear();
+
+interface PachtwesenSchlag {
+  schlag_id: string;
+  schlag_name: string;
+  hektar: number;
+  geometrie_geojson: string;
+  geometrie_hash: string;
+}
+
 interface PlanungsInfo {
   feld_id: number;
   saison_jahr: number;
@@ -43,6 +53,13 @@ export default function AnbauFelderPage() {
   const [neuName, setNeuName] = useState("");
   const [neuKultur, setNeuKultur] = useState<FeldKultur | "">("");
   const [laeuft, setLaeuft] = useState(false);
+
+  // Import aus Pachtwesen2026 (Phase 2, Migration 2026-10-19) - Schlag-Ebene,
+  // einmal pro Saison anstoßbar. Lässt eine bereits in spargar26 verfeinerte
+  // Geometrie unangetastet, wenn sich am Schlag nichts geändert hat.
+  const [importJahr, setImportJahr] = useState(CURRENT_YEAR);
+  const [importLaeuft, setImportLaeuft] = useState(false);
+  const [importMeldung, setImportMeldung] = useState<string | null>(null);
 
   async function load() {
     setLoading(true);
@@ -114,6 +131,98 @@ export default function AnbauFelderPage() {
     load();
   }
 
+  async function importierenAusPachtwesen() {
+    setImportLaeuft(true);
+    setFehler(null);
+    setImportMeldung(null);
+    try {
+      const res = await fetch(`/api/pachtwesen-schlaege?jahr=${importJahr}`);
+      const body = await res.json();
+      if (!res.ok) {
+        setFehler(body.error ?? "Import fehlgeschlagen.");
+        return;
+      }
+      const schlaege: PachtwesenSchlag[] = body.schlaege ?? [];
+      const supabase = getSupabaseClient();
+      let neu = 0;
+      let unveraendert = 0;
+      let geaendertReview = 0;
+      let fehlgeschlagen = 0;
+
+      for (const s of schlaege) {
+        const { data: bestehend } = await supabase
+          .from("feld")
+          .select("id, pachtwesen_geometrie_hash")
+          .eq("pachtwesen_schlag_id", s.schlag_id)
+          .maybeSingle();
+
+        if (!bestehend) {
+          const { data: neuesFeld, error: insertFehler } = await supabase
+            .from("feld")
+            .insert({ bezeichnung: s.schlag_name, pachtwesen_schlag_id: s.schlag_id })
+            .select("id")
+            .single();
+          if (insertFehler || !neuesFeld) {
+            fehlgeschlagen += 1;
+            continue;
+          }
+          await supabase.rpc("feld_geometrie_setzen", {
+            p_feld_id: neuesFeld.id,
+            p_geojson: s.geometrie_geojson,
+          });
+          await supabase
+            .from("feld")
+            .update({ pachtwesen_geometrie_hash: s.geometrie_hash })
+            .eq("id", neuesFeld.id);
+          neu += 1;
+        } else if (bestehend.pachtwesen_geometrie_hash === s.geometrie_hash) {
+          unveraendert += 1;
+        } else {
+          // Geometrie hat sich am Schlag geändert - NICHT automatisch
+          // überschreiben (könnte in spargar26 bereits verfeinert worden
+          // sein), stattdessen zur Überprüfung zwischenspeichern.
+          await supabase
+            .from("feld")
+            .update({
+              pachtwesen_geometrie_hash_neu: s.geometrie_hash,
+              pachtwesen_geometrie_geojson_neu: s.geometrie_geojson,
+            })
+            .eq("id", bestehend.id);
+          geaendertReview += 1;
+        }
+      }
+
+      setImportMeldung(
+        `${neu} neu, ${unveraendert} unverändert, ${geaendertReview} mit Änderung zur Überprüfung` +
+          `${fehlgeschlagen > 0 ? `, ${fehlgeschlagen} fehlgeschlagen` : ""}.`
+      );
+      load();
+    } catch (e) {
+      setFehler(e instanceof Error ? e.message : "Import fehlgeschlagen.");
+    } finally {
+      setImportLaeuft(false);
+    }
+  }
+
+  async function geometrieUebernehmen(f: Feld) {
+    if (!f.pachtwesen_geometrie_geojson_neu || !f.pachtwesen_geometrie_hash_neu) return;
+    setFehler(null);
+    const supabase = getSupabaseClient();
+    await supabase.rpc("feld_geometrie_setzen", {
+      p_feld_id: f.id,
+      p_geojson: f.pachtwesen_geometrie_geojson_neu,
+    });
+    await supabase
+      .from("feld")
+      .update({
+        pachtwesen_geometrie_hash: f.pachtwesen_geometrie_hash_neu,
+        pachtwesen_geometrie_hash_neu: null,
+        pachtwesen_geometrie_geojson_neu: null,
+      })
+      .eq("id", f.id);
+    load();
+  }
+
   const sichtbar = felder.filter((f) => {
     if (!zeigeInaktive && !f.aktiv) return false;
     if (kulturFilter && f.kultur !== kulturFilter) return false;
@@ -176,6 +285,44 @@ export default function AnbauFelderPage() {
         </div>
       )}
 
+      {canEdit && (
+        <div className="rounded border border-linie bg-white p-3">
+          <h2 className="mb-2 text-sm font-semibold text-emerald-800">
+            Aus Pachtwesen importieren/aktualisieren
+          </h2>
+          <p className="mb-2 text-xs text-neutral-500">
+            Holt alle selbst bewirtschafteten Schläge der gewählten Saison aus
+            Pachtwesen2026 (Name + Geometrie + Hektar). Neue Schläge werden als
+            Feld angelegt; bereits importierte Felder bleiben unangetastet,
+            solange sich am Schlag nichts geändert hat - bei einer Änderung
+            erscheint unten ein Hinweis zum Prüfen statt stillschweigend zu
+            überschreiben.
+          </p>
+          <div className="flex flex-wrap items-end gap-2">
+            <label className="text-sm">
+              Saison{" "}
+              <input
+                type="number"
+                className="w-24"
+                value={importJahr}
+                onChange={(e) => setImportJahr(Number(e.target.value))}
+              />
+            </label>
+            <button
+              type="button"
+              className="btn text-xs"
+              disabled={importLaeuft}
+              onClick={importierenAusPachtwesen}
+            >
+              {importLaeuft ? "Importiere …" : "Importieren/aktualisieren"}
+            </button>
+          </div>
+          {importMeldung && (
+            <p className="mt-2 text-sm text-emerald-700">{importMeldung}</p>
+          )}
+        </div>
+      )}
+
       {fehler && (
         <p className="rounded border border-beere-300 bg-beere-50 p-2 text-sm text-beere-700">
           {fehler}
@@ -222,6 +369,7 @@ export default function AnbauFelderPage() {
                   Geplant
                 </th>
                 <th>Aktiv</th>
+                <th title="Geometrie aus Pachtwesen2026 importiert?">Herkunft</th>
               </tr>
             </thead>
             <tbody>
@@ -276,6 +424,31 @@ export default function AnbauFelderPage() {
                           aendern(f.id, "aktiv", e.target.checked)
                         }
                       />
+                    </td>
+                    <td className="text-xs">
+                      {f.pachtwesen_geometrie_hash_neu ? (
+                        <span className="inline-flex items-center gap-1.5">
+                          <span
+                            className="badge badge-warn"
+                            title="Der Schlag in Pachtwesen2026 hat sich geändert - diese Übernahme ersetzt die Feld-Geometrie hier."
+                          >
+                            Quelle geändert
+                          </span>
+                          {canEdit && (
+                            <button
+                              type="button"
+                              className="btn-secondary text-xs"
+                              onClick={() => geometrieUebernehmen(f)}
+                            >
+                              übernehmen
+                            </button>
+                          )}
+                        </span>
+                      ) : f.pachtwesen_schlag_id ? (
+                        <span className="text-neutral-400">Pachtwesen</span>
+                      ) : (
+                        <span className="text-neutral-300">—</span>
+                      )}
                     </td>
                   </tr>
                 );
