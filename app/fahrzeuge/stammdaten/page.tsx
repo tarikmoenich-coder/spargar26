@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { Fragment, useCallback, useEffect, useMemo, useState } from "react";
 import { Truck } from "lucide-react";
 import { getSupabaseClient } from "@/lib/supabase/client";
 import { useProfile } from "@/lib/useProfile";
@@ -10,8 +10,15 @@ import {
   FAHRZEUG_TYP_LABELS,
   fahrzeugTypLabel,
   type Fahrzeug,
+  type FahrzeugHofStatus,
   type FahrzeugTracker,
 } from "@/lib/types";
+import {
+  fahrzeugAlarmBadgeKlasse,
+  fahrzeugAlarmBerechnen,
+  fahrzeugAlarmLabel,
+  type FahrzeugAlarm,
+} from "@/lib/fahrzeugAlarme";
 import FahrzeugeTabs from "@/components/FahrzeugeTabs";
 import PageHeader from "@/components/PageHeader";
 
@@ -241,6 +248,7 @@ export default function FahrzeugeStammdatenPage() {
 
   const [fahrzeuge, setFahrzeuge] = useState<Fahrzeug[]>([]);
   const [tracker, setTracker] = useState<FahrzeugTracker[]>([]);
+  const [hofStatus, setHofStatus] = useState<FahrzeugHofStatus[]>([]);
   const [mitarbeiter, setMitarbeiter] = useState<EmpOpt[]>([]);
   const [loading, setLoading] = useState(true);
   const [fehler, setFehler] = useState<string | null>(null);
@@ -261,12 +269,13 @@ export default function FahrzeugeStammdatenPage() {
 
   const laden = useCallback(async () => {
     const supabase = getSupabaseClient();
-    const [f, t, m] = await Promise.all([
+    const [f, t, h, m] = await Promise.all([
       supabase.from("fahrzeug").select("*").order("bezeichnung"),
       supabase
         .from("fahrzeug_tracker")
         .select("*")
         .order("zuletzt_gesehen", { ascending: false, nullsFirst: false }),
+      supabase.from("fahrzeug_hof_status").select("*"),
       supabase
         .from("employees")
         .select("id, personal_nr, name, vorname")
@@ -275,6 +284,7 @@ export default function FahrzeugeStammdatenPage() {
     ]);
     setFahrzeuge((f.data as Fahrzeug[]) ?? []);
     setTracker((t.data as FahrzeugTracker[]) ?? []);
+    setHofStatus((h.data as FahrzeugHofStatus[]) ?? []);
     setMitarbeiter((m.data as EmpOpt[]) ?? []);
     setLoading(false);
   }, []);
@@ -379,6 +389,50 @@ export default function FahrzeugeStammdatenPage() {
     tracker.filter((t) => t.fahrzeug_id != null).map((t) => t.fahrzeug_id)
   );
 
+  // Tracker-Trennung (Nutzer-Vorgabe 2026-10-16): zugeordnete und nicht
+  // zugeordnete Tracker standen bisher wild durcheinander in einer einzigen,
+  // nach "zuletzt gesehen" sortierten Tabelle - beim Einrichten von 100+
+  // Trackern verliert man da leicht den Überblick. Nicht zugeordnete zuerst
+  // (das ist beim Einrichten die eigentliche Arbeitsliste), sortiert nach
+  // "zuletzt gesehen" - zugeordnete danach, alphabetisch nach Fahrzeug, damit
+  // sie nicht bei jeder neuen GPS-Meldung durcheinanderspringen.
+  const fahrzeugBezeichnungById = new Map(fahrzeuge.map((f) => [f.id, f.bezeichnung]));
+  const trackerNichtZugeordnet = tracker.filter((t) => t.fahrzeug_id == null);
+  const trackerZugeordnet = [...tracker.filter((t) => t.fahrzeug_id != null)].sort((a, b) =>
+    (fahrzeugBezeichnungById.get(a.fahrzeug_id!) ?? "").localeCompare(
+      fahrzeugBezeichnungById.get(b.fahrzeug_id!) ?? "",
+      "de"
+    )
+  );
+
+  // Tracker-Alarme (Nutzer-Vorgabe 2026-10-16): Rot = Hof verlassen und seit
+  // über 24h keine Rückkehr/Position (auch abgemeldete Fahrzeuge); sonst
+  // allgemeine Stille-Erkennung für aktive Fahrzeuge, mit großzügigeren
+  // Schwellen für Traktoren. Siehe lib/fahrzeugAlarme.ts.
+  const hofStatusByFahrzeug = new Map(hofStatus.map((h) => [h.fahrzeug_id, h]));
+  const alarmReihenfolge: Record<FahrzeugAlarm["stufe"], number> = {
+    "rot-hof": 0,
+    kritisch: 1,
+    warnung: 2,
+  };
+  const fahrzeugeMitAlarm = fahrzeuge
+    .map((f) => {
+      const t = tracker.find((x) => x.fahrzeug_id === f.id);
+      const alarm = fahrzeugAlarmBerechnen({
+        typ: f.typ,
+        aktiv: f.aktiv,
+        zuletztGesehen: t?.zuletzt_gesehen ?? null,
+        letztesHofEreignis: hofStatusByFahrzeug.get(f.id)?.letztes_hof_ereignis,
+      });
+      return alarm ? { fahrzeug: f, alarm } : null;
+    })
+    .filter((x): x is { fahrzeug: Fahrzeug; alarm: FahrzeugAlarm } => x !== null)
+    .sort(
+      (a, b) =>
+        alarmReihenfolge[a.alarm.stufe] - alarmReihenfolge[b.alarm.stufe] ||
+        b.alarm.stundenStill - a.alarm.stundenStill
+    );
+
   const sucheNorm = suche.trim().toLowerCase();
   const fahrzeugeGefiltert = fahrzeuge.filter((f) => {
     if (statusFilter === "angemeldet" && !f.aktiv) return false;
@@ -390,6 +444,22 @@ export default function FahrzeugeStammdatenPage() {
       fahrzeugTypLabel(f.typ).toLowerCase().includes(sucheNorm)
     );
   });
+
+  // Gruppierung nach Fahrzeugtyp (Nutzer-Vorgabe 2026-10-16) - fester Reihen-
+  // folge aus FAHRZEUG_TYPEN, nicht vorhandene/leere Typen landen in "Ohne
+  // Typ" am Ende. Leere Gruppen werden ausgeblendet (z.B. bei aktivem Filter).
+  const fahrzeugGruppen = [
+    ...FAHRZEUG_TYPEN.map((typ) => ({
+      typ,
+      label: FAHRZEUG_TYP_LABELS[typ],
+      liste: fahrzeugeGefiltert.filter((f) => f.typ === typ),
+    })),
+    {
+      typ: null as string | null,
+      label: "Ohne Typ",
+      liste: fahrzeugeGefiltert.filter((f) => !f.typ),
+    },
+  ].filter((g) => g.liste.length > 0);
 
   function auswahlUmschalten(id: number) {
     setAusgewaehlt((prev) => {
@@ -463,6 +533,50 @@ export default function FahrzeugeStammdatenPage() {
         <p className="text-xs text-amber-700">
           Deine Rolle darf Stammdaten nur ansehen.
         </p>
+      )}
+
+      {!loading && fahrzeugeMitAlarm.length > 0 && (
+        <div className="flex flex-col gap-2 rounded-lg border border-beere-200 bg-beere-50 p-4 shadow-card">
+          <h2 className="text-base font-semibold text-beere-700">
+            ⚠ Tracker-Alarme ({fahrzeugeMitAlarm.length})
+          </h2>
+          <p className="text-xs text-neutral-600">
+            Rot „Hof verlassen" = seit über 24h keine Rückkehr/Position, seit
+            der Hof verlassen wurde (auch bei abgemeldeten Fahrzeugen). Sonst
+            allgemeine Stille-Erkennung für aktive Fahrzeuge (Traktoren dürfen
+            deutlich länger stillstehen).
+          </p>
+          <div className="overflow-x-auto">
+            <table>
+              <thead>
+                <tr>
+                  <th>Fahrzeug</th>
+                  <th>Typ</th>
+                  <th>Status</th>
+                  <th>Alarm</th>
+                </tr>
+              </thead>
+              <tbody>
+                {fahrzeugeMitAlarm.map(({ fahrzeug: f, alarm }) => (
+                  <tr key={f.id}>
+                    <td>
+                      {f.bezeichnung}
+                      {f.kennzeichen ? ` (${f.kennzeichen})` : ""}
+                    </td>
+                    <td>{fahrzeugTypLabel(f.typ)}</td>
+                    <td>{f.aktiv ? "angemeldet" : "abgemeldet"}</td>
+                    <td>
+                      <span className={fahrzeugAlarmBadgeKlasse(alarm.stufe)}>
+                        {fahrzeugAlarmLabel(alarm.stufe)}
+                      </span>{" "}
+                      <span className="text-sm text-neutral-600">{alarm.text}</span>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
       )}
 
       {loading ? (
@@ -793,89 +907,101 @@ export default function FahrzeugeStammdatenPage() {
                 </tr>
               </thead>
               <tbody>
-                {fahrzeugeGefiltert.map((f) => {
-                  const t = tracker.find((x) => x.fahrzeug_id === f.id);
-                  return (
-                    <tr key={f.id} className={f.aktiv ? "" : "opacity-50"}>
-                      {canEdit && (
-                        <td>
-                          <input
-                            type="checkbox"
-                            checked={ausgewaehlt.has(f.id)}
-                            onChange={() => auswahlUmschalten(f.id)}
-                            aria-label={`${f.bezeichnung} auswählen`}
-                          />
-                        </td>
-                      )}
-                      <td>
-                        {f.bild ? (
-                          // eslint-disable-next-line @next/next/no-img-element
-                          <img
-                            src={f.bild}
-                            alt=""
-                            className="h-9 w-14 rounded border border-linie object-cover"
-                          />
-                        ) : (
-                          <span className="text-neutral-300">—</span>
-                        )}
-                      </td>
-                      <td>{f.bezeichnung}</td>
-                      <td>{f.kennzeichen ?? "—"}</td>
-                      <td>{fahrzeugTypLabel(f.typ)}</td>
-                      <td className="align-top">
-                        <FahrerZelle
-                          fahrzeug={f}
-                          mitarbeiter={mitarbeiter}
-                          canEdit={canEdit}
-                          onGesetzt={laden}
-                        />
-                      </td>
-                      <td>
-                        {f.km_stand != null
-                          ? f.km_stand.toLocaleString("de-DE")
-                          : "—"}
-                      </td>
-                      <td>
-                        {f.hu_faellig ? formatDatumDE(f.hu_faellig) : "—"}
-                      </td>
-                      <td>
-                        {f.angemeldet_seit ? formatDatumDE(f.angemeldet_seit) : "—"}
-                      </td>
-                      <td>
-                        {f.abgemeldet_am ? (
-                          <span className="text-beere-600">
-                            {formatDatumDE(f.abgemeldet_am)}
-                          </span>
-                        ) : (
-                          "—"
-                        )}
-                      </td>
-                      <td className="text-sm">
-                        {t
-                          ? `${t.traccar_unique_id}${
-                              t.geraetetyp ? ` (${t.geraetetyp})` : ""
-                            }`
-                          : "—"}
-                        {f.tracker_position && (
-                          <span className="block text-xs text-neutral-500">
-                            📍 {f.tracker_position}
-                          </span>
-                        )}
-                      </td>
-                      <td>
-                        {canEdit && (
-                          <button
-                            type="button"
-                            className="btn-secondary text-xs"
-                            onClick={() => starteBearbeiten(f)}
-                          >
-                            Bearbeiten
-                          </button>
-                        )}
+                {fahrzeugGruppen.map((gruppe) => (
+                  <Fragment key={`gruppe-${gruppe.typ ?? "ohne-typ"}`}>
+                    <tr className="bg-sand">
+                      <td
+                        colSpan={canEdit ? 12 : 11}
+                        className="font-semibold text-emerald-800"
+                      >
+                        {gruppe.label} ({gruppe.liste.length})
                       </td>
                     </tr>
-                  );
-                })}
+                    {gruppe.liste.map((f) => {
+                      const t = tracker.find((x) => x.fahrzeug_id === f.id);
+                      return (
+                        <tr key={f.id} className={f.aktiv ? "" : "opacity-50"}>
+                          {canEdit && (
+                            <td>
+                              <input
+                                type="checkbox"
+                                checked={ausgewaehlt.has(f.id)}
+                                onChange={() => auswahlUmschalten(f.id)}
+                                aria-label={`${f.bezeichnung} auswählen`}
+                              />
+                            </td>
+                          )}
+                          <td>
+                            {f.bild ? (
+                              // eslint-disable-next-line @next/next/no-img-element
+                              <img
+                                src={f.bild}
+                                alt=""
+                                className="h-9 w-14 rounded border border-linie object-cover"
+                              />
+                            ) : (
+                              <span className="text-neutral-300">—</span>
+                            )}
+                          </td>
+                          <td>{f.bezeichnung}</td>
+                          <td>{f.kennzeichen ?? "—"}</td>
+                          <td>{fahrzeugTypLabel(f.typ)}</td>
+                          <td className="align-top">
+                            <FahrerZelle
+                              fahrzeug={f}
+                              mitarbeiter={mitarbeiter}
+                              canEdit={canEdit}
+                              onGesetzt={laden}
+                            />
+                          </td>
+                          <td>
+                            {f.km_stand != null
+                              ? f.km_stand.toLocaleString("de-DE")
+                              : "—"}
+                          </td>
+                          <td>
+                            {f.hu_faellig ? formatDatumDE(f.hu_faellig) : "—"}
+                          </td>
+                          <td>
+                            {f.angemeldet_seit ? formatDatumDE(f.angemeldet_seit) : "—"}
+                          </td>
+                          <td>
+                            {f.abgemeldet_am ? (
+                              <span className="text-beere-600">
+                                {formatDatumDE(f.abgemeldet_am)}
+                              </span>
+                            ) : (
+                              "—"
+                            )}
+                          </td>
+                          <td className="text-sm">
+                            {t
+                              ? `${t.traccar_unique_id}${
+                                  t.geraetetyp ? ` (${t.geraetetyp})` : ""
+                                }`
+                              : "—"}
+                            {f.tracker_position && (
+                              <span className="block text-xs text-neutral-500">
+                                📍 {f.tracker_position}
+                              </span>
+                            )}
+                          </td>
+                          <td>
+                            {canEdit && (
+                              <button
+                                type="button"
+                                className="btn-secondary text-xs"
+                                onClick={() => starteBearbeiten(f)}
+                              >
+                                Bearbeiten
+                              </button>
+                            )}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </Fragment>
+                ))}
                 {fahrzeugeGefiltert.length === 0 && (
                   <tr>
                     <td
@@ -894,13 +1020,11 @@ export default function FahrzeugeStammdatenPage() {
 
           {/* ---- Tracker ---- */}
           <h2 className="mt-4 text-base font-semibold text-emerald-800">
-            GPS-Tracker ({tracker.length})
+            Nicht zugeordnete Tracker ({trackerNichtZugeordnet.length})
           </h2>
           <p className="text-sm text-neutral-500">
             Tracker erscheinen automatisch, sobald sie Daten an Traccar senden.
-            Hier einem Fahrzeug zuordnen. Nicht mehr in Traccar vorhandene
-            Tracker ohne Fahrzeug räumt der Poller selbst weg; zugeordnete
-            werden markiert (⚠) und können hier entfernt werden.
+            Hier einem Fahrzeug zuordnen.
           </p>
           <div className="overflow-x-auto">
             <table>
@@ -916,7 +1040,88 @@ export default function FahrzeugeStammdatenPage() {
                 </tr>
               </thead>
               <tbody>
-                {tracker.map((t) => (
+                {trackerNichtZugeordnet.map((t) => (
+                  <tr key={t.traccar_unique_id}>
+                    <td className="font-mono text-xs">{t.traccar_unique_id}</td>
+                    <td>{t.bezeichnung ?? "—"}</td>
+                    <td>{t.geraetetyp ?? "—"}</td>
+                    <td
+                      className={
+                        t.status === "online"
+                          ? "text-emerald-700"
+                          : "text-neutral-500"
+                      }
+                    >
+                      {t.status ?? "—"}
+                    </td>
+                    <td className="text-sm">
+                      {t.zuletzt_gesehen
+                        ? new Date(t.zuletzt_gesehen).toLocaleString("de-DE")
+                        : "—"}
+                    </td>
+                    <td>
+                      <select
+                        value=""
+                        disabled={!canEdit}
+                        onChange={(e) => trackerZuordnen(t, e.target.value)}
+                      >
+                        <option value="">— nicht zugeordnet —</option>
+                        {fahrzeuge.map((f) => (
+                          <option key={f.id} value={f.id} disabled={belegt.has(f.id)}>
+                            {f.bezeichnung}
+                            {f.kennzeichen ? ` (${f.kennzeichen})` : ""}
+                            {belegt.has(f.id) ? " – hat Tracker" : ""}
+                          </option>
+                        ))}
+                      </select>
+                    </td>
+                    {canEdit && (
+                      <td>
+                        <button
+                          type="button"
+                          className="btn-secondary text-xs"
+                          onClick={() => trackerEntfernen(t)}
+                        >
+                          Entfernen
+                        </button>
+                      </td>
+                    )}
+                  </tr>
+                ))}
+                {trackerNichtZugeordnet.length === 0 && (
+                  <tr>
+                    <td colSpan={canEdit ? 7 : 6} className="text-neutral-500">
+                      Keine nicht zugeordneten Tracker.
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+
+          <h2 className="mt-4 text-base font-semibold text-emerald-800">
+            Zugeordnete Tracker ({trackerZugeordnet.length})
+          </h2>
+          <p className="text-sm text-neutral-500">
+            Nicht mehr in Traccar vorhandene Tracker räumt der Poller selbst
+            nicht weg, solange sie einem Fahrzeug zugeordnet sind - sie werden
+            hier markiert (⚠) und können entfernt werden.
+          </p>
+          <div className="overflow-x-auto">
+            <table>
+              <thead>
+                <tr>
+                  <th>Traccar-ID</th>
+                  <th>Bezeichnung</th>
+                  <th>Typ</th>
+                  <th>Status</th>
+                  <th>Zuletzt gesehen</th>
+                  <th>Fahrzeug</th>
+                  {canEdit && <th></th>}
+                </tr>
+              </thead>
+              <tbody>
+                {trackerZugeordnet.map((t) => (
                   <tr
                     key={t.traccar_unique_id}
                     className={t.traccar_fehlt ? "bg-amber-50" : ""}
@@ -985,10 +1190,10 @@ export default function FahrzeugeStammdatenPage() {
                     )}
                   </tr>
                 ))}
-                {tracker.length === 0 && (
+                {trackerZugeordnet.length === 0 && (
                   <tr>
                     <td colSpan={canEdit ? 7 : 6} className="text-neutral-500">
-                      Noch keine Tracker gemeldet.
+                      Keine zugeordneten Tracker.
                     </td>
                   </tr>
                 )}
