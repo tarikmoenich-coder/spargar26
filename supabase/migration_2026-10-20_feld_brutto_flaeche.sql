@@ -10,8 +10,20 @@
 -- Nutzt bewusst KEIN "extensions."-Präfix (siehe Migration
 -- 2026-10-19_feld_geojson_view.sql - PostGIS liegt in diesem Projekt im
 -- normalen Suchpfad, anders als in Pachtwesen2026).
+--
+-- Korrektur (Vorfall 2026-10-20, zwei fehlgeschlagene Anläufe mit
+-- "CREATE OR REPLACE VIEW"): die erlaubt nur ein Anhängen neuer Spalten
+-- GENAU dort, wo die live gespeicherte Spaltenliste schon endet - bei
+-- jeder Abweichung (auch nur in der Reihenfolge) bricht sie mit "cannot
+-- change name of view column ... to ..." ab. Beide Sichten hängen an
+-- keiner anderen Stelle in der Datenbank (nur die App liest sie) - deshalb
+-- hier DROP + CREATE statt CREATE OR REPLACE, das ist unabhängig vom
+-- aktuellen Spalten-Stand und macht diese Fehlerklasse unmöglich.
 
-create or replace view feld_geojson as
+drop view if exists feld_geojson;
+drop view if exists feld_anbau_uebersicht;
+
+create view feld_geojson as
 select
   id,
   bezeichnung,
@@ -34,7 +46,7 @@ from feld;
 alter view feld_geojson set (security_invoker = true);
 grant select on feld_geojson to authenticated;
 
-create or replace view feld_anbau_uebersicht as
+create view feld_anbau_uebersicht as
 select
   fa.id as anbau_id,
   fa.feld_id,
