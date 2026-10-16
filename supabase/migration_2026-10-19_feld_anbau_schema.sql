@@ -208,7 +208,22 @@ grant select on erdbeeren_praemie_tag to authenticated;
 --    erdbeeren_parzellen droppen (jetzt sicher - erdbeeren_praemie_tag
 --    zeigt seit Schritt 6 schon auf "feld", nichts referenziert
 --    erdbeeren_parzellen mehr).
+--
+--    WICHTIG: "feld" ist eine neue, leere Tabelle - jede bestehende Zeile
+--    in erdbeeren_parzellen_saetze/erdbeeren_rohdaten verweist noch auf
+--    eine alte erdbeeren_parzellen-ID, die es in "feld" nicht gibt. Beim
+--    ersten Einspiel-Versuch dieser Migration brach die neue FK deshalb mit
+--    "Key (feld_id)=(1) is not present in table feld" ab. Nutzer-Bestätigung:
+--    es gibt noch keine echten Erdbeeren-/Spargel-Prämien-Daten, nur
+--    Test-/Stub-Zeilen aus der Entwicklung - die werden hier bewusst
+--    geleert statt mühsam auf neue feld-IDs umgehängt zu werden.
+--    FALLS DOCH ECHTE DATEN DARIN STEHEN SOLLTEN: vor dem Einspielen
+--    stoppen und stattdessen erst "feld"-Zeilen mit denselben IDs wie die
+--    alten erdbeeren_parzellen anlegen (insert ... overriding system value).
 -- ----------------------------------------------------------------------
+delete from erdbeeren_parzellen_saetze;
+delete from erdbeeren_rohdaten;
+
 alter table erdbeeren_parzellen_saetze
   drop constraint erdbeeren_parzellen_saetze_parzelle_id_fkey,
   add constraint erdbeeren_parzellen_saetze_feld_id_fkey
