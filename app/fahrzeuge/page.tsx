@@ -42,6 +42,9 @@ export default function FahrzeugeUebersichtPage() {
   const [offeneTracker, setOffeneTracker] = useState<FahrzeugTracker[]>([]);
   const [geofences, setGeofences] = useState<FahrzeugGeofence[]>([]);
   const [hofStatus, setHofStatus] = useState<FahrzeugHofStatus[]>([]);
+  // km-Überblick (Nutzer-Vorgabe 2026-10-19): kein Fahrtenbuch, nur ein
+  // Überblick, wer viel fährt - rein aus Tracker-Daten, rührt km_stand nicht an.
+  const [kmVor30Tagen, setKmVor30Tagen] = useState<Record<number, number>>({});
   const [bilder, setBilder] = useState<Record<number, string>>({});
   const [alarmHeute, setAlarmHeute] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -67,7 +70,7 @@ export default function FahrzeugeUebersichtPage() {
     const supabase = getSupabaseClient();
     const tagesbeginn = new Date();
     tagesbeginn.setHours(0, 0, 0, 0);
-    const [f, t, g, al, h] = await Promise.all([
+    const [f, t, g, al, h, km30] = await Promise.all([
       supabase.from("fahrzeug_uebersicht").select("*").order("bezeichnung"),
       supabase
         .from("fahrzeug_tracker")
@@ -81,12 +84,21 @@ export default function FahrzeugeUebersichtPage() {
         .eq("alarm_relevant", true)
         .gte("zeitpunkt", tagesbeginn.toISOString()),
       supabase.from("fahrzeug_hof_status").select("*"),
+      supabase.from("fahrzeug_km_vor_30_tagen").select("fahrzeug_id, gesamt_km"),
     ]);
     setFahrzeuge((f.data as FahrzeugUebersicht[]) ?? []);
     setOffeneTracker((t.data as FahrzeugTracker[]) ?? []);
     setGeofences((g.data as FahrzeugGeofence[]) ?? []);
     setAlarmHeute(al.count ?? 0);
     setHofStatus((h.data as FahrzeugHofStatus[]) ?? []);
+    setKmVor30Tagen(
+      Object.fromEntries(
+        ((km30.data as { fahrzeug_id: number; gesamt_km: number }[]) ?? []).map((r) => [
+          r.fahrzeug_id,
+          r.gesamt_km,
+        ])
+      )
+    );
     setLoading(false);
   }, []);
 
@@ -288,6 +300,9 @@ export default function FahrzeugeUebersichtPage() {
                       <th className="px-3 py-2 font-medium">Batterie</th>
                       <th className="px-3 py-2 font-medium">Typ</th>
                       <th className="px-3 py-2 font-medium">km-Stand</th>
+                      <th className="px-3 py-2 font-medium" title="Aus Tracker-Daten, kein Fahrtenbuch - zeigt, wer viel fährt">
+                        km, 30 Tage
+                      </th>
                       <th className="px-3 py-2 font-medium">HU fällig</th>
                       <th className="px-3 py-2 font-medium">Angemeldet seit</th>
                       <th className="px-3 py-2 font-medium">Abgemeldet am</th>
@@ -399,6 +414,14 @@ export default function FahrzeugeUebersichtPage() {
                             {f.km_stand != null
                               ? `${f.km_stand.toLocaleString("de-DE")} km`
                               : "—"}
+                          </td>
+                          <td className="px-3 py-1.5 text-neutral-600">
+                            {(() => {
+                              const vorher = kmVor30Tagen[f.id];
+                              if (f.gesamt_km == null || vorher == null) return "—";
+                              const delta = f.gesamt_km - vorher;
+                              return `${Math.max(0, delta).toLocaleString("de-DE", { maximumFractionDigits: 1 })} km`;
+                            })()}
                           </td>
                           <td className="px-3 py-1.5 text-neutral-600">
                             {f.hu_faellig ? formatDatumDE(f.hu_faellig) : "—"}
