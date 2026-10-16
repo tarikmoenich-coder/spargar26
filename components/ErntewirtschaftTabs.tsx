@@ -44,6 +44,7 @@ const BEREICHE: {
     rechteKey: "/anbau/erdbeeren",
     unter: [
       { href: "/anbau/erdbeeren", label: "Erdbeeren" },
+      { href: "/anbau/spargel", label: "Spargel" },
       { href: "/anbau/bestellung", label: "Bestellung" },
       { href: "/anbau/felder", label: "Felder" },
     ],
