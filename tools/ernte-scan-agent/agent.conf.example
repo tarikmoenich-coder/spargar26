@@ -1,0 +1,28 @@
+# Konfiguration fuer agent.sh - auf dem TRB246 nach /etc/ernte-scan-agent/agent.conf
+# kopieren und anpassen. Wird als Shell-Datei eingelesen (einfache KEY=WERT-Zeilen,
+# keine Anfuehrungszeichen noetig, aber erlaubt).
+
+# Geraetepfad der RS232-Schnittstelle - per SSH mit "ls /dev/tty*" ermitteln,
+# NICHT raten. Vorher in Services -> Serial Utilities die RS232-Instanz auf
+# "Enable: off" lassen (Console/Over-IP wuerden den Port sonst selbst belegen).
+SERIAL_DEV=/dev/ttyS0
+
+# Baudrate/Format laut Datenblatt des QR-Scan-Moduls (meist 9600 8N1).
+SERIAL_BAUD=9600
+
+# Kennung dieser Box im Payload - z.B. die IMEI des Geraets (Status -> Network Info).
+BOX_ID=
+
+# Ziel-URL der Supabase Edge Function "ernte-ingest" - existiert laut Plan
+# noch nicht. Bis dahin Platzhalter stehen lassen: Scans werden trotzdem
+# gelesen und in QUEUE_DATEI gesammelt, nur eben nie verschickt.
+INGEST_URL=http://PLATZHALTER.invalid/ernte-ingest
+INGEST_TOKEN=
+
+# Muss auf einem Flash-Pfad liegen, der einen Neustart uebersteht - NICHT
+# /tmp (das ist auf RutOS i.d.R. tmpfs/RAM und waere nach Stromverlust leer,
+# siehe "Offene Frage Stromausfall" im Plan).
+QUEUE_DATEI=/etc/ernte-scan-agent/queue.jsonl
+
+# Wie oft die Warteschlange abgearbeitet wird (Sekunden).
+RETRY_INTERVALL_S=30
