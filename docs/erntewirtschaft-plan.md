@@ -256,6 +256,16 @@ Drei Ströme, **getrennt geführt**:
 
 ## Teil C — Ingest Edge Function `ernte-ingest`
 
+**Gebaut 2026-10-17** (`supabase/functions/ernte-ingest/`), noch nicht
+deployt — siehe dessen README für Migration + Deploy-Schritte. Nimmt nur das
+Maschinen-Payload entgegen (der Waagen-Pfad schreibt weiterhin direkt mit
+Service-Key, siehe Teil D). Idempotenz-Umsetzung musste beim Bauen angepasst
+werden: statt eines Hashs ein Unique-Index auf
+`(quelle, tag_uid_norm, ereignis, zeitpunkt)` — `tag_uid_norm` ist eine
+generierte, NULL-sichere Kopie von `tag_uid` (Migration
+`migration_2026-10-17_ernte_scan_idempotenz.sql`), weil `ernte_scan` dafür
+noch keinen Unique-Index hatte.
+
 Supabase Edge Function (Deno). Auth: `Authorization: Bearer <ERNTE_INGEST_TOKEN>`.
 **Dumm** — nur validieren + je Ereignis eine `ernte_scan`-Zeile schreiben
 (Idempotenz-Key = Hash aus `quelle|typ|ts|tag` → `on conflict do nothing`).
@@ -885,11 +895,15 @@ Spatial-Join gegen `feld.geometrie` → `feld_id`. Retention/Downsample-Job.
 
 1. Hardware-Entscheidungen oben treffen (QR-Scan-Modul an der Maschine, RTK-Kette,
    NTRIP-Quelle) — **vor** dem Kauf der SpidertrackBox-Teile.
-2. Traccar auf PostgreSQL umstellen.
+2. Traccar auf PostgreSQL umstellen (noch H2, Stand 2026-10-17 — für EIN
+   Pilotgerät kein Blocker, erst vor dem 140er-Rollout Pflicht).
 3. Migration `erntewirtschaft` in Supabase (PostGIS ist bereits seit Migration
    2026-10-19 aktiviert); `feld` befüllen (Import aus Pachtwesen2026 oder
    Karten-Editor, siehe Phase 2/3 des Feld/Anbau-Plans).
-4. Edge Function `ernte-ingest` deployen; `ERNTE_INGEST_TOKEN` setzen.
+4. Edge Function `ernte-ingest` deployen; `ERNTE_INGEST_TOKEN` setzen —
+   **gebaut 2026-10-17** (siehe Teil C), Migration
+   `migration_2026-10-17_ernte_scan_idempotenz.sql` davor einspielen, Deploy
+   + Secret steht noch aus.
 5. pg_cron-Processor einrichten.
 6. Eine Spinne als Pilot komplett aufbauen (RTK + QR-Scan-Modul + Data-to-Server), End-to-End
    testen (Badge → Kiste → LKW → Waage → `ernte_kiste_zyklus` gewogen).

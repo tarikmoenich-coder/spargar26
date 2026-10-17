@@ -22,10 +22,13 @@ SERIAL_BAUD=9600
 # Kennung dieser Box im Payload - z.B. die IMEI des Geraets (Status -> Network Info).
 BOX_ID=
 
-# Ziel-URL der Supabase Edge Function "ernte-ingest" - existiert laut Plan
-# noch nicht. Bis dahin Platzhalter stehen lassen: Scans werden trotzdem
-# gelesen und in QUEUE_DATEI gesammelt, nur eben nie verschickt.
-INGEST_URL=http://PLATZHALTER.invalid/ernte-ingest
+# Ziel-URL der Supabase Edge Function "ernte-ingest" (siehe
+# supabase/functions/ernte-ingest/). Erst eintragen, NACHDEM die Funktion
+# deployt wurde (siehe deren README) und die Migration
+# migration_2026-10-17_ernte_scan_idempotenz.sql eingespielt ist - bis dahin
+# Platzhalter stehen lassen: Scans werden trotzdem gelesen und in
+# QUEUE_DATEI gesammelt, nur eben nie verschickt.
+INGEST_URL=https://cmlbugppwhytloxjkxmt.supabase.co/functions/v1/ernte-ingest
 INGEST_TOKEN=
 
 # Muss auf einem Flash-Pfad liegen, der einen Neustart uebersteht - NICHT

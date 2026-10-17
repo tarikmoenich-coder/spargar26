@@ -44,9 +44,10 @@ erwartet.
   raten.
 - **Kein Erfolgston** (Piezo-Summer am Digitalausgang, siehe Plan) — kommt,
   sobald das Grundgerüst steht.
-- **`ernte-ingest` existiert noch nicht** (Plan Teil H, Schritt 4) — bis dahin
-  bleibt `INGEST_URL` ein Platzhalter, der Agent sammelt Scans trotzdem schon
-  zuverlässig in der lokalen Warteschlange gleichzeitig mit dem GPS-Test.
+- **`ernte-ingest` ist jetzt gebaut** (`supabase/functions/ernte-ingest/`,
+  2026-10-17), aber noch nicht deployt — siehe dessen README für Migration +
+  Deploy-Schritte. Bis dahin bleibt `INGEST_URL` ein Platzhalter, der Agent
+  sammelt Scans trotzdem schon zuverlässig in der lokalen Warteschlange.
 
 ## RS232-Geräte-Pfad (geklärt 2026-10-17)
 
@@ -101,5 +102,7 @@ Dauerbetrieb ist der procd-Dienst (siehe oben) die bessere Wahl.
   unbeschadet übersteht, hängt vom Flash-Dateisystem von RutOS ab — vor dem
   Pilottest gezielt prüfen (Gerät mit wartenden Zeilen in der Warteschlange
   stromlos machen, wieder einschalten, Datei prüfen).
-- Sobald `ernte-ingest` deployt ist: nur `INGEST_URL`/`INGEST_TOKEN` in
-  `agent.conf` eintragen, Dienst neu starten — kein Code-Änderung nötig.
+- Sobald `ernte-ingest` deployt ist (siehe `supabase/functions/ernte-ingest/README.md`):
+  `INGEST_URL` ist schon in `agent.conf.example` korrekt vorausgefüllt, nur
+  `INGEST_TOKEN` (= der per `supabase secrets set` gesetzte Wert) eintragen,
+  Dienst neu starten — kein Code-Änderung nötig.
