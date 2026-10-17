@@ -2,10 +2,19 @@
 # kopieren und anpassen. Wird als Shell-Datei eingelesen (einfache KEY=WERT-Zeilen,
 # keine Anfuehrungszeichen noetig, aber erlaubt).
 
-# Geraetepfad der RS232-Schnittstelle - per SSH mit "ls /dev/tty*" ermitteln,
-# NICHT raten. Vorher in Services -> Serial Utilities die RS232-Instanz auf
-# "Enable: off" lassen (Console/Over-IP wuerden den Port sonst selbst belegen).
-SERIAL_DEV=/dev/ttyS0
+# Geraetepfad der RS232-Schnittstelle. Auf dem TRB246 (Hardware-Revision
+# 0004, Stand 2026-10-17) ist das IMMER /dev/rs232 - ein fester Symlink, den
+# Teltonikas eigenes Boot-Skript (01-serial-symlink.sh) anlegt (siehe
+# "dmesg | grep tty": "Creating /dev/ttyUSB0 -> /dev/rs232 symlink"). Die
+# externe RS232-Buchse haengt intern an einem USB-Seriell-Chip (ttyUSB0,
+# PL2303), NICHT an einer der internen ttyS*-UARTs - ttyS0 ist die
+# System-Konsole (nicht anfassen), ttyS1 ist per Symlink /dev/rs485, ttyS2
+# vermutlich intern fuers GPS-Modul reserviert. Vorher in Services -> Serial
+# Utilities die RS232-Instanz auf "Enable: off" lassen (Console/Over-IP
+# wuerden den Port sonst selbst belegen). Bei einer anderen Hardware-Revision
+# zur Sicherheit per "ls -la /dev/rs232" gegenpruefen, ob der Symlink noch so
+# existiert.
+SERIAL_DEV=/dev/rs232
 
 # Baudrate/Format laut Datenblatt des QR-Scan-Moduls (meist 9600 8N1).
 SERIAL_BAUD=9600

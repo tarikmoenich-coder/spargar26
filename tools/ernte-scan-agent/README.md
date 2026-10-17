@@ -48,14 +48,26 @@ erwartet.
   bleibt `INGEST_URL` ein Platzhalter, der Agent sammelt Scans trotzdem schon
   zuverlässig in der lokalen Warteschlange gleichzeitig mit dem GPS-Test.
 
+## RS232-Geräte-Pfad (geklärt 2026-10-17)
+
+**Immer `/dev/rs232`** — kein Raten nötig. Auf dem TRB246 (Hardware-Rev.
+0004) legt Teltonikas eigenes Boot-Skript (`01-serial-symlink.sh`) einen
+festen Symlink an: die externe RS232-Buchse hängt intern an einem
+USB-Seriell-Chip (`ttyUSB0`, PL2303), der auf `/dev/rs232` verlinkt wird
+(`dmesg | grep tty` zeigt `Creating /dev/ttyUSB0 -> /dev/rs232 symlink`).
+`ttyS0` ist die System-Konsole (nicht anfassen), `ttyS1` ist `/dev/rs485`,
+`ttyS2` vermutlich intern fürs GPS-Modul. Die `ttyUSB1`–`ttyUSB4` gehören
+zum internen LTE-Modem (AT/Diagnose/PPP), nicht zur externen Buchse. Bei
+anderer Hardware-Revision sicherheitshalber mit `ls -la /dev/rs232`
+gegenprüfen.
+
 ## Einrichtung auf dem TRB246
 
 1. **Services → Serial Utilities**: RS232-Instanz NICHT auf "Console" oder
    "Over IP" stellen (sonst belegt RutOS den Port selbst) — Baudrate/Parität
    passend zum Scan-Modul-Datenblatt einstellen.
-2. Per SSH auf das Gerät, `ls /dev/tty*` prüfen, welcher Device-Pfad die
-   RS232-Schnittstelle ist (variiert je nach Firmware/Modell, nicht eindeutig
-   dokumentiert).
+2. `SERIAL_DEV=/dev/rs232` in `agent.conf` eintragen (siehe oben) —
+   zur Sicherheit auf dem Gerät mit `ls -la /dev/rs232` bestätigen.
 3. Dateien aufs Gerät kopieren (z.B. per `scp`):
    ```
    scp agent.sh root@<TRB246-IP>:/etc/ernte-scan-agent/agent.sh
