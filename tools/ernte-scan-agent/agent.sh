@@ -181,7 +181,12 @@ scan_einreihen() {
 # gespeichert wird.
 lese_schleife() {
   while true; do
-    stty -F "$SERIAL_DEV" "$SERIAL_BAUD" raw -echo
+    # cs8 -parenb -cstopb explizit erzwingen (8 Datenbits, keine Paritaet, 1
+    # Stopbit) - "raw" allein garantiert das NICHT zuverlaessig, haengt vom
+    # vorherigen Zustand der Schnittstelle ab. Ohne das kamen beim
+    # Datalogic-Scanner einzelne Zeichen verstuemmelt an (Praxistest
+    # 2026-10-20, siehe README).
+    stty -F "$SERIAL_DEV" "$SERIAL_BAUD" cs8 -parenb -cstopb raw -echo
     # Deskriptor EINMAL offen halten, nicht pro Zeile neu oeffnen - sonst geht
     # zwischen zwei Zeilen gepuffertes Rohdaten verloren und die Schnittstelle
     # wird staendig neu initialisiert.
