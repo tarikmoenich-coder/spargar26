@@ -32,6 +32,34 @@ in der Warteschlange, kein Verlust), Erholung nach Neustart des Servers, und
 mehrere schnelle Scans hintereinander — alle vier Fälle funktionieren wie
 erwartet.
 
+## Serielle Schnittstelle: cs8/-parenb/-cstopb + icrnl (Praxistest 2026-10-20)
+
+Erster echter Scanner (Datalogic) angeschlossen, zwei reale Probleme gefunden
+und behoben:
+
+1. **Zeichen kamen verstümmelt an** (z. B. Umlaute als Ersatzzeichen,
+   einzelne falsche Buchstaben). Ursache: `stty ... raw` allein garantiert
+   **nicht** 8 Datenbits/keine Parität/1 Stopbit — das hängt vom vorherigen
+   Zustand der Schnittstelle ab. Fix: `cs8 -parenb -cstopb` explizit dazu.
+2. **Kein einziger Scan wurde erfasst**, obwohl Daten ankamen. Ursache: Per
+   Hex-Dump (`Format-Hex` in PowerShell, nachdem `od`/`base64`/`sed -n l` auf
+   diesem BusyBox alle fehlten) bestätigt: Der Scanner schließt jeden Code
+   nur mit **CR** (`\r`, 0x0D) ab, **kein LF**. `read` in der Shell erkennt
+   aber ausschließlich `\n` als Zeilenende - das Skript wartete ewig.
+   **Erster Versuch, verworfen:** eine `tr '\r' '\n'`-Pipe vor `read` -
+   gepuffert, wenn `tr` in eine Pipe statt ein Terminal schreibt, kurze
+   einzelne Scans kamen nie zeitnah durch (lokal nachgestellt und bestätigt).
+   **Fix stattdessen:** `icrnl` als stty-Flag - lässt den **Kernel**
+   synchron jedes eingehende CR in LF wandeln, kein Pufferungsrisiko.
+
+Ein scheinbar drittes Problem (Zeichen fielen bei Mehrfach-Scans mitten im
+Code weg) stellte sich bei genauerem Hinsehen als **Test-Artefakt** heraus,
+nicht als echter Fehler: mehrere alte, nicht sauber beendete
+`agent.sh`-Testinstanzen liefen gleichzeitig und haben sich beim Lesen
+gegenseitig Bytes weggeschnappt. Mit garantiert nur einer laufenden Instanz
+kamen mehrere Scans hintereinander (auch mit realistischen Pausen
+dazwischen) jedes Mal exakt korrekt an.
+
 ## LED-Statusanzeige (SpidertrackBox-Erweiterung, 2026-10-20)
 
 RGB-Status-LED (Signal-Construct SWBM08952L020, Common-Anode, 12 V) an den

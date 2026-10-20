@@ -186,7 +186,19 @@ lese_schleife() {
     # vorherigen Zustand der Schnittstelle ab. Ohne das kamen beim
     # Datalogic-Scanner einzelne Zeichen verstuemmelt an (Praxistest
     # 2026-10-20, siehe README).
-    stty -F "$SERIAL_DEV" "$SERIAL_BAUD" cs8 -parenb -cstopb raw -echo
+    #
+    # icrnl AM ENDE (nach raw!) erzwingen: unser Datalogic-Scanner schliesst
+    # jeden Code nur mit CR (\r) ab, nicht mit LF (\n) - per Hex-Dump
+    # bestaetigt (2026-10-20). "read" erkennt aber ausschliesslich \n als
+    # Zeilenende, sonst wartet es ewig und kein Scan wird je erfasst. icrnl
+    # laesst den KERNEL jedes eingehende CR sofort in LF umwandeln, bevor
+    # read es sieht - "raw" schaltet das eigentlich ab, deshalb hier danach
+    # explizit wieder an. Erst eine fehlgeschlagene Variante mit einer
+    # tr-Pipe probiert, verworfen: tr puffert seine Ausgabe beim Schreiben in
+    # eine Pipe und gibt einzelne kurze Scans nie zeitnah weiter (lokal
+    # nachgestellt und bestaetigt) - icrnl passiert dagegen synchron im
+    # Kernel, ohne Pufferungsrisiko.
+    stty -F "$SERIAL_DEV" "$SERIAL_BAUD" cs8 -parenb -cstopb raw -echo icrnl
     # Deskriptor EINMAL offen halten, nicht pro Zeile neu oeffnen - sonst geht
     # zwischen zwei Zeilen gepuffertes Rohdaten verloren und die Schnittstelle
     # wird staendig neu initialisiert.
