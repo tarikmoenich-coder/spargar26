@@ -32,6 +32,48 @@ in der Warteschlange, kein Verlust), Erholung nach Neustart des Servers, und
 mehrere schnelle Scans hintereinander — alle vier Fälle funktionieren wie
 erwartet.
 
+## LED-Statusanzeige (SpidertrackBox-Erweiterung, 2026-10-20)
+
+RGB-Status-LED (Signal-Construct SWBM08952L020, Common-Anode, 12 V) an den
+drei konfigurierbaren I/O-Pins des TRB246. Diese sind laut Teltonika-Doku
+**nicht** `D1`/`D2`/`D3` (wie ein erster Entwurf annahm), sondern heißen
+`dio0`/`dio1`/`dio2` und sind als Ausgang **Open-Collector, bis 30 V/300 mA**
+— passt elektrisch zu einer Common-Anode-LED (jeder Farbkanal wird einzeln
+gegen Masse geschaltet), sofern die LED tatsächlich eine integrierte
+Strombegrenzung hat (laut Datenblatt der Fall) — **vor dem ersten Anschluss
+trotzdem elektrisch gegenprüfen**, bevor `LED_MODUS=echt` gesetzt wird.
+
+**Dritter Hintergrundprozess (`led_schleife`)**, nicht in die bestehende
+Sendeschleife gequetscht: ein durchgehend **blinkendes** Gelb braucht einen
+eigenen, kurzen Tick (0,3–0,5 s), unabhängig vom viel längeren
+`RETRY_INTERVALL_S`. `led_schleife` ist die **einzige** Stelle im ganzen
+Skript, die `ubus` aufruft — Lese- und Sendeschleife schreiben nur noch in
+zwei kleine Dateien (`LED_ZUSTAND_DATEI` = gewünschter Dauerzustand,
+`LED_BLINK_ZAEHLER_DATEI` = Zähler, der bei jedem erfolgreich zugestellten
+Scan hochgezählt wird). Das erfüllt "GPIO-Zugriffe zentral kapseln" und
+vermeidet, dass zwei Prozesse unabhängig an denselben Pins schalten.
+
+| Zustand | Bedeutung |
+|---|---|
+| **Rot** | Seit dem letzten Neustart noch nie erfolgreich mit `ernte-ingest` verbunden gewesen |
+| **Gelb (durchgehend)** | War/ist verbunden, Warteschlange leer bzw. letzter Versand erfolgreich |
+| **Gelb (blinkend)** | War schon mal verbunden, aktuell nicht erreichbar — Scans werden trotzdem lokal gesammelt (Nutzer-Idee 2026-10-19, verhindert das Missverständnis "Rot = ich darf nicht mehr scannen") |
+| **Grün (2× kurz blinken)** | Server hat einen Scan soeben bestätigt, danach zurück zum vorherigen Dauerzustand |
+
+**Bewusst zurückgestellt:** die ursprünglich geplante Unterscheidung
+Gelb=nicht angemeldet / Grün=angemeldet. Dafür müsste der Agent wissen, ob
+gerade ein Mitarbeiter an der Maschine eingeloggt ist — dieses Konzept
+existiert im Backend noch gar nicht (das ist Teil des noch nicht gebauten
+pg_cron-Processors, Teil E, der erst Kisten-Zyklen/Schichten herstellt). Bis
+dahin zeigt "Gelb durchgehend" nur "online", ohne Anmelde-Unterscheidung.
+
+**`LED_MODUS=simuliert`** (Standard) schreibt nur `LED-SIM: dioN=wert`-Zeilen
+ins Log statt echte `ubus`-Aufrufe zu machen — so lange die LED nicht
+verkabelt ist. Alle vier Zustände wurden in diesem Modus durchgetestet
+(Start, Verbindung, Bestätigungs-Blinken, Verbindungsverlust, Erholung).
+Sobald die LED angeschlossen und elektrisch verifiziert ist: `LED_MODUS=echt`
+in `agent.conf` setzen, Dienst neu starten.
+
 ## Noch NICHT Teil von v1 (bewusste Vereinfachung)
 
 - **Kein GPS/Koordinaten im Scan-Event**, obwohl der Plan das im Payload
@@ -44,10 +86,14 @@ erwartet.
   raten.
 - **Kein Erfolgston** (Piezo-Summer am Digitalausgang, siehe Plan) — kommt,
   sobald das Grundgerüst steht.
-- **`ernte-ingest` ist jetzt gebaut** (`supabase/functions/ernte-ingest/`,
-  2026-10-17), aber noch nicht deployt — siehe dessen README für Migration +
-  Deploy-Schritte. Bis dahin bleibt `INGEST_URL` ein Platzhalter, der Agent
-  sammelt Scans trotzdem schon zuverlässig in der lokalen Warteschlange.
+- **`ernte-ingest` ist jetzt gebaut und deployt** (`supabase/functions/ernte-ingest/`,
+  2026-10-17), End-to-End per `curl` vom TRB246 selbst verifiziert.
+- **Kein eigener manueller LED-Testmodus** (z.B. "Rot einschalten" als
+  CLI-Befehl, unabhängig vom Scan-Betrieb) — `LED_MODUS=simuliert` deckt das
+  Testen der Logik bereits ab. Für die elektrische Erstverifikation, sobald
+  die LED verkabelt ist, reicht ein einzeiliger manueller `ubus call
+  ioman.gpio.dio0 update '{"direction":"out","value":"1"}'`-Aufruf auf dem
+  Gerät - kein eigenes Testskript nötig.
 
 ## RS232-Geräte-Pfad (geklärt 2026-10-17)
 

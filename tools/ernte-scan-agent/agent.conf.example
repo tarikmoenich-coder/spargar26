@@ -38,3 +38,17 @@ QUEUE_DATEI=/etc/ernte-scan-agent/queue.jsonl
 
 # Wie oft die Warteschlange abgearbeitet wird (Sekunden).
 RETRY_INTERVALL_S=30
+
+# LED-Statusanzeige (RGB-Leuchte Signal-Construct SWBM08952L020 an dio0-dio2,
+# siehe README "LED-Statusanzeige"). "simuliert" loggt nur "LED-SIM: ..."
+# statt echte ubus-Aufrufe zu machen - solange die LED nicht verkabelt und
+# elektrisch verifiziert ist, NICHT auf "echt" stellen.
+LED_MODUS=simuliert
+LED_PIN_ROT=dio0
+LED_PIN_GRUEN=dio1
+LED_PIN_BLAU=dio2
+LED_BLINK_AN_S=0.15
+LED_BLINK_AUS_S=0.15
+LED_BLINK_ANZAHL=2
+LED_ZUSTAND_DATEI=/etc/ernte-scan-agent/led_zustand
+LED_BLINK_ZAEHLER_DATEI=/etc/ernte-scan-agent/led_blink_zaehler
