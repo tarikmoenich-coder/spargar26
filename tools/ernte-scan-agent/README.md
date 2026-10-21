@@ -105,16 +105,28 @@ vermeidet, dass zwei Prozesse unabhängig an denselben Pins schalten.
 | Zustand | Bedeutung |
 |---|---|
 | **Rot** | Seit dem letzten Neustart noch nie erfolgreich mit `ernte-ingest` verbunden gewesen |
-| **Gelb (durchgehend)** | War/ist verbunden, Warteschlange leer bzw. letzter Versand erfolgreich |
-| **Gelb (blinkend)** | War schon mal verbunden, aktuell nicht erreichbar — Scans werden trotzdem lokal gesammelt (Nutzer-Idee 2026-10-19, verhindert das Missverständnis "Rot = ich darf nicht mehr scannen") |
-| **Grün (2× kurz blinken)** | Server hat einen Scan soeben bestätigt, danach zurück zum vorherigen Dauerzustand |
+| **Gelb (durchgehend)** | Online, aber (lokal gesehen) noch niemand angemeldet |
+| **Gelb (blinkend)** | War schon mal verbunden, aktuell nicht erreichbar — Scans werden trotzdem lokal gesammelt (Nutzer-Idee 2026-10-19, verhindert das Missverständnis "Rot = ich darf nicht mehr scannen"). Rein verbindungsbasiert, unabhängig vom Anmeldestatus. |
+| **Grün (durchgehend)** | Seit dem letzten erfolgreich zugestellten `P-...`-Login-Scan lokal als "angemeldet" gemerkt |
+| **Grün (2× kurz blinken)** | Server hat einen Scan (Login oder Kiste) soeben bestätigt, danach zurück zum aktuellen Dauerzustand (Gelb oder Grün) |
 
-**Bewusst zurückgestellt:** die ursprünglich geplante Unterscheidung
-Gelb=nicht angemeldet / Grün=angemeldet. Dafür müsste der Agent wissen, ob
-gerade ein Mitarbeiter an der Maschine eingeloggt ist — dieses Konzept
-existiert im Backend noch gar nicht (das ist Teil des noch nicht gebauten
-pg_cron-Processors, Teil E, der erst Kisten-Zyklen/Schichten herstellt). Bis
-dahin zeigt "Gelb durchgehend" nur "online", ohne Anmelde-Unterscheidung.
+**Nachgezogen 2026-10-21** (ursprünglich zurückgestellt, siehe Kurswechsel
+unten): Gelb=nicht angemeldet / Grün=angemeldet jetzt doch gebaut, weil
+`ernte_schicht` (Anmelde-Session-Tabelle) seit dem Kisten-Zyklus-Processor
+existiert. Der Agent fragt den Anmeldestatus aber **nicht vom Server ab**
+(dafür gibt's noch keinen Endpunkt) - er merkt sich nur lokal "angemeldet",
+sobald ein `P-...`-Scan erfolgreich durchgeht, bis zum nächsten Neustart.
+**Bewusste Lücke:** Erkennt nicht, wenn sich dieselbe Person an einer
+ANDEREN Maschine anmeldet (die serverseitige Ein-Maschine-Regel würde die
+hiesige Schicht dann automatisch schließen) - die LED würde in dem Fall
+fälschlich weiter Grün zeigen. Für eine korrekte Erkennung bräuchte es eine
+echte Status-Abfrage vom Server, aufwändiger als für v1 gerechtfertigt.
+
+Erwogen und bewusst verworfen: "Gelb blinkend" zusätzlich als
+Pro-Kiste-Warte-Anzeige ("Server hat diese eine Kiste noch nicht bestätigt")
+zu verwenden - das wäre nicht von einem echten Verbindungsverlust zu
+unterscheiden gewesen. Bleibt bei der reinen Verbindungsbedeutung, Kisten-
+Bestätigung bleibt beim kurzen Grün-Blinken.
 
 **`LED_MODUS=simuliert`** (Standard) schreibt nur `LED-SIM: dioN=wert`-Zeilen
 ins Log statt echte `ubus`-Aufrufe zu machen — so lange die LED nicht

@@ -82,11 +82,12 @@ led_farbe() {
 
 led_rot() { led_farbe 1 0 0; }
 led_gelb() { led_farbe 1 1 0; }
+led_gruen() { led_farbe 0 1 0; }
 led_aus() { led_farbe 0 0 0; }
 
 # Von sende_schleife aufgerufen: schreibt nur den GEWUENSCHTEN Dauerzustand
-# (ROT/GELB/GELB_BLINKT) in eine Datei - fasst selbst keine GPIO an, das
-# macht ausschliesslich led_schleife weiter unten.
+# (ROT/GELB/GRUEN/GELB_BLINKT) in eine Datei - fasst selbst keine GPIO an,
+# das macht ausschliesslich led_schleife weiter unten.
 led_zustand_setzen() {
   echo "$1" > "$LED_ZUSTAND_DATEI"
 }
@@ -142,6 +143,13 @@ led_schleife() {
         if [ "$zuletzt_angezeigt" != "GELB" ]; then
           led_gelb
           zuletzt_angezeigt="GELB"
+        fi
+        usleep 300000
+        ;;
+      GRUEN)
+        if [ "$zuletzt_angezeigt" != "GRUEN" ]; then
+          led_gruen
+          zuletzt_angezeigt="GRUEN"
         fi
         usleep 300000
         ;;
@@ -223,7 +231,26 @@ lese_schleife() {
 # wie wartendeHolen()/schreibeZurueck() im ernte-waage-agent.
 sende_schleife() {
   jemals_verbunden=0
+  # Lokal gemerkt, NICHT vom Server abgefragt (es gibt noch keinen
+  # Status-Endpunkt "ist gerade eine Schicht offen?") - wird gesetzt, sobald
+  # ein P-...-Scan erfolgreich zugestellt wurde, und bleibt bis zum naechsten
+  # Neustart bestehen. Erkennt also NICHT, wenn sich dieselbe Person an
+  # einer ANDEREN Maschine anmeldet (serverseitige Ein-Maschine-Regel wuerde
+  # die hiesige Schicht dann automatisch schliessen) - bewusste
+  # Vereinfachung (Nutzer-Entscheidung 2026-10-21), siehe README.
+  angemeldet=0
   led_zustand_setzen ROT
+
+  # Setzt den Dauerzustand passend zum aktuellen Verbindungs-/Anmeldestatus -
+  # an allen drei Stellen unten verwendet, die "online" bedeuten.
+  led_online_zustand_anwenden() {
+    if [ "$angemeldet" = "1" ]; then
+      led_zustand_setzen GRUEN
+    else
+      led_zustand_setzen GELB
+    fi
+  }
+
   while true; do
     sleep "$RETRY_INTERVALL_S"
 
@@ -234,7 +261,7 @@ sende_schleife() {
     # "Server erreicht", nur ein echter Verbindungsfehler ist "nicht erreicht".
     if curl -s -o /dev/null -m 5 --head "$INGEST_URL"; then
       jemals_verbunden=1
-      led_zustand_setzen GELB
+      led_online_zustand_anwenden
     elif [ "$jemals_verbunden" = "1" ]; then
       led_zustand_setzen GELB_BLINKT
     else
@@ -263,7 +290,10 @@ sende_schleife() {
         2??)
           echo "Versendet: $zeile"
           jemals_verbunden=1
-          led_zustand_setzen GELB
+          case "$zeile" in
+            *'"code":"P-'*) angemeldet=1 ;;
+          esac
+          led_online_zustand_anwenden
           led_bestaetigung_blinken
           ;;
         400)
