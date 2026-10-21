@@ -40,8 +40,8 @@ fi
 : "${LED_PIN_ROT:=dio0}"
 : "${LED_PIN_GRUEN:=dio1}"
 : "${LED_PIN_BLAU:=dio2}"
-: "${LED_BLINK_AN_S:=0.15}"
-: "${LED_BLINK_AUS_S:=0.15}"
+: "${LED_BLINK_AN_MS:=150}"
+: "${LED_BLINK_AUS_MS:=150}"
 : "${LED_BLINK_ANZAHL:=2}"
 : "${LED_ZUSTAND_DATEI:=/etc/ernte-scan-agent/led_zustand}"
 : "${LED_BLINK_ZAEHLER_DATEI:=/etc/ernte-scan-agent/led_blink_zaehler}"
@@ -113,9 +113,9 @@ led_schleife() {
       i=0
       while [ "$i" -lt "$LED_BLINK_ANZAHL" ]; do
         led_farbe 0 1 0
-        sleep "$LED_BLINK_AN_S"
+        usleep $((LED_BLINK_AN_MS * 1000))
         led_aus
-        sleep "$LED_BLINK_AUS_S"
+        usleep $((LED_BLINK_AUS_MS * 1000))
         i=$((i + 1))
       done
       # Danach steht wieder der letzte Dauerzustand an - neu anwenden
@@ -136,21 +136,21 @@ led_schleife() {
           blink_phase_an=1
         fi
         zuletzt_angezeigt=""
-        sleep 0.5
+        usleep 500000
         ;;
       GELB)
         if [ "$zuletzt_angezeigt" != "GELB" ]; then
           led_gelb
           zuletzt_angezeigt="GELB"
         fi
-        sleep 0.3
+        usleep 300000
         ;;
       *)
         if [ "$zuletzt_angezeigt" != "ROT" ]; then
           led_rot
           zuletzt_angezeigt="ROT"
         fi
-        sleep 0.3
+        usleep 300000
         ;;
     esac
   done

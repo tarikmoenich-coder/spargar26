@@ -123,6 +123,20 @@ verkabelt ist. Alle vier Zustände wurden in diesem Modus durchgetestet
 Sobald die LED angeschlossen und elektrisch verifiziert ist: `LED_MODUS=echt`
 in `agent.conf` setzen, Dienst neu starten.
 
+**Praxisfund 2026-10-21, direkt beim ersten echten Anschluss:** Alle drei
+Farbkanäle + die Gelb-Mischung elektrisch per Hand bestätigt (`ubus call
+ioman.gpio.dioN update`), aber `led_schleife` startete trotzdem nicht -
+`logread` zeigte `sleep: invalid number '0.3'`. Dieses BusyBox unterstützt
+**keine Nachkommastellen** bei `sleep` (anders als GNU-`sleep`, mit dem lokal
+getestet wurde) - betraf sowohl die festen `sleep 0.3`/`0.5`-Ticks als auch
+die konfigurierbaren Blink-Zeiten. Fix: komplett auf `usleep`
+(Mikrosekunden, ganzzahlig) umgestellt, `LED_BLINK_AN_S`/`LED_BLINK_AUS_S`
+(Sekunden-Dezimalzahl) dafür umbenannt in `LED_BLINK_AN_MS`/`LED_BLINK_AUS_MS`
+(Millisekunden, ganzzahlig) - `usleep` ist auf diesem Gerät bestätigt
+vorhanden. Lokal mit einem kleinen `usleep`-Shim (ruft intern das
+fraktionsfähige GNU-`sleep` auf) nachgetestet, alle vier Zustände weiterhin
+korrekt.
+
 ## Noch NICHT Teil von v1 (bewusste Vereinfachung)
 
 - **Kein GPS/Koordinaten im Scan-Event**, obwohl der Plan das im Payload
