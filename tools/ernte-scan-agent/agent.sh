@@ -249,18 +249,31 @@ sende_schleife() {
 
     while IFS= read -r zeile; do
       [ -n "$zeile" ] || continue
-      if curl -fsS -m 10 -X POST "$INGEST_URL" \
+      # Kein -f mehr: wir werten den HTTP-Code selbst aus, um zwischen
+      # "dauerhaft ungueltig" (400 - z.B. Code ohne P-/K--Praefix, wird nie
+      # erfolgreich, egal wie oft wiederholt) und "vorruebergehend"
+      # (Netzwerkausfall, 5xx, falscher Token) zu unterscheiden. Ohne diese
+      # Unterscheidung blieb z.B. eine versehentlich gescannte Visitenkarte
+      # fuer immer in der Warteschlange haengen (Praxisfund 2026-10-21).
+      antwort_code="$(curl -sS -m 10 -o /dev/null -w '%{http_code}' -X POST "$INGEST_URL" \
           -H "Content-Type: application/json" \
           -H "Authorization: Bearer $INGEST_TOKEN" \
-          -d "$zeile" >/dev/null 2>&1; then
-        echo "Versendet: $zeile"
-        jemals_verbunden=1
-        led_zustand_setzen GELB
-        led_bestaetigung_blinken
-      else
-        echo "Versand fehlgeschlagen, bleibt in der Warteschlange: $zeile" >&2
-        printf '%s\n' "$zeile" >> "$QUEUE_DATEI"
-      fi
+          -d "$zeile" 2>/dev/null)"
+      case "$antwort_code" in
+        2??)
+          echo "Versendet: $zeile"
+          jemals_verbunden=1
+          led_zustand_setzen GELB
+          led_bestaetigung_blinken
+          ;;
+        400)
+          echo "Dauerhaft ungueltig (HTTP 400), verworfen statt endlos wiederholt: $zeile" >&2
+          ;;
+        *)
+          echo "Versand fehlgeschlagen (HTTP ${antwort_code:-000}), bleibt in der Warteschlange: $zeile" >&2
+          printf '%s\n' "$zeile" >> "$QUEUE_DATEI"
+          ;;
+      esac
     done < "$abholung"
     rm -f "$abholung"
   done

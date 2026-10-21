@@ -60,6 +60,27 @@ gegenseitig Bytes weggeschnappt. Mit garantiert nur einer laufenden Instanz
 kamen mehrere Scans hintereinander (auch mit realistischen Pausen
 dazwischen) jedes Mal exakt korrekt an.
 
+## Dauerhaft ungültige Codes werden verworfen, nicht endlos wiederholt (2026-10-21)
+
+Praxisfund: Eine versehentlich gescannte Visitenkarte (kein `P-`/`K-`-Präfix)
+blieb vorher **für immer** in der Warteschlange hängen — `ernte-ingest`
+antwortet darauf mit `400`, und ein `400` wird sich durch Wiederholen nie in
+Erfolg verwandeln, anders als ein Netzwerkausfall oder ein Server-Fehler.
+
+Die Sendeschleife prüft jetzt den tatsächlichen HTTP-Status (`-w
+'%{http_code}'` statt `curl -f`):
+- **2xx** → erfolgreich versendet, verworfen (wie bisher).
+- **400** → dauerhaft ungültiger Inhalt, wird geloggt und **verworfen**, kein
+  erneuter Versuch.
+- **alles andere** (Netzwerkausfall, 401 falscher Token, 5xx) → bleibt wie
+  bisher in der Warteschlange, da sich die Ursache ändern kann (Token
+  korrigieren, Server kommt wieder).
+
+Mit einem Fake-Server, der je nach Code-Präfix `200` oder `400` zurückgibt,
+lokal bestätigt: gültiger Code → versendet und aus der Warteschlange
+entfernt; ungültiger Code → verworfen und ebenfalls aus der Warteschlange
+entfernt (statt wie vorher dauerhaft hängen zu bleiben).
+
 ## LED-Statusanzeige (SpidertrackBox-Erweiterung, 2026-10-20)
 
 RGB-Status-LED (Signal-Construct SWBM08952L020, Common-Anode, 12 V) an den
