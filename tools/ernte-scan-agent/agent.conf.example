@@ -36,8 +36,11 @@ INGEST_TOKEN=
 # siehe "Offene Frage Stromausfall" im Plan).
 QUEUE_DATEI=/etc/ernte-scan-agent/queue.jsonl
 
-# Wie oft die Warteschlange abgearbeitet wird (Sekunden).
-RETRY_INTERVALL_S=30
+# Wie oft die Warteschlange abgearbeitet wird (Sekunden). Bestimmt auch,
+# wie lange es nach einem Scan dauert, bis das Bestaetigungs-Blinken kommt -
+# 30s (frueherer Standard) fuehlte sich beim Praxistest zu traege an
+# (2026-10-21), 3s ist fuer eine einzelne Box unproblematisch.
+RETRY_INTERVALL_S=3
 
 # LED-Statusanzeige (RGB-Leuchte Signal-Construct SWBM08952L020 an dio0-dio2,
 # siehe README "LED-Statusanzeige"). "simuliert" loggt nur "LED-SIM: ..."
