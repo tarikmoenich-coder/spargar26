@@ -160,6 +160,7 @@ alter table ernte_position enable row level security;
 alter table ernte_schicht enable row level security;
 alter table ernte_kiste_zyklus enable row level security;
 alter table ernte_konfig enable row level security;
+alter table ernte_poller_state enable row level security;
 
 drop policy if exists "ernte_maschine_select" on ernte_maschine;
 create policy "ernte_maschine_select" on ernte_maschine for select
@@ -202,11 +203,19 @@ create policy "ernte_konfig_write" on ernte_konfig for all
   using (current_role_name() = 'admin')
   with check (current_role_name() = 'admin');
 
+-- KEINE Insert/Update-Policy: nur der noch zu bauende Poller
+-- (Service-Key) schreibt hier - rein interner Zustand, fuer die App nur
+-- zur Diagnose lesbar.
+drop policy if exists "ernte_poller_state_select" on ernte_poller_state;
+create policy "ernte_poller_state_select" on ernte_poller_state for select
+  using (current_role_name() in ('admin', 'hr', 'management', 'erntewirtschaft', 'zeiterfassung'));
+
 grant select, insert, update, delete on ernte_maschine to authenticated;
 grant select on ernte_position to authenticated;
 grant select, update on ernte_schicht to authenticated;
 grant select, update on ernte_kiste_zyklus to authenticated;
 grant select, insert, update, delete on ernte_konfig to authenticated;
+grant select on ernte_poller_state to authenticated;
 
 -- --------------------------------------------------------------------------
 -- 8. Pilot-Maschine anlegen (das heute verkabelte und getestete TRB246).
