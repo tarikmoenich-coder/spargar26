@@ -67,6 +67,12 @@ function heuteIso(): string {
   return new Date().toISOString().slice(0, 10);
 }
 
+function vorTagenIso(tage: number): string {
+  const d = new Date();
+  d.setUTCDate(d.getUTCDate() - tage);
+  return d.toISOString().slice(0, 10);
+}
+
 // Nachträgliches Zuordnen einer Person - exakt dasselbe Muster wie
 // FahrerZelle in app/fahrzeuge/stammdaten/page.tsx, nur auf
 // ernte_kiste_zyklus.employee_id statt fahrzeug.fahrer_employee_id.
@@ -223,7 +229,7 @@ export default function ErntewirtschaftErntePage() {
   const { profile } = useProfile();
   const canEdit = profile?.role === "admin" || profile?.role === "hr";
 
-  const [datum, setDatum] = useState(heuteIso());
+  const [datumAb, setDatumAb] = useState(vorTagenIso(7));
   const [nurLuecken, setNurLuecken] = useState(false);
   const [nurOhneZuordnung, setNurOhneZuordnung] = useState(false);
   const [zyklen, setZyklen] = useState<KisteZyklusZeile[]>([]);
@@ -235,9 +241,6 @@ export default function ErntewirtschaftErntePage() {
     setLoading(true);
     const supabase = getSupabaseClient();
 
-    const bis = new Date(`${datum}T00:00:00`);
-    bis.setDate(bis.getDate() + 1);
-
     let query = supabase
       .from("ernte_kiste_zyklus")
       .select(
@@ -246,8 +249,7 @@ export default function ErntewirtschaftErntePage() {
          employees(name, vorname, personal_nr),
          feld(bezeichnung)`
       )
-      .gte("befuellt_am", `${datum}T00:00:00`)
-      .lt("befuellt_am", bis.toISOString())
+      .gte("befuellt_am", `${datumAb}T00:00:00Z`)
       .order("befuellt_am", { ascending: false });
 
     if (nurLuecken) query = query.in("status", ["offen", "ungeklaert"]);
@@ -266,7 +268,7 @@ export default function ErntewirtschaftErntePage() {
     setZyklen((data as unknown as KisteZyklusZeile[]) ?? []);
     setMitarbeiter((mitarbeiterData as EmpOpt[]) ?? []);
     setLoading(false);
-  }, [datum, nurLuecken, nurOhneZuordnung]);
+  }, [datumAb, nurLuecken, nurOhneZuordnung]);
 
   useEffect(() => {
     laden();
@@ -294,11 +296,11 @@ export default function ErntewirtschaftErntePage() {
 
       <div className="sticky top-[calc(3.5rem+var(--subtabs-h,2.5rem))] z-30 flex flex-wrap items-center gap-4 bg-sand py-2 print:hidden">
         <label className="text-sm">
-          Datum{" "}
+          Zeitraum ab{" "}
           <input
             type="date"
-            value={datum}
-            onChange={(e) => setDatum(e.target.value)}
+            value={datumAb}
+            onChange={(e) => setDatumAb(e.target.value)}
           />
         </label>
         <label className="flex items-center gap-1 text-sm">
