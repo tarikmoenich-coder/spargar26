@@ -194,33 +194,35 @@ export default function ErntewirtschaftAusweisePage() {
               Drucken
             </button>
           </div>
-          <div className="ausweis-karte flex items-center gap-2 rounded border border-dashed border-neutral-400 bg-white p-3">
-            {druck.fotoUrl ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img
-                src={druck.fotoUrl}
-                alt="Mitarbeiterfoto"
-                className="ausweis-foto-platzhalter shrink-0 rounded object-cover grayscale"
-              />
-            ) : (
-              <div className="ausweis-foto-platzhalter flex shrink-0 items-center justify-center rounded bg-neutral-200 text-neutral-400">
-                <UserRound className="h-10 w-10" strokeWidth={1.25} />
-              </div>
-            )}
-            <div className="min-w-0 flex-1">
+          <div className="ausweis-karte flex flex-col gap-1 rounded border border-dashed border-neutral-400 bg-white p-3">
+            <div className="min-w-0">
               <p className="text-[8px] uppercase tracking-wide text-neutral-500">
                 Spargelhof Mömmel
               </p>
-              <p className="truncate text-sm font-semibold leading-tight">
+              <p className="truncate text-base font-semibold leading-tight">
                 {druck.mitarbeiter.name}, {druck.mitarbeiter.vorname}
               </p>
             </div>
-            <div className="flex shrink-0 flex-col items-center justify-start gap-1">
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={druck.qrDataUrl} alt="QR-Code" className="ausweis-qr" />
-              <p className="text-sm font-semibold tabular-nums">
-                {druck.mitarbeiter.personal_nr}
-              </p>
+            <div className="flex flex-1 items-center justify-between gap-2">
+              {druck.fotoUrl ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  src={druck.fotoUrl}
+                  alt="Mitarbeiterfoto"
+                  className="ausweis-foto-platzhalter shrink-0 rounded object-cover grayscale"
+                />
+              ) : (
+                <div className="ausweis-foto-platzhalter flex shrink-0 items-center justify-center rounded bg-neutral-200 text-neutral-400">
+                  <UserRound className="h-16 w-16" strokeWidth={1.25} />
+                </div>
+              )}
+              <div className="flex shrink-0 flex-col items-center justify-start gap-1">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={druck.qrDataUrl} alt="QR-Code" className="ausweis-qr" />
+                <p className="text-sm font-semibold tabular-nums">
+                  {druck.mitarbeiter.personal_nr}
+                </p>
+              </div>
             </div>
           </div>
           <p className="text-xs text-neutral-500 print:hidden">
