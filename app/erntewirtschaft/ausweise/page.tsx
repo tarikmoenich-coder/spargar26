@@ -15,10 +15,12 @@
 
 import { useCallback, useEffect, useState } from "react";
 import QRCode from "qrcode";
-import { IdCard, UserRound } from "lucide-react";
+import { IdCard } from "lucide-react";
 import PageHeader from "@/components/PageHeader";
 import EmptyState from "@/components/EmptyState";
 import MitarbeiterFotoAufnahme from "@/components/MitarbeiterFotoAufnahme";
+import MitarbeiterAusweisKarte from "@/components/MitarbeiterAusweisKarte";
+import MitarbeiterAusweisDruckbogen from "@/components/MitarbeiterAusweisDruckbogen";
 import { getSupabaseClient } from "@/lib/supabase/client";
 import { useProfile } from "@/lib/useProfile";
 import { formatDatumDE } from "@/lib/format";
@@ -43,7 +45,7 @@ interface AusweisZeile {
 interface DruckAnsicht {
   mitarbeiter: MitarbeiterZeile;
   code: string;
-  qrDataUrl: string;
+  qrSvg: string;
   fotoUrl: string | null;
 }
 
@@ -95,10 +97,13 @@ export default function ErntewirtschaftAusweisePage() {
   }, [laden]);
 
   async function druckeKarte(m: MitarbeiterZeile, suffix: string) {
+    // Wert/Generierung unverändert (P-<personal_nr>-<suffix>, dieselbe
+    // "qrcode"-Bibliothek) - nur als SVG statt PNG-DataURL, für einen
+    // scharfen Vektor-Druck (Nutzer-Vorgabe 2026-10-22).
     const code = `P-${m.personal_nr}-${suffix}`;
     const supabase = getSupabaseClient();
-    const [qrDataUrl, fotoUrl] = await Promise.all([
-      QRCode.toDataURL(code, { margin: 1, width: 500 }),
+    const [qrSvg, fotoUrl] = await Promise.all([
+      QRCode.toString(code, { type: "svg", color: { dark: "#000000", light: "#ffffff" } }),
       m.foto_pfad
         ? supabase.storage
             .from(FOTO_BUCKET)
@@ -106,8 +111,7 @@ export default function ErntewirtschaftAusweisePage() {
             .then((r) => r.data?.signedUrl ?? null)
         : Promise.resolve(null),
     ]);
-    setDruck({ mitarbeiter: m, code, qrDataUrl, fotoUrl });
-    setTimeout(() => window.print(), 150);
+    setDruck({ mitarbeiter: m, code, qrSvg, fotoUrl });
   }
 
   async function neuenSuffixErzeugenUndDrucken(m: MitarbeiterZeile) {
@@ -181,7 +185,7 @@ export default function ErntewirtschaftAusweisePage() {
       )}
 
       {druck ? (
-        <div className="ausweis-druck flex flex-col items-start gap-4">
+        <div className="flex flex-col items-start gap-4">
           <div className="flex gap-2 print:hidden">
             <button
               type="button"
@@ -194,40 +198,33 @@ export default function ErntewirtschaftAusweisePage() {
               Drucken
             </button>
           </div>
-          <div className="ausweis-karte flex flex-col gap-1 rounded border border-dashed border-neutral-400 bg-white p-3">
-            <div className="min-w-0">
-              <p className="text-[8px] uppercase tracking-wide text-neutral-500">
-                Spargelhof Mömmel
-              </p>
-              <p className="truncate text-base font-semibold leading-tight">
-                {druck.mitarbeiter.name}, {druck.mitarbeiter.vorname}
-              </p>
-            </div>
-            <div className="flex flex-1 items-center gap-4">
-              {druck.fotoUrl ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img
-                  src={druck.fotoUrl}
-                  alt="Mitarbeiterfoto"
-                  className="ausweis-foto-platzhalter shrink-0 rounded object-cover grayscale"
-                />
-              ) : (
-                <div className="ausweis-foto-platzhalter flex shrink-0 items-center justify-center rounded bg-neutral-200 text-neutral-400">
-                  <UserRound className="h-12 w-12" strokeWidth={1.25} />
-                </div>
-              )}
-              <div className="flex shrink-0 flex-col items-center justify-start gap-1">
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src={druck.qrDataUrl} alt="QR-Code" className="ausweis-qr" />
-                <p className="text-base font-semibold tabular-nums">
-                  {druck.mitarbeiter.personal_nr}
-                </p>
-              </div>
+
+          <div className="ausweis2-vorschau-rahmen w-full print:hidden">
+            <div className="ausweis2-vorschau-box">
+              <MitarbeiterAusweisKarte
+                name={druck.mitarbeiter.name}
+                vorname={druck.mitarbeiter.vorname}
+                personalNr={druck.mitarbeiter.personal_nr}
+                fotoUrl={druck.fotoUrl}
+                qrSvg={druck.qrSvg}
+                variante="vorschau"
+              />
             </div>
           </div>
+
+          <MitarbeiterAusweisDruckbogen
+            name={druck.mitarbeiter.name}
+            vorname={druck.mitarbeiter.vorname}
+            personalNr={druck.mitarbeiter.personal_nr}
+            fotoUrl={druck.fotoUrl}
+            qrSvg={druck.qrSvg}
+          />
+
           <p className="text-xs text-neutral-500 print:hidden">
-            Noch kein Kartendrucker vorhanden - zum Testen reicht der normale
-            Drucker (Schnittrand gestrichelt).
+            Noch kein eigener Kartendrucker vorhanden - Druck auf DIN A4 mit
+            Schnittmarkierungen, Ausweis 20&nbsp;mm vom linken/oberen Blattrand.
+            Im Druckdialog: Skalierung 100&nbsp;%, keine zusätzlichen Ränder,
+            Kopf-/Fußzeilen deaktivieren.
           </p>
         </div>
       ) : (

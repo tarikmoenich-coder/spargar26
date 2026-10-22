@@ -882,11 +882,27 @@ danach:
   Karte sofort ungültig, mit Bestätigungsdialog). Druckansicht zeigt groß die
   Personalnummer als Klarnummer, der Suffix steckt nur im QR-Code
   (`qrcode`-Paket, client-seitig). Noch ohne eigenen Kartendrucker (Stand
-  2026-10-22) - Druckansicht funktioniert mit jedem normalen Drucker
-  (benanntes `@page`, siehe `app/globals.css`). Karte zeigt links ein
-  Mitarbeiterfoto (s/w per CSS-Filter) oder, falls noch keins vorhanden,
-  einen Silhouetten-Platzhalter; QR-Code + Personalnummer rechts
-  untereinander.
+  2026-10-22).
+  **Redesign 2026-10-22 ("Design und DIN-A4-Druck", eigene Spezifikation):**
+  Karte exakt 85,60 x 53,98 mm (ID-1), eigenes Farbschema (Primärgrün
+  `#286b38`, Text `#202820`, Sekundärtext `#737b73`), Kopfzeile "SPARGELHOF
+  MÖMMEL" / "MITARBEITERAUSWEIS" mit grüner Trennlinie, Name prominent
+  darunter, untere Zeile Foto (20x26mm) · Personalnummer (mittig, mit
+  kleiner Beschriftung) · QR-Code (24x24mm, jetzt als **SVG** statt
+  PNG-DataURL für scharfen Vektordruck - Wert/Erzeugung unverändert).
+  Eigene Komponenten `components/MitarbeiterAusweisKarte.tsx` (fixe
+  physische Größe, für Vorschau UND Druck identisch, nur Schatten/
+  Eckenrundung unterscheiden sich) und
+  `components/MitarbeiterAusweisDruckbogen.tsx` (DIN-A4-Blatt, Karte 20mm
+  vom linken/oberen Rand, 4 Schnittmarkierungen außerhalb der Kartenfläche).
+  Bildschirm-Vorschau ca. 3-fach vergrößert per `transform:scale()` am
+  äußeren Rahmen (responsiv über Media-Query-Stufen, beeinflusst nie die
+  Druckgröße). **Bewusste Abweichung von der Nutzer-Vorgabe:** die
+  mitgelieferte CSS-Skizze nutzt eine unbenannte `@page { size: A4; margin:
+  0; }` - das würde (siehe Bugfix-Hinweis bei `.stammkarte` in
+  `app/globals.css`) den gesamten App-Druck beeinflussen, nicht nur diese
+  Seite. Stattdessen eine benannte `@page ausweis2-a4`, gleiches Muster wie
+  überall sonst in der App - Ergebnis optisch identisch.
   **Mitarbeiterfoto (`migration_2026-10-22_mitarbeiter_foto.sql`,
   `employees.foto_pfad` + privater Bucket `mitarbeiter-fotos`, gleiches
   RLS-Muster wie `mitarbeiter-dokumente`):** wird NICHT hier aufgenommen,

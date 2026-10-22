@@ -297,41 +297,192 @@ input[type="number"]::-webkit-inner-spin-button {
   }
 }
 
-/* Mitarbeiter-Ausweis (app/erntewirtschaft/ausweise) - eine Karte im
-   ID-1-Format (85,6 x 54 mm, CR80) oben links auf der Druckseite. Noch kein
-   eigener Kartendrucker vorhanden (Stand 2026-10-22, Nutzer-Vorgabe: "auch
-   wenn es noch nicht mit dem echten Kartendrucker passiert") - vorerst auf
-   normalem Drucker/Papier, mit gestricheltem Schnittrand. BENANNTE @page
-   (siehe Bugfix-Hinweis bei .stammkarte oben - eine unbenannte @page würde
-   den gesamten App-Druck beeinflussen). */
-@media print {
-  @page ausweis-seite {
-    size: A4 portrait;
-    margin: 10mm;
-  }
-  .ausweis-druck {
-    page: ausweis-seite;
-  }
-}
-.ausweis-karte {
+/* ============================================================================
+   Mitarbeiterausweis v2 (app/erntewirtschaft/ausweise) - Redesign nach
+   Nutzer-Spezifikation 2026-10-22 ("Design und DIN-A4-Druck"). Ersetzt die
+   erste Kartenversion komplett (vorherige .ausweis-karte/.ausweis-*-Klassen
+   und @page ausweis-seite - siehe Git-Historie für den ersten Entwurf).
+
+   Kartengröße 85,60 x 53,98 mm ist VERBINDLICH (ID-1-Format) und gilt
+   IMMER unverändert - für die Bildschirm-Vorschau wird NUR der äußere
+   Rahmen per transform:scale() vergrößert, nie die Karte selbst
+   umdefiniert (QA-Kriterium: Vorschau und Druck nutzen dieselbe
+   Kartenkomponente, nur unterschiedliche Größen-/Darstellungsregeln).
+   ============================================================================ */
+.ausweis2-karte {
   width: 85.6mm;
-  height: 54mm;
+  height: 53.98mm;
+  box-sizing: border-box;
+  background: #ffffff;
+  color: #202820;
+  padding: 3mm;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
 }
-/* Muster-Schatten-Platzhalter, solange kein echtes Mitarbeiterfoto
-   vorhanden ist - Portraitformat, Seitenverhältnis wie der Kamera-Crop in
-   MitarbeiterFotoAufnahme (300x400 = 3:4). Nutzer-Vorgabe 2026-10-22:
-   erst auf 30x40mm vergrößert, dann als "etwas zu groß" auf 24x32mm
-   zurückgenommen. */
-.ausweis-foto-platzhalter {
+.ausweis2-karte--vorschau {
+  border-radius: 1.2mm;
+  box-shadow:
+    0 1mm 3mm rgba(0, 0, 0, 0.18),
+    0 0.3mm 1mm rgba(0, 0, 0, 0.12);
+}
+
+.ausweis2-kopf {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 2mm;
+  border-bottom: 0.4mm solid #286b38;
+  padding-bottom: 1mm;
+  margin-bottom: 1.5mm;
+}
+.ausweis2-firma {
+  font-size: 2.6mm;
+  font-weight: 700;
+  letter-spacing: 0.3px;
+  color: #286b38;
+  white-space: nowrap;
+}
+.ausweis2-typ {
+  font-size: 1.9mm;
+  font-weight: 600;
+  letter-spacing: 0.4px;
+  color: #737b73;
+  white-space: nowrap;
+}
+
+.ausweis2-name {
+  margin: 0 0 1.5mm;
+  font-size: 3.3mm;
+  font-weight: 600;
+  line-height: 1.15;
+  color: #202820;
+  overflow-wrap: break-word;
+  word-break: break-word;
+}
+
+.ausweis2-unten {
+  margin-top: auto;
+  display: flex;
+  align-items: center;
+  gap: 3mm;
+}
+
+.ausweis2-foto-bild,
+.ausweis2-foto-platzhalter {
+  width: 20mm;
+  height: 26mm;
+  flex-shrink: 0;
+  border-radius: 0.8mm;
+}
+.ausweis2-foto-bild {
+  object-fit: cover;
+}
+.ausweis2-foto-platzhalter {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #e7e9e6;
+  color: #9aa39a;
+}
+
+.ausweis2-personalnr {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.5mm;
+}
+.ausweis2-personalnr-label {
+  font-size: 1.8mm;
+  color: #737b73;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+}
+.ausweis2-personalnr-wert {
+  font-size: 4mm;
+  font-weight: 700;
+  color: #202820;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ~24x24mm inkl. Ruhezone - die SVG-Ausgabe von QRCode.toString() bringt
+   ihre Ruhezone/viewBox schon mit, wird hier nur auf die Zielgröße
+   skaliert (reine CSS-Darstellungsregel, Wert/Generierung unverändert). */
+.ausweis2-qr {
   width: 24mm;
-  height: 32mm;
+  height: 24mm;
+  flex-shrink: 0;
 }
-/* Größer als vorher (Nutzer-Vorgabe 2026-10-22: erst 25mm->30mm, dann
-   nochmal "etwas größer" auf 34mm) - passt bei 85,6mm Kartenbreite noch
-   neben dem 24mm breiten Foto. */
-.ausweis-qr {
-  width: 34mm;
-  height: 34mm;
+.ausweis2-qr svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+/* --- Bildschirm-Vorschau: ca. 3-fach vergrößert, responsiv per
+   Media-Query-Stufen (kein JS nötig) - beeinflusst NICHT die Druckgröße,
+   da .ausweis2-vorschau-box im Druck gar nicht gerendert wird
+   (print:hidden am Aufrufer). --- */
+.ausweis2-vorschau-rahmen {
+  display: flex;
+  justify-content: center;
+  padding: 2rem 1rem;
+  background: #f0f1ef;
+  border-radius: 0.5rem;
+}
+.ausweis2-vorschau-box {
+  --ausweis2-skala: 3;
+  width: calc(85.6mm * var(--ausweis2-skala));
+  height: calc(53.98mm * var(--ausweis2-skala));
+}
+.ausweis2-vorschau-box .ausweis2-karte {
+  transform: scale(var(--ausweis2-skala));
+  transform-origin: top left;
+}
+@media (max-width: 480px) {
+  .ausweis2-vorschau-box {
+    --ausweis2-skala: 2.2;
+  }
+}
+@media (max-width: 360px) {
+  .ausweis2-vorschau-box {
+    --ausweis2-skala: 1.7;
+  }
+}
+
+/* --- DIN-A4-Druck: ein Ausweis, 20mm vom linken/oberen Blattrand, 4
+   Schnittmarkierungen außerhalb der Kartenfläche (siehe
+   components/MitarbeiterAusweisDruckbogen.tsx für deren Geometrie).
+   BENANNTE @page - eine unbenannte @page { size: A4; margin: 0; } würde
+   (siehe Bugfix-Hinweis bei .stammkarte weiter oben in dieser Datei) den
+   gesamten App-Druck beeinflussen, nicht nur diese eine Seite - deshalb
+   hier bewusst abweichend vom wörtlichen Vorgabe-Snippet umgesetzt. */
+.ausweis2-druckbogen {
+  display: none;
+}
+@media print {
+  @page ausweis2-a4 {
+    size: A4 portrait;
+    margin: 0;
+  }
+  .ausweis2-druckbogen {
+    display: block;
+    page: ausweis2-a4;
+    position: relative;
+    width: 210mm;
+    height: 297mm;
+  }
+  .ausweis2-druckbogen .ausweis2-karte {
+    position: absolute;
+    left: 20mm;
+    top: 20mm;
+  }
+  .ausweis2-schnittmarke {
+    position: absolute;
+    background: #999999;
+  }
 }
 
 
