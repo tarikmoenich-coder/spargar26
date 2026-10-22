@@ -920,6 +920,16 @@ Spatial-Join gegen `feld.geometrie` → `feld_id`. Retention/Downsample-Job.
    testen (Badge → Kiste → LKW → Waage → `ernte_kiste_zyklus` gewogen).
 7. Waagen-Agent am Hof aufsetzen, sobald die Waage da ist.
 8. Rollout auf die 140 Maschinen; whereversim je Maschine zur Saison aktivieren.
+   **Standard-Konfiguration je Box** (Praxistest 2026-10-22, senkt die
+   Bootzeit bis zur ersten Status-LED-Reaktion von 3:20 auf 2:10 Minuten -
+   bei 140 Boxen täglich spürbar): unter **Network → Mobile → General**
+   "Preferred network type" auf **"4G only"** stellen (verhindert
+   sequenzielles Durchprobieren von 2G/3G/4G); unter **Status → Services**
+   **SMS Utilities deaktivieren** (wird nicht gebraucht). APN muss laut
+   Teltonika-Vorgabe auf "Auto" bleiben, hier kein Hebel. Netzwerktyp "Auto"
+   vs. "4G only" sowie "Band Selection" (bewusst auf "Auto" gelassen -
+   falsches manuelles Band riskiert Verbindungsabbruch) sind zwei getrennte
+   Einstellungen, nicht zu verwechseln.
 9. Mitbestimmung mit den Fahrern klären, bevor der Effizienz-Check scharfgeschaltet
    wird.
 
