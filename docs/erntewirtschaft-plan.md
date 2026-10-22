@@ -692,7 +692,18 @@ Erkennung), damit sie ohne Deploy nachjustierbar bleiben statt hart codiert.
   „gewogen ohne Befüllung" (`status='ungeklaert'` - Kiste zum ersten Mal an
   der Waage gescannt, ohne Maschinen-Scan davor; **wird erkannt**, aber
   Feld/Person/Zeit sind für diese eine Kiste nicht rekonstruierbar),
-  „eingeloggt, nichts geerntet", implausibles Nettogewicht.
+  „eingeloggt, nichts geerntet", implausibles Nettogewicht,
+  **„Kiste erneut befüllt, obwohl noch ein offener Zyklus existiert"**
+  (Nutzer-Vorgabe 2026-10-22, beim Praxistest entdeckt: eine Kiste darf den
+  Zyklus erst wieder von vorne durchlaufen, nachdem sie die Waage passiert
+  hat — ein versehentlicher zweiter Scan vor dem Wiegen wird vom Processor
+  **abgelehnt** statt einen zweiten, parallelen Zyklus anzulegen; die
+  Rohzeile bleibt erhalten, `ernte_scan.verarbeitung_fehler` nennt den
+  bereits offenen Zyklus, siehe `migration_2026-10-22_ernte_kiste_bereits_offen.sql`).
+  Alle fünf Fälle bis auf „gewogen ohne Befüllung" und den neuen
+  Doppel-Scan-Fall **existieren bisher nur als Beschreibung hier** - die
+  Sicht selbst ist noch nicht gebaut (geplanter nächster zusammenhängender
+  Baustein, statt die restlichen Faelle einzeln nachzuziehen).
   **Nutzer-Vorgabe 2026-09-23: Kisten müssen immer am selben Tag an der
   Waage ankommen** - deshalb Fälligkeit an eine feste Tagesend-Uhrzeit
   koppeln (`ernte_konfig.kiste_faellig_bis='23:00'`, ersetzt/ergänzt das
