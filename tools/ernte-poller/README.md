@@ -52,8 +52,10 @@ cd tools/ernte-poller && npm ci   # (oder: npm install)
 
 # 4. Supabase-Service-Key: Dashboard -> Project Settings -> API -> service_role
 
-# 5. Env-Datei anlegen (root, nur lesbar für root)
-sudo install -m 600 /dev/null /etc/ernte-poller.env
+# 5. Env-Datei anlegen - gehört dir selbst, mode 600 (nur du + root lesen).
+#    NICHT root:root, sonst kann der folgende "source"-Test sie nicht lesen -
+#    systemd selbst (root) liest sie ohnehin unabhängig vom Besitzer.
+sudo install -o "$(id -un)" -m 600 /dev/null /etc/ernte-poller.env
 sudo nano /etc/ernte-poller.env      # Inhalt: siehe .env.example
 
 # 6. Einmal von Hand testen
