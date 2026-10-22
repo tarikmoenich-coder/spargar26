@@ -774,6 +774,16 @@ danach:
   (`ende = zeitpunkt` des neuen Logins). Eine Person kann also nie
   gleichzeitig auf zwei Maschinen als aktiv gelten; ein Wechsel (auch
   Vormittag/Nachmittag) schaltet nahtlos um, ohne manuellen Logout.
+  **Spiegelbildlich (Praxisfund/Nutzer-Entscheidung 2026-10-22):** Scannt an
+  einer Maschine, an der schon eine Schicht offen ist, eine ANDERE Karte ein,
+  gilt das als impliziter Schichtwechsel - die alte Schicht wird geschlossen,
+  eine neue geöffnet. Scannt dieselbe Karte erneut, während ihre eigene
+  Schicht noch offen ist, passiert nichts Neues, außer: war der Name noch
+  nicht aufgelöst (Karte wurde erst nach dem Login in `ernte_tag`
+  registriert), wird er jetzt nachträglich gesetzt, statt die Schicht für
+  immer "ohne Zuordnung" zu lassen (siehe
+  `migration_2026-10-22_ernte_schicht_nachtraeglich_aufloesen.sql` und
+  `migration_2026-10-22_ernte_schichtwechsel_maschine.sql`).
 - **Kiste (jeder nicht als `person` klassifizierte Tag - das ist der
   Normalfall für jede Kiste, siehe Klassifizierungs-Entscheidung oben) an
   Maschine M** → jüngsten offenen Zyklus für M schließen (`voll_am`,
