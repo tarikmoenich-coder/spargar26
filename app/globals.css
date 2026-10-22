@@ -317,6 +317,18 @@ input[type="number"]::-webkit-inner-spin-button {
   width: 85.6mm;
   height: 54mm;
 }
+/* Muster-Schatten-Platzhalter, solange kein echtes Mitarbeiterfoto
+   vorhanden ist (kein Upload/Storage dafür, siehe Plan) - Portraitformat. */
+.ausweis-foto-platzhalter {
+  width: 16mm;
+  height: 20mm;
+}
+/* Größer als vorher (Nutzer-Vorgabe 2026-10-22: "QR-Code könnte größer
+   sein") - 30mm passt bei 85,6mm Kartenbreite noch neben Foto + Text. */
+.ausweis-qr {
+  width: 30mm;
+  height: 30mm;
+}
 
 
 /* ---------------------------------------------------------------------------

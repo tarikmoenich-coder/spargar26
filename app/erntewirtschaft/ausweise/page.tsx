@@ -11,7 +11,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import QRCode from "qrcode";
-import { IdCard } from "lucide-react";
+import { IdCard, UserRound } from "lucide-react";
 import PageHeader from "@/components/PageHeader";
 import EmptyState from "@/components/EmptyState";
 import { getSupabaseClient } from "@/lib/supabase/client";
@@ -161,13 +161,16 @@ export default function ErntewirtschaftAusweisePage() {
               Drucken
             </button>
           </div>
-          <div className="ausweis-karte flex items-center justify-between gap-3 rounded border border-dashed border-neutral-400 bg-white p-3">
-            <div className="flex h-full flex-col justify-between">
+          <div className="ausweis-karte flex items-center gap-2 rounded border border-dashed border-neutral-400 bg-white p-3">
+            <div className="ausweis-foto-platzhalter flex shrink-0 items-center justify-center rounded bg-neutral-200 text-neutral-400">
+              <UserRound className="h-10 w-10" strokeWidth={1.25} />
+            </div>
+            <div className="flex h-full min-w-0 flex-1 flex-col justify-between">
               <div>
                 <p className="text-[8px] uppercase tracking-wide text-neutral-500">
                   Spargelhof Mömmel
                 </p>
-                <p className="text-sm font-semibold leading-tight">
+                <p className="truncate text-sm font-semibold leading-tight">
                   {druck.mitarbeiter.name}, {druck.mitarbeiter.vorname}
                 </p>
               </div>
@@ -176,7 +179,7 @@ export default function ErntewirtschaftAusweisePage() {
               </p>
             </div>
             {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={druck.qrDataUrl} alt="QR-Code" className="h-24 w-24 shrink-0" />
+            <img src={druck.qrDataUrl} alt="QR-Code" className="ausweis-qr shrink-0" />
           </div>
           <p className="text-xs text-neutral-500 print:hidden">
             Noch kein Kartendrucker vorhanden - zum Testen reicht der normale
