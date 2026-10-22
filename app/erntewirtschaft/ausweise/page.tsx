@@ -203,7 +203,7 @@ export default function ErntewirtschaftAusweisePage() {
                 {druck.mitarbeiter.name}, {druck.mitarbeiter.vorname}
               </p>
             </div>
-            <div className="flex flex-1 items-center justify-between gap-2">
+            <div className="flex flex-1 items-center gap-4">
               {druck.fotoUrl ? (
                 // eslint-disable-next-line @next/next/no-img-element
                 <img
