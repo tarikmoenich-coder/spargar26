@@ -14,6 +14,14 @@
 -- schliesst ihre alte Schicht) um den spiegelbildlichen Fall (ANDERE Person
 -- an DERSELBEN Maschine schliesst die hier offene Schicht).
 --
+-- ZUSAETZLICH gehaertet (Nutzer-Vorgabe 2026-10-22: "darf absolut nicht
+-- sein, dass dieselbe Person an zwei Maschinen gleichzeitig angemeldet
+-- ist"): Die Ein-Maschine-Regel selbst griff bisher nur, wenn die Karte
+-- schon in ernte_tag aufgeloest war (employee_id bekannt) - eine noch
+-- UNREGISTRIERTE Karte an zwei Maschinen waere nicht erkannt worden. Prueft
+-- jetzt zusaetzlich ueber den rohen Kartencode, greift also auch VOR jeder
+-- Registrierung.
+--
 -- Nur die Funktion wird per CREATE OR REPLACE aktualisiert - keine
 -- Tabellenaenderung noetig.
 --
@@ -99,15 +107,21 @@ begin
         from ernte_tag
         where uid = zeile.tag_uid and art = 'person' and aktiv;
 
-        -- Ein-Maschine-Regel: offene Schicht derselben Person an einer
-        -- ANDEREN Maschine sofort schliessen (kein manueller Logout noetig).
-        if v_employee_id is not null then
-          update ernte_schicht
-          set ende = zeile.zeitpunkt
-          where employee_id = v_employee_id
-            and ende is null
-            and maschine_id <> v_maschine.id;
-        end if;
+        -- Ein-Maschine-Regel, hartes Invariant (Nutzer-Vorgabe 2026-10-22:
+        -- "darf absolut nicht sein, dass dieselbe Person an zwei Maschinen
+        -- gleichzeitig angemeldet ist"): offene Schicht an einer ANDEREN
+        -- Maschine sofort schliessen - sowohl ueber den rohen Kartencode
+        -- (greift auch VOR jeder ernte_tag-Registrierung) als auch ueber
+        -- die aufgeloeste Person (falls dieselbe Person je zwei Karten
+        -- haben sollte). Kein manueller Logout noetig.
+        update ernte_schicht
+        set ende = zeile.zeitpunkt
+        where ende is null
+          and maschine_id <> v_maschine.id
+          and (
+            tag_uid = zeile.tag_uid
+            or (v_employee_id is not null and employee_id = v_employee_id)
+          );
 
         select * into v_offene_schicht from ernte_schicht
         where maschine_id = v_maschine.id and ende is null
