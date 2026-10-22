@@ -930,6 +930,14 @@ Traccar-Instanz. Abweichungen gegenüber der ursprünglichen Skizze:
 - Noch nicht umgesetzt: Fix-Qualität unter RTK (aktuell kein RTK im Einsatz,
   siehe Hardware-Entscheidungen oben) — `fix_qualitaet`/`hdop` werden
   mitgeschrieben, falls Traccar sie liefert, aber (noch) nicht ausgewertet.
+- **Praxistest bestanden (2026-10-22):** erste echte Feld-Geometrie
+  ("Hofstelle") gezeichnet, Poller lieferte Positionen, Spatial-Join hat
+  `feld_id` korrekt aufgelöst. Dabei ein Bug gefunden+gefixt
+  (`migration_2026-10-22_ernte_position_feld_zuordnen_fix.sql`):
+  PostGIS-Funktionen liegen in diesem Supabase-Projekt unter `public`, nicht
+  `extensions` (derselbe Stolperstein wie schon bei
+  `migration_2026-10-19_feld_geojson_view.sql` — beim ersten Schreiben der
+  Funktion übersehen).
 
 ## Teil H — Deploy-Reihenfolge (Nutzer)
 
