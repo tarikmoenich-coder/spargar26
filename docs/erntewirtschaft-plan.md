@@ -886,6 +886,13 @@ danach:
   2026-10-22) - Druckansicht funktioniert mit jedem normalen Drucker
   (benanntes `@page`, siehe `app/globals.css`).
 
+**Praxistest bestanden (2026-10-22):** Ausweis über `/erntewirtschaft/ausweise`
+gedruckt (normaler Drucker, kein Kartendrucker), mit dem Scan-Modul an der
+Maschine gescannt (Login), danach Kisten gescannt - Personalnummer+Suffix
+korrekt aufgelöst, Kisten-Zyklen dem Fahrer zugeordnet. Kompletter neuer
+Ausweis-Workflow damit end-to-end bestätigt, inklusive Druck auf normalem
+Papier statt Kartendrucker.
+
 ### Excel-/CSV-Import (nur noch Maschinen)
 
 Bulk-Import, weil 140 Maschinen niemand von Hand tippt. Für Mitarbeiter-
