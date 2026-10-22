@@ -14,11 +14,13 @@
 -- In der Supabase SQL-Konsole ausfuehren (ein Zug). Idempotent.
 -- ============================================================================
 
--- Schema "cron" existiert auf Supabase bereits vorbereitet/verwaltet - ein
--- eigenes "create schema" schlug mit "schema cron already exists" fehl,
--- obwohl pg_cron selbst noch nicht aktiviert war (2026-10-22). Nur die
--- Extension anlegen, das vorhandene Schema nutzen.
-create extension if not exists pg_cron with schema cron;
+-- Schema "cron" existiert auf Supabase bereits vorbereitet/verwaltet - sogar
+-- "create extension ... WITH SCHEMA cron" schlug noch mit demselben Fehler
+-- fehl (die Extension versucht intern, das Schema selbst anzulegen, wenn
+-- man es explizit angibt). Deshalb KEINE Schema-Angabe mehr - die Extension
+-- legt sich laut Supabase-Standarddoku ohnehin von selbst ins vorbereitete
+-- "cron"-Schema.
+create extension if not exists pg_cron;
 
 select cron.schedule(
   'ernte-scan-verarbeiten',
