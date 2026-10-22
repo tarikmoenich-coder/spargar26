@@ -98,7 +98,7 @@ export default function ErntewirtschaftAusweisePage() {
     const code = `P-${m.personal_nr}-${suffix}`;
     const supabase = getSupabaseClient();
     const [qrDataUrl, fotoUrl] = await Promise.all([
-      QRCode.toDataURL(code, { margin: 1, width: 400 }),
+      QRCode.toDataURL(code, { margin: 1, width: 500 }),
       m.foto_pfad
         ? supabase.storage
             .from(FOTO_BUCKET)
@@ -219,7 +219,7 @@ export default function ErntewirtschaftAusweisePage() {
               <div className="flex shrink-0 flex-col items-center justify-start gap-1">
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img src={druck.qrDataUrl} alt="QR-Code" className="ausweis-qr" />
-                <p className="text-sm font-semibold tabular-nums">
+                <p className="text-base font-semibold tabular-nums">
                   {druck.mitarbeiter.personal_nr}
                 </p>
               </div>

@@ -326,11 +326,12 @@ input[type="number"]::-webkit-inner-spin-button {
   width: 24mm;
   height: 32mm;
 }
-/* Größer als vorher (Nutzer-Vorgabe 2026-10-22: "QR-Code könnte größer
-   sein") - 30mm passt bei 85,6mm Kartenbreite noch neben Foto + Text. */
+/* Größer als vorher (Nutzer-Vorgabe 2026-10-22: erst 25mm->30mm, dann
+   nochmal "etwas größer" auf 34mm) - passt bei 85,6mm Kartenbreite noch
+   neben dem 24mm breiten Foto. */
 .ausweis-qr {
-  width: 30mm;
-  height: 30mm;
+  width: 34mm;
+  height: 34mm;
 }
 
 
