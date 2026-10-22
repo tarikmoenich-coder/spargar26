@@ -13,7 +13,7 @@ import { useProfile } from "@/lib/useProfile";
 import { MENUE_RECHTE } from "@/lib/rollen";
 import type { UserRole } from "@/lib/types";
 
-type BereichKey = "praemien" | "anbau" | "statistik" | "qualitaet" | "waage";
+type BereichKey = "praemien" | "anbau" | "statistik" | "qualitaet" | "ernte" | "waage";
 
 const BEREICHE: {
   key: BereichKey;
@@ -71,6 +71,14 @@ const BEREICHE: {
       { href: "/qualitaet", label: "Schichtkontrolle" },
       { href: "/qualitaet/strichliste", label: "Strichliste / Nacharbeit" },
     ],
+  },
+  {
+    key: "ernte",
+    label: "Ernte",
+    href: "/erntewirtschaft/ernte",
+    prefix: "/erntewirtschaft/ernte",
+    rechteKey: "/erntewirtschaft/ernte",
+    unter: [],
   },
   {
     key: "waage",

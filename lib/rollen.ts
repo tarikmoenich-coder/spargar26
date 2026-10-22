@@ -155,6 +155,15 @@ export const MENUE_RECHTE: Record<string, UserRole[]> = {
     "management",
     "erntewirtschaft",
   ],
+  // Rollen hier 1:1 wie die RLS-Select-Policy auf ernte_kiste_zyklus
+  // (migration_2026-10-20_erntewirtschaft_kisten_zyklus.sql).
+  "/erntewirtschaft/ernte": [
+    "admin",
+    "hr",
+    "zeiterfassung",
+    "management",
+    "erntewirtschaft",
+  ],
   "/kasse": ["admin", "kasse", "pruefer", "management"],
   "/management": ["admin", "hr", "management"],
   "/aenderungsprotokoll": ["admin"],
