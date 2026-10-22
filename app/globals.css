@@ -297,6 +297,27 @@ input[type="number"]::-webkit-inner-spin-button {
   }
 }
 
+/* Mitarbeiter-Ausweis (app/erntewirtschaft/ausweise) - eine Karte im
+   ID-1-Format (85,6 x 54 mm, CR80) oben links auf der Druckseite. Noch kein
+   eigener Kartendrucker vorhanden (Stand 2026-10-22, Nutzer-Vorgabe: "auch
+   wenn es noch nicht mit dem echten Kartendrucker passiert") - vorerst auf
+   normalem Drucker/Papier, mit gestricheltem Schnittrand. BENANNTE @page
+   (siehe Bugfix-Hinweis bei .stammkarte oben - eine unbenannte @page würde
+   den gesamten App-Druck beeinflussen). */
+@media print {
+  @page ausweis-seite {
+    size: A4 portrait;
+    margin: 10mm;
+  }
+  .ausweis-druck {
+    page: ausweis-seite;
+  }
+}
+.ausweis-karte {
+  width: 85.6mm;
+  height: 54mm;
+}
+
 
 /* ---------------------------------------------------------------------------
    Blanko-Strichliste Zuckermais (app/praemien/zuckermais/strichliste) -

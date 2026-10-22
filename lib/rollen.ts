@@ -164,6 +164,10 @@ export const MENUE_RECHTE: Record<string, UserRole[]> = {
     "management",
     "erntewirtschaft",
   ],
+  // Nur admin/hr - 1:1 wie ernte_ausweis_admin_hr_all
+  // (migration_2026-10-22_ernte_ausweis.sql), der Suffix ist sicherheits-
+  // relevant und darf keiner weiteren Rolle sichtbar sein.
+  "/erntewirtschaft/ausweise": ["admin", "hr"],
   "/kasse": ["admin", "kasse", "pruefer", "management"],
   "/management": ["admin", "hr", "management"],
   "/aenderungsprotokoll": ["admin"],

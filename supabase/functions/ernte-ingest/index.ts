@@ -38,7 +38,21 @@ type MaschinenPayload = {
   events?: EingehendesEreignis[];
 };
 
-type Klassifizierung = "person" | "person_unbekannt" | "kiste";
+type Klassifizierung = "person" | "person_unbekannt" | "person_gesperrt" | "kiste";
+
+// Code-Schema seit 2026-10-22 (Nutzer-Vorgabe): "P-<personal_nr>-<suffix>",
+// z.B. "P-2412-A1B2C3D4" - kein Anlernschritt mehr noetig, der Code traegt
+// die Zuordnung direkt in sich. Suffix ist IMMER das letzte Segment (8 Hex-
+// Zeichen), .+ ist gierig und sucht sich automatisch den LETZTEN
+// Bindestrich - robust, falls eine Personalnummer selbst einen Bindestrich
+// enthaelt (einzelne Alt-Personalnummern sind alphanumerisch).
+const P_CODE_MUSTER = /^P-(.+)-([0-9A-Fa-f]{8})$/;
+
+function parsePCode(code: string): { personalNr: string; suffix: string } | null {
+  const treffer = code.match(P_CODE_MUSTER);
+  if (!treffer) return null;
+  return { personalNr: treffer[1], suffix: treffer[2].toUpperCase() };
+}
 
 function json(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), {
@@ -73,7 +87,10 @@ Deno.serve(async (req) => {
 
   // Alle P-Codes vorab in EINEM Rutsch nachschlagen statt pro Ereignis -
   // relevant, wenn ein Batch mehrere Scans auf einmal enthaelt (z.B. nach
-  // einer Offline-Phase mit vielen nachgereichten Zeilen).
+  // einer Offline-Phase mit vielen nachgereichten Zeilen). Seit 2026-10-22
+  // kein ernte_tag-Lookup mehr fuer Personen - die Personalnummer steckt
+  // direkt im Code, nur der geheime Suffix (ernte_ausweis.suffix) muss noch
+  // nachgeschlagen werden.
   const pCodes = [
     ...new Set(
       events
@@ -81,10 +98,40 @@ Deno.serve(async (req) => {
         .map((e) => e.code as string),
     ),
   ];
-  const { data: tagTreffer } = pCodes.length
-    ? await supabase.from("ernte_tag").select("uid, art, aktiv, employee_id").in("uid", pCodes)
-    : { data: [] as { uid: string; art: string; aktiv: boolean; employee_id: string | null }[] };
-  const tagProUid = new Map((tagTreffer ?? []).map((t) => [t.uid, t]));
+  const pGeparst = new Map(
+    pCodes
+      .map((code) => [code, parsePCode(code)] as const)
+      .filter((paar): paar is [string, { personalNr: string; suffix: string }] => paar[1] !== null),
+  );
+  const personalNrListe = [...new Set([...pGeparst.values()].map((g) => g.personalNr))];
+  const { data: mitarbeiterTreffer } = personalNrListe.length
+    ? await supabase
+        .from("employees")
+        .select("id, personal_nr, aktiv")
+        .in("personal_nr", personalNrListe)
+    : { data: [] as { id: string; personal_nr: string; aktiv: boolean }[] };
+  const employeeIdVonPersonalNr = new Map(
+    (mitarbeiterTreffer ?? []).filter((m) => m.aktiv).map((m) => [m.personal_nr, m.id]),
+  );
+  const employeeIds = [...employeeIdVonPersonalNr.values()];
+  const { data: ausweisTreffer } = employeeIds.length
+    ? await supabase.from("ernte_ausweis").select("employee_id, suffix").in("employee_id", employeeIds)
+    : { data: [] as { employee_id: string; suffix: string }[] };
+  const suffixVonEmployeeId = new Map((ausweisTreffer ?? []).map((a) => [a.employee_id, a.suffix]));
+
+  // Klassifiziert einen P-Code fuer die sofortige Geraete-Antwort (siehe
+  // Teil C im Plan): "person" nur, wenn Personalnummer UND Suffix passen.
+  // "person_gesperrt" (Personalnummer existiert, Suffix passt nicht) ist
+  // bewusst von "person_unbekannt" (Personalnummer existiert gar nicht)
+  // unterschieden - ersteres ist typischerweise eine per "Verlust-Karte
+  // drucken" bereits ungueltig gemachte, alte Karte.
+  function klassifiziereP(code: string): Klassifizierung {
+    const geparst = pGeparst.get(code);
+    if (!geparst) return "person_unbekannt";
+    const employeeId = employeeIdVonPersonalNr.get(geparst.personalNr);
+    if (!employeeId) return "person_unbekannt";
+    return suffixVonEmployeeId.get(employeeId) === geparst.suffix ? "person" : "person_gesperrt";
+  }
 
   type EinzufuegendeZeile = {
     quelle: "maschine";
@@ -117,9 +164,7 @@ Deno.serve(async (req) => {
       }
 
       if (code.startsWith("P-")) {
-        const tag = tagProUid.get(code);
-        const bekannt = !!tag && tag.art === "person" && tag.aktiv;
-        klassifizierung.push({ code, typ: bekannt ? "person" : "person_unbekannt" });
+        klassifizierung.push({ code, typ: klassifiziereP(code) });
         zeilen.push({
           quelle: "maschine",
           maschine_id: null,

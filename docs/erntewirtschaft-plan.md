@@ -43,6 +43,18 @@ zu ~30 % Flächenverlust und bleiben trotzdem lesbar.
   Entscheidungshistorie stehen, gelten für den Kisten-/Badge-Scan aber als
   **überholt**, nicht gelöscht.
 
+**Kurswechsel 2026-10-22: Mitarbeiter-Codes direkt aus der Personalnummer,
+kein Anlernschritt mehr.** Nutzer-Idee, mit Suffix gegen Fälschung
+gehärtet: `P-<personal_nr>-<suffix>` statt eines opaken, manuell
+anzulernenden Badge-Codes - der zufällige, nur im QR-Code (nicht als
+Klartext) stehende Suffix verhindert "Buddy Punching" über die bekannte
+Personalnummer eines Kollegen und lässt sich bei Kartenverlust rotieren
+("Verlust-Karte drucken" macht die alte Karte sofort ungültig). Gebaut auf
+`/erntewirtschaft/ausweise`, siehe Teil C und Teil F für Details. Ein
+eigener Kartendrucker (Blanko-Karten + Foto s/w) ist angeschafft/geplant,
+aber noch nicht da - die Druckansicht funktioniert bis dahin mit jedem
+normalen Drucker.
+
 **Präzisionsanforderung geklärt (2026-09-23): RTK voraussichtlich NICHT
 nötig.** Die ursprüngliche „±1 m"-Vorgabe (Klärung 2026-09-03/04) stammte aus
 einem Testaufbau mit RTK, ohne dass der tatsächliche Verwendungszweck der
@@ -275,36 +287,44 @@ Klassifizierung unten**, die dafür zu langsam wäre.
 
 **Klassifizierung Person/Kiste — seit 2026-10-12 per Typ-Präfix im QR-Code,
 kein Raten mehr nötig.** Mitarbeiter-Badges beginnen mit `P-`, Kisten mit
-`K-` (z. B. `P-00042`, `K-10293`). Die Ingest-Funktion liest nur das Präfix
-und weiß damit sofort, ohne Datenbank-Lookup, ob es eine Person oder eine
-Kiste ist:
-- `P-…` → Lookup in `ernte_tag` (weiterhin nötig, um den Code mit
-  `employee_id` zu verknüpfen — neue Mitarbeiter-Badges müssen also weiterhin
-  einmalig angelernt werden).
+`K-`. Die Ingest-Funktion liest nur das Präfix und weiß damit sofort, ohne
+Datenbank-Lookup, ob es eine Person oder eine Kiste ist.
+
+**Mitarbeiter-Codes (seit 2026-10-22, löst den ursprünglichen
+`ernte_tag`-Anlernschritt ab):** `P-<personal_nr>-<suffix>`, z. B.
+`P-2412-A1B2C3D4` - kein separates Onboarding mehr nötig, Ausweise werden
+direkt auf `/erntewirtschaft/ausweise` (admin/hr) gedruckt, siehe dessen
+eigenen Abschnitt unten. `<suffix>` ist ein zufälliger, in `ernte_ausweis`
+gespeicherter 8-Hex-Zeichen-Code, der NUR im QR steht (nicht als Klartext
+auf der Karte) - er verhindert, dass jemand allein über die (oft bekannte)
+Personalnummer eines Kollegen eine funktionierende Karte fälschen kann,
+ohne dessen echte Karte je gesehen zu haben ("Buddy Punching"). Drei
+Klassifizierungs-Ergebnisse: `person` (Personalnummer + Suffix passen),
+`person_gesperrt` (Personalnummer existiert, Suffix passt nicht mehr -
+typischerweise eine per "Verlust-Karte drucken" bereits ungültig gemachte
+alte Karte), `person_unbekannt` (Personalnummer existiert gar nicht, z. B.
+Tippfehler/Fremdkörper). `ernte_tag` wird für Personen nicht mehr gelesen,
+bleibt aber als Tabelle bestehen (siehe unten, weiterhin nutzbar, um
+einzelne Kisten manuell zu markieren).
+
 - `K-…` → immer eindeutig eine Kiste, **kein Lookup nötig** - `ernte_tag`
   muss für Kisten nicht befüllt werden, außer man will eine einzelne Kiste
   manuell markieren.
 
-Das macht die komplette Rate-Heuristik des RFID-Standes (siehe „Stand bis
-2026-10-11", unten eingeklappt) überflüssig: Ein noch nicht angelerntes
-Mitarbeiter-Badge sieht jetzt **nicht mehr identisch aus wie eine Kiste** -
-das `P-`-Präfix sagt sofort „das ist ein Mensch", auch wenn der
-`employee_id`-Lookup fehlschlägt. Der Fehlerfall ist also sofort erkennbar
+In allen drei Faellen wird der Scan trotzdem als `ernte_scan`-Zeile
+gespeichert (nichts geht verloren) - der Fehlerfall ist sofort erkennbar
 (kein stiller Fall mehr, der erst am Monatsende aus fehlenden Stunden
-auffällt): Scan wird trotzdem als `ernte_scan`-Zeile gespeichert (nichts
-geht verloren), aber mit `employee_id = null` und einem eigenen
-Klassifizierungs-Typ (`person_unbekannt`), der **sofort** eine Meldung
-auslösen kann statt erst über eine tägliche Rückschau.
+auffällt), statt erst über eine tägliche Rückschau.
 
-**Erfolgston am Gerät:** jetzt wieder drei klare, verwechslungsfreie Töne
-möglich, ohne das frühere Fehlalarm-Risiko: „Person erkannt" / „Kiste" /
-„Badge unbekannt" (`P-`-Präfix, aber kein Treffer in `ernte_tag`) - je ein
-einfacher Piezo-Summer an einem Digitalausgang des TRB246, unterschiedliche
-Muster je Ereignis. Ton erst **nach der Serverantwort**, nicht schon beim
-reinen Lesen des Codes, weil nur das wirklich bestätigt, dass die Daten
-sicher angekommen sind. Eine durch die Sperrzeit verworfene Wiederholung
-gilt dabei als Erfolg (der Server hat sie ja erhalten) - stumm bleibt es
-nur bei echten Übertragungsfehlern.
+**Erfolgston am Gerät (noch nicht gebaut):** vier klare, verwechslungsfreie
+Töne möglich, ohne Fehlalarm-Risiko: „Person erkannt" / „Kiste" / „Karte
+gesperrt" / „Badge unbekannt" - je ein einfacher Piezo-Summer an einem
+Digitalausgang des TRB246, unterschiedliche Muster je Ereignis. Ton erst
+**nach der Serverantwort**, nicht schon beim reinen Lesen des Codes, weil
+nur das wirklich bestätigt, dass die Daten sicher angekommen sind. Eine
+durch die Sperrzeit verworfene Wiederholung gilt dabei als Erfolg (der
+Server hat sie ja erhalten) - stumm bleibt es nur bei echten
+Übertragungsfehlern.
 
 Payload Maschine (TRB246):
 ```json
@@ -578,13 +598,21 @@ Monats-Partitionierung + Retention-Job (~400 Tage).
 `P-…`/`K-…`, seit 2026-10-12 statt RFID-UID),
 `art text check (art in ('person','kiste'))`, `employee_id → employees`,
 `kiste_nr text`, `aktiv boolean default true`, `notiz`, timestamps.
-**Enthält faktisch nur noch die ~140-200 Mitarbeiter-Badges** (siehe
-Teil C) - ein `K-…`-Code braucht wegen des Typ-Präfixes strukturell nie
-eine eigene Zeile (nicht nur „per Vorgabe" wie beim RFID-Stand bis
-2026-09-23/10-11, sondern weil die Klassifizierung gar nicht mehr hier
-nachschlägt). `kiste_nr` bleibt nutzbar, falls doch mal eine einzelne Kiste
-manuell markiert werden soll (z. B. eine reparierte/markierte Testkiste),
-ist aber im Regelfall leer.
+**Seit 2026-10-22 für Personen nicht mehr genutzt** (siehe `ernte_ausweis`
+unten und Teil C) - ein `P-…`-Code trägt die Personalnummer jetzt direkt in
+sich, kein Lookup hier mehr nötig. Bleibt als Tabelle bestehen, falls doch
+mal eine einzelne Kiste manuell markiert werden soll (`kiste_nr`), ist aber
+im Regelfall komplett leer.
+
+**`ernte_ausweis`** — **Gebaut 2026-10-22** (ersetzt den
+Badge-Anlern-Workflow über `ernte_tag`): `employee_id uuid pk → employees`,
+`suffix text` (8 Hex-Zeichen, zufällig, check-constraint), `erstellt_am`,
+`erstellt_von → profiles`, `aktualisiert_am`. RLS bewusst **nur admin/hr**
+(nicht wie `employees` selbst für jede eingeloggte Rolle lesbar) - der
+Suffix ist das Geheimnis, das eine Karte fälschungssicher macht, siehe
+Migrationskopf `migration_2026-10-22_ernte_ausweis.sql` für die ausführliche
+Begründung (Spalten-Ebene-Policies auf `employees` sind in diesem Projekt
+laut dokumentiertem Vorfall explizit verboten).
 
 **`ernte_schicht`** — Tages-Login: `id identity pk`, `maschine_id → ernte_maschine`,
 `employee_id → employees` (aus Tag aufgelöst, nullbar), `tag_uid text`,
@@ -779,8 +807,8 @@ danach:
   gilt das als impliziter Schichtwechsel - die alte Schicht wird geschlossen,
   eine neue geöffnet. Scannt dieselbe Karte erneut, während ihre eigene
   Schicht noch offen ist, passiert nichts Neues, außer: war der Name noch
-  nicht aufgelöst (Karte wurde erst nach dem Login in `ernte_tag`
-  registriert), wird er jetzt nachträglich gesetzt, statt die Schicht für
+  nicht aufgelöst (Ausweis wurde erst nach dem Login gedruckt/angelegt in
+  `ernte_ausweis`), wird er jetzt nachträglich gesetzt, statt die Schicht für
   immer "ohne Zuordnung" zu lassen (siehe
   `migration_2026-10-22_ernte_schicht_nachtraeglich_aufloesen.sql` und
   `migration_2026-10-22_ernte_schichtwechsel_maschine.sql`).
@@ -803,8 +831,9 @@ danach:
   täglich im Report, siehe Teil F): laufende „Kisten ohne Zuordnung" je
   Maschine, damit das Problem sofort auffällt, während noch gearbeitet
   wird - Nutzer-Erwartung: die Mitarbeiter sorgen selbst zeitnah für die
-  Behebung (Badge anlernen lassen), wenn sie sehen, dass ihre Kisten nicht
-  zugeordnet werden.
+  Behebung (Ausweis auf `/erntewirtschaft/ausweise` drucken lassen, kein
+  Anlernschritt mehr seit 2026-10-22), wenn sie sehen, dass ihre Kisten
+  nicht zugeordnet werden.
 - `gewicht` (Tag T) → jüngsten offenen Zyklus für T → `gewogen_am`,
   `gewicht_brutto_kg`, `tara_kg` aus Konfig, `status='gewogen'`; kein Treffer →
   `ungeklaert`-Zyklus.
@@ -840,26 +869,32 @@ danach:
 - **`/erntewirtschaft/stammdaten`** — Maschinen-CRUD, Waagen, Felder (Karten-
   Editor / Import), Konfig-Konstanten. **Excel-/CSV-Import für die 140 Maschinen**
   (siehe unten).
-- **`/erntewirtschaft/transponder`** — seit dem QR-Kurswechsel (2026-10-12)
-  nur noch **Mitarbeiter-Badge-Verwaltung**, kein Kisten-Onboarding mehr
-  nötig (jeder `K-…`-Code ist automatisch eine Kiste, siehe Teil C): Liste +
-  Suche der ~140-200 `P-…`-Badges; „Badge zuordnen" für den Fehlerfall
-  `person_unbekannt` (ein gescannter `P-…`-Code ohne Treffer in `ernte_tag` →
-  Person nachträglich zuordnen); **Excel-/CSV-Import nur noch für die
-  Mitarbeiter-Badges** (siehe unten, Kisten brauchen keinen Import mehr).
+- **`/erntewirtschaft/transponder`** — **ERSETZT (2026-10-22)** durch
+  `/erntewirtschaft/ausweise` (gebaut, siehe eigener Abschnitt unten): seit
+  Codes direkt aus der Personalnummer ableitbar sind, gibt es keine
+  Badge↔Person-Zuordnung mehr zu verwalten - "Badge zuordnen für
+  `person_unbekannt`" entfällt, ein Ausweis wird per Knopfdruck gedruckt statt
+  importiert/zugeordnet.
+- **`/erntewirtschaft/ausweise`** — **Gebaut 2026-10-22** (admin/hr, eigene
+  RLS-Tabelle `ernte_ausweis`): Liste aller aktiven Mitarbeiter, je Zeile
+  "Drucken" (legt beim ersten Mal einen Suffix an) / "Erneut drucken"
+  (gleicher Suffix) / "Verlust-Karte drucken" (rotiert den Suffix, alte
+  Karte sofort ungültig, mit Bestätigungsdialog). Druckansicht zeigt groß die
+  Personalnummer als Klarnummer, der Suffix steckt nur im QR-Code
+  (`qrcode`-Paket, client-seitig). Noch ohne Foto (kein Upload/Storage dafür
+  vorhanden, bewusst v1-Scope) und ohne eigenen Kartendrucker (Stand
+  2026-10-22) - Druckansicht funktioniert mit jedem normalen Drucker
+  (benanntes `@page`, siehe `app/globals.css`).
 
-### Excel-/CSV-Import (Maschinen und Transponder)
+### Excel-/CSV-Import (nur noch Maschinen)
 
-Bulk-Import, weil 140 Maschinen niemand von Hand tippt. Für die
-Mitarbeiter-Badges (seit 2026-10-12 nur noch diese, siehe oben) sind es nur
-~140-200 Zeilen - lohnt sich trotzdem als Import, da sie vor Saisonstart auf
-einmal anfallen.
+Bulk-Import, weil 140 Maschinen niemand von Hand tippt. Für Mitarbeiter-
+Badges entfällt der Import seit 2026-10-22 komplett (siehe
+`/erntewirtschaft/ausweise` - der Code wird aus der ohnehin vorhandenen
+Personalnummer erzeugt, kein Datensatz zu importieren).
 
 - **Maschinen:** Spalten `nummer`, `bezeichnung`, `box_seriennummer`,
   `traccar_unique_id` (IMEI). Upsert auf `nummer`.
-- **Mitarbeiter-Badges:** Spalten `uid` (der `P-…`-Code von der Karte),
-  `employee_id`. Upsert auf `uid`. `art` ist für neue Zeilen immer `person`
-  (Kisten brauchen seit dem QR-Kurswechsel keinen `ernte_tag`-Eintrag mehr).
 - **Vorschau vor dem Schreiben:** erkannte Zeilen, Dubletten, Fehler; erst dann
   „Importieren".
 - **Umschalter „aktiv / inaktiv" für den ganzen Import, Default `inaktiv`** — die

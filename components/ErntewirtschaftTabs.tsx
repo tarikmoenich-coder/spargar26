@@ -13,7 +13,7 @@ import { useProfile } from "@/lib/useProfile";
 import { MENUE_RECHTE } from "@/lib/rollen";
 import type { UserRole } from "@/lib/types";
 
-type BereichKey = "praemien" | "anbau" | "statistik" | "qualitaet" | "ernte" | "waage";
+type BereichKey = "praemien" | "anbau" | "statistik" | "qualitaet" | "ernte" | "ausweise" | "waage";
 
 const BEREICHE: {
   key: BereichKey;
@@ -78,6 +78,14 @@ const BEREICHE: {
     href: "/erntewirtschaft/ernte",
     prefix: "/erntewirtschaft/ernte",
     rechteKey: "/erntewirtschaft/ernte",
+    unter: [],
+  },
+  {
+    key: "ausweise",
+    label: "Ausweise",
+    href: "/erntewirtschaft/ausweise",
+    prefix: "/erntewirtschaft/ausweise",
+    rechteKey: "/erntewirtschaft/ausweise",
     unter: [],
   },
   {
