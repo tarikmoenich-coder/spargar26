@@ -19,6 +19,14 @@ der Supabase SQL-Konsole laufen — die Funktion verlässt sich beim
 nach Netzausfall, siehe Warteschlange im Agenten) lautlos zu verwerfen statt
 doppelt zu zählen.
 
+Seit 2026-10-22 braucht ein erneuter Deploy zusätzlich
+`migration_2026-10-22_ernte_ausweis.sql` (Tabelle `ernte_ausweis`) — ohne sie
+liefert die `ernte_ausweis`-Abfrage einen (hier nicht geprüften) Fehler und
+damit leer zurück, wodurch **jeder** sonst gültige `P-`-Code faelschlich als
+`"person_gesperrt"` klassifiziert würde (kein Absturz, nur eine irreführende
+Klassifizierung — die Zeile landet trotzdem korrekt in `ernte_scan`, der
+Processor löst `employee_id` ohnehin unabhängig von dieser Antwort auf).
+
 ## Deploy
 
 ```bash
@@ -56,10 +64,16 @@ sollte `"angenommen":0,"dubletten":1` kommen (Idempotenz greift). Danach in
 Supabase `select * from ernte_scan order by id desc` prüfen: nur EINE Zeile,
 nicht zwei.
 
-Für einen `P-`-Code (Mitarbeiter-Badge): ist der Code noch nicht in
-`ernte_tag` angelernt, kommt `"typ":"person_unbekannt"` zurück (Zeile wird
-trotzdem gespeichert, nur ohne aufgelöste Mitarbeiter-Zuordnung — die läuft
-später über `ernte_tag` im Processor).
+Für einen `P-`-Code (Mitarbeiter-Ausweis, seit 2026-10-22
+`P-<personal_nr>-<suffix>`, siehe `/erntewirtschaft/ausweise`): passt
+Personalnummer + Suffix zu einem aktiven Mitarbeiter, kommt `"typ":"person"`;
+existiert die Personalnummer, aber der Suffix passt nicht mehr (z. B. nach
+"Verlust-Karte drucken"), kommt `"typ":"person_gesperrt"`; existiert die
+Personalnummer gar nicht (oder das Code-Format passt nicht), kommt
+`"typ":"person_unbekannt"`. In allen drei Fällen wird die Zeile trotzdem
+gespeichert — die eigentliche Zuordnung zu `ernte_schicht`/
+`ernte_kiste_zyklus.employee_id` macht ohnehin erst der Processor
+(`ernte_scan_verarbeiten()`, `migration_2026-10-22_ernte_ausweis_processor.sql`).
 
 ## Lokal mit `deno check` typprüfen
 
