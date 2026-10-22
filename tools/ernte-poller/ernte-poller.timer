@@ -1,0 +1,12 @@
+[Unit]
+Description=Ernte-Poller alle 15 s
+
+[Timer]
+OnBootSec=15
+OnUnitActiveSec=15
+AccuracySec=2
+# nicht mehrere Läufe gleichzeitig, falls einer mal länger braucht
+RandomizedDelaySec=0
+
+[Install]
+WantedBy=timers.target

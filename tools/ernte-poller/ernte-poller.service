@@ -1,0 +1,16 @@
+[Unit]
+Description=Ernte-Poller (Traccar -> Supabase, Erntemaschinen-Positionen)
+After=network-online.target traccar.service
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=tarik
+EnvironmentFile=/etc/ernte-poller.env
+WorkingDirectory=/home/tarik/projekte/spargar26/tools/ernte-poller
+ExecStart=/usr/bin/node index.mjs
+# nicht zu lange hängen bleiben, falls Traccar/Supabase klemmt
+TimeoutStartSec=45
+
+[Install]
+WantedBy=multi-user.target

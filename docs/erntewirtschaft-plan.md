@@ -907,10 +907,29 @@ Abrechnungssystem — das beantwortet den Pflichtenheft-Punkt „Abrechnung Lohn
 
 ## Teil G — Poller-Erweiterung
 
-Neues Modul im systemd-Poller (oder zweite Instanz): liest die Spinne-Geräte aus
-Traccar (Gruppe/Namensschema), schreibt gedrosselt `ernte_position` (jeder Punkt
-mit `position_rate_s`-Raster; bei Fix-Abfall unter RTK jeden Punkt, für QA),
-Spatial-Join gegen `feld.geometrie` → `feld_id`. Retention/Downsample-Job.
+**Gebaut 2026-10-22** (`tools/ernte-poller/`, siehe dessen README) — eigene
+systemd-Timer-Instanz (15 s), nicht Teil des Fahrzeug-Pollers, aber gleiche
+Traccar-Instanz. Abweichungen gegenüber der ursprünglichen Skizze:
+
+- Statt einer Traccar-Gruppe/Namensschema erkennt der Poller "seine" Geräte
+  selbst über IMEI-Abgleich (Traccar-`uniqueId` = `ernte_maschine.box_seriennummer`)
+  und trägt `traccar_unique_id` automatisch nach — keine manuelle
+  Traccar-Pflege je Box nötig, auch nicht beim 140er-Rollout.
+- Drosselung auf `POSITION_RATE_S` (Standard 5 s, Env-Var) je Maschine, nach
+  demselben Lücken-Nachzug-Muster (`/api/reports/route`) wie der
+  Fahrzeug-Poller — Traccar selbst bekommt weiterhin die volle 1-s-Auflösung
+  vom TRB246.
+- Spatial-Join gegen `feld.geometrie` läuft NICHT im Node-Code, sondern in der
+  DB-Funktion `ernte_position_feld_zuordnen()`
+  (`migration_2026-10-22_ernte_position_feld_zuordnung.sql`), vom Poller nach
+  jedem Schreib-Durchlauf aufgerufen — gleiches Muster wie
+  `ernte_scan_verarbeiten()`. Ohne passende Feld-Geometrie bleibt `feld_id`
+  NULL (kein Fehler).
+- Retention 1x/Tag wie beim Fahrzeug-Poller, aber `RETENTION_DAYS=365`
+  (deckt eine ganze Saison ab, für die Laufmeter-/Feldstufen-Auswertung).
+- Noch nicht umgesetzt: Fix-Qualität unter RTK (aktuell kein RTK im Einsatz,
+  siehe Hardware-Entscheidungen oben) — `fix_qualitaet`/`hdop` werden
+  mitgeschrieben, falls Traccar sie liefert, aber (noch) nicht ausgewertet.
 
 ## Teil H — Deploy-Reihenfolge (Nutzer)
 
