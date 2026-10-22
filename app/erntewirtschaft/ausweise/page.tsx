@@ -8,21 +8,29 @@
 // Personalnummer eines Kollegen eine funktionierende Karte faelschen kann.
 // Nutzer-Vorgabe 2026-10-22: Drucken / Erneut drucken / Verlust-Karte
 // drucken (rotiert den Suffix, macht die alte Karte sofort ungueltig).
+// Mitarbeiterfoto (s/w auf der Karte) ueber den privaten Storage-Bucket
+// "mitarbeiter-fotos" (migration_2026-10-22_mitarbeiter_foto.sql), gleiches
+// Muster wie app/personal-dokumente/page.tsx - Anzeige ueber eine zeitlich
+// begrenzte signierte URL, kein oeffentlicher Zugriff.
 
 import { useCallback, useEffect, useState } from "react";
 import QRCode from "qrcode";
 import { IdCard, UserRound } from "lucide-react";
 import PageHeader from "@/components/PageHeader";
 import EmptyState from "@/components/EmptyState";
+import MitarbeiterFotoAufnahme from "@/components/MitarbeiterFotoAufnahme";
 import { getSupabaseClient } from "@/lib/supabase/client";
 import { useProfile } from "@/lib/useProfile";
 import { formatDatumDE } from "@/lib/format";
+
+const FOTO_BUCKET = "mitarbeiter-fotos";
 
 interface MitarbeiterZeile {
   id: string;
   personal_nr: string;
   name: string;
   vorname: string;
+  foto_pfad: string | null;
 }
 
 interface AusweisZeile {
@@ -36,6 +44,7 @@ interface DruckAnsicht {
   mitarbeiter: MitarbeiterZeile;
   code: string;
   qrDataUrl: string;
+  fotoUrl: string | null;
 }
 
 // Nur maschinenlesbar (steckt nur im QR-Code, nie als Klartext auf der
@@ -59,6 +68,7 @@ export default function ErntewirtschaftAusweisePage() {
   const [fehler, setFehler] = useState<string | null>(null);
   const [laeuft, setLaeuft] = useState<string | null>(null);
   const [druck, setDruck] = useState<DruckAnsicht | null>(null);
+  const [fotoKameraFuer, setFotoKameraFuer] = useState<MitarbeiterZeile | null>(null);
 
   const laden = useCallback(async () => {
     setLoading(true);
@@ -67,7 +77,7 @@ export default function ErntewirtschaftAusweisePage() {
       await Promise.all([
         supabase
           .from("employees")
-          .select("id, personal_nr, name, vorname")
+          .select("id, personal_nr, name, vorname, foto_pfad")
           .eq("aktiv", true)
           .order("name"),
         supabase.from("ernte_ausweis").select("employee_id, suffix, erstellt_am, aktualisiert_am"),
@@ -86,8 +96,17 @@ export default function ErntewirtschaftAusweisePage() {
 
   async function druckeKarte(m: MitarbeiterZeile, suffix: string) {
     const code = `P-${m.personal_nr}-${suffix}`;
-    const qrDataUrl = await QRCode.toDataURL(code, { margin: 1, width: 400 });
-    setDruck({ mitarbeiter: m, code, qrDataUrl });
+    const supabase = getSupabaseClient();
+    const [qrDataUrl, fotoUrl] = await Promise.all([
+      QRCode.toDataURL(code, { margin: 1, width: 400 }),
+      m.foto_pfad
+        ? supabase.storage
+            .from(FOTO_BUCKET)
+            .createSignedUrl(m.foto_pfad, 60)
+            .then((r) => r.data?.signedUrl ?? null)
+        : Promise.resolve(null),
+    ]);
+    setDruck({ mitarbeiter: m, code, qrDataUrl, fotoUrl });
     setTimeout(() => window.print(), 150);
   }
 
@@ -147,6 +166,20 @@ export default function ErntewirtschaftAusweisePage() {
         />
       </div>
 
+      {fotoKameraFuer && (
+        <MitarbeiterFotoAufnahme
+          key={fotoKameraFuer.id}
+          employeeId={fotoKameraFuer.id}
+          name={fotoKameraFuer.name}
+          vorname={fotoKameraFuer.vorname}
+          onFertig={() => {
+            setFotoKameraFuer(null);
+            laden();
+          }}
+          onAbbrechen={() => setFotoKameraFuer(null)}
+        />
+      )}
+
       {druck ? (
         <div className="ausweis-druck flex flex-col items-start gap-4">
           <div className="flex gap-2 print:hidden">
@@ -162,24 +195,33 @@ export default function ErntewirtschaftAusweisePage() {
             </button>
           </div>
           <div className="ausweis-karte flex items-center gap-2 rounded border border-dashed border-neutral-400 bg-white p-3">
-            <div className="ausweis-foto-platzhalter flex shrink-0 items-center justify-center rounded bg-neutral-200 text-neutral-400">
-              <UserRound className="h-10 w-10" strokeWidth={1.25} />
-            </div>
-            <div className="flex h-full min-w-0 flex-1 flex-col justify-between">
-              <div>
-                <p className="text-[8px] uppercase tracking-wide text-neutral-500">
-                  Spargelhof Mömmel
-                </p>
-                <p className="truncate text-sm font-semibold leading-tight">
-                  {druck.mitarbeiter.name}, {druck.mitarbeiter.vorname}
-                </p>
+            {druck.fotoUrl ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                src={druck.fotoUrl}
+                alt="Mitarbeiterfoto"
+                className="ausweis-foto-platzhalter shrink-0 rounded object-cover grayscale"
+              />
+            ) : (
+              <div className="ausweis-foto-platzhalter flex shrink-0 items-center justify-center rounded bg-neutral-200 text-neutral-400">
+                <UserRound className="h-10 w-10" strokeWidth={1.25} />
               </div>
-              <p className="text-3xl font-bold tabular-nums">
+            )}
+            <div className="min-w-0 flex-1">
+              <p className="text-[8px] uppercase tracking-wide text-neutral-500">
+                Spargelhof Mömmel
+              </p>
+              <p className="truncate text-sm font-semibold leading-tight">
+                {druck.mitarbeiter.name}, {druck.mitarbeiter.vorname}
+              </p>
+            </div>
+            <div className="flex shrink-0 flex-col items-center justify-start gap-1">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={druck.qrDataUrl} alt="QR-Code" className="ausweis-qr" />
+              <p className="text-sm font-semibold tabular-nums">
                 {druck.mitarbeiter.personal_nr}
               </p>
             </div>
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={druck.qrDataUrl} alt="QR-Code" className="ausweis-qr shrink-0" />
           </div>
           <p className="text-xs text-neutral-500 print:hidden">
             Noch kein Kartendrucker vorhanden - zum Testen reicht der normale
@@ -202,6 +244,7 @@ export default function ErntewirtschaftAusweisePage() {
                     <th>Personalnr.</th>
                     <th>Name</th>
                     <th>Ausweis</th>
+                    <th>Foto</th>
                     <th>Aktionen</th>
                   </tr>
                 </thead>
@@ -230,6 +273,20 @@ export default function ErntewirtschaftAusweisePage() {
                           ) : (
                             <span className="text-neutral-400">noch kein Ausweis</span>
                           )}
+                        </td>
+                        <td className="text-xs">
+                          <button
+                            type="button"
+                            className="text-left hover:underline"
+                            disabled={inArbeit}
+                            onClick={() => setFotoKameraFuer(m)}
+                          >
+                            {m.foto_pfad ? (
+                              "Foto ändern"
+                            ) : (
+                              <span className="text-emerald-700">+ Foto aufnehmen</span>
+                            )}
+                          </button>
                         </td>
                         <td>
                           <div className="flex flex-wrap gap-3 text-xs">

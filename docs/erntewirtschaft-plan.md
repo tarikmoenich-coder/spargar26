@@ -881,10 +881,26 @@ danach:
   (gleicher Suffix) / "Verlust-Karte drucken" (rotiert den Suffix, alte
   Karte sofort ungültig, mit Bestätigungsdialog). Druckansicht zeigt groß die
   Personalnummer als Klarnummer, der Suffix steckt nur im QR-Code
-  (`qrcode`-Paket, client-seitig). Noch ohne Foto (kein Upload/Storage dafür
-  vorhanden, bewusst v1-Scope) und ohne eigenen Kartendrucker (Stand
+  (`qrcode`-Paket, client-seitig). Noch ohne eigenen Kartendrucker (Stand
   2026-10-22) - Druckansicht funktioniert mit jedem normalen Drucker
-  (benanntes `@page`, siehe `app/globals.css`).
+  (benanntes `@page`, siehe `app/globals.css`). Karte zeigt links ein
+  Mitarbeiterfoto (s/w per CSS-Filter) oder, falls noch keins vorhanden,
+  einen Silhouetten-Platzhalter; QR-Code + Personalnummer rechts
+  untereinander.
+  **Mitarbeiterfoto (`migration_2026-10-22_mitarbeiter_foto.sql`,
+  `employees.foto_pfad` + privater Bucket `mitarbeiter-fotos`, gleiches
+  RLS-Muster wie `mitarbeiter-dokumente`):** wird NICHT hier aufgenommen,
+  sondern **direkt bei der Anreise** in `app/personalplanung/page.tsx`
+  (Nutzer-Vorgabe 2026-10-22: "muss beim Anlegen der Person während der
+  Anreise schon passieren") - `anreiseVorbereiten()` öffnet nach dem
+  Anlegen für jede neu (nicht reaktivierte) Person nacheinander
+  `components/MitarbeiterFotoAufnahme.tsx`: Kamera-Vorschau mit gelbem
+  Rahmen, in den das Passfoto des physischen Personalausweises gehalten
+  wird - gespeichert wird NUR der zugeschnittene Rahmen-Ausschnitt, nie das
+  volle Kamerabild (keine Ausweiskopie mit Nummer/Geburtsdatum im Storage).
+  Dieselbe Komponente steht auch auf `/erntewirtschaft/ausweise` für
+  nachträgliches Hinzufügen/Ändern bereit (z. B. bei der Anreise
+  übersprungen, oder für ältere Mitarbeiter ohne Foto).
 
 **Praxistest bestanden (2026-10-22):** Ausweis über `/erntewirtschaft/ausweise`
 gedruckt (normaler Drucker, kein Kartendrucker), mit dem Scan-Modul an der

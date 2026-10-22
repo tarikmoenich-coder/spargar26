@@ -30,6 +30,7 @@ import {
 } from "@/lib/types";
 import PersonalTabs from "@/components/PersonalTabs";
 import PageHeader from "@/components/PageHeader";
+import MitarbeiterFotoAufnahme from "@/components/MitarbeiterFotoAufnahme";
 import { CalendarRange } from "lucide-react";
 
 const emptyForm = {
@@ -68,6 +69,13 @@ export default function PersonalplanungPage() {
   const [error, setError] = useState<string | null>(null);
   const [ausgewaehlt, setAusgewaehlt] = useState<string[]>([]);
   const [aktivierenLaufend, setAktivierenLaufend] = useState(false);
+  // Warteschlange frisch angelegter (NICHT reaktivierter) Mitarbeiter, deren
+  // Ausweisfoto direkt bei der Anreise aufgenommen werden soll (Nutzer-
+  // Vorgabe 2026-10-22) - siehe anreiseVorbereiten() und
+  // MitarbeiterFotoAufnahme weiter unten.
+  const [fotoWarteschlange, setFotoWarteschlange] = useState<
+    { id: string; name: string; vorname: string }[]
+  >([]);
   // Für die Vorbelegung des Stundenlohns mit dem Mindestlohn (siehe
   // Einstellungen-Seite).
   const [saetze, setSaetze] = useState<VerpflegungsSatz[]>([]);
@@ -360,6 +368,10 @@ export default function PersonalplanungPage() {
     setError(null);
     const supabase = getSupabaseClient();
     const fehlerListe: string[] = [];
+    // Nur ECHT neu angelegte (nicht reaktivierte) Personen bekommen die
+    // Foto-Aufnahme vorgeschlagen - eine reaktivierte Person hatte ggf.
+    // schon ein Foto aus einer früheren Saison.
+    const neuAngelegt: { id: string; name: string; vorname: string }[] = [];
 
     // Herkunfts-Stammplätze laden: die reservierten Wohneinheiten je
     // (Saison, Herkunft) und die aktuelle Belegung/Planung je Wohneinheit.
@@ -462,6 +474,9 @@ export default function PersonalplanungPage() {
           continue;
         }
         employeeId = data.id;
+        if (employeeId) {
+          neuAngelegt.push({ id: employeeId, name: k.name, vorname: k.vorname });
+        }
       }
       await supabase
         .from("personal_kandidaten")
@@ -525,6 +540,27 @@ export default function PersonalplanungPage() {
       );
     }
     if (fehlerListe.length > 0) setError(fehlerListe.join(" · "));
+    // Fotos der neu angelegten Personen direkt jetzt aufnehmen (Nutzer-
+    // Vorgabe 2026-10-22) - load() erst, wenn die Warteschlange fertig ist,
+    // damit die Kandidatenliste währenddessen nicht unter dem Kamera-Dialog
+    // wegspringt.
+    if (neuAngelegt.length > 0) {
+      setFotoWarteschlange(neuAngelegt);
+    } else {
+      load();
+    }
+  }
+
+  function fotoWarteschlangeWeiter() {
+    setFotoWarteschlange((prev) => {
+      const rest = prev.slice(1);
+      if (rest.length === 0) load();
+      return rest;
+    });
+  }
+
+  function fotoWarteschlangeAbbrechen() {
+    setFotoWarteschlange([]);
     load();
   }
 
@@ -1424,6 +1460,17 @@ export default function PersonalplanungPage() {
             );
           })}
         </>
+      )}
+
+      {fotoWarteschlange.length > 0 && (
+        <MitarbeiterFotoAufnahme
+          key={fotoWarteschlange[0].id}
+          employeeId={fotoWarteschlange[0].id}
+          name={fotoWarteschlange[0].name}
+          vorname={fotoWarteschlange[0].vorname}
+          onFertig={fotoWarteschlangeWeiter}
+          onAbbrechen={fotoWarteschlangeAbbrechen}
+        />
       )}
     </div>
   );
