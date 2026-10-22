@@ -320,10 +320,11 @@ input[type="number"]::-webkit-inner-spin-button {
 /* Muster-Schatten-Platzhalter, solange kein echtes Mitarbeiterfoto
    vorhanden ist - Portraitformat, Seitenverhältnis wie der Kamera-Crop in
    MitarbeiterFotoAufnahme (300x400 = 3:4). Nutzer-Vorgabe 2026-10-22:
-   deutlich größer als der erste Entwurf (16x20mm). */
+   erst auf 30x40mm vergrößert, dann als "etwas zu groß" auf 24x32mm
+   zurückgenommen. */
 .ausweis-foto-platzhalter {
-  width: 30mm;
-  height: 40mm;
+  width: 24mm;
+  height: 32mm;
 }
 /* Größer als vorher (Nutzer-Vorgabe 2026-10-22: "QR-Code könnte größer
    sein") - 30mm passt bei 85,6mm Kartenbreite noch neben Foto + Text. */

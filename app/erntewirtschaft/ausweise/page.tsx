@@ -213,7 +213,7 @@ export default function ErntewirtschaftAusweisePage() {
                 />
               ) : (
                 <div className="ausweis-foto-platzhalter flex shrink-0 items-center justify-center rounded bg-neutral-200 text-neutral-400">
-                  <UserRound className="h-16 w-16" strokeWidth={1.25} />
+                  <UserRound className="h-12 w-12" strokeWidth={1.25} />
                 </div>
               )}
               <div className="flex shrink-0 flex-col items-center justify-start gap-1">
