@@ -19,12 +19,23 @@ umschaltbar, ohne den Rest des Agenten anzufassen:
   (`K-TEST-0001`, `K-TEST-0002`, ...). **Zum Testen mit der echten Waage:**
   echtes Gewicht auflegen, dann ENTER drücken - der Agent tut so, als wäre
   jetzt eine Kiste gescannt worden, liest aber das wirkliche Gewicht.
-- `stdin` - echten Code eintippen, oder später ein USB-HID-Scanner (tippt
-  den Code wie eine Tastatur).
-- `seriell` - RS232-Scanner, noch nicht implementiert (sobald ein Modell
-  feststeht, siehe `docs/anfrage-2d-scanner-rfq.md`).
+- `stdin` - echten Code eintippen, oder ein USB-HID-Scanner (tippt den Code
+  wie eine Tastatur). **Braucht ein sichtbares, fokussiertes Konsolenfenster**
+  - Tastatureingaben landen nur dort, wo der Fokus liegt. Für einen
+  unsichtbaren Hintergrunddienst (z. B. NSSM unter Windows) darum
+  **ungeeignet** - dort `seriell` nehmen.
+- `seriell` (2026-10-26 implementiert, siehe `scanner-quelle.mjs`) -
+  RS232-Scanner über COM-Port/USB-Seriell-Adapter (`serialport`-Paket,
+  liefert vorgefertigte Binaries für Windows x64, kein Compiler nötig).
+  Braucht **keinen** Tastaturfokus - darum die richtige Wahl für
+  Dauerbetrieb als unsichtbarer Hintergrunddienst. Setup: `SCANNER_QUELLE
+  =seriell` + `SCANNER_SERIELL_PORT` (z. B. `COM3`) in der `.env`, siehe
+  `.env.example`. Voraussetzung: der gewählte Scanner muss RS232-Ausgabe
+  unterstützen (nicht nur USB-HID/Tastatur-Emulation) - im Handbuch des
+  jeweiligen Modells prüfen, bevor es bestellt wird.
 
-Sobald echte Hardware da ist: nur `SCANNER_QUELLE` in der `.env` umstellen.
+Sobald echte Hardware da ist: nur `SCANNER_QUELLE` (+ bei `seriell` den
+COM-Port) in der `.env` umstellen.
 
 ## Einrichtung (lokal zum Testen)
 
@@ -43,11 +54,17 @@ sein.
 ## Einrichtung am Hof (Dauerbetrieb) - NICHT auf dem Hetzner-Server
 
 **Wichtig, anders als beim `fahrzeug-poller`:** Dieser Agent muss auf einem
-Gerät **im selben LAN wie die Waage** laufen (z. B. Mini-PC/Raspberry Pi am
-Hof, siehe Plan Teil D) - der Hetzner-Server erreicht `192.168.2.x` nicht.
-Der fahrzeug-poller darf auf Hetzner laufen, weil dort Traccar selbst der
-Server ist, den die Tracker über eine echte Internet-SIM erreichen - die
-Waage ist dagegen nur lokal im Hofnetz ansprechbar.
+Gerät **im selben LAN wie die Waage** laufen - der Hetzner-Server erreicht
+`192.168.2.x` nicht. Der fahrzeug-poller darf auf Hetzner laufen, weil dort
+Traccar selbst der Server ist, den die Tracker über eine echte Internet-SIM
+erreichen - die Waage ist dagegen nur lokal im Hofnetz ansprechbar.
+
+**Zielgerät entschieden (2026-10-26): Dell Desktop `DESKTOP-HV8VR5E`**
+(Windows), nicht der zuvor angedachte Raspberry Pi 3B+ (dessen
+Härtungs-Anleitung steht als `<details>`-Block unten, falls doch mal ein
+Linux-Gerät zum Einsatz kommt).
+
+### Linux (systemd) - falls doch ein Linux-Gerät zum Einsatz kommt
 
 Als systemd-Dienst (`Restart=always`), nicht als Timer - der Agent läuft
 dauerhaft und wartet auf Scans:
@@ -63,13 +80,43 @@ sudo systemctl enable --now ernte-waage-agent
 journalctl -u ernte-waage-agent -f
 ```
 
-Hinweis: Im Dauerbetrieb am Hof macht `SCANNER_QUELLE=simuliert` keinen
-Sinn mehr (niemand sitzt am Terminal, um ENTER zu drücken) - sobald der
-echte Scanner da ist, auf `stdin` oder `seriell` umstellen.
+### Windows (Dell Desktop `DESKTOP-HV8VR5E`, aktuelle Entscheidung)
 
-## Zuverlässiger Dauerbetrieb auf dem Raspberry Pi 3B+ (nächster Schritt)
+Eine echte SSD/HDD + NTFS ist von Haus aus robuster gegen Korruption als
+eine microSD-Karte - die Pi-spezifische SD-Härtung (unten) entfällt damit.
+Trotzdem wichtig für Dauerbetrieb:
 
-Geplantes Zielgerät: **Raspberry Pi 3B+** (vorhandenes Lager-Exemplar).
+1. **`SCANNER_QUELLE=seriell` verwenden, nicht `stdin`** - ein unsichtbarer
+   Hintergrunddienst (z. B. via NSSM) hat kein Fenster, das Tastaturfokus
+   bekommen könnte; ein USB-HID-Scanner (`stdin`) würde darum ins Leere
+   tippen. RS232 braucht keinen Fokus und funktioniert deshalb zuverlässig
+   im Hintergrund - siehe Abschnitt "Scanner-Quelle" oben. Voraussetzung:
+   der bestellte Scanner muss RS232-Ausgabe unterstützen (nicht nur
+   HID/Tastatur-Emulation) - **vor der Bestellung im Datenblatt prüfen.**
+   Der Dell-Desktop braucht dafür vermutlich einen USB-zu-RS232-Adapter
+   (die meisten modernen Desktops haben keinen eingebauten COM-Port mehr) -
+   funktioniert aus Node-Sicht identisch, nur der COM-Port-Name
+   (`SCANNER_SERIELL_PORT`) ändert sich ggf.
+2. **Autostart + Auto-Login einrichten** (Task Scheduler: Trigger "Beim
+   Anmelden", oder NSSM für einen echten, unsichtbaren Windows-Dienst - mit
+   `seriell` als Scanner-Quelle funktioniert jetzt auch Letzteres).
+3. **Energieoptionen:** Energiesparmodus/Ruhezustand deaktivieren (Systemsteuerung
+   -> Energieoptionen -> "Nie" für Energiesparmodus) - sonst schläft der
+   PC ein und der Agent reagiert nicht mehr.
+4. **Windows Update:** automatische Neustarts außerhalb der Erntezeiten legen
+   (Richtlinien/Aktive Stunden) - verhindert einen Neustart mitten am
+   Erntetag ohne dass es jemand bemerkt.
+5. **`ernte-waage-agent.service`** (systemd-Unit-Datei im Repo) gilt nur für
+   Linux - auf Windows übernimmt NSSM bzw. der Task-Scheduler-Trigger die
+   Neustart-Logik bei Prozessabsturz.
+6. **Noch offen/später:** Alarmierung, falls der Rechner komplett offline
+   geht (Netzwerkausfall, Absturz) - könnte sich an die bestehende
+   Telegram-Alarmierung des `fahrzeug-poller` anlehnen
+   ([[fahrzeuge-traccar]]), ist aber noch nicht umgesetzt.
+
+<details>
+<summary>Raspberry Pi 3B+ Härtungs-Anleitung (2026-10-26 zurückgestellt zugunsten des Dell-Desktops, für späteren Bedarf aufgehoben)</summary>
+
 Stromausfälle am Hof sind laut Nutzer an der Waage nicht zu erwarten -
 trotzdem schützen die folgenden Punkte zusätzlich gegen SD-Karten-Verschleiß
 durch normales Dauer-Schreiben (Logs, Warteschlangen-Datei) und gegen jedes
@@ -113,10 +160,8 @@ Stromausfälle im engeren Sinn.
 5. **`ernte-waage-agent.service` hat bereits `Restart=always`/`RestartSec=5`**
    (siehe oben im Repo) - kein weiterer Schritt nötig, fängt Abstürze des
    Node-Prozesses selbst ab.
-6. **Noch offen/später:** Alarmierung, falls der Pi komplett offline geht
-   (Stromausfall am Gerät selbst, Netzwerkausfall) - könnte sich an die
-   bestehende Telegram-Alarmierung des `fahrzeug-poller` anlehnen
-   ([[fahrzeuge-traccar]]), ist aber noch nicht umgesetzt.
+
+</details>
 
 ## Noch nicht Teil dieses Agenten
 

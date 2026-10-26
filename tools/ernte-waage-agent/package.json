@@ -8,7 +8,9 @@
     "start": "node index.mjs"
   },
   "dependencies": {
+    "@serialport/parser-readline": "^13.0.0",
     "@supabase/supabase-js": "^2.45.4",
-    "dotenv": "^16.4.5"
+    "dotenv": "^16.4.5",
+    "serialport": "^13.0.0"
   }
 }
