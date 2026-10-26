@@ -1007,6 +1007,44 @@ Abrechnungssystem — das beantwortet den Pflichtenheft-Punkt „Abrechnung Lohn
 - Finale **Manipulation je Person** vor „Freigeben/Alles speichern" bleibt
   `admin`-only (Audit-relevant, wie oben bei RLS).
 
+## Teil F3 — Feld-Zielertrag + Telegram-Alarm (vorgemerkt 2026-10-26, noch nicht gebaut)
+
+Nutzer-Vorgabe: Zusätzlich zum bestehenden Erntefenster (`feld_anbau.
+erntefenster_von/_bis`) braucht jedes Feld einen **Maximal-/Zielertrag**, gegen
+den der laufende **Rohertrag** (tatsächlich gewogene kg, aus
+`ernte_kiste_zyklus.gewicht_netto_kg` je `feld_id` summiert) mitläuft. Wird der
+Zielertrag erreicht, soll eine **Telegram-Nachricht** kommen - Grund: bei
+manchen Feldern muss die Ernte dann bewusst beendet werden (z.B. um den Bestand
+nicht zu überernten).
+
+Offene Design-Punkte, vor dem Bauen zu klären:
+
+- **Neues Feld, nicht `ertrag_erwartet` wiederverwenden:** `ertrag_erwartet`
+  (+ `ertrag_einheit`, Default „steigen") ist eine grobe Vorab-Schätzung für
+  die Bestellplanung, keine kg-genaue harte Schwelle. Zielertrag sollte eine
+  eigene Spalte in **kg** sein (z.B. `feld_anbau.ertrag_ziel_kg`), damit der
+  Vergleich mit der Waage (ebenfalls kg) ohne Einheiten-Umrechnung funktioniert.
+- **Zeitraum-Frage:** läuft der Rohertrag-Zähler über die ganze Saison
+  (`feld_anbau.saison_jahr`) oder nur innerhalb des Erntefensters? Nutzer
+  entscheidet.
+- **Technischer Weg zur Telegram-Nachricht:** Postgres selbst kann nicht
+  direkt ins Internet - entweder (a) die `pg_net`-Extension (in Supabase
+  verfügbar) direkt aus `ernte_scan_verarbeiten()` nach jedem Wiegen einen
+  HTTP-Call an die Telegram-Bot-API machen lassen, oder (b) ein kleiner
+  periodischer Check (Edge Function oder eigener Poller, analog zur
+  bestehenden Telegram-Alarmierung bei [[fahrzeuge-traccar]]/
+  `tools/fahrzeug-poller`). Variante (a) ist näher an der bestehenden
+  DB-zentrierten Processor-Architektur dieses Moduls.
+- **Mehrfachversand verhindern:** braucht einen Dedup-Zustand (z.B.
+  `feld_anbau.ziel_erreicht_benachrichtigt_am`), sonst kommt bei jeder
+  weiteren Wiegung über dem Ziel erneut eine Nachricht.
+- **Offen, ob rein informativ oder auch eine Sperre im System:** reicht die
+  Telegram-Nachricht (Rest ist manuelle Organisation vor Ort - Fahrer/
+  Vorarbeiter stoppen die Ernte auf diesem Feld selbst), oder soll die App
+  danach auch aktiv warnen/blockieren, falls trotzdem noch eine Maschine auf
+  diesem Feld scannt? Nutzer entscheidet, wenn der Rest der Erntewirtschaft
+  gebaut wird.
+
 ## Teil G — Poller-Erweiterung
 
 **Gebaut 2026-10-22** (`tools/ernte-poller/`, siehe dessen README) — eigene
