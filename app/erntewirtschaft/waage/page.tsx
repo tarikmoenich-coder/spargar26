@@ -85,9 +85,14 @@ export default function ErntewirtschaftWaagePage() {
         titel="Waage"
         beschreibung="Live-Protokoll des Waagen-Agenten - Scan-Code + Gewicht je Wiegung an der Hofwaage."
         aktionen={
-          <button type="button" className="btn-secondary text-xs" onClick={laden}>
-            Aktualisieren
-          </button>
+          <>
+            <a href="/erntewirtschaft/waage/kiosk" className="btn-secondary text-xs">
+              Kiosk öffnen
+            </a>
+            <button type="button" className="btn-secondary text-xs" onClick={laden}>
+              Aktualisieren
+            </button>
+          </>
         }
       />
 

@@ -13,13 +13,22 @@
 // ALLE Sitzungen der Person ab ("global"), das würde einen zweiten, gerade
 // aktiv genutzten Tab derselben Person fälschlich mit ausloggen. "local"
 // beendet nur die Sitzung dieses einen Tabs.
+//
+// Ausnahme (2026-10-26): der Waagen-Kiosk läuft unbeaufsichtigt auf einem
+// Touchscreen am Hof - dort tippt/klickt niemand regelmäßig, der Agent
+// schreibt die Daten im Hintergrund. Ohne Ausnahme würde die Seite nach
+// spätestens 60 Minuten abgemeldet und die Realtime-Anzeige stumm stehen
+// bleiben, ohne dass das sofort auffällt - anders als bei den übrigen,
+// aktiv bedienten Seiten mit sensiblen Personal-/Lohndaten, wo Inaktivität
+// tatsächlich "jemand ist weggegangen" bedeutet.
 
+import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useRef } from "react";
-import { useRouter } from "next/navigation";
 import { getSupabaseClient } from "@/lib/supabase/client";
 import { useProfile } from "@/lib/useProfile";
 
 const INAKTIVITAETS_LIMIT_MS = 60 * 60 * 1000; // 60 Minuten
+const AUSGENOMMENE_PFADE = ["/erntewirtschaft/waage/kiosk"];
 
 const AKTIVITAETS_EREIGNISSE = [
   "mousedown",
@@ -33,10 +42,12 @@ const AKTIVITAETS_EREIGNISSE = [
 export default function InaktivitaetsAbmeldung() {
   const { userId } = useProfile();
   const router = useRouter();
+  const pathname = usePathname();
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     if (!userId) return;
+    if (AUSGENOMMENE_PFADE.includes(pathname)) return;
 
     async function abmelden() {
       await getSupabaseClient().auth.signOut({ scope: "local" });
@@ -60,7 +71,7 @@ export default function InaktivitaetsAbmeldung() {
       );
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [userId]);
+  }, [userId, pathname]);
 
   return null;
 }

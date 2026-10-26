@@ -57,6 +57,20 @@ async function schreibenMitQueueFallback(zeile) {
   try {
     await schreiben(zeile);
     console.log(`  -> ernte_scan geschrieben (${zeile.tag_uid}, ${zeile.gewicht_kg} kg)`);
+    // Sofort verarbeiten lassen statt bis zu 60s auf den naechsten
+    // pg_cron-Takt zu warten (Nutzer-Vorgabe 2026-10-26: der geplante
+    // Waagen-Kiosk soll Mitarbeiter/Feld quasi sofort nach dem Wiegen
+    // zeigen). Schlaegt das fehl (z.B. kurzer Netzwerkausfall), greift
+    // trotzdem der normale Minuten-Takt als Netz - rein ein
+    // Geschwindigkeits-Gewinn, keine Korrektheits-Abhaengigkeit.
+    try {
+      const { error: rpcError } = await supabase.rpc("ernte_scan_verarbeiten");
+      if (rpcError) {
+        console.error(`  -> Sofort-Verarbeitung fehlgeschlagen (laeuft trotzdem per Minuten-Takt nach): ${rpcError.message}`);
+      }
+    } catch (e) {
+      console.error(`  -> Sofort-Verarbeitung fehlgeschlagen (laeuft trotzdem per Minuten-Takt nach): ${e.message}`);
+    }
   } catch (e) {
     console.error(`  -> Supabase-Fehler, lege lokal in die Warteschlange: ${e.message}`);
     einreihen(QUEUE_DATEI, zeile);

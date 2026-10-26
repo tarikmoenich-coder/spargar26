@@ -19,6 +19,7 @@ import {
   FELD_KULTUR_LABELS,
   type FeldGeojson,
   type FeldKultur,
+  type SpargelSorte,
 } from "@/lib/types";
 import { formatMenge, formatZahlDE } from "@/lib/format";
 
@@ -46,6 +47,7 @@ export default function AnbauFelderPage() {
 
   const [felder, setFelder] = useState<FeldGeojson[]>([]);
   const [planung, setPlanung] = useState<Record<number, PlanungsInfo[]>>({});
+  const [sorten, setSorten] = useState<SpargelSorte[]>([]);
   const [loading, setLoading] = useState(true);
   const [fehler, setFehler] = useState<string | null>(null);
   const [zeigeInaktive, setZeigeInaktive] = useState(false);
@@ -53,7 +55,15 @@ export default function AnbauFelderPage() {
 
   const [neuName, setNeuName] = useState("");
   const [neuKultur, setNeuKultur] = useState<FeldKultur | "">("");
+  const [neuSorteId, setNeuSorteId] = useState<number | "">("");
   const [laeuft, setLaeuft] = useState(false);
+
+  // Spargelsorte ist ein fester Stammdaten-Baustein (spargel_sorte,
+  // migration_2026-10-26_ernte_kiosk.sql), nicht Freitext - soll später
+  // feldbezogene Ernte-/Sortenauswertung tragen, dafür darf die Schreibweise
+  // nicht je Feld variieren.
+  const [neueSorte, setNeueSorte] = useState("");
+  const [sorteLaeuft, setSorteLaeuft] = useState(false);
 
   // Import aus Pachtwesen2026 (Phase 2, Migration 2026-10-19) - Schlag-Ebene,
   // einmal pro Saison anstoßbar. Lässt eine bereits in spargar26 verfeinerte
@@ -65,13 +75,15 @@ export default function AnbauFelderPage() {
   async function load() {
     setLoading(true);
     const supabase = getSupabaseClient();
-    const [{ data: fData }, { data: pData }] = await Promise.all([
+    const [{ data: fData }, { data: pData }, { data: sData }] = await Promise.all([
       supabase.from("feld_geojson").select("*").order("bezeichnung"),
       supabase
         .from("feld_anbau_uebersicht")
         .select("feld_id, saison_jahr, anzahl_abschnitte, anzahl_pflanzen"),
+      supabase.from("spargel_sorte").select("*").order("bezeichnung"),
     ]);
     setFelder((fData as FeldGeojson[]) ?? []);
+    setSorten((sData as SpargelSorte[]) ?? []);
     const pMap: Record<number, PlanungsInfo[]> = {};
     ((pData as PlanungsInfo[]) ?? []).forEach((p) => {
       if (!pMap[p.feld_id]) pMap[p.feld_id] = [];
@@ -99,6 +111,7 @@ export default function AnbauFelderPage() {
     const { error } = await supabase.from("feld").insert({
       bezeichnung: neuName.trim(),
       kultur: neuKultur || null,
+      sorte_id: neuSorteId || null,
     });
     if (error) {
       setFehler(
@@ -109,6 +122,7 @@ export default function AnbauFelderPage() {
     } else {
       setNeuName("");
       setNeuKultur("");
+      setNeuSorteId("");
     }
     setLaeuft(false);
     load();
@@ -116,19 +130,44 @@ export default function AnbauFelderPage() {
 
   async function aendern(
     id: number,
-    feld: "bezeichnung" | "kultur" | "aktiv",
+    feld: "bezeichnung" | "kultur" | "aktiv" | "sorte_id",
     wert: string | boolean
   ) {
     setFehler(null);
     const supabase = getSupabaseClient();
+    let wertZumSpeichern: string | boolean | number | null;
+    if (feld === "aktiv") {
+      wertZumSpeichern = wert;
+    } else if (feld === "sorte_id") {
+      wertZumSpeichern = wert === "" ? null : Number(wert);
+    } else {
+      wertZumSpeichern = String(wert).trim() || null;
+    }
     const { error } = await supabase
       .from("feld")
-      .update({
-        [feld]:
-          feld === "aktiv" ? wert : String(wert).trim() || null,
-      })
+      .update({ [feld]: wertZumSpeichern })
       .eq("id", id);
     if (error) setFehler(error.message);
+    load();
+  }
+
+  async function sorteAnlegen() {
+    if (!neueSorte.trim()) return;
+    setSorteLaeuft(true);
+    setFehler(null);
+    const { error } = await getSupabaseClient()
+      .from("spargel_sorte")
+      .insert({ bezeichnung: neueSorte.trim() });
+    setSorteLaeuft(false);
+    if (error) {
+      setFehler(
+        error.message.includes("spargel_sorte_bezeichnung_key")
+          ? "Diese Sorte gibt es schon."
+          : error.message
+      );
+      return;
+    }
+    setNeueSorte("");
     load();
   }
 
@@ -274,6 +313,22 @@ export default function AnbauFelderPage() {
                 ))}
               </select>
             </label>
+            <label className="text-sm">
+              Sorte{" "}
+              <select
+                value={neuSorteId}
+                onChange={(e) =>
+                  setNeuSorteId(e.target.value ? Number(e.target.value) : "")
+                }
+              >
+                <option value="">—</option>
+                {sorten.map((s) => (
+                  <option key={s.id} value={s.id}>
+                    {s.bezeichnung}
+                  </option>
+                ))}
+              </select>
+            </label>
             <button
               type="button"
               className="btn text-xs"
@@ -282,6 +337,43 @@ export default function AnbauFelderPage() {
             >
               Feld anlegen
             </button>
+          </div>
+        </div>
+      )}
+
+      {canEdit && (
+        <div className="rounded border border-linie bg-white p-3">
+          <h2 className="mb-2 text-sm font-semibold text-emerald-800">
+            Spargelsorten verwalten
+          </h2>
+          <p className="mb-2 text-xs text-neutral-500">
+            Fester Stammdaten-Baustein statt Freitext je Feld - wird in der
+            Waagen-Kiosk-Anzeige verwendet und soll später feldbezogene
+            Ernte-/Sortenauswertung ermöglichen, dafür muss die Schreibweise
+            einheitlich bleiben.
+          </p>
+          <div className="flex flex-wrap items-end gap-2">
+            <label className="text-sm">
+              Neue Sorte{" "}
+              <input
+                className="w-40"
+                value={neueSorte}
+                onChange={(e) => setNeueSorte(e.target.value)}
+              />
+            </label>
+            <button
+              type="button"
+              className="btn text-xs"
+              disabled={sorteLaeuft}
+              onClick={sorteAnlegen}
+            >
+              Sorte anlegen
+            </button>
+            {sorten.length > 0 && (
+              <span className="text-xs text-neutral-500">
+                Bisher: {sorten.map((s) => s.bezeichnung).join(", ")}
+              </span>
+            )}
           </div>
         </div>
       )}
@@ -366,6 +458,7 @@ export default function AnbauFelderPage() {
               <tr>
                 <th>Bezeichnung</th>
                 <th>Kultur</th>
+                <th>Sorte</th>
                 <th title="Fläche aus der Geometrie (ST_Area), nicht aus der Reihen-Planung">
                   Brutto ha
                 </th>
@@ -404,6 +497,20 @@ export default function AnbauFelderPage() {
                         {FELD_KULTUREN.map((k) => (
                           <option key={k} value={k}>
                             {FELD_KULTUR_LABELS[k]}
+                          </option>
+                        ))}
+                      </select>
+                    </td>
+                    <td>
+                      <select
+                        defaultValue={f.sorte_id ?? ""}
+                        disabled={!canEdit}
+                        onChange={(e) => aendern(f.id, "sorte_id", e.target.value)}
+                      >
+                        <option value="">—</option>
+                        {sorten.map((s) => (
+                          <option key={s.id} value={s.id}>
+                            {s.bezeichnung}
                           </option>
                         ))}
                       </select>

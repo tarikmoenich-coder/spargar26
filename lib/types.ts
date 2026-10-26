@@ -1153,12 +1153,26 @@ export const FELD_KULTUR_LABELS: Record<FeldKultur, string> = {
   sonstiges: 'Sonstiges',
 };
 
+// spargel_sorte (migration_2026-10-26_ernte_kiosk.sql) - eigene
+// Stammdaten-Tabelle statt Freitext auf feld (Nutzer-Vorgabe 2026-10-26: soll
+// spaeter feldbezogene Ernte-/Sortenauswertung tragen, dafuer muss die Sorte
+// ein fester, wiederverwendbarer Baustein sein statt frei getippt).
+export interface SpargelSorte {
+  id: number;
+  bezeichnung: string;
+  aktiv: boolean;
+}
+
 export interface Feld {
   id: number;
   bezeichnung: string;
   // nullable: frisch importierte Felder (aus Pachtwesen2026) kennen ihre
   // Kultur noch nicht.
   kultur: FeldKultur | null;
+  // Spargelsorte (2026-10-26, fuer den Waagen-Kiosk) - FK auf spargel_sorte,
+  // siehe dort. Anders als feld_anbau_abschnitt.sorte (Erdbeeren, Freitext,
+  // mehrere Sorten je Saison moeglich) bleibt das hier bewusst unveraendert.
+  sorte_id: number | null;
   aktiv: boolean;
   // geometrie (PostGIS) fehlt bewusst hier, analog zur Lücke bei
   // Pachtwesen2026s database.types.ts - select("*") liefert sie trotzdem.
@@ -1170,6 +1184,27 @@ export interface Feld {
   erstellt_am: string;
   updated_by: string | null;
   updated_at: string;
+}
+
+// ernte_kiosk_wiegung (migration_2026-10-26_ernte_kiosk.sql) - fuer die
+// Touchscreen-Kiosk-Seite am Waagen-PC (app/erntewirtschaft/waage/kiosk).
+export interface ErnteKioskWiegung {
+  id: number;
+  tag_uid: string;
+  waage_id: number | null;
+  gewogen_am: string | null;
+  gewicht_brutto_kg: number | null;
+  tara_kg: number | null;
+  gewicht_netto_kg: number | null;
+  status: "offen" | "gewogen" | "verworfen" | "ungeklaert";
+  feld_id: number | null;
+  feld_bezeichnung: string | null;
+  feld_sorte: string | null;
+  employee_id: string | null;
+  mitarbeiter_name: string | null;
+  mitarbeiter_vorname: string | null;
+  mitarbeiter_personal_nr: string | null;
+  mitarbeiter_foto_pfad: string | null;
 }
 
 export const PFLANZTYPEN = [
@@ -1276,6 +1311,9 @@ export interface FeldGeojson {
   pachtwesen_geometrie_hash: string | null;
   pachtwesen_geometrie_hash_neu: string | null;
   pachtwesen_geometrie_geojson_neu: string | null;
+  // Ans Ende angehaengt (migration_2026-10-26_ernte_kiosk.sql).
+  sorte_id: number | null;
+  sorte_bezeichnung: string | null;
 }
 
 export interface ErdbeerenBestellung {
