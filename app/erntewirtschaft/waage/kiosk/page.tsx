@@ -7,12 +7,15 @@
 // erfassten+übermittelten Wiegung.
 //
 // Mitarbeiter/Feld/Sorte sind NUR bekannt, wenn vorher an der Erntemaschine
-// die Kiste gescannt wurde (Badge -> Feld per GPS) - die dafür nötige
-// QR-Scan-Hardware an den Maschinen selbst ist noch nicht gekauft/
-// pilotgetestet (siehe docs/erntewirtschaft-plan.md). Bis dahin zeigt diese
-// Seite nur Gewicht+Tara an (status "ungeklaert" - der Processor legt dann
-// direkt einen neuen, nicht zuordenbaren ernte_kiste_zyklus-Datensatz an,
-// siehe migration_2026-10-20_erntewirtschaft_kisten_zyklus.sql).
+// die Kiste gescannt wurde (Badge -> Feld per GPS) - das Scan-Modul ist am
+// Pilotgerät bereits produktiv im Einsatz (Praxistest bestanden, siehe
+// docs/erntewirtschaft-plan.md "Praxistest bestanden 2026-10-22"), die
+// Scanner für den restlichen Rollout sind bereits bestellt. Fehlt die
+// Zuordnung trotzdem (z.B. Testscans direkt an der Waage ohne vorherigen
+// Maschinen-Scan, oder eine Kiste außerhalb des Pilotbetriebs), legt der
+// Processor einen "ungeklaert"-Datensatz an statt zu blockieren, siehe
+// migration_2026-10-20_erntewirtschaft_kisten_zyklus.sql - diese Seite
+// zeigt dann nur Gewicht+Tara.
 //
 // Realtime statt Polling: tools/ernte-waage-agent ruft nach jedem
 // erfolgreichen Schreiben sofort ernte_scan_verarbeiten() auf (statt bis zu
