@@ -90,13 +90,32 @@ Trotzdem wichtig für Dauerbetrieb:
    Hintergrunddienst (z. B. via NSSM) hat kein Fenster, das Tastaturfokus
    bekommen könnte; ein USB-HID-Scanner (`stdin`) würde darum ins Leere
    tippen. RS232 braucht keinen Fokus und funktioniert deshalb zuverlässig
-   im Hintergrund - siehe Abschnitt "Scanner-Quelle" oben. Voraussetzung:
-   der bestellte Scanner muss RS232-Ausgabe unterstützen (nicht nur
-   HID/Tastatur-Emulation) - **vor der Bestellung im Datenblatt prüfen.**
-   Der Dell-Desktop braucht dafür vermutlich einen USB-zu-RS232-Adapter
-   (die meisten modernen Desktops haben keinen eingebauten COM-Port mehr) -
-   funktioniert aus Node-Sicht identisch, nur der COM-Port-Name
-   (`SCANNER_SERIELL_PORT`) ändert sich ggf.
+   im Hintergrund - siehe Abschnitt "Scanner-Quelle" oben.
+
+   **Scanner entschieden (2026-10-26): Datalogic Gryphon GFS4550**
+   (reines RS-232-Modell der GFS4500-Serie - Achtung bei der Beschaffung:
+   GFS4520 ist nur USB, GFS4590 kann beides je nach Kabel, nur GFS4550 ist
+   reines RS232 mit DB9-Kabel). Einrichtung:
+   1. DB9-Kabel vom Scanner über einen **USB-zu-RS232-Adapter** an den
+      Dell-Desktop anschließen (die meisten modernen Desktops haben keinen
+      eingebauten COM-Port mehr).
+   2. **Interface auf "RS232-STD" programmieren:** aus der gedruckten
+      Kurzanleitung (liegt dem Scanner bei) den Abschnitt "Selecting the
+      Interface Type" aufschlagen und den Barcode "Select RS232-STD"
+      zwischen den Barcodes "ENTER/EXIT PROGRAMMING MODE" scannen - ab
+      Werk ist das Interface nicht zwangsläufig schon richtig eingestellt.
+   3. Windows-Gerätemanager öffnen, unter "Anschlüsse (COM & LPT)" die
+      COM-Port-Nummer des Adapters ablesen (z. B. `COM3`) →
+      `SCANNER_SERIELL_PORT` in der `.env`.
+   4. Baudrate/Zeilenende (`SCANNER_SERIELL_BAUDRATE`/
+      `SCANNER_SERIELL_DELIMITER`) sind beim GFS4550 nicht öffentlich
+      dokumentiert auffindbar - **mit dem Default (9600, `\r`) testen**
+      (`SCANNER_QUELLE=seriell`, Testcode scannen, Konsole beobachten):
+      kommt nur Datenmüll an, stimmt die Baudrate nicht; kommt gar nichts
+      oder mehrere Codes verklebt an, stimmt das Zeilenende nicht. Für die
+      exakten Werkseinstellungen notfalls **Datalogic Aladdin**
+      (kostenloses Konfigurations-Tool von datalogic.com) nutzen, das den
+      Scanner ausliest.
 2. **Autostart + Auto-Login einrichten** (Task Scheduler: Trigger "Beim
    Anmelden", oder NSSM für einen echten, unsichtbaren Windows-Dienst - mit
    `seriell` als Scanner-Quelle funktioniert jetzt auch Letzteres).
