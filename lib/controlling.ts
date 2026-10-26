@@ -96,6 +96,7 @@ export function offeneGruende(z: AnreiselisteOffenArbeitend): string[] {
     z.hochzeitsurkunde_fehlt ? "Hochzeitsurkunde fehlt" : null,
     z.dhh_angaben_fehlen ? "Angaben Doppelte Haushaltsführung fehlen" : null,
     z.buskosten_fehlen ? "Buskosten nicht erfasst" : null,
+    z.schulungsliste_fehlt ? "Nicht auf Schulungsliste" : null,
   ].filter((g): g is string => g !== null);
 }
 

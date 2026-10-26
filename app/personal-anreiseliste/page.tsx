@@ -173,7 +173,8 @@ export default function AnreiselistePage() {
       c.ausweiskopie_vorhanden &&
       c.fuehrerschein_erfuellt &&
       c.hochzeitsurkunde_erfuellt &&
-      c.lohnsteuerabzug_erfuellt
+      c.lohnsteuerabzug_erfuellt &&
+      c.schulungsliste_erfuellt
     );
   }
 
@@ -789,6 +790,7 @@ export default function AnreiselistePage() {
                               `Führerscheinkopie: ${c.fuehrerschein_erfuellt ? "OK/entfällt" : "fehlt"}`,
                               `Hochzeitsurkunde: ${c.hochzeitsurkunde_erfuellt ? "OK/entfällt" : "fehlt"}`,
                               `Formular Doppelte Haushaltsführung: ${c.lohnsteuerabzug_erfuellt ? "OK/entfällt" : "fehlt"}`,
+                              `Schulungsliste: ${c.schulungsliste_erfuellt ? "vorhanden" : "fehlt"}`,
                             ].join(" · ")}
                           >
                             {[
@@ -796,6 +798,7 @@ export default function AnreiselistePage() {
                               c.fuehrerschein_erfuellt ? "" : "Führerschein ✗",
                               c.hochzeitsurkunde_erfuellt ? "" : "Heiratsurk. ✗",
                               c.lohnsteuerabzug_erfuellt ? "" : "DHH-Formular ✗",
+                              c.schulungsliste_erfuellt ? "" : "Schulung ✗",
                             ]
                               .filter(Boolean)
                               .join(", ")}

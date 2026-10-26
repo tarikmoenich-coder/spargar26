@@ -8,6 +8,15 @@
 // verdrahtet, damit dieselbe Seite auch für künftige Pflichtschulungen
 // reicht. Druckmuster (print-form-table, Unterschrift als leere Zelle)
 // kopiert von app/vorschuesse/page.tsx.
+//
+// Prüfpunkt (Nutzer-Vorgabe 2026-10-26): "Jede Person muss auf mindestens
+// einer Schulungsliste stehen." Beim Drucken wird deshalb für jede gerade
+// angezeigte Person eine Zeile in schulung_teilnahme angelegt - das ist das
+// "Gedächtnis", gegen das personal_kandidaten_checkliste.schulungsliste_
+// erfuellt prüft (migration_2026-10-26_schulungsliste_pruefpunkt.sql).
+// Gleiche Semantik wie das bestehende "Gedruckt"-Häkchen beim
+// Arbeitsvertrag: markiert, dass das Dokument erzeugt/ausgegeben wurde,
+// nicht dass jede Unterschrift tatsächlich geleistet wurde.
 
 import { useEffect, useState } from "react";
 import { getSupabaseClient } from "@/lib/supabase/client";
@@ -37,6 +46,8 @@ export default function SchulungslistePage() {
   const [teilnehmer, setTeilnehmer] = useState<Teilnehmer[]>([]);
   const [loading, setLoading] = useState(true);
   const [fehler, setFehler] = useState<string | null>(null);
+  const [traegtEin, setTraegtEin] = useState(false);
+  const [hinweis, setHinweis] = useState<string | null>(null);
 
   useEffect(() => {
     if (!canView) {
@@ -84,6 +95,37 @@ export default function SchulungslistePage() {
     })();
   }, [canView]);
 
+  async function teilnahmeEintragenUndDrucken() {
+    if (teilnehmer.length === 0) {
+      window.print();
+      return;
+    }
+    if (
+      !window.confirm(
+        `${teilnehmer.length} Person(en) als Teilnehmer von "${titel}" (${formatDatumDE(datum)}) eintragen und drucken?`
+      )
+    ) {
+      return;
+    }
+    setTraegtEin(true);
+    setFehler(null);
+    const supabase = getSupabaseClient();
+    const { error } = await supabase.from("schulung_teilnahme").insert(
+      teilnehmer.map((t) => ({
+        employee_id: t.employeeId,
+        titel,
+        schulung_datum: datum,
+      }))
+    );
+    setTraegtEin(false);
+    if (error) {
+      setFehler(error.message);
+      return;
+    }
+    setHinweis(`Teilnahme für ${teilnehmer.length} Person(en) eingetragen.`);
+    window.print();
+  }
+
   if (profilLaedt) {
     return <p className="p-4 text-sm text-neutral-500">Lädt…</p>;
   }
@@ -104,10 +146,15 @@ export default function SchulungslistePage() {
         <PageHeader
           icon={ClipboardCheck}
           titel="Unterschriftenliste"
-          beschreibung="Teilnehmerbestätigung für Pflichtschulungen - alle Personen aktuell auf der Anreiseliste."
+          beschreibung="Teilnehmerbestätigung für Pflichtschulungen - alle Personen aktuell auf der Anreiseliste. Drucken trägt sie als Schulungsteilnehmer ein (erfüllt den Checkliste-Punkt in der Anreiseliste)."
           aktionen={
-            <button type="button" className="btn text-xs" onClick={() => window.print()}>
-              Drucken
+            <button
+              type="button"
+              className="btn text-xs"
+              disabled={traegtEin || loading}
+              onClick={teilnahmeEintragenUndDrucken}
+            >
+              {traegtEin ? "Trage ein …" : "Teilnahme eintragen & drucken"}
             </button>
           }
         />
@@ -128,6 +175,7 @@ export default function SchulungslistePage() {
         </label>
       </div>
 
+      {hinweis && <p className="text-sm text-emerald-700 print:hidden">{hinweis}</p>}
       {fehler && <p className="text-sm text-beere-700 print:hidden">Konnte nicht laden: {fehler}</p>}
 
       <div>

@@ -333,6 +333,7 @@ export interface AnreiselisteOffenArbeitend {
   fuehrerschein_fehlt: boolean;
   hochzeitsurkunde_fehlt: boolean;
   dhh_angaben_fehlen: boolean;
+  schulungsliste_fehlt: boolean;
 }
 
 // Aus der Sicht employee_urlaubstage - Urlaubstage-Anspruch (2 je vollem
@@ -1477,6 +1478,9 @@ export interface PersonalKandidatChecklisteRow {
   sv_fragebogen_erfasst: boolean;
   sv_fragebogen_bestanden: boolean;
   sv_fragebogen_unvollstaendig_fehlerhaft: boolean;
+  // Mindestens einmal auf einer gedruckten Schulungs-Unterschriftenliste
+  // gestanden (app/personal-anreiseliste/schulungsliste).
+  schulungsliste_erfuellt: boolean;
 }
 
 export interface CashDeposit {
