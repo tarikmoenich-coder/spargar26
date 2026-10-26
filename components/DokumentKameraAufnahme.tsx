@@ -88,13 +88,33 @@ export default function DokumentKameraAufnahme({
   useEffect(() => {
     let abgebrochen = false;
     navigator.mediaDevices
-      .getUserMedia({ video: { facingMode: { ideal: "environment" } }, audio: false })
+      .getUserMedia({
+        video: {
+          facingMode: { ideal: "environment" },
+          // Ohne Auflösungs-Hinweis wählen manche Handys eine
+          // Vorschau-Pipeline mit nur einmaligem Fokus beim Start statt
+          // laufendem Autofokus - fürs Dokument-aus-der-Nähe-Halten (anders
+          // als ein normales Foto) entscheidend.
+          width: { ideal: 1920 },
+          height: { ideal: 1080 },
+        },
+        audio: false,
+      })
       .then((stream) => {
         if (abgebrochen) {
           stream.getTracks().forEach((t) => t.stop());
           return;
         }
         streamRef.current = stream;
+        // Laufenden Autofokus erzwingen (Nicht-Standard-Erweiterung, v.a.
+        // Chrome/Android) - wo nicht unterstützt, schlägt das einfach
+        // folgenlos fehl.
+        const [track] = stream.getVideoTracks();
+        track
+          ?.applyConstraints({
+            advanced: [{ focusMode: "continuous" } as unknown as MediaTrackConstraintSet],
+          })
+          .catch(() => {});
         if (videoRef.current) {
           videoRef.current.srcObject = stream;
           videoRef.current.play().catch(() => {});
