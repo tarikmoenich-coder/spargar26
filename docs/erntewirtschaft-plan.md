@@ -1044,6 +1044,18 @@ Offene Design-Punkte, vor dem Bauen zu klären:
   danach auch aktiv warnen/blockieren, falls trotzdem noch eine Maschine auf
   diesem Feld scannt? Nutzer entscheidet, wenn der Rest der Erntewirtschaft
   gebaut wird.
+- **Wichtige Ablauf-Info (Nutzer-Vorgabe 2026-10-26): eine volle Kiste steht
+  mindestens 30-60 Minuten auf dem Feld, bevor sie die Hofwaage passiert -
+  die Felder liegen kilometerweit von der Waage entfernt.** Das heißt: der
+  per Waage gemessene Rohertrag hinkt der tatsächlichen Erntemenge immer um
+  diese Zeitspanne hinterher - wird der Zielertrag erst bei 100% des
+  gewogenen Werts gemeldet, ist zu dem Zeitpunkt schon mindestens eine weitere
+  halbe bis ganze Stunde Ernte "unterwegs" (gefüllte, noch ungewogene Kisten
+  auf dem Feld/beim Transport), die den tatsächlichen Ertrag über das Ziel
+  hinausschießen lässt. Beim Bauen berücksichtigen: Alarm schon bei einem
+  Schwellwert **unter** 100% auslösen (Sicherheitspuffer, Größe hängt von der
+  durchschnittlichen Erntegeschwindigkeit des jeweiligen Feldes ab - Nutzer
+  entscheidet), nicht erst beim exakten Erreichen.
 
 ## Teil G — Poller-Erweiterung
 
