@@ -67,6 +67,57 @@ Hinweis: Im Dauerbetrieb am Hof macht `SCANNER_QUELLE=simuliert` keinen
 Sinn mehr (niemand sitzt am Terminal, um ENTER zu drücken) - sobald der
 echte Scanner da ist, auf `stdin` oder `seriell` umstellen.
 
+## Zuverlässiger Dauerbetrieb auf dem Raspberry Pi 3B+ (nächster Schritt)
+
+Geplantes Zielgerät: **Raspberry Pi 3B+** (vorhandenes Lager-Exemplar).
+Stromausfälle am Hof sind laut Nutzer an der Waage nicht zu erwarten -
+trotzdem schützen die folgenden Punkte zusätzlich gegen SD-Karten-Verschleiß
+durch normales Dauer-Schreiben (Logs, Warteschlangen-Datei) und gegen jedes
+unsaubere Abschalten (Stecker ziehen, Reboot-Hänger), nicht nur gegen
+Stromausfälle im engeren Sinn.
+
+1. **Von USB statt microSD booten** (Pi 3B+ unterstützt das offiziell seit
+   dem Bootloader-Update 2017):
+   - Einmalig von SD-Karte booten, dann:
+     ```bash
+     echo program_usb_boot_mode=1 | sudo tee -a /boot/config.txt
+     sudo reboot
+     ```
+   - Danach Raspberry Pi OS mit dem Raspberry Pi Imager auf einen USB-Stick
+     oder eine kleine USB-SSD schreiben, SD-Karte entfernen, von USB booten.
+     (Neuere `raspi-config`-Versionen bieten das auch als Menüpunkt
+     "Boot Order" unter Advanced Options an - führt zum selben Ergebnis.)
+   - Deutlich langlebiger/robuster gegen Korruption als microSD; SD-Karte
+     danach nur noch Reserve.
+2. **Overlay-Filesystem (Read-Only-Root) aktivieren:**
+   ```bash
+   sudo raspi-config
+   # -> Performance Options -> Overlay File System -> aktivieren,
+   # Boot-Partition ebenfalls schreibgeschuetzt
+   ```
+   Das eigentliche Betriebssystem ist danach gegen Schreibvorgänge/
+   Korruption immun; nur ein bewusst ausgenommener Pfad (z. B. das
+   Verzeichnis der lokalen Warteschlangen-Datei, siehe `queue.mjs`) bleibt
+   beschreibbar.
+3. **Kabel-Ethernet statt WLAN** für die Dauerverbindung ins Hofnetz nutzen
+   (der 3B+ hat einen eingebauten Ethernet-Port) - stabiler als WLAN in der
+   Werkstatt-/Waagenumgebung.
+4. **Hardware-Watchdog aktivieren** (reboot bei komplett hängendem System,
+   unabhängig von `systemd`'s eigenem `Restart=always` für den Agent-
+   Prozess, der nur Prozess-Abstürze abfängt, nicht einen hängenden Kernel):
+   ```bash
+   echo dtparam=watchdog=on | sudo tee -a /boot/config.txt
+   sudo sed -i 's/^#RuntimeWatchdogSec=.*/RuntimeWatchdogSec=14/' /etc/systemd/system.conf
+   sudo reboot
+   ```
+5. **`ernte-waage-agent.service` hat bereits `Restart=always`/`RestartSec=5`**
+   (siehe oben im Repo) - kein weiterer Schritt nötig, fängt Abstürze des
+   Node-Prozesses selbst ab.
+6. **Noch offen/später:** Alarmierung, falls der Pi komplett offline geht
+   (Stromausfall am Gerät selbst, Netzwerkausfall) - könnte sich an die
+   bestehende Telegram-Alarmierung des `fahrzeug-poller` anlehnen
+   ([[fahrzeuge-traccar]]), ist aber noch nicht umgesetzt.
+
 ## Noch nicht Teil dieses Agenten
 
 - Die eigentliche Zuordnung "Kiste X war an Maschine Y, Feld Z" passiert
