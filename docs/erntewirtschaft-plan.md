@@ -238,6 +238,33 @@ Ergebnis:  pro Kiste: Maschine · Fahrer · Feld/Flur (aus GPS) · Zeit · netto
 | **Ingest-Auth** | ein Fleet-Token / Token je Box | v1: **ein Fleet-Token**; Token-je-Box später. |
 | **Einschränkung** | Unter Folientunnel/Vlies verliert RTK ggf. den Fix | akzeptiert; im offenen Feld stabil. Fix-Qualität wird je Punkt gespeichert. |
 
+### Glas-Montage/-Abdichtung im Gehäusefenster (2026-10-26)
+
+Zwei Varianten, Pilottest entscheidet:
+
+- **Variante A – Silikon als reine Dichtmasse:** CNC-Ausschnitt etwas größer
+  als die Glasscheibe (1–2 mm Spalt ringsum), damit das Glas elastisch im
+  Silikon "schwimmt" statt hart gegen Kunststoff/Metall zu liegen (sonst
+  Rissrisiko bei Vibration/Temperaturdehnung). Beide Flächen vor dem
+  Verkleben mit Isopropanol entfetten. **Neutralvernetzendes,
+  UV-beständiges Silikon** (Elektronik-/Outdoor-Qualität, kein
+  essigvernetzendes - greift Metall/Kontakte an). Durchgehende Raupe ohne
+  Unterbrechung, Glas mit gleichmäßigem Druck einsetzen (nicht nur an den
+  Ecken - sonst Luftblasen als spätere Leckkanäle). Silikon dichtet nur,
+  trägt aber nicht dauerhaft: zusätzlich 2-4 kleine Schrauben/Klammern
+  AUSSERHALB der Dichtzone zur rein mechanischen Fixierung.
+- **Variante B – vorgefertigte Dichtung (konsistenter bei 140 Stück,
+  gleiches Argument wie beim Fensterausschnitt selbst):** Shop fräst
+  zusätzlich eine gestufte Fase/einen Falz für die Glasdicke, dazu ein
+  passender zugeschnittener Gummi-/Silikon-Dichtring, zusammengepresst von
+  einem dünnen Klemmring/wenigen Schrauben - eliminiert die
+  Handarbeits-Streuung von Variante A über 140 Boxen.
+
+Empfehlung: **Variante A am Pilotgerät** (schnell, kein Zusatzauftrag),
+beim Gartenschlauch-Test (siehe oben) gezielt die Fensternaht besprühen.
+Hält das, aber Konsistenz über 140 Stück fraglich → beim Shop nach
+Variante B fragen.
+
 ## Teil A — Traccar auf PostgreSQL (Voraussetzung)
 
 140 TRB246 zusätzlich zu Autos/LKW → **H2 → PostgreSQL ist jetzt Pflicht**, bevor
