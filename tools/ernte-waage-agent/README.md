@@ -107,15 +107,10 @@ Trotzdem wichtig für Dauerbetrieb:
    3. Windows-Gerätemanager öffnen, unter "Anschlüsse (COM & LPT)" die
       COM-Port-Nummer des Adapters ablesen (z. B. `COM3`) →
       `SCANNER_SERIELL_PORT` in der `.env`.
-   4. Baudrate/Zeilenende (`SCANNER_SERIELL_BAUDRATE`/
-      `SCANNER_SERIELL_DELIMITER`) sind beim GFS4550 nicht öffentlich
-      dokumentiert auffindbar - **mit dem Default (9600, `\r`) testen**
-      (`SCANNER_QUELLE=seriell`, Testcode scannen, Konsole beobachten):
-      kommt nur Datenmüll an, stimmt die Baudrate nicht; kommt gar nichts
-      oder mehrere Codes verklebt an, stimmt das Zeilenende nicht. Für die
-      exakten Werkseinstellungen notfalls **Datalogic Aladdin**
-      (kostenloses Konfigurations-Tool von datalogic.com) nutzen, das den
-      Scanner ausliest.
+   4. **Bestätigt (2026-10-26, echter Praxistest):** Werkseinstellung
+      `SCANNER_SERIELL_BAUDRATE=9600` (8N1) + Default-Zeilenende `\r`
+      funktionieren beim GFS4550 **ohne Anpassung** - Testcode kam exakt
+      passend an. Kein weiterer Abgleich nötig.
 2. **Autostart + Auto-Login einrichten** (Task Scheduler: Trigger "Beim
    Anmelden", oder NSSM für einen echten, unsichtbaren Windows-Dienst - mit
    `seriell` als Scanner-Quelle funktioniert jetzt auch Letzteres).
