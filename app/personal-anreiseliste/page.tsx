@@ -18,6 +18,7 @@ import {
   type DokumentSpezifikation,
 } from "@/lib/dokumentGenerator";
 import type {
+  DokumentKategorie,
   Employee,
   PersonalKandidat,
   PersonalKandidatChecklisteRow,
@@ -27,6 +28,7 @@ import PersonalTabs from "@/components/PersonalTabs";
 import PageHeader from "@/components/PageHeader";
 import { Plane } from "lucide-react";
 import SvFragebogenFormular from "@/components/SvFragebogenFormular";
+import DokumentKameraAufnahme from "@/components/DokumentKameraAufnahme";
 
 // Saison-Jahr für den SV-Fragebogen eines Kandidaten: aus dem geplanten
 // Ankunftsdatum abgeleitet (personal_kandidaten hat kein eigenes
@@ -67,6 +69,17 @@ export default function AnreiselistePage() {
   // Kandidat, für den gerade der SV-Fragebogen inline erfasst/bearbeitet
   // wird (person für person, siehe svSaisonJahrFuer).
   const [svEditingId, setSvEditingId] = useState<string | null>(null);
+  // Kamera-Dokumentenaufnahme (Nutzer-Vorgabe 2026-10-26): öffnet sich NIE
+  // automatisch, nur über den gezielten "Dokument hinzufügen"-Klick je
+  // Person - auf dem Handy direkt in der Anreiseliste nutzbar, ohne Umweg
+  // über /personal-dokumente.
+  const [kameraFuer, setKameraFuer] = useState<{
+    employeeId: string;
+    name: string;
+    vorname: string;
+    modus: "ausweis" | "dokument";
+    dokumentKategorie: DokumentKategorie;
+  } | null>(null);
 
   async function load() {
     setLoading(true);
@@ -447,7 +460,18 @@ export default function AnreiselistePage() {
     <div className="flex flex-col gap-6">
       <PersonalTabs />
       <div>
-        <PageHeader icon={Plane} titel="Anreiseliste" />
+        <PageHeader
+          icon={Plane}
+          titel="Anreiseliste"
+          aktionen={
+            <a
+              href="/personal-anreiseliste/schulungsliste"
+              className="btn-secondary text-xs"
+            >
+              Unterschriftenliste (Schulung)
+            </a>
+          }
+        />
         <p className="text-sm text-neutral-500">
           Personen, die über „Anreise vorbereiten" aus der{" "}
           <a href="/personalplanung" className="underline">
@@ -522,6 +546,7 @@ export default function AnreiselistePage() {
               )}
             </div>
 
+            <div className="overflow-x-auto">
             <table>
               <thead>
                 <tr>
@@ -783,6 +808,40 @@ export default function AnreiselistePage() {
                             Dokumente hochladen →
                           </a>
                         </div>
+                        {canEdit && k.aktivierter_employee_id && (
+                          <div className="mt-1 flex flex-wrap gap-2">
+                            <button
+                              type="button"
+                              className="text-emerald-700 underline"
+                              onClick={() =>
+                                setKameraFuer({
+                                  employeeId: k.aktivierter_employee_id as string,
+                                  name: k.name,
+                                  vorname: k.vorname,
+                                  modus: "ausweis",
+                                  dokumentKategorie: "Ausweiskopie",
+                                })
+                              }
+                            >
+                              📷 Ausweis
+                            </button>
+                            <button
+                              type="button"
+                              className="text-emerald-700 underline"
+                              onClick={() =>
+                                setKameraFuer({
+                                  employeeId: k.aktivierter_employee_id as string,
+                                  name: k.name,
+                                  vorname: k.vorname,
+                                  modus: "dokument",
+                                  dokumentKategorie: "Führerschein Kopie",
+                                })
+                              }
+                            >
+                              📷 Führerschein
+                            </button>
+                          </div>
+                        )}
                       </td>
                       <td>
                         {vollstaendig(k) ? (
@@ -832,6 +891,7 @@ export default function AnreiselistePage() {
                 })}
               </tbody>
             </table>
+            </div>
           </div>
         ))
       )}
@@ -890,6 +950,22 @@ export default function AnreiselistePage() {
             </table>
           )}
         </div>
+      )}
+
+      {kameraFuer && (
+        <DokumentKameraAufnahme
+          key={`${kameraFuer.employeeId}-${kameraFuer.dokumentKategorie}`}
+          employeeId={kameraFuer.employeeId}
+          name={kameraFuer.name}
+          vorname={kameraFuer.vorname}
+          modus={kameraFuer.modus}
+          dokumentKategorie={kameraFuer.dokumentKategorie}
+          onFertig={() => {
+            setKameraFuer(null);
+            load();
+          }}
+          onAbbrechen={() => setKameraFuer(null)}
+        />
       )}
     </div>
   );

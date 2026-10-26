@@ -18,7 +18,7 @@ import QRCode from "qrcode";
 import { IdCard } from "lucide-react";
 import PageHeader from "@/components/PageHeader";
 import EmptyState from "@/components/EmptyState";
-import MitarbeiterFotoAufnahme from "@/components/MitarbeiterFotoAufnahme";
+import DokumentKameraAufnahme from "@/components/DokumentKameraAufnahme";
 import MitarbeiterAusweisKarte from "@/components/MitarbeiterAusweisKarte";
 import MitarbeiterAusweisDruckbogen from "@/components/MitarbeiterAusweisDruckbogen";
 import { getSupabaseClient } from "@/lib/supabase/client";
@@ -171,11 +171,13 @@ export default function ErntewirtschaftAusweisePage() {
       </div>
 
       {fotoKameraFuer && (
-        <MitarbeiterFotoAufnahme
+        <DokumentKameraAufnahme
           key={fotoKameraFuer.id}
           employeeId={fotoKameraFuer.id}
           name={fotoKameraFuer.name}
           vorname={fotoKameraFuer.vorname}
+          modus="ausweis"
+          dokumentKategorie="Ausweiskopie"
           onFertig={() => {
             setFotoKameraFuer(null);
             laden();

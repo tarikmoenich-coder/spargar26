@@ -30,7 +30,7 @@ import {
 } from "@/lib/types";
 import PersonalTabs from "@/components/PersonalTabs";
 import PageHeader from "@/components/PageHeader";
-import MitarbeiterFotoAufnahme from "@/components/MitarbeiterFotoAufnahme";
+import DokumentKameraAufnahme from "@/components/DokumentKameraAufnahme";
 import { CalendarRange } from "lucide-react";
 
 const emptyForm = {
@@ -72,7 +72,7 @@ export default function PersonalplanungPage() {
   // Warteschlange frisch angelegter (NICHT reaktivierter) Mitarbeiter, deren
   // Ausweisfoto direkt bei der Anreise aufgenommen werden soll (Nutzer-
   // Vorgabe 2026-10-22) - siehe anreiseVorbereiten() und
-  // MitarbeiterFotoAufnahme weiter unten.
+  // DokumentKameraAufnahme weiter unten.
   const [fotoWarteschlange, setFotoWarteschlange] = useState<
     { id: string; name: string; vorname: string }[]
   >([]);
@@ -1463,11 +1463,13 @@ export default function PersonalplanungPage() {
       )}
 
       {fotoWarteschlange.length > 0 && (
-        <MitarbeiterFotoAufnahme
+        <DokumentKameraAufnahme
           key={fotoWarteschlange[0].id}
           employeeId={fotoWarteschlange[0].id}
           name={fotoWarteschlange[0].name}
           vorname={fotoWarteschlange[0].vorname}
+          modus="ausweis"
+          dokumentKategorie="Ausweiskopie"
           onFertig={fotoWarteschlangeWeiter}
           onAbbrechen={fotoWarteschlangeAbbrechen}
         />
