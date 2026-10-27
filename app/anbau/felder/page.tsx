@@ -206,10 +206,16 @@ export default function AnbauFelderPage() {
             fehlgeschlagen += 1;
             continue;
           }
-          await supabase.rpc("feld_geometrie_setzen", {
+          // Vorfall 2026-10-27: dieser Aufruf wurde bisher NICHT auf einen
+          // Fehler geprüft - siehe geometrieUebernehmen() oben für Details.
+          const { error: geoFehler } = await supabase.rpc("feld_geometrie_setzen", {
             p_feld_id: neuesFeld.id,
             p_geojson: s.geometrie_geojson,
           });
+          if (geoFehler) {
+            fehlgeschlagen += 1;
+            continue;
+          }
           await supabase
             .from("feld")
             .update({ pachtwesen_geometrie_hash: s.geometrie_hash })
@@ -248,11 +254,20 @@ export default function AnbauFelderPage() {
     if (!f.pachtwesen_geometrie_geojson_neu || !f.pachtwesen_geometrie_hash_neu) return;
     setFehler(null);
     const supabase = getSupabaseClient();
-    await supabase.rpc("feld_geometrie_setzen", {
+    // Vorfall 2026-10-27 ("Edeka"): dieser Aufruf wurde bisher NICHT auf
+    // einen Fehler geprüft - ein fehlgeschlagenes Schreiben (z.B. Typ-
+    // Konflikt bei der Geometrie) wirkte dadurch wie ein stiller Erfolg,
+    // weil direkt im Anschluss trotzdem die "erledigt"-Markierung gesetzt
+    // wurde.
+    const { error: geoFehler } = await supabase.rpc("feld_geometrie_setzen", {
       p_feld_id: f.id,
       p_geojson: f.pachtwesen_geometrie_geojson_neu,
     });
-    await supabase
+    if (geoFehler) {
+      setFehler(`Geometrie konnte nicht übernommen werden: ${geoFehler.message}`);
+      return;
+    }
+    const { error } = await supabase
       .from("feld")
       .update({
         pachtwesen_geometrie_hash: f.pachtwesen_geometrie_hash_neu,
@@ -260,6 +275,7 @@ export default function AnbauFelderPage() {
         pachtwesen_geometrie_geojson_neu: null,
       })
       .eq("id", f.id);
+    if (error) setFehler(error.message);
     load();
   }
 
