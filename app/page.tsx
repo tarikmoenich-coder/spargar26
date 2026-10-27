@@ -15,7 +15,8 @@ export default function Home() {
       return;
     }
     // zeiterfassung hat kein eigenes Dashboard (Stundenerfassung ist schon
-    // ihr einziger Arbeitsbereich), hausmeister genauso (nur Unterkunft) -
+    // ihr einziger Arbeitsbereich), hausmeister genauso (nur Unterkunft),
+    // waage genauso (nur der Kiosk-Bildschirm, Nutzer-Vorgabe 2026-10-27) -
     // alle anderen Rollen (inkl. erntewirtschaft, hat seit 2026-08-09 ein
     // eigenes Dashboard) landen auf ihrem rollenabhängigen Dashboard, siehe
     // app/dashboard/page.tsx.
@@ -24,7 +25,9 @@ export default function Home() {
         ? "/erfassung"
         : profile?.role === "hausmeister"
           ? "/unterkunft/reparaturen"
-          : "/dashboard";
+          : profile?.role === "waage"
+            ? "/erntewirtschaft/waage/kiosk"
+            : "/dashboard";
     router.replace(start);
   }, [loading, profile, userId, router]);
 

@@ -31,9 +31,10 @@ function LoginFormular() {
       return;
     }
     // Auf die Startseite - die verteilt rollenabhängig weiter (zeiterfassung
-    // → /erfassung, hausmeister → /unterkunft, sonst → /dashboard), siehe
-    // app/page.tsx. Früher stand hier fix /erfassung, dadurch landete jede
-    // Rolle in der Stundenerfassung.
+    // → /erfassung, hausmeister → /unterkunft, waage → /erntewirtschaft/
+    // waage/kiosk, sonst → /dashboard), siehe app/page.tsx. Früher stand
+    // hier fix /erfassung, dadurch landete jede Rolle in der
+    // Stundenerfassung.
     router.replace("/");
   }
 

@@ -70,6 +70,11 @@ export const ROLLEN: RolleInfo[] = [
     label: "Hausmeister",
     kurz: "Ausschließlich Unterkunft (Reparaturen).",
   },
+  {
+    wert: "waage",
+    label: "Waage",
+    kurz: "Ausschließlich der Kiosk-Bildschirm an der Hofwaage, sonst nichts.",
+  },
 ];
 
 export const ROLLEN_LABELS: Record<UserRole, string> = Object.fromEntries(

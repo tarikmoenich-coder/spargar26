@@ -15,7 +15,11 @@ export type UserRole =
   // Nur das Modul "Unterkunft" (+ Suche); pflegt dort Belegung, Übergabe/
   // Abnahme, Kontrolle, Mängel, Fotos - keine Stammdaten (Nutzer-Vorgabe
   // 2026-08-30).
-  | 'hausmeister';
+  | 'hausmeister'
+  // Ausschliesslich der Waagen-Kiosk-Bildschirm (app/erntewirtschaft/waage/
+  // kiosk) - sonst nichts, kein Dashboard, keine Admin-Rohdatenuebersicht
+  // (Nutzer-Vorgabe 2026-10-27).
+  | 'waage';
 
 export type Abrechnungsart =
   | 'pauschal'
