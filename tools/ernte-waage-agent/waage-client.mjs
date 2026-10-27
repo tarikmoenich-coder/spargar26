@@ -33,7 +33,13 @@ function sendeBefehl(ip, port, befehl, timeoutMs) {
       chunks.push(chunk);
       const alles = Buffer.concat(chunks);
       const text = alles.toString("latin1");
-      if (text.endsWith(">") && (text.includes("!") || alles.includes(ETX))) {
+      // Jede Antwort (Erfolg ODER Fehlerquittung) endet mit ">" - das reicht
+      // als Fertig-Signal. Die vorherige, engere Bedingung (zusaetzlich "!"
+      // oder ETX noetig) passte nur auf <FP0>/Fehlerantworten, nicht auf eine
+      // normale erfolgreiche <GN7>-Antwort (z.B. "   3.280<GN>" - kein ETX,
+      // kein "!") - der Agent wartete dort bis zum Timeout, obwohl die volle
+      // Antwort laengst da war (im Praxistest 2026-10-27 aufgefallen).
+      if (text.endsWith(">")) {
         socket.end();
       }
     });
