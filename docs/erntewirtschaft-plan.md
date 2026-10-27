@@ -756,6 +756,14 @@ Frage 1 unten.
 Laderegler-Zustand, aus dem Pflichtenheft), `roh jsonb`,
 `unique(maschine_id, zeitpunkt)`.
 
+**Ausgebaut (Nutzer-Vorgabe 2026-10-27): das Batterie-Anzeige-Feature
+entfällt** - betrifft diese Tabelle sowie die Konfig-Schlüssel
+`batterie_melde_intervall_min`/`batterie_warn_v`/`batterie_alarm_v` unten.
+Bleibt als Tabelle/Schlüssel in der Dokumentation stehen (nicht gelöscht,
+gleiche Konvention wie bei anderen überholten Entscheidungen in diesem
+Dokument), für die Kartenansicht (Teil F) aber **nicht mehr relevant** -
+dort zählt nur noch die Online/Offline-Ampel.
+
 **`ernte_konfig`** — `schluessel text pk`, `wert text`, `beschreibung`. Seed:
 `tara_kg_standard`, `schicht_timeout_min`, `kiste_faellig_bis='23:00'`
 (ersetzt `kiste_offen_warn_h`, siehe `ernte_kette_luecken` unten - feste
@@ -764,10 +772,12 @@ Tagesend-Uhrzeit statt rollierender Stundenzahl), `position_rate_s`,
 die native VE.Direct-Rate 1:1 durchreichen), `sperrzeit_tag_s=15`
 (Entscheidung 2026-09-23, siehe Processor unten - gegen Mehrfach-Lesungen
 desselben Tags), `offline_warn_min=5`,
-`offline_alarm_min=10`, `batterie_warn_v=24`,
-`batterie_alarm_v=22`, `pause_max_meter=2`, `pause_fenster_min=5` — alle
-Schwellen 1:1 aus dem Pflichtenheft (Ampel Online/Offline, Batterie, Pausen-
-Erkennung), damit sie ohne Deploy nachjustierbar bleiben statt hart codiert.
+`offline_alarm_min=10`, ~~`batterie_warn_v=24`,
+`batterie_alarm_v=22`~~ (Batterie-Anzeige-Feature ausgebaut, s.o. -
+Schlüssel bleiben gesetzt, werden aber von nichts mehr ausgewertet),
+`pause_max_meter=2`, `pause_fenster_min=5` — alle Schwellen 1:1 aus dem
+Pflichtenheft (Ampel Online/Offline, Pausen-Erkennung), damit sie ohne
+Deploy nachjustierbar bleiben statt hart codiert.
 
 **`ernte_poller_state`** — `id int pk default 1`, `letzter_lauf`,
 `letzte_position_zeit`.
@@ -1033,11 +1043,18 @@ danach:
   Nutzer besonders wichtig (2026-10-27).** Karte als neue, schlanke
   `components/ErnteMaschinenKarte.tsx`, eng nach dem Vorbild
   `components/FahrzeugKarte.tsx` gebaut - **keine** Fix-Qualitäts-Farblogik
-  mehr (RTK ist seit 2026-09-23 kein Einsatzszenario mehr), Marker
-  stattdessen einfarbig, nur „aktive Schicht ja/nein" unterscheidbar.
-  Bewusst **keine** Extraktion einer gemeinsamen `GpsKarte`-Basis in diesem
-  Schritt (spekulativ bei aktuell einer einzigen Pilot-Maschine) - gleiches
-  Duplizieren-statt-vorzeitig-abstrahieren-Muster wie bei `FeldKarte.tsx`.
+  mehr (RTK ist seit 2026-09-23 kein Einsatzszenario mehr).
+  **Marker-Farbe, präzisiert 2026-10-27: Online/Offline-Ampel**, exakt
+  nach dem Vorbild `FahrzeugKarte.tsx`s `ampel(minutenSeitLetzterPosition)`
+  (grün/orange/grau je nach Alter der letzten `ernte_position`), aber mit
+  den dafür schon vorgesehenen `ernte_konfig`-Schwellen
+  `offline_warn_min=5`/`offline_alarm_min=10` statt `FahrzeugKarte`s
+  eigenen Werten. **Keine Batterie-Ampel** (Feature ausgebaut, s. Teil E) -
+  „Schicht aktiv" ist kein Marker-Farbton, sondern steht separat im Popup
+  (Fahrername bzw. Gruppenbelegung, s.u.). Bewusst **keine** Extraktion
+  einer gemeinsamen `GpsKarte`-Basis in diesem Schritt (spekulativ bei
+  aktuell einer einzigen Pilot-Maschine) - gleiches Duplizieren-statt-
+  vorzeitig-abstrahieren-Muster wie bei `FeldKarte.tsx`.
   **Gruppenmaschinen-Anzeige (Planungs-Update 2026-10-27):** Marker-Popup
   einer Grünspargel-Maschine (`max_personen > 1`) zeigt die aktuelle
   Belegung als „3/5 angemeldet" (Anzahl offener `ernte_schicht`-Zeilen ÷
