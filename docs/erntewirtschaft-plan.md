@@ -614,6 +614,23 @@ PostGIS aktivieren (`create extension if not exists postgis`).
 `rtk boolean default true`, `aktiv boolean default true`, `notiz`, timestamps +
 `updated_at`-Trigger.
 
+**Wichtige Unterscheidung, Planungs-Update 2026-10-27 (Nutzer-Vorgabe,
+„wichtig"): Weißspargel- vs. Grünspargel-Maschinen sind strukturell
+verschieden, nicht nur im Feld-`kultur`-Wert.** Weißspargel: **1 Person pro
+Maschine**, arbeitet komplett für sich (so schon gebaut). Grünspargel-
+Maschinen sind **Plattformen, an denen sich bis zu 5 Personen gleichzeitig
+anmelden können** - diese werden leistungsmäßig als **eine Gruppe** bewertet
+(Gruppen-Stundenschnitt, eine Gruppenprämie, die auf alle an diesem Tag
+angemeldeten Mitarbeiter verteilt wird), obwohl dauerhaft mehrere Personen
+parallel Kisten scannen.
+
+Neue Spalte: **`ernte_maschine.max_personen smallint not null default 1`**
+(bewusst eine Kapazitätszahl, nicht nur ein Boolean „Gruppe ja/nein" - bildet
+„bis zu 5" direkt ab und bleibt erweiterbar, falls eine andere Plattform
+später eine andere Personenzahl hat). `max_personen = 1` = Weißspargel-
+Verhalten (unverändert), `max_personen > 1` = Gruppenverhalten (siehe
+`ernte_schicht`/`ernte_kiste_zyklus` unten).
+
 **`ernte_position`** — Zeitreihe (append-only, nur Poller): `id identity pk`,
 `maschine_id → ernte_maschine`, `traccar_unique_id text`, `zeitpunkt timestamptz`,
 `lat/lng double precision`, `hoehe_m`, `speed_kmh`, `kurs`,
@@ -650,6 +667,29 @@ laut dokumentiertem Vorfall explizit verboten).
 Timeout aus `ernte_konfig`), `quelle text default 'scan'`, `notiz`,
 Index `(maschine_id, beginn desc)`.
 
+**Gruppenmaschinen-Anpassung, Planungs-Update 2026-10-27 (noch nicht
+gebaut, nur Entwurf):** Heute akzeptiert der Processor
+(`ernte_scan_verarbeiten()`, `person_login`-Zweig) an einer Maschine nur
+**eine** offene Schicht gleichzeitig - ein zweiter Badge-Scan an derselben
+Maschine, während schon eine offene Schicht existiert, wird aktuell
+stillschweigend **ignoriert** (kein Insert, da `v_offene_schicht is null`
+dann false ist). Für `max_personen > 1` muss dieser Zweig
+kapazitätsbewusst werden: ein neuer Login an derselben Maschine legt eine
+**zusätzliche** offene Schicht an, solange
+`count(*) where maschine_id = … and ende is null` unter `max_personen`
+liegt (darüber: Scan ablehnen/ignorieren, analog zum bereits bestehenden
+Doppel-Scan-Schutz bei Kisten).
+
+**Logout-Mechanismus, entschieden (2026-10-27): nur automatisches
+Tagesende**, kein Re-Scan-Logout während des Tages (einfacher, keine
+Mehrdeutigkeit, ob ein erneuter Scan „ich bin fertig" oder ein neuer
+Login-Versuch bedeutet). Das macht den in `ernte_konfig.schicht_timeout_
+min` bereits vorgesehenen, aber laut Migrationskopf **„noch nicht vom
+Processor verwendet (v1)"** End-of-Day-Job jetzt zu einer echten
+Voraussetzung (nicht mehr nur ein später nachzuziehendes Detail) - er muss
+vor dem Gruppenmaschinen-Feature gebaut werden, sonst bleiben
+Gruppenmaschinen-Schichten nach Feierabend für immer „offen".
+
 **`ernte_kiste_zyklus`** — eine Zeile je Befüll-→-Wiege-Runde: `id identity pk`,
 `tag_uid text`, `kiste_nr text` (denorm.), `maschine_id → ernte_maschine`,
 `schicht_id → ernte_schicht`, `employee_id → employees` (denorm.),
@@ -667,6 +707,19 @@ echter FK seit Migration 2026-10-19 - `kultur` kommt bei Bedarf per Join aus
 Wiege-Ereignis sucht den jüngsten offenen Zyklus zu `tag_uid` → `gewogen`.
 Sonderfälle → `ungeklaert`: Wiegen ohne offenen Zyklus, zweites Wiegen, nie
 gewogen nach N Stunden.
+
+**Gruppenmaschinen-Anpassung, Planungs-Update 2026-10-27:** der
+`kiste`-Zweig des Processors ermittelt die zuständige Schicht heute über
+`... where maschine_id = … and ende is null order by beginn desc limit 1`
+- bei mehreren gleichzeitig offenen Schichten (Gruppenmaschine) würde das
+**immer die zuletzt eingeloggte Person** treffen und eine Kiste fälschlich
+dieser einen Person statt der Gruppe zuschreiben. Für `max_personen > 1`
+bleiben `schicht_id`/`employee_id` auf der Kisten-Zyklus-Zeile deshalb
+bewusst **leer** (nur `maschine_id` gesetzt) - die Kiste gehört der Gruppe,
+nicht einer Einzelperson. Mitarbeiter-/Stunden-Zuordnung für Prämie/
+Effizienz läuft bei Gruppenmaschinen stattdessen über **alle an diesem
+Maschine+Tag offenen/gewesenen `ernte_schicht`-Zeilen**, nicht über die
+einzelne Kisten-Zeile (siehe `ernte_effizienz_schicht`/Teil F2 unten).
 
 **`ernte_scan`** — Rohprotokoll (append-only, Ingest): `id identity pk`,
 `empfangen_am timestamptz default now()`,
@@ -738,6 +791,18 @@ Erkennung), damit sie ohne Deploy nachjustierbar bleiben statt hart codiert.
     sein → Hinweis, nicht hart validiert).
   - `kg_pro_stunde` (kg / produktivzeit), `kg_pro_laufmeter` (kg /
     Tages-Laufmeter aus `ernte_laufmeter_tag`).
+  - **Nur für `max_personen = 1`-Maschinen** (dort ist die 1:1-Zuordnung
+    Schicht↔Kiste eindeutig). **Für Gruppenmaschinen (Planungs-Update
+    2026-10-27, noch nicht gebaut) braucht es eine eigene, parallele
+    Sicht `ernte_effizienz_gruppe_tag`** (je Tag+Maschine statt je
+    `ernte_schicht`, da eine Kiste bei Gruppenmaschinen keiner Einzelschicht
+    zugeordnet ist, s.o.): `kg` = Tagessumme aus `ernte_ertrag_tag` für
+    diese Maschine; `personenstunden` = Summe
+    `coalesce(ende, tagesende) − beginn` **über alle** an diesem
+    Maschine+Tag aktiven `ernte_schicht`-Zeilen (entschieden 2026-10-27:
+    „Gruppen-Stundenschnitt" = `kg ÷ Summe aller Einzelstunden`, direkt
+    vergleichbar mit der Einzelpersonen-Kennzahl `kg_pro_stunde` oben,
+    NICHT `kg ÷ Maschinenlaufzeit`).
 - **`ernte_laufmeter_tag`** — je (Tag, Maschine, Feld): aus `ernte_position`
   aufsummierte Distanz zwischen aufeinanderfolgenden Punkten (Haversine, nur
   während Bewegung/RTK-Fix, Ausreißer/Sprünge gekappt) = „Laufmeter heute".
@@ -964,7 +1029,8 @@ danach:
   `lohnabrechnung` (einzige in `MENUE_RECHTE["/erntewirtschaft"]` fehlende
   Rolle aus diesem Set) behält den bisherigen Redirect zum ersten erlaubten
   Bereich (→ `praemien/zuckermais`), da sie kein operatives Interesse an der
-  Maschinen-Flotte hat. Karte als neue, schlanke
+  Maschinen-Flotte hat. **Kartenansicht für die Spargelspinnen ist dem
+  Nutzer besonders wichtig (2026-10-27).** Karte als neue, schlanke
   `components/ErnteMaschinenKarte.tsx`, eng nach dem Vorbild
   `components/FahrzeugKarte.tsx` gebaut - **keine** Fix-Qualitäts-Farblogik
   mehr (RTK ist seit 2026-09-23 kein Einsatzszenario mehr), Marker
@@ -972,6 +1038,11 @@ danach:
   Bewusst **keine** Extraktion einer gemeinsamen `GpsKarte`-Basis in diesem
   Schritt (spekulativ bei aktuell einer einzigen Pilot-Maschine) - gleiches
   Duplizieren-statt-vorzeitig-abstrahieren-Muster wie bei `FeldKarte.tsx`.
+  **Gruppenmaschinen-Anzeige (Planungs-Update 2026-10-27):** Marker-Popup
+  einer Grünspargel-Maschine (`max_personen > 1`) zeigt die aktuelle
+  Belegung als „3/5 angemeldet" (Anzahl offener `ernte_schicht`-Zeilen ÷
+  `max_personen`) statt eines einzelnen Fahrernamens wie bei Weißspargel-
+  Maschinen (`max_personen = 1`).
 - **`/erntewirtschaft/ernte`** — Kisten-Zyklen: Datumsfilter, Tabelle (befüllt ·
   Maschine · Fahrer · Feld · netto kg · gewogen · Status), Filter „nur Lücken"
   und **„nur ohne Zuordnung"** (`employee_id is null`, siehe Prozessor oben) -
@@ -1127,6 +1198,18 @@ Abrechnungssystem — das beantwortet den Pflichtenheft-Punkt „Abrechnung Lohn
     (eine zusätzliche CTE, Summe fließt in die bestehenden Spalten
     `praemien_summe`/`bruttolohn`, keine Änderung der äußersten
     SELECT-Liste nötig - vermeidet das dokumentierte 42P16-Risiko).
+  - **Gruppenmaschinen-Prämie (Planungs-Update 2026-10-27, Nutzer-Vorgabe
+    „wichtig"):** `ernte_feldstufe_praemie_tag` setzt oben eine 1:1-Zyklus↔
+    Mitarbeiter-Zuordnung voraus - bei Grünspargel-Gruppenmaschinen
+    (`ernte_maschine.max_personen > 1`, s. Teil E) gibt es die nicht (Kisten
+    sind nicht einzelnen Personen zugeordnet). Für diese Maschinen daher
+    eine eigene Berechnung: Tagesprämie **je Maschine** (`ernte_ertrag_tag`-
+    Tagessumme dieser Maschine × Preis(Feldstufe des zugehörigen Felds)),
+    **entschieden (2026-10-27): gleich pro Kopf geteilt** durch die Anzahl
+    der an diesem Maschine+Tag angemeldeten `ernte_schicht`-Personen (nicht
+    nach individuellen Stunden gewichtet - einfacher, unabhängig von genauen
+    An-/Abmeldezeiten) und dann je Person genauso in `season_bonuses`/
+    `season_summary` eingetragen wie eine individuelle Prämie.
 - **Tagesliste Boni** (`/erntewirtschaft/tagesliste`, Rolle `zeiterfassung`+):
   druckbare, optisch aufbereitete Prämienliste je Tag, Spalten ein-/ausblendbar
   für den Ausdruck (Muster: Lohnübersicht-Monatsdruck). Beispielvorlage liegt
