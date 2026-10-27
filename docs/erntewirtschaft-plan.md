@@ -1,6 +1,8 @@
 # Erntewirtschaft — Architektur- und Umsetzungsplan
 
-Stand: 2026-09-04, Frequenz-Entscheidung 2026-09-22 (UHF→HF), TECTUS-Rückmeldung
+Stand: 2026-09-04, Planungs-Update 2026-10-27 (Übersichtsseiten, Boni/
+Feldstufen, Zielertrag-Alarm konkretisiert, siehe jeweilige Abschnitte),
+Frequenz-Entscheidung 2026-09-22 (UHF→HF), TECTUS-Rückmeldung
 2026-09-22 (HF→LF), Präzisionsanforderung präzisiert 2026-09-23 (RTK
 voraussichtlich verzichtbar), **Kurswechsel 2026-10-12: Kisten-/Badge-Scan
 weg von RFID, hin zu QR-Codes** (siehe Abschnitt direkt unter diesem). Arbeitsdokument (wie `unterkunft-plan.md`),
@@ -760,6 +762,71 @@ Erkennung), damit sie ohne Deploy nachjustierbar bleiben statt hart codiert.
   Doppel-Scan-Fall **existieren bisher nur als Beschreibung hier** - die
   Sicht selbst ist noch nicht gebaut (geplanter nächster zusammenhängender
   Baustein, statt die restlichen Faelle einzeln nachzuziehen).
+
+  **Konkretisiert, Planungs-Update 2026-10-27 (noch nicht gebaut, nur
+  Entwurf):** eine einzige View bedient sowohl die „live, nicht erst nach
+  Tagesende"-Kacheln auf der künftigen Überblicksseite (Teil F) als auch die
+  formale Tagesend-Reconciliation - über ein berechnetes `ist_faellig`-Flag
+  statt zweier getrennter Sichten (Kacheln/Live-Ansicht ignorieren das Flag
+  und zeigen alle aktuell offenen/auffälligen Zeilen, ein admin-Review/
+  Export filtert zusätzlich darauf):
+  ```sql
+  create or replace view ernte_kette_luecken as
+  select
+    z.id as zyklus_id,
+    z.tag_uid,
+    z.employee_id,
+    z.maschine_id,
+    z.feld_id,
+    z.befuellt_am,
+    z.gewogen_am,
+    z.status,
+    z.gewicht_netto_kg,
+    case
+      when z.status = 'offen' then 'befuellt_nie_gewogen'
+      when z.status = 'ungeklaert' then 'gewogen_ohne_befuellung'
+      when z.status = 'gewogen'
+        and (z.gewicht_netto_kg < k_min.wert::numeric or z.gewicht_netto_kg > k_max.wert::numeric)
+        then 'implausibles_gewicht'
+    end as art,
+    (z.status = 'offen' and (
+      z.befuellt_am::date < current_date
+      or (z.befuellt_am::date = current_date
+          and current_time >= k_faellig.wert::time)
+    )) as ist_faellig
+  from ernte_kiste_zyklus z
+  left join ernte_konfig k_faellig on k_faellig.schluessel = 'kiste_faellig_bis'
+  left join ernte_konfig k_min on k_min.schluessel = 'netto_plausibel_min_kg'
+  left join ernte_konfig k_max on k_max.schluessel = 'netto_plausibel_max_kg'
+  where z.status in ('offen', 'ungeklaert')
+     or (z.status = 'gewogen'
+         and (z.gewicht_netto_kg < k_min.wert::numeric or z.gewicht_netto_kg > k_max.wert::numeric));
+  ```
+  Braucht zwei neue `ernte_konfig`-Schlüssel (fehlen noch):
+  `netto_plausibel_min_kg`, `netto_plausibel_max_kg` - Platzhalter-Defaults
+  beim Bauen einsetzen, echte Kistenkapazitäts-Werte liefert der Nutzer vor
+  Produktivbetrieb nach.
+
+  „Eingeloggt, nichts geerntet" bleibt bewusst **außerhalb** dieser View
+  (strukturell anders - Schicht-Ebene statt Zyklus-Ebene): eine separate,
+  kleine Abfrage auf `ernte_schicht` (`ende is not null`, keine zugehörige
+  `ernte_kiste_zyklus`-Zeile), um die Haupt-View nicht mit einer strukturell
+  anderen Fallgruppe zu vermischen.
+
+  „Je Mitarbeiter aggregiert" (Kachel „Kisten fehlen heute") wird bewusst
+  **client-seitig** aus `ernte_kette_luecken` + einer einzigen
+  Zusatzabfrage (alle heutigen Zyklen gruppiert nach `employee_id`)
+  berechnet, keine weitere DB-View nötig - gleiches Muster wie der
+  Kiosk-Kistenzähler (`app/erntewirtschaft/waage/kiosk/page.tsx`).
+
+  **Baureihenfolge der sechs noch fehlenden Teil-E-Sichten** (keine davon
+  existiert bisher): zuerst `ernte_maschine_live`/`ernte_ertrag_tag`
+  (einfache Aggregate, Grundlage der Überblicksseite), dann
+  `ernte_kette_luecken` (s. o.), zuletzt `ernte_laufmeter_tag`/
+  `ernte_effizienz_schicht` (brauchen Pausenzeit-Logik + `work_entries`-
+  Join, Grundlage von `/erntewirtschaft/effizienz`). `/erntewirtschaft/
+  ernte` bleibt wie es ist (liest `ernte_kiste_zyklus` direkt mit
+  PostgREST-Embeds, keine Umstellung auf eine View nötig).
   **Nutzer-Vorgabe 2026-09-23: Kisten müssen immer am selben Tag an der
   Waage ankommen** - deshalb Fälligkeit an eine feste Tagesend-Uhrzeit
   koppeln (`ernte_konfig.kiste_faellig_bis='23:00'`, ersetzt/ergänzt das
@@ -885,6 +952,26 @@ danach:
   `kiste_faellig_bis`-Tagesende, damit eine tatsächlich verlorene Kiste
   noch am selben Tag gesucht werden kann. Karten-Muster aus
   `FahrzeugKarte` (ggf. zu gemeinsamem `GpsKarte` verallgemeinern).
+
+  **Konkretisiert, Planungs-Update 2026-10-27 (noch nicht gebaut, nur
+  Entwurf):** `app/erntewirtschaft/page.tsx` ist heute ein reiner
+  Redirect-Router (leitet jede Rolle auf den ersten erlaubten Bereich aus
+  `BEREICHE` um - Prämien/Anbau/Statistik/Waage), es gibt noch keine echte
+  `/erntewirtschaft`-Seite. Entscheidung: `/erntewirtschaft` wird die echte
+  Flotten-Überblicksseite, aber **nur für die Rollen, die auch
+  `ernte_kiste_zyklus` lesen dürfen** (admin/hr/management/erntewirtschaft/
+  zeiterfassung, identisch zur `ernte_kiste_zyklus_select`-Policy) -
+  `lohnabrechnung` (einzige in `MENUE_RECHTE["/erntewirtschaft"]` fehlende
+  Rolle aus diesem Set) behält den bisherigen Redirect zum ersten erlaubten
+  Bereich (→ `praemien/zuckermais`), da sie kein operatives Interesse an der
+  Maschinen-Flotte hat. Karte als neue, schlanke
+  `components/ErnteMaschinenKarte.tsx`, eng nach dem Vorbild
+  `components/FahrzeugKarte.tsx` gebaut - **keine** Fix-Qualitäts-Farblogik
+  mehr (RTK ist seit 2026-09-23 kein Einsatzszenario mehr), Marker
+  stattdessen einfarbig, nur „aktive Schicht ja/nein" unterscheidbar.
+  Bewusst **keine** Extraktion einer gemeinsamen `GpsKarte`-Basis in diesem
+  Schritt (spekulativ bei aktuell einer einzigen Pilot-Maschine) - gleiches
+  Duplizieren-statt-vorzeitig-abstrahieren-Muster wie bei `FeldKarte.tsx`.
 - **`/erntewirtschaft/ernte`** — Kisten-Zyklen: Datumsfilter, Tabelle (befüllt ·
   Maschine · Fahrer · Feld · netto kg · gewogen · Status), Filter „nur Lücken"
   und **„nur ohne Zuordnung"** (`employee_id is null`, siehe Prozessor oben) -
@@ -894,6 +981,12 @@ danach:
 - **`/erntewirtschaft/effizienz`** — Realitätscheck: je Schicht/Fahrer/Maschine/
   Feld kg, Stunden (Schicht vs. `work_entries`), kg/h; Ertragsdichte-Heatmap aus
   `ernte_kiste_zyklus`-Positionen (gewichtet mit netto kg); Zeitraum-Wähler; Export.
+  **Konkretisiert, Planungs-Update 2026-10-27:** Tabelle aus
+  `ernte_effizienz_schicht` (s. Teil E), Filter-Muster wie
+  `/erntewirtschaft/ernte`. Heatmap über MapLibres **eingebauten
+  `heatmap`-Layer-Typ** (`type: "heatmap"`, Gewichtung via
+  `heatmap-weight`) - keine neue Abhängigkeit nötig, gleicher Satellit/OSM-
+  Unterbau wie bei den anderen Karten. Noch nicht gebaut.
 - **`/erntewirtschaft/stammdaten`** — Maschinen-CRUD, Waagen, Felder (Karten-
   Editor / Import), Konfig-Konstanten. **Excel-/CSV-Import für die 140 Maschinen**
   (siehe unten).
@@ -999,6 +1092,35 @@ Abrechnungssystem — das beantwortet den Pflichtenheft-Punkt „Abrechnung Lohn
   markierte Problem „dünne Stangen = wenig kg UND wenig Laufmeter" (Schieber
   kg/h ↔ Lfm/h, 0–1) — braucht eine Entscheidung des Nutzers, bevor die Formel
   feststeht. Bis dahin nur kg-basiert wie oben.
+
+  **Konkretisiert, Planungs-Update 2026-10-27 (noch nicht gebaut, nur
+  Entwurf):**
+  - **Vergütungsart je Person, entschieden:** NICHT ein festes Flag wie die
+    drei bestehenden `praemien_*`-Booleans, sondern **pro Saison änderbar**
+    - eigene kleine Tabelle `ernte_verguetungsart (employee_id, saison_jahr,
+      art)` mit `art check (art in ('akkord', 'feldstufe'))`,
+      `unique(employee_id, saison_jahr)` (beantwortet Offene Frage 9 unten).
+  - **Feldstufen-Formel, entschieden:** v1 bleibt **nur kg-basiert**
+    (`netto_kg × Preis(Stufe)`) - die Lfm-gewichtete „dünne Stangen"-Formel
+    ist explizit vertagt (Offene Frage 8 bleibt offen, nur die
+    v1-Fallback-Variante ist jetzt bestätigt statt nur vorgeschlagen).
+  - **Neue Sätze-Tabelle `ernte_feldstufe_saetze`**: `stufe smallint`,
+    `gueltig_ab date`, `preis_pro_kg numeric(8,4)`,
+    `unique(stufe, gueltig_ab)` - exaktes Muster wie `zuckermais_saetze`
+    (`security_invoker`-View joint per `lateral` den jeweils aktuellsten
+    Satz).
+  - **View `ernte_feldstufe_praemie_tag`**: join `ernte_ertrag_tag`
+    (Teil E) × `ernte_feldstufe` (Feld+Tag → Stufe) ×
+    `ernte_feldstufe_saetze` (Stufe+Datum → Preis) ×
+    `ernte_verguetungsart` (nur wo `art = 'feldstufe'`) - exakt analog zu
+    `zuckermais_praemie_tag` (`supabase/migration_2026-08-09_praemien_
+    zuckermais.sql`), nur mit Feld/Tag statt manuell erfasster Rohdaten als
+    Mengen-Quelle - **keine eigene Rohdaten-Tabelle nötig**, die Menge kommt
+    bereits automatisch aus Waage/Processor.
+  - **Integration in `season_summary`**: gleiches Muster wie Zuckermais
+    (eine zusätzliche CTE, Summe fließt in die bestehenden Spalten
+    `praemien_summe`/`bruttolohn`, keine Änderung der äußersten
+    SELECT-Liste nötig - vermeidet das dokumentierte 42P16-Risiko).
 - **Tagesliste Boni** (`/erntewirtschaft/tagesliste`, Rolle `zeiterfassung`+):
   druckbare, optisch aufbereitete Prämienliste je Tag, Spalten ein-/ausblendbar
   für den Ausdruck (Muster: Lohnübersicht-Monatsdruck). Beispielvorlage liegt
@@ -1007,7 +1129,7 @@ Abrechnungssystem — das beantwortet den Pflichtenheft-Punkt „Abrechnung Lohn
 - Finale **Manipulation je Person** vor „Freigeben/Alles speichern" bleibt
   `admin`-only (Audit-relevant, wie oben bei RLS).
 
-## Teil F3 — Feld-Zielertrag + Telegram-Alarm (vorgemerkt 2026-10-26, noch nicht gebaut)
+## Teil F3 — Feld-Zielertrag + Telegram-Alarm (konkretisiert 2026-10-27, noch nicht gebaut)
 
 Nutzer-Vorgabe: Zusätzlich zum bestehenden Erntefenster (`feld_anbau.
 erntefenster_von/_bis`) braucht jedes Feld einen **Maximal-/Zielertrag**, gegen
@@ -1019,31 +1141,46 @@ nicht zu überernten).
 
 Offene Design-Punkte, vor dem Bauen zu klären:
 
-- **Neues Feld, nicht `ertrag_erwartet` wiederverwenden:** `ertrag_erwartet`
-  (+ `ertrag_einheit`, Default „steigen") ist eine grobe Vorab-Schätzung für
-  die Bestellplanung, keine kg-genaue harte Schwelle. Zielertrag sollte eine
-  eigene Spalte in **kg** sein (z.B. `feld_anbau.ertrag_ziel_kg`), damit der
-  Vergleich mit der Waage (ebenfalls kg) ohne Einheiten-Umrechnung funktioniert.
-- **Zeitraum-Frage:** läuft der Rohertrag-Zähler über die ganze Saison
-  (`feld_anbau.saison_jahr`) oder nur innerhalb des Erntefensters? Nutzer
-  entscheidet.
-- **Technischer Weg zur Telegram-Nachricht:** Postgres selbst kann nicht
-  direkt ins Internet - entweder (a) die `pg_net`-Extension (in Supabase
-  verfügbar) direkt aus `ernte_scan_verarbeiten()` nach jedem Wiegen einen
-  HTTP-Call an die Telegram-Bot-API machen lassen, oder (b) ein kleiner
-  periodischer Check (Edge Function oder eigener Poller, analog zur
-  bestehenden Telegram-Alarmierung bei [[fahrzeuge-traccar]]/
-  `tools/fahrzeug-poller`). Variante (a) ist näher an der bestehenden
-  DB-zentrierten Processor-Architektur dieses Moduls.
-- **Mehrfachversand verhindern:** braucht einen Dedup-Zustand (z.B.
-  `feld_anbau.ziel_erreicht_benachrichtigt_am`), sonst kommt bei jeder
-  weiteren Wiegung über dem Ziel erneut eine Nachricht.
-- **Offen, ob rein informativ oder auch eine Sperre im System:** reicht die
-  Telegram-Nachricht (Rest ist manuelle Organisation vor Ort - Fahrer/
-  Vorarbeiter stoppen die Ernte auf diesem Feld selbst), oder soll die App
-  danach auch aktiv warnen/blockieren, falls trotzdem noch eine Maschine auf
-  diesem Feld scannt? Nutzer entscheidet, wenn der Rest der Erntewirtschaft
-  gebaut wird.
+- ~~**Neues Feld, nicht `ertrag_erwartet` wiederverwenden**~~ — **neu
+  gelöst (Planungs-Update 2026-10-27):** diese Notiz verwarf eine
+  Wiederverwendung, weil `ertrag_erwartet` damals nur eine grobe
+  Bestellplanungs-Schätzung in beliebiger Einheit (Default „steigen") war.
+  Das hat sich geändert: seit 2026-10-27 trägt `feld_anbau.ertrag_erwartet`
+  für Spargel-Felder konkret den **Zielertrag in kg/ha**
+  (`ertrag_einheit='kg_ha'`, gepflegt in `/anbau/spargel`,
+  `app/anbau/spargel/page.tsx`). Der absolute Ziel-kg-Schwellwert lässt sich
+  damit **ableiten** statt eine weitere Eingabe-Spalte zu pflegen:
+  `ziel_kg = ertrag_erwartet × netto_ha` (aus
+  `feld_anbau_uebersicht.ertrag_erwartet`/`netto_ha`, nur wenn
+  `ertrag_einheit = 'kg_ha'`).
+- ~~**Zeitraum-Frage**~~ — **geklärt (2026-10-27):** Zeitraum = ganze
+  **Saison** (`feld_anbau.saison_jahr`), nicht das Erntefenster - das wurde
+  im selben Zug als bearbeitbares Feld aus `/anbau/spargel` wieder entfernt
+  (Nutzer-Vorgabe 2026-10-27: „Das Erntefenster als bearbeitbare Felder kann
+  man dort rausnehmen"), eine Bindung an ein nicht mehr gepflegtes Feld wäre
+  unpraktisch gewesen.
+- ~~**Technischer Weg zur Telegram-Nachricht**~~ — **entschieden
+  (2026-10-27): Variante (b), über den bestehenden `ernte-waage-agent`**,
+  NICHT `pg_net`. Analog zum etablierten Muster in
+  `tools/fahrzeug-poller/index.mjs` (eigene `telegram()`-Funktion, reiner
+  Node-seitiger HTTP-Call an die Telegram-Bot-API, kein DB-seitiger
+  HTTP-Call) - der Agent hat ohnehin Internetzugang und ruft nach jedem Scan
+  bereits `ernte_scan_verarbeiten()` auf, direkt danach zusätzlich eine
+  kleine Status-RPC `ernte_zielertrag_pruefen()` abfragen und bei Bedarf
+  Telegram verschicken (`tools/ernte-waage-agent/index.mjs`,
+  `TELEGRAM_BOT_TOKEN`/`TELEGRAM_CHAT_ID` neu in der `.env`, 1:1 nach dem
+  Vorbild aus `tools/fahrzeug-poller`).
+- ~~**Mehrfachversand verhindern**~~ — **entschieden (2026-10-27):** neue
+  Spalte `feld_anbau.ziel_erreicht_bis_kg numeric` (ersetzt den hier
+  ursprünglich skizzierten Zeitstempel-Ansatz) hält den höchsten bereits
+  gemeldeten 1000-kg-Schwellwert für dieses Feld+Saison fest;
+  `ernte_zielertrag_pruefen()` meldet nur, wenn ein neuer, höherer
+  1000-kg-Schritt erreicht wurde, und aktualisiert die Spalte dabei.
+- ~~**Offen, ob rein informativ oder auch eine Sperre im System**~~ —
+  **entschieden (2026-10-27): nur Information, v1.** Telegram-Nachricht
+  reicht, keine Sperre/Warnung im System selbst - reduziert das Risiko
+  eines durch einen Bug in der Zielertrag-Logik blockierten Normalbetriebs.
+  Kann später nachgerüstet werden, falls nötig.
 - **Ablauf-Info (Nutzer-Vorgabe 2026-10-26): eine volle Kiste steht
   mindestens 30-60 Minuten auf dem Feld, bevor sie die kilometerweit
   entfernte Hofwaage passiert** - der per Waage gemessene Rohertrag hinkt der
@@ -1056,6 +1193,19 @@ Offene Design-Punkte, vor dem Bauen zu klären:
   gesonderter Sicherheitspuffer-Mechanismus nötig**, einfach bei jedem
   Erreichen eines 1000-kg-Vielfachen (bzw. kurz davor, am gerundeten
   Schwellwert) prüfen/melden statt kontinuierlich exakt am Zielwert.
+
+**Konkretisiert, Planungs-Update 2026-10-27 (noch nicht gebaut, nur
+Entwurf, alle offenen Design-Punkte oben jetzt entschieden):**
+`ernte_zielertrag_pruefen()` vergleicht je Feld/Saison mit gesetztem
+`ertrag_erwartet`/`ertrag_einheit='kg_ha'` die Saison-Summe
+`ernte_kiste_zyklus.gewicht_netto_kg` (`ist_kg`) gegen den abgeleiteten
+`ziel_kg`; sobald ein neues 1000-kg-Vielfaches `>= ziel_kg` zum ersten Mal
+erreicht wird (geprüft über `ziel_erreicht_bis_kg`), gibt die Funktion die
+betroffene Feld-Zeile + Meldetext zurück und aktualisiert
+`ziel_erreicht_bis_kg` - der Agent verschickt daraufhin die
+Telegram-Nachricht. Genaue Melde-Schwelle (z.B. exakt bei `ist_kg >=
+ziel_kg` oder schon kurz davor am gerundeten Schwellwert) noch beim Bauen
+final festzuzurren.
 
 ## Teil G — Poller-Erweiterung
 
@@ -1150,9 +1300,9 @@ Traccar-Instanz. Abweichungen gegenüber der ursprünglichen Skizze:
    wenig Laufmeter) bewertet werden — fester Kg-Preis je Stufe reicht erstmal,
    der im Pflichtenheft skizzierte kg/h↔Lfm/h-Schieber ist vertagt, bis eine
    klare Formel feststeht.
-9. **Vergütungsart je Person** (Akkord vs. Feldstufe/Prämie): reicht ein
-   einfaches Flag wie bei den drei bestehenden `praemien_*`-Booleans, oder soll
-   sich das je Saison ändern können?
+9. ~~**Vergütungsart je Person**~~ — **geklärt (2026-10-27):** kein festes
+   Flag, sondern pro Saison änderbar - eigene Tabelle
+   `ernte_verguetungsart (employee_id, saison_jahr, art)`, siehe Teil F2.
 
 ## Nicht in v1
 
