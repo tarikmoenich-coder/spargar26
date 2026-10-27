@@ -218,15 +218,27 @@ export default function FeldKarte({
       return;
     }
     try {
-      const geom = JSON.parse(geometrieGeojson) as GeoJSON.Polygon;
+      const geom = JSON.parse(geometrieGeojson) as GeoJSON.Polygon | GeoJSON.MultiPolygon;
       src.setData({
         type: "FeatureCollection",
         features: [{ type: "Feature", geometry: geom, properties: {} }],
       });
-      const coords = geom.coordinates?.[0] ?? [];
-      if (coords.length > 0) {
+      // Aeussere Ringe je Teilflaeche - bei "Polygon" genau einer, bei
+      // "MultiPolygon" (seit 2026-10-27: alle aus Pachtwesen importierten
+      // Felder, sobald ein Schlag aus mehreren, nicht zusammenhaengenden
+      // Flurstuecken besteht) einer je Teilflaeche. Vorher nahm der Code
+      // immer "coordinates[0]" an, was bei MultiPolygon eine Ebene zu
+      // flach griff (keine Koordinaten, sondern ein Ring-Array) - die
+      // Bounds-Berechnung bekam dadurch Unsinn und zoomte auf die Welt
+      // heraus, statt auf die Flaeche.
+      const aussenringe: GeoJSON.Position[][] =
+        geom.type === "MultiPolygon"
+          ? geom.coordinates.map((polygon) => polygon[0] ?? [])
+          : [geom.coordinates?.[0] ?? []];
+      const alleKoordinaten = aussenringe.flat();
+      if (alleKoordinaten.length > 0) {
         const b = new maplibregl.LngLatBounds();
-        coords.forEach((c) => b.extend(c as [number, number]));
+        alleKoordinaten.forEach((c) => b.extend(c as [number, number]));
         map.fitBounds(b, { padding: 40, maxZoom: 18, duration: 0 });
       }
     } catch {
