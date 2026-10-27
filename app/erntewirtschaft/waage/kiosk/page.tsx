@@ -51,6 +51,7 @@ export default function WaagenKioskPage() {
   const [erfolgSichtbar, setErfolgSichtbar] = useState(false);
   const [gestartet, setGestartet] = useState(false);
   const [fehler, setFehler] = useState<string | null>(null);
+  const [zaehler, setZaehler] = useState({ vormittag: 0, nachmittag: 0 });
 
   const letzteIdRef = useRef<number | null>(null);
   const erfolgTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -110,6 +111,36 @@ export default function WaagenKioskPage() {
     [uebernehmeZeile]
   );
 
+  // Kistenzähler Vormittag (00:00-14:59) / Nachmittag (15:00-23:59) -
+  // bewusst zwei reine Zähl-Abfragen (count, "head: true", keine Zeilen)
+  // statt alle Zeilen des Tages zu laden: an Spitzentagen werden bis zu
+  // 1600 Kisten erwartet (docs/erntewirtschaft-plan.md) - das reisst locker
+  // den Supabase/PostgREST-1000-Zeilen-Cap (siehe [[postgrest-1000-zeilen-
+  // cap]]), ein reiner Zählwert ist davon nicht betroffen. Grenzen in
+  // lokaler Zeit (Browser-Zeitzone des Kiosk-Rechners), nicht UTC.
+  const ladeZaehler = useCallback(async () => {
+    const jetzt = new Date();
+    const mitternacht = new Date(jetzt.getFullYear(), jetzt.getMonth(), jetzt.getDate());
+    const fuenfzehnUhr = new Date(jetzt.getFullYear(), jetzt.getMonth(), jetzt.getDate(), 15);
+    const naechsteMitternacht = new Date(jetzt.getFullYear(), jetzt.getMonth(), jetzt.getDate() + 1);
+
+    const basis = () =>
+      getSupabaseClient()
+        .from("ernte_kiste_zyklus")
+        .select("*", { count: "exact", head: true })
+        .in("status", ["gewogen", "ungeklaert"]);
+
+    const [{ count: vormittag, error: e1 }, { count: nachmittag, error: e2 }] = await Promise.all([
+      basis().gte("gewogen_am", mitternacht.toISOString()).lt("gewogen_am", fuenfzehnUhr.toISOString()),
+      basis().gte("gewogen_am", fuenfzehnUhr.toISOString()).lt("gewogen_am", naechsteMitternacht.toISOString()),
+    ]);
+    if (e1 || e2) {
+      setFehler((e1 ?? e2)?.message ?? "Kistenzähler konnte nicht geladen werden.");
+      return;
+    }
+    setZaehler({ vormittag: vormittag ?? 0, nachmittag: nachmittag ?? 0 });
+  }, []);
+
   // Letzte bekannte Wiegung beim Laden/Neuladen der Seite anzeigen, ohne auf
   // das nächste Realtime-Ereignis warten zu müssen.
   useEffect(() => {
@@ -132,7 +163,12 @@ export default function WaagenKioskPage() {
         setAktuelle(data as ErnteKioskWiegung);
       }
     })();
-  }, []);
+    ladeZaehler();
+    // Netz gegen verpasste Realtime-Ereignisse und für den Mitternachts-
+    // Umbruch (Vormittag/Nachmittag-Grenzen hängen vom aktuellen Tag ab).
+    const intervall = setInterval(ladeZaehler, 60_000);
+    return () => clearInterval(intervall);
+  }, [ladeZaehler]);
 
   // Realtime-Abo auf ernte_kiste_zyklus - jede neue/aktualisierte Zeile mit
   // frischem gewogen_am löst einen gezielten Nachlade-Request auf die Sicht
@@ -144,19 +180,25 @@ export default function WaagenKioskPage() {
       .on(
         "postgres_changes",
         { event: "INSERT", schema: "public", table: "ernte_kiste_zyklus" },
-        (payload) => void ladeZeile((payload.new as { id: number }).id)
+        (payload) => {
+          void ladeZeile((payload.new as { id: number }).id);
+          void ladeZaehler();
+        }
       )
       .on(
         "postgres_changes",
         { event: "UPDATE", schema: "public", table: "ernte_kiste_zyklus" },
-        (payload) => void ladeZeile((payload.new as { id: number }).id)
+        (payload) => {
+          void ladeZeile((payload.new as { id: number }).id);
+          void ladeZaehler();
+        }
       )
       .subscribe();
 
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [ladeZeile]);
+  }, [ladeZeile, ladeZaehler]);
 
   // Signierte Foto-URL nachladen, sobald sich der Mitarbeiter ändert
   // (mitarbeiter-fotos ist ein privater Bucket, siehe app/erntewirtschaft/
@@ -221,6 +263,23 @@ export default function WaagenKioskPage() {
           <span className="text-sm text-neutral-500">
             {aktuelle ? formatZeitpunktDE(aktuelle.gewogen_am) : "Noch keine Wiegung"}
           </span>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-3 gap-3 text-center">
+        <div className="card p-3">
+          <p className="text-xs text-neutral-500">Kisten Vormittag</p>
+          <p className="text-2xl font-semibold text-emerald-900">{zaehler.vormittag}</p>
+        </div>
+        <div className="card p-3">
+          <p className="text-xs text-neutral-500">Kisten Nachmittag</p>
+          <p className="text-2xl font-semibold text-emerald-900">{zaehler.nachmittag}</p>
+        </div>
+        <div className="card p-3">
+          <p className="text-xs text-neutral-500">Kisten Gesamt</p>
+          <p className="text-2xl font-semibold text-emerald-900">
+            {zaehler.vormittag + zaehler.nachmittag}
+          </p>
         </div>
       </div>
 
