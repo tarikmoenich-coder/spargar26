@@ -131,46 +131,34 @@ async function wartetAufVeraenderung(tagUid) {
   return false;
 }
 
-/**
- * Fragt <FP0> zweimal hintereinander ab und akzeptiert nur, wenn beide
- * Male (fast) dasselbe rauskommt. Absicherung gegen ein falsch-stabiles
- * Zwischenplateau waehrend eines ueberlappenden Kistenwechsels - wie
- * robust der Geraete-eigene Ruhelage-Algorithmus das selbst abfaengt,
- * wissen wir ohne Pilottest nicht, diese Gegenprobe ist billig.
- */
-async function fp0LesenBestaetigt() {
-  const erste = await fp0Lesen(WAAGE_IP, WAAGE_PORT);
-  if (!erste) return { ergebnis: null, bestaetigt: true };
-
-  const zweite = await fp0Lesen(WAAGE_IP, WAAGE_PORT);
-  if (!zweite) return { ergebnis: erste, bestaetigt: false };
-
-  const bestaetigt = Math.abs(zweite.nettoKg - erste.nettoKg) < 0.05;
-  return { ergebnis: zweite, bestaetigt };
-}
-
 async function kisteWiegen(tagUid) {
+  // Zeitmessung (Nutzer-Rueckmeldung 2026-10-27: Uebermittlung fuehlt sich
+  // langsam an) - zeigt, ob die Zeit beim Warten auf die Gewichtsaenderung
+  // oder beim Schreiben nach Supabase draufgeht, statt das zu erraten.
+  const start = Date.now();
   console.log(`Code gescannt: ${tagUid} - warte auf Gewichtswechsel auf der Waage ...`);
   if (!(await wartetAufVeraenderung(tagUid))) return;
 
-  console.log("  -> Aenderung erkannt, frage <FP0> zweimal ab (muss uebereinstimmen) ...");
-  let ergebnis, bestaetigt;
+  console.log(`  -> Aenderung erkannt nach ${Date.now() - start}ms, frage <FP0> ab ...`);
+  const fp0Start = Date.now();
+  // Nur noch EINE <FP0>-Abfrage (Nutzer-Entscheidung 2026-10-27): die
+  // urspruengliche doppelte Abfrage als Gegenprobe gegen einen falsch-
+  // stabilen Zwischenwert beim Kistenwechsel verdoppelte effektiv die
+  // Standzeit der Kiste auf der Waage (jede Abfrage laesst das Geraet
+  // selbst erneut auf Ruhelage warten) - der Durchsatz war dem Nutzer
+  // wichtiger als diese zusaetzliche Absicherung.
+  let ergebnis;
   try {
-    ({ ergebnis, bestaetigt } = await fp0LesenBestaetigt());
+    ergebnis = await fp0Lesen(WAAGE_IP, WAAGE_PORT);
   } catch (e) {
     console.error(`  -> Waage nicht erreichbar/Fehler: ${e.message}`);
     return;
   }
+  console.log(`  -> <FP0> dauerte ${Date.now() - fp0Start}ms`);
 
   if (!ergebnis) {
     console.warn("  -> <FP!> - kein stabiles Gewicht innerhalb von 30s, oder ausserhalb Waegebereich.");
     return;
-  }
-
-  if (!bestaetigt) {
-    console.warn(
-      `  -> Zweite <FP0>-Abfrage wich vom ersten Wert ab (wahrscheinlich noch im Kistenwechsel) - speichere trotzdem den zweiten Wert (${ergebnis.nettoKg} kg) zur Kontrolle.`,
-    );
   }
 
   if (ergebnis.nettoKg < MINDESTGEWICHT_KG) {
