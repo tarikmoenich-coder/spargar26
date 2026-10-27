@@ -987,6 +987,12 @@ danach:
   `heatmap`-Layer-Typ** (`type: "heatmap"`, Gewichtung via
   `heatmap-weight`) - keine neue Abhängigkeit nötig, gleicher Satellit/OSM-
   Unterbau wie bei den anderen Karten. Noch nicht gebaut.
+  **Priorität zurückgestellt (Nutzer-Vorgabe 2026-10-27): die Heatmap ist
+  nicht wichtig** - im Gegensatz zu Teil E/F insgesamt (Übersichtsseite,
+  `ernte_kette_luecken`), die der Nutzer explizit als „extrem wichtig"
+  eingestuft hat. Tabelle + kg/h-Kennzahlen aus `ernte_effizienz_schicht`
+  bleiben Teil des baldigen Baus, die Heatmap selbst kann ohne
+  Funktionsverlust der restlichen Seite später nachgezogen werden.
 - **`/erntewirtschaft/stammdaten`** — Maschinen-CRUD, Waagen, Felder (Karten-
   Editor / Import), Konfig-Konstanten. **Excel-/CSV-Import für die 140 Maschinen**
   (siehe unten).
