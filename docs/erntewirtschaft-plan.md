@@ -1060,6 +1060,21 @@ danach:
   Belegung als „3/5 angemeldet" (Anzahl offener `ernte_schicht`-Zeilen ÷
   `max_personen`) statt eines einzelnen Fahrernamens wie bei Weißspargel-
   Maschinen (`max_personen = 1`).
+  **Fotos der angemeldeten Personen im Popup (Nutzer-Vorgabe 2026-10-27):**
+  beim Öffnen des Popups eine gezielte Zusatzabfrage (nicht Teil der
+  Dauer-Live-Last der ganzen Flotte) auf `ernte_schicht` (`maschine_id = …
+  and ende is null`) mit Embed `employees(name, vorname, personal_nr,
+  foto_pfad)`, dann je Zeile mit `foto_pfad` eine signierte URL aus dem
+  privaten Bucket `mitarbeiter-fotos` (`createSignedUrl`, 60s) - exakt das
+  gleiche Muster wie schon im Waagen-Kiosk
+  (`app/erntewirtschaft/waage/kiosk/page.tsx`). Bei Weißspargel (1 Person)
+  ein Foto+Name, bei Grünspargel-Gruppenmaschinen eine kleine Foto-Reihe
+  (bis zu `max_personen` Fotos+Namen nebeneinander) statt nur der
+  „3/5"-Zahl. RLS-seitig schon passend: die Storage-Policy
+  `mitarbeiter_fotos_storage_select` (Migration
+  `migration_2026-10-27_rolle_waage_2_policies.sql`) deckt genau die
+  Rollen ab, die auch die Überblicksseite sehen dürfen (admin/hr/
+  management/erntewirtschaft/zeiterfassung) - keine RLS-Änderung nötig.
 - **`/erntewirtschaft/ernte`** — Kisten-Zyklen: Datumsfilter, Tabelle (befüllt ·
   Maschine · Fahrer · Feld · netto kg · gewogen · Status), Filter „nur Lücken"
   und **„nur ohne Zuordnung"** (`employee_id is null`, siehe Prozessor oben) -
