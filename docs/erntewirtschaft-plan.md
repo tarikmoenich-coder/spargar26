@@ -1028,10 +1028,19 @@ danach:
   noch am selben Tag gesucht werden kann. Karten-Muster aus
   `FahrzeugKarte` (ggf. zu gemeinsamem `GpsKarte` verallgemeinern).
 
-  **Konkretisiert, Planungs-Update 2026-10-27 (noch nicht gebaut, nur
-  Entwurf):** `app/erntewirtschaft/page.tsx` ist heute ein reiner
-  Redirect-Router (leitet jede Rolle auf den ersten erlaubten Bereich aus
-  `BEREICHE` um - Prämien/Anbau/Statistik/Waage), es gibt noch keine echte
+  **Gebaut (2026-10-27, `41f81cb`):** Karte + Rollen-Gate (siehe unten) sind
+  live, bewusst als erste schlanke Scheibe - **noch nicht Teil davon:** die
+  Tages-Kacheln (brauchen `ernte_kette_luecken`/`ernte_ertrag_tag`, siehe
+  Teil E), Marker-Clusterung (erst relevant ab vielen gleichzeitig
+  sichtbaren Maschinen) und die Prozessor-Anpassung für echte
+  Grünspargel-Gruppenmaschinen (aktuell nur die eine Weißspargel-
+  Pilotmaschine, `max_personen=1` default - schadet ihr nicht, ändert aber
+  noch nichts am Processor-Verhalten).
+
+  **Konkretisiert, Planungs-Update 2026-10-27:**
+  `app/erntewirtschaft/page.tsx` war zuvor ein reiner
+  Redirect-Router (leitete jede Rolle auf den ersten erlaubten Bereich aus
+  `BEREICHE` um - Prämien/Anbau/Statistik/Waage), es gab noch keine echte
   `/erntewirtschaft`-Seite. Entscheidung: `/erntewirtschaft` wird die echte
   Flotten-Überblicksseite, aber **nur für die Rollen, die auch
   `ernte_kiste_zyklus` lesen dürfen** (admin/hr/management/erntewirtschaft/
