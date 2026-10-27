@@ -51,7 +51,7 @@ export default function WaagenKioskPage() {
   const [erfolgSichtbar, setErfolgSichtbar] = useState(false);
   const [gestartet, setGestartet] = useState(false);
   const [fehler, setFehler] = useState<string | null>(null);
-  const [zaehler, setZaehler] = useState({ vormittag: 0, nachmittag: 0 });
+  const [zaehler, setZaehler] = useState({ vormittag: 0, nachmittag: 0, offen: 0 });
 
   const letzteIdRef = useRef<number | null>(null);
   const erfolgTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -130,15 +130,27 @@ export default function WaagenKioskPage() {
         .select("*", { count: "exact", head: true })
         .in("status", ["gewogen", "ungeklaert"]);
 
-    const [{ count: vormittag, error: e1 }, { count: nachmittag, error: e2 }] = await Promise.all([
-      basis().gte("gewogen_am", mitternacht.toISOString()).lt("gewogen_am", fuenfzehnUhr.toISOString()),
-      basis().gte("gewogen_am", fuenfzehnUhr.toISOString()).lt("gewogen_am", naechsteMitternacht.toISOString()),
-    ]);
-    if (e1 || e2) {
-      setFehler((e1 ?? e2)?.message ?? "Kistenzähler konnte nicht geladen werden.");
+    // "Kisten im Umlauf" (Nutzer-Vorgabe 2026-10-27: Abschaetzung, wieviel
+    // noch von den Maschinen kommt / Kontrolle, ob am Tagesende alle Kisten
+    // abgeholt wurden): bewusst ein einzelner Live-Zaehlwert (Status
+    // "offen" = an der Maschine gescannt, noch nicht gewogen) statt
+    // "heute an Maschinen gescannt" minus "heute gewogen" zu rechnen -
+    // kein Tagesgrenzen-Sonderfall noetig und eine seit gestern vergessene
+    // offene Kiste faellt dadurch nicht unbemerkt aus der Zaehlung heraus.
+    const [{ count: vormittag, error: e1 }, { count: nachmittag, error: e2 }, { count: offen, error: e3 }] =
+      await Promise.all([
+        basis().gte("gewogen_am", mitternacht.toISOString()).lt("gewogen_am", fuenfzehnUhr.toISOString()),
+        basis().gte("gewogen_am", fuenfzehnUhr.toISOString()).lt("gewogen_am", naechsteMitternacht.toISOString()),
+        getSupabaseClient()
+          .from("ernte_kiste_zyklus")
+          .select("*", { count: "exact", head: true })
+          .eq("status", "offen"),
+      ]);
+    if (e1 || e2 || e3) {
+      setFehler((e1 ?? e2 ?? e3)?.message ?? "Kistenzähler konnte nicht geladen werden.");
       return;
     }
-    setZaehler({ vormittag: vormittag ?? 0, nachmittag: nachmittag ?? 0 });
+    setZaehler({ vormittag: vormittag ?? 0, nachmittag: nachmittag ?? 0, offen: offen ?? 0 });
   }, []);
 
   // Letzte bekannte Wiegung beim Laden/Neuladen der Seite anzeigen, ohne auf
@@ -266,7 +278,7 @@ export default function WaagenKioskPage() {
         </div>
       </div>
 
-      <div className="grid grid-cols-3 gap-3 text-center">
+      <div className="grid grid-cols-2 gap-3 text-center md:grid-cols-4">
         <div className="card p-3">
           <p className="text-xs text-neutral-500">Kisten Vormittag</p>
           <p className="text-2xl font-semibold text-emerald-900">{zaehler.vormittag}</p>
@@ -276,10 +288,14 @@ export default function WaagenKioskPage() {
           <p className="text-2xl font-semibold text-emerald-900">{zaehler.nachmittag}</p>
         </div>
         <div className="card p-3">
-          <p className="text-xs text-neutral-500">Kisten Gesamt</p>
+          <p className="text-xs text-neutral-500">Kisten Gesamt (Waage)</p>
           <p className="text-2xl font-semibold text-emerald-900">
             {zaehler.vormittag + zaehler.nachmittag}
           </p>
+        </div>
+        <div className="card p-3" title="An der Maschine gescannt, noch nicht gewogen">
+          <p className="text-xs text-neutral-500">Kisten im Umlauf</p>
+          <p className="text-2xl font-semibold text-emerald-900">{zaehler.offen}</p>
         </div>
       </div>
 
