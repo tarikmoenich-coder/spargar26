@@ -133,14 +133,18 @@ export default function AnbauSpargelPage() {
 
   async function anbauAendern(
     anbauId: number,
-    feld: "erntefenster_von" | "erntefenster_bis" | "rodung_geplant" | "notiz",
+    feld: "rodung_geplant" | "notiz" | "ertrag_erwartet",
     wert: string
   ) {
     const supabase = getSupabaseClient();
-    const { error } = await supabase
-      .from("feld_anbau")
-      .update({ [feld]: wert || null })
-      .eq("id", anbauId);
+    // Zielertrag ist auf dieser Seite immer kg/ha - Einheit mit setzen, damit
+    // spätere generische Auswertungen (z.B. Teil F3 Zielertrag-Alarm) den Wert
+    // nicht versehentlich als "steigen" (Erdbeeren-Default) interpretieren.
+    const payload: Record<string, number | string | null> =
+      feld === "ertrag_erwartet"
+        ? { ertrag_erwartet: wert ? Number(wert) : null, ertrag_einheit: wert ? "kg_ha" : null }
+        : { [feld]: wert || null };
+    const { error } = await supabase.from("feld_anbau").update(payload).eq("id", anbauId);
     if (error) setFehler(error.message);
     load();
   }
@@ -283,7 +287,9 @@ export default function AnbauSpargelPage() {
                 </th>
                 <th title="Aus Reihen × Länge × Abstand">Netto ha</th>
                 <th>Pflanzen</th>
-                <th>Erntefenster</th>
+                <th title="Geplanter Ertrag je Hektar, für Planung/Vergleich mit dem tatsächlichen Wiege-Ertrag">
+                  Zielertrag kg/ha
+                </th>
                 <th>Rodung geplant</th>
                 <th></th>
               </tr>
@@ -391,20 +397,14 @@ export default function AnbauSpargelPage() {
                               </td>
                               <td>{formatMenge(u.netto_ha, 4)}</td>
                               <td>{formatZahlDE(u.anzahl_pflanzen)}</td>
-                              <td className="text-xs">
+                              <td>
                                 <input
-                                  type="date"
-                                  defaultValue={u.erntefenster_von ?? ""}
+                                  type="number"
+                                  step="1"
+                                  defaultValue={u.ertrag_erwartet ?? ""}
                                   disabled={!canEdit}
-                                  className="w-32"
-                                  onBlur={(e) => anbauAendern(u.anbau_id, "erntefenster_von", e.target.value)}
-                                />
-                                <input
-                                  type="date"
-                                  defaultValue={u.erntefenster_bis ?? ""}
-                                  disabled={!canEdit}
-                                  className="mt-1 w-32"
-                                  onBlur={(e) => anbauAendern(u.anbau_id, "erntefenster_bis", e.target.value)}
+                                  className="w-24"
+                                  onBlur={(e) => anbauAendern(u.anbau_id, "ertrag_erwartet", e.target.value)}
                                 />
                               </td>
                               <td>
