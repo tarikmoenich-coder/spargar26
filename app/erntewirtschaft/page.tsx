@@ -1,15 +1,29 @@
 "use client";
 
-// Sammel-Menüpunkt "Erntewirtschaft" (Prämien / Anbau / Statistik). Diese
-// Route hat noch keine eigene Übersicht - sie leitet auf den ersten Bereich
-// weiter, in den die Rolle darf. Die Bereichs-/Unterreiter stehen in
-// components/ErntewirtschaftTabs.tsx. Wird das große Erntewirtschaft-Modul
-// (Spargelspinnen) gebaut, bekommt es hier eine echte Startseite.
+// Sammel-Menüpunkt "Erntewirtschaft". Echte Flotten-Überblicksseite
+// (Kartenansicht der Spargelspinnen, Nutzer-Vorgabe 2026-10-27: "besonders
+// wichtig") für die Rollen, die auch ernte_kiste_zyklus lesen dürfen -
+// admin/hr/management/erntewirtschaft/zeiterfassung, identisch zur
+// ernte_kiste_zyklus_select-Policy (siehe docs/erntewirtschaft-plan.md
+// Teil F). `lohnabrechnung` (einzige in MENUE_RECHTE["/erntewirtschaft"]
+// fehlende Rolle aus diesem Set) hat kein operatives Interesse an der
+// Maschinen-Flotte und behält den bisherigen Redirect zum ersten erlaubten
+// Prämien-/Anbau-/Statistik-Bereich (Unterreiter aus
+// components/ErntewirtschaftTabs.tsx).
+//
+// Erste, bewusst schlanke Scheibe: nur die Karte selbst. Tages-Kacheln
+// (Kisten/kg heute, Lücken) folgen als eigener nächster Schritt, sobald
+// ernte_kette_luecken/ernte_ertrag_tag gebaut sind.
 
-import { useEffect } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import { Sprout } from "lucide-react";
+import PageHeader from "@/components/PageHeader";
+import ErnteMaschinenKarte, { type MaschineLive } from "@/components/ErnteMaschinenKarte";
+import { getSupabaseClient } from "@/lib/supabase/client";
 import { useProfile } from "@/lib/useProfile";
 import { MENUE_RECHTE } from "@/lib/rollen";
+import type { UserRole } from "@/lib/types";
 
 const BEREICHE: [string, string][] = [
   ["/praemien/zuckermais", "/praemien/zuckermais"],
@@ -18,7 +32,20 @@ const BEREICHE: [string, string][] = [
   ["/erntewirtschaft/waage", "/erntewirtschaft/waage"],
 ];
 
-export default function ErntewirtschaftPage() {
+// Identisch zur ernte_kiste_zyklus_select-RLS-Policy (migration_2026-10-20_
+// erntewirtschaft_kisten_zyklus.sql) - wer die Kisten-Zyklen nicht lesen
+// darf, sieht auch keine Flotten-Karte, die darauf aufbaut.
+const SIEHT_UEBERBLICK: UserRole[] = [
+  "admin",
+  "hr",
+  "management",
+  "erntewirtschaft",
+  "zeiterfassung",
+];
+
+const AKTUALISIERUNG_MS = 15_000;
+
+function UeberblickRedirect() {
   const router = useRouter();
   const { loading, profile } = useProfile();
 
@@ -33,4 +60,56 @@ export default function ErntewirtschaftPage() {
   }, [loading, profile, router]);
 
   return <p className="p-4 text-sm text-neutral-500">Lädt…</p>;
+}
+
+function FlottenUeberblick() {
+  const [maschinen, setMaschinen] = useState<MaschineLive[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [fehler, setFehler] = useState<string | null>(null);
+
+  const laden = useCallback(async () => {
+    const { data, error } = await getSupabaseClient()
+      .from("ernte_maschine_live")
+      .select("*");
+    setFehler(error?.message ?? null);
+    setMaschinen((data as MaschineLive[]) ?? []);
+    setLoading(false);
+  }, []);
+
+  useEffect(() => {
+    laden();
+    const intervall = setInterval(laden, AKTUALISIERUNG_MS);
+    return () => clearInterval(intervall);
+  }, [laden]);
+
+  return (
+    <div className="flex flex-col gap-4">
+      <PageHeader
+        icon={Sprout}
+        titel="Erntewirtschaft"
+        beschreibung="Live-Überblick der Spargelspinnen."
+      />
+      {fehler && (
+        <p className="text-sm text-beere-700">
+          Konnte nicht laden: {fehler}. Ist die Migration
+          migration_2026-10-27_ernte_maschine_live.sql schon eingespielt?
+        </p>
+      )}
+      {loading ? (
+        <p className="text-neutral-500">Lädt…</p>
+      ) : (
+        <ErnteMaschinenKarte maschinen={maschinen} />
+      )}
+    </div>
+  );
+}
+
+export default function ErntewirtschaftPage() {
+  const { loading, profile } = useProfile();
+
+  if (loading) return <p className="p-4 text-sm text-neutral-500">Lädt…</p>;
+  if (profile?.role && SIEHT_UEBERBLICK.includes(profile.role)) {
+    return <FlottenUeberblick />;
+  }
+  return <UeberblickRedirect />;
 }

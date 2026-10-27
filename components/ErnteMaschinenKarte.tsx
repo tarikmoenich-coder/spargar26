@@ -1,0 +1,286 @@
+"use client";
+
+// Kartenansicht für die Spargelspinnen (docs/erntewirtschaft-plan.md Teil F,
+// Nutzer-Vorgabe 2026-10-27: "besonders wichtig"). Erste, bewusst schlanke
+// Scheibe - nur Marker + Online/Offline-Ampel + Popup, noch KEINE Clusterung
+// (heute 1 Pilotmaschine, Clusterung ist ein eigener, späterer Ausbauschritt
+// für den 140er-Rollout, siehe components/FahrzeugKarte.tsx für das Muster,
+// sobald es gebraucht wird).
+//
+// Eigene, kleine Kopie von BasiskartenControl statt einer gemeinsamen Basis
+// mit FahrzeugKarte.tsx/FeldKarte.tsx - gleiche Konvention wie dort (siehe
+// deren eigene Begründungskommentare): jede Karte ist für sich klein genug,
+// dass ein Teilen mehr Kopplung als Nutzen bringt.
+
+import { useEffect, useRef, useState } from "react";
+import maplibregl from "maplibre-gl";
+import "maplibre-gl/dist/maplibre-gl.css";
+import { getSupabaseClient } from "@/lib/supabase/client";
+import { formatMenge } from "@/lib/format";
+
+class BasiskartenControl implements maplibregl.IControl {
+  private map?: maplibregl.Map;
+  private container?: HTMLDivElement;
+  private satellitAktiv = false;
+
+  onAdd(map: maplibregl.Map) {
+    this.map = map;
+    this.container = document.createElement("div");
+    this.container.className = "maplibregl-ctrl maplibregl-ctrl-group";
+    const button = document.createElement("button");
+    button.type = "button";
+    button.title = "Zwischen Karte und Satellit wechseln";
+    button.style.fontSize = "16px";
+    button.textContent = "🛰️";
+    button.onclick = () => {
+      this.satellitAktiv = !this.satellitAktiv;
+      this.map?.setLayoutProperty(
+        "satellit",
+        "visibility",
+        this.satellitAktiv ? "visible" : "none"
+      );
+      this.map?.setLayoutProperty(
+        "osm",
+        "visibility",
+        this.satellitAktiv ? "none" : "visible"
+      );
+      button.textContent = this.satellitAktiv ? "🗺️" : "🛰️";
+    };
+    this.container.appendChild(button);
+    return this.container;
+  }
+
+  onRemove() {
+    this.container?.parentNode?.removeChild(this.container);
+    this.map = undefined;
+  }
+}
+
+function minutenHer(iso: string | null): number | null {
+  if (!iso) return null;
+  return Math.round((Date.now() - new Date(iso).getTime()) / 60000);
+}
+
+function vorText(min: number | null): string {
+  if (min === null) return "keine Meldung";
+  if (min < 1) return "gerade eben";
+  if (min < 60) return `vor ${min} min`;
+  if (min < 1440) return `vor ${Math.round(min / 60)} h`;
+  return `vor ${Math.round(min / 1440)} d`;
+}
+
+// Schwellen aus ernte_konfig.offline_warn_min/offline_alarm_min (5/10) -
+// hier als Konstante statt eines eigenen Requests, die Werte ändern sich in
+// der Praxis quasi nie; bei Bedarf später aus ernte_konfig nachladbar.
+const OFFLINE_WARN_MIN = 5;
+const OFFLINE_ALARM_MIN = 10;
+
+function ampel(min: number | null): string {
+  if (min === null || min >= OFFLINE_ALARM_MIN) return "#9ca3af";
+  if (min >= OFFLINE_WARN_MIN) return "#d97706";
+  return "#16a34a";
+}
+
+export interface MaschineLive {
+  maschine_id: number;
+  nummer: string;
+  bezeichnung: string | null;
+  max_personen: number;
+  lat: number | null;
+  lng: number | null;
+  position_zeitpunkt: string | null;
+  aktive_personen: number;
+  kg_heute: number;
+}
+
+interface AngemeldetePerson {
+  name: string;
+  vorname: string;
+  personal_nr: string;
+  fotoUrl: string | null;
+}
+
+const FOTO_BUCKET = "mitarbeiter-fotos";
+
+async function ladeAngemeldetePersonen(maschineId: number): Promise<AngemeldetePerson[]> {
+  const supabase = getSupabaseClient();
+  const { data, error } = await supabase
+    .from("ernte_schicht")
+    .select("employees(name, vorname, personal_nr, foto_pfad)")
+    .eq("maschine_id", maschineId)
+    .is("ende", null);
+  if (error || !data) return [];
+
+  const zeilen = data as unknown as {
+    employees: { name: string; vorname: string; personal_nr: string; foto_pfad: string | null } | null;
+  }[];
+
+  return Promise.all(
+    zeilen
+      .filter((z) => z.employees)
+      .map(async (z) => {
+        const e = z.employees!;
+        let fotoUrl: string | null = null;
+        if (e.foto_pfad) {
+          const { data: signiert } = await supabase.storage
+            .from(FOTO_BUCKET)
+            .createSignedUrl(e.foto_pfad, 60);
+          fotoUrl = signiert?.signedUrl ?? null;
+        }
+        return { name: e.name, vorname: e.vorname, personal_nr: e.personal_nr, fotoUrl };
+      })
+  );
+}
+
+function popupHtmlGeruest(m: MaschineLive): string {
+  return `
+    <div style="font:400 12px/1.45 system-ui">
+      <div style="font-weight:600">${m.bezeichnung || m.nummer}</div>
+      <div>kg heute: ${formatMenge(m.kg_heute, 1)}</div>
+      <div>${m.aktive_personen}/${m.max_personen} angemeldet</div>
+      <div style="color:#6b7280">zuletzt: ${vorText(minutenHer(m.position_zeitpunkt))}</div>
+      <div data-personen style="margin-top:6px">Lädt…</div>
+    </div>`;
+}
+
+function personenHtml(personen: AngemeldetePerson[]): string {
+  if (personen.length === 0) return `<div style="color:#6b7280">Niemand angemeldet</div>`;
+  return `<div style="display:flex;flex-wrap:wrap;gap:6px">${personen
+    .map(
+      (p) => `
+        <div style="display:flex;flex-direction:column;align-items:center;width:56px">
+          ${
+            p.fotoUrl
+              ? `<img src="${p.fotoUrl}" alt="" style="width:40px;height:40px;border-radius:9999px;object-fit:cover;border:1px solid #e6e1d5" />`
+              : `<div style="width:40px;height:40px;border-radius:9999px;background:#f1efe8;border:1px solid #e6e1d5"></div>`
+          }
+          <div style="font-size:10px;text-align:center;line-height:1.2;margin-top:2px">${p.vorname} ${p.name}</div>
+        </div>`
+    )
+    .join("")}</div>`;
+}
+
+export default function ErnteMaschinenKarte({ maschinen }: { maschinen: MaschineLive[] }) {
+  const containerRef = useRef<HTMLDivElement>(null);
+  const mapRef = useRef<maplibregl.Map | null>(null);
+  const markersRef = useRef<Map<number, maplibregl.Marker>>(new Map());
+  const [bereit, setBereit] = useState(false);
+
+  useEffect(() => {
+    if (!containerRef.current) return;
+    const map = new maplibregl.Map({
+      container: containerRef.current,
+      style: {
+        version: 8,
+        sources: {
+          osm: {
+            type: "raster",
+            tiles: ["https://tile.openstreetmap.org/{z}/{x}/{y}.png"],
+            tileSize: 256,
+            attribution: "© OpenStreetMap-Mitwirkende",
+          },
+        },
+        layers: [{ id: "osm", type: "raster", source: "osm" }],
+      },
+      center: [8.6, 49.85],
+      zoom: 13,
+    });
+    mapRef.current = map;
+    map.addControl(new maplibregl.NavigationControl(), "top-right");
+
+    map.on("load", () => {
+      map.addSource("satellit", {
+        type: "raster",
+        tiles: [
+          "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
+        ],
+        tileSize: 256,
+        attribution: "© Esri, Maxar, Earthstar Geographics",
+      });
+      map.addLayer(
+        { id: "satellit", type: "raster", source: "satellit", layout: { visibility: "none" } },
+        "osm"
+      );
+      map.addControl(new BasiskartenControl(), "top-right");
+      setBereit(true);
+    });
+
+    return () => {
+      map.remove();
+      mapRef.current = null;
+      setBereit(false);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !bereit) return;
+
+    const mitPosition = maschinen.filter((m) => m.lat != null && m.lng != null);
+    const behalten = new Set<number>();
+
+    for (const m of mitPosition) {
+      behalten.add(m.maschine_id);
+      const farbe = ampel(minutenHer(m.position_zeitpunkt));
+
+      let marker = markersRef.current.get(m.maschine_id);
+      let el: HTMLDivElement;
+      if (!marker) {
+        el = document.createElement("div");
+        el.style.cursor = "pointer";
+        marker = new maplibregl.Marker({ element: el, anchor: "center" }).setLngLat([
+          m.lng!,
+          m.lat!,
+        ]);
+        const popup = new maplibregl.Popup({ offset: 14, maxWidth: "240px" });
+        marker.setPopup(popup);
+        popup.on("open", () => {
+          void ladeAngemeldetePersonen(m.maschine_id).then((personen) => {
+            const el2 = popup.getElement()?.querySelector("[data-personen]");
+            if (el2) el2.outerHTML = `<div data-personen>${personenHtml(personen)}</div>`;
+          });
+        });
+        marker.addTo(map);
+        markersRef.current.set(m.maschine_id, marker);
+      } else {
+        el = marker.getElement() as HTMLDivElement;
+        marker.setLngLat([m.lng!, m.lat!]);
+      }
+
+      el.innerHTML = `
+        <div style="width:16px;height:16px;border-radius:9999px;background:${farbe};border:2px solid #fff;box-shadow:0 0 0 1px rgba(0,0,0,.3)"></div>
+        <div style="position:absolute;left:22px;top:50%;transform:translateY(-50%);background:#fff;border:1px solid #e6e1d5;border-radius:6px;padding:1px 5px;font:600 11px/1.3 system-ui;box-shadow:0 1px 2px rgba(0,0,0,.15);white-space:nowrap">${
+          m.bezeichnung || m.nummer
+        }${m.max_personen > 1 ? ` · ${m.aktive_personen}/${m.max_personen}` : ""}</div>`;
+
+      // Waehrend ein Popup offen ist, dessen Inhalt nicht per Refresh
+      // ueberschreiben - sonst faellt die schon nachgeladene Personen-Liste
+      // zurueck auf "Laedt...", weil das "open"-Ereignis nur einmal feuert.
+      const popup = marker.getPopup();
+      if (popup && !popup.isOpen()) {
+        popup.setHTML(popupHtmlGeruest(m));
+      }
+    }
+
+    markersRef.current.forEach((marker, id) => {
+      if (!behalten.has(id)) {
+        marker.remove();
+        markersRef.current.delete(id);
+      }
+    });
+
+    if (mitPosition.length > 0) {
+      const b = new maplibregl.LngLatBounds();
+      mitPosition.forEach((m) => b.extend([m.lng!, m.lat!]));
+      map.fitBounds(b, { padding: 60, maxZoom: 16, duration: 0 });
+    }
+  }, [maschinen, bereit]);
+
+  return (
+    <div
+      ref={containerRef}
+      className="h-[60vh] w-full overflow-hidden rounded-lg border border-linie"
+    />
+  );
+}
