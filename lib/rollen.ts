@@ -126,6 +126,17 @@ export const MENUE_RECHTE: Record<string, UserRole[]> = {
     "management",
     "erntewirtschaft",
   ],
+  // Wer die Flotten-Überblicksseite (Karte) unter /erntewirtschaft selbst
+  // sieht statt dorthin weitergeleitet zu werden - 1:1 wie
+  // ernte_kiste_zyklus_select (lohnabrechnung bleibt beim bisherigen
+  // Redirect zu praemien/zuckermais, siehe app/erntewirtschaft/page.tsx).
+  "/erntewirtschaft/ueberblick": [
+    "admin",
+    "hr",
+    "zeiterfassung",
+    "management",
+    "erntewirtschaft",
+  ],
   "/praemien/zuckermais": [
     "admin",
     "hr",

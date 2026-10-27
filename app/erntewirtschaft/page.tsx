@@ -19,28 +19,17 @@ import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Sprout } from "lucide-react";
 import PageHeader from "@/components/PageHeader";
+import ErntewirtschaftTabs from "@/components/ErntewirtschaftTabs";
 import ErnteMaschinenKarte, { type MaschineLive } from "@/components/ErnteMaschinenKarte";
 import { getSupabaseClient } from "@/lib/supabase/client";
 import { useProfile } from "@/lib/useProfile";
 import { MENUE_RECHTE } from "@/lib/rollen";
-import type { UserRole } from "@/lib/types";
 
 const BEREICHE: [string, string][] = [
   ["/praemien/zuckermais", "/praemien/zuckermais"],
   ["/anbau/erdbeeren", "/anbau/erdbeeren"],
   ["/statistik/zuckermais", "/statistik/zuckermais"],
   ["/erntewirtschaft/waage", "/erntewirtschaft/waage"],
-];
-
-// Identisch zur ernte_kiste_zyklus_select-RLS-Policy (migration_2026-10-20_
-// erntewirtschaft_kisten_zyklus.sql) - wer die Kisten-Zyklen nicht lesen
-// darf, sieht auch keine Flotten-Karte, die darauf aufbaut.
-const SIEHT_UEBERBLICK: UserRole[] = [
-  "admin",
-  "hr",
-  "management",
-  "erntewirtschaft",
-  "zeiterfassung",
 ];
 
 const AKTUALISIERUNG_MS = 15_000;
@@ -84,6 +73,7 @@ function FlottenUeberblick() {
 
   return (
     <div className="flex flex-col gap-4">
+      <ErntewirtschaftTabs />
       <PageHeader
         icon={Sprout}
         titel="Erntewirtschaft"
@@ -108,7 +98,8 @@ export default function ErntewirtschaftPage() {
   const { loading, profile } = useProfile();
 
   if (loading) return <p className="p-4 text-sm text-neutral-500">Lädt…</p>;
-  if (profile?.role && SIEHT_UEBERBLICK.includes(profile.role)) {
+  const sichtRollen = MENUE_RECHTE["/erntewirtschaft/ueberblick"] ?? [];
+  if (profile?.role && sichtRollen.includes(profile.role)) {
     return <FlottenUeberblick />;
   }
   return <UeberblickRedirect />;

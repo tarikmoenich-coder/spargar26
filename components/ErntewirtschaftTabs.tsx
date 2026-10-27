@@ -13,7 +13,15 @@ import { useProfile } from "@/lib/useProfile";
 import { MENUE_RECHTE } from "@/lib/rollen";
 import type { UserRole } from "@/lib/types";
 
-type BereichKey = "praemien" | "anbau" | "statistik" | "qualitaet" | "ernte" | "ausweise" | "waage";
+type BereichKey =
+  | "ueberblick"
+  | "praemien"
+  | "anbau"
+  | "statistik"
+  | "qualitaet"
+  | "ernte"
+  | "ausweise"
+  | "waage";
 
 const BEREICHE: {
   key: BereichKey;
@@ -94,6 +102,18 @@ const BEREICHE: {
     href: "/erntewirtschaft/waage",
     prefix: "/erntewirtschaft/waage",
     rechteKey: "/erntewirtschaft/waage",
+    unter: [],
+  },
+  // Muss NACH "ernte"/"ausweise"/"waage" stehen: deren Pfade beginnen
+  // ebenfalls mit "/erntewirtschaft", die erste Übereinstimmung in
+  // Array-Reihenfolge gewinnt (siehe "aktiv" unten) - sonst würde "ernte"
+  // etc. nie als aktiver Reiter erkannt.
+  {
+    key: "ueberblick",
+    label: "Überblick",
+    href: "/erntewirtschaft",
+    prefix: "/erntewirtschaft",
+    rechteKey: "/erntewirtschaft/ueberblick",
     unter: [],
   },
 ];
