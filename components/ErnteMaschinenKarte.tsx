@@ -189,6 +189,10 @@ export default function ErnteMaschinenKarte({
   const mapRef = useRef<maplibregl.Map | null>(null);
   const markersRef = useRef<Map<number, maplibregl.Marker>>(new Map());
   const feldLabelMarkersRef = useRef<maplibregl.Marker[]>([]);
+  // Nur beim allerersten Laden mit Positionsdaten auf die Flotte zoomen -
+  // sonst wuerde jeder 15s-Refresh (Nutzer-Meldung 2026-10-28) den
+  // Kartenausschnitt zuruecksetzen, waehrend man gerade selbst navigiert.
+  const autoGezoomtRef = useRef(false);
   const [bereit, setBereit] = useState(false);
 
   useEffect(() => {
@@ -317,7 +321,8 @@ export default function ErnteMaschinenKarte({
       }
     });
 
-    if (mitPosition.length > 0) {
+    if (!autoGezoomtRef.current && mitPosition.length > 0) {
+      autoGezoomtRef.current = true;
       const b = new maplibregl.LngLatBounds();
       mitPosition.forEach((m) => b.extend([m.lng!, m.lat!]));
       map.fitBounds(b, { padding: 60, maxZoom: 16, duration: 0 });
