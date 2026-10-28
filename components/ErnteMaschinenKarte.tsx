@@ -17,6 +17,7 @@ import maplibregl from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
 import { getSupabaseClient } from "@/lib/supabase/client";
 import { formatMenge } from "@/lib/format";
+import type { FeldGeojson } from "@/lib/types";
 
 class BasiskartenControl implements maplibregl.IControl {
   private map?: maplibregl.Map;
@@ -79,6 +80,23 @@ function ampel(min: number | null): string {
   if (min === null || min >= OFFLINE_ALARM_MIN) return "#9ca3af";
   if (min >= OFFLINE_WARN_MIN) return "#d97706";
   return "#16a34a";
+}
+
+// Label-Punkt für den Feldnamen - bewusst die Mitte der Bounding-Box statt
+// eines echten Flaechenschwerpunkts (keine zusaetzliche Geometrie-Bibliothek
+// noetig, fuer die meist recht kompakten Feldformen eine gute Naeherung).
+// Gleiche Ring-Extraktion wie in components/FeldKarte.tsx ("aussenringe"),
+// bei MultiPolygon ueber alle Teilflaechen hinweg - ein Label je Feld.
+function feldMittelpunkt(geom: GeoJSON.Polygon | GeoJSON.MultiPolygon): [number, number] | null {
+  const aussenringe: GeoJSON.Position[][] =
+    geom.type === "MultiPolygon"
+      ? geom.coordinates.map((polygon) => polygon[0] ?? [])
+      : [geom.coordinates?.[0] ?? []];
+  const alle = aussenringe.flat();
+  if (alle.length === 0) return null;
+  const lngs = alle.map((p) => p[0]);
+  const lats = alle.map((p) => p[1]);
+  return [(Math.min(...lngs) + Math.max(...lngs)) / 2, (Math.min(...lats) + Math.max(...lats)) / 2];
 }
 
 export interface MaschineLive {
@@ -160,10 +178,17 @@ function personenHtml(personen: AngemeldetePerson[]): string {
     .join("")}</div>`;
 }
 
-export default function ErnteMaschinenKarte({ maschinen }: { maschinen: MaschineLive[] }) {
+export default function ErnteMaschinenKarte({
+  maschinen,
+  felder,
+}: {
+  maschinen: MaschineLive[];
+  felder: FeldGeojson[];
+}) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<maplibregl.Map | null>(null);
   const markersRef = useRef<Map<number, maplibregl.Marker>>(new Map());
+  const feldLabelMarkersRef = useRef<maplibregl.Marker[]>([]);
   const [bereit, setBereit] = useState(false);
 
   useEffect(() => {
@@ -201,6 +226,28 @@ export default function ErnteMaschinenKarte({ maschinen }: { maschinen: Maschine
         { id: "satellit", type: "raster", source: "satellit", layout: { visibility: "none" } },
         "osm"
       );
+
+      // Feld-Geometrien aus /anbau/felder (Nutzer-Vorgabe 2026-10-28) - reine
+      // Orientierungsflächen, nicht anklickbar/kein Popup. Der Feldname wird
+      // NICHT per MapLibre-Symbol-Layer gesetzt (bräuchte eine "glyphs"-
+      // Schriftquelle in der Style-Definition, die diese Karte - wie
+      // FahrzeugKarte/FeldKarte auch - bewusst nicht hat), sondern wie die
+      // Maschinen-Labels als einfacher HTML-Marker in der Mitte der Fläche
+      // (siehe feldLabelsRef unten).
+      map.addSource("felder", { type: "geojson", data: { type: "FeatureCollection", features: [] } });
+      map.addLayer({
+        id: "felder-flaeche",
+        type: "fill",
+        source: "felder",
+        paint: { "fill-color": "#2b711e", "fill-opacity": 0.08 },
+      });
+      map.addLayer({
+        id: "felder-rand",
+        type: "line",
+        source: "felder",
+        paint: { "line-color": "#2b711e", "line-width": 1.5, "line-opacity": 0.6 },
+      });
+
       map.addControl(new BasiskartenControl(), "top-right");
       setBereit(true);
     });
@@ -276,6 +323,43 @@ export default function ErnteMaschinenKarte({ maschinen }: { maschinen: Maschine
       map.fitBounds(b, { padding: 60, maxZoom: 16, duration: 0 });
     }
   }, [maschinen, bereit]);
+
+  // Feld-Geometrien + Namens-Label in der Mitte jeder Fläche.
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !bereit) return;
+    const quelle = map.getSource("felder") as maplibregl.GeoJSONSource | undefined;
+    if (!quelle) return;
+
+    feldLabelMarkersRef.current.forEach((m) => m.remove());
+    feldLabelMarkersRef.current = [];
+
+    const features: GeoJSON.Feature[] = [];
+    for (const f of felder) {
+      if (!f.geometrie_geojson) continue;
+      let geom: GeoJSON.Polygon | GeoJSON.MultiPolygon;
+      try {
+        geom = JSON.parse(f.geometrie_geojson);
+      } catch {
+        continue;
+      }
+      features.push({ type: "Feature", geometry: geom, properties: { id: f.id } });
+
+      const mitte = feldMittelpunkt(geom);
+      if (!mitte) continue;
+      const el = document.createElement("div");
+      el.style.pointerEvents = "none";
+      el.style.whiteSpace = "nowrap";
+      el.style.font = "600 11px/1.3 system-ui";
+      el.style.color = "#1f4d16";
+      el.style.textShadow =
+        "0 0 2px #fff, 0 0 2px #fff, 0 0 2px #fff, 0 0 2px #fff";
+      el.textContent = f.bezeichnung;
+      const marker = new maplibregl.Marker({ element: el, anchor: "center" }).setLngLat(mitte).addTo(map);
+      feldLabelMarkersRef.current.push(marker);
+    }
+    quelle.setData({ type: "FeatureCollection", features });
+  }, [felder, bereit]);
 
   return (
     <div

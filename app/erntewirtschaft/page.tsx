@@ -24,6 +24,7 @@ import ErnteMaschinenKarte, { type MaschineLive } from "@/components/ErnteMaschi
 import { getSupabaseClient } from "@/lib/supabase/client";
 import { useProfile } from "@/lib/useProfile";
 import { MENUE_RECHTE } from "@/lib/rollen";
+import type { FeldGeojson } from "@/lib/types";
 
 const BEREICHE: [string, string][] = [
   ["/praemien/zuckermais", "/praemien/zuckermais"],
@@ -53,6 +54,7 @@ function UeberblickRedirect() {
 
 function FlottenUeberblick() {
   const [maschinen, setMaschinen] = useState<MaschineLive[]>([]);
+  const [felder, setFelder] = useState<FeldGeojson[]>([]);
   const [loading, setLoading] = useState(true);
   const [fehler, setFehler] = useState<string | null>(null);
 
@@ -71,6 +73,22 @@ function FlottenUeberblick() {
     return () => clearInterval(intervall);
   }, [laden]);
 
+  // Feld-Geometrien aus /anbau/felder (Nutzer-Vorgabe 2026-10-28) - nur zur
+  // Orientierung auf der Karte, ändern sich kaum, darum einmalig geladen statt
+  // im 15s-Takt wie die Maschinen-Positionen. Nur Spargel/Grünspargel (die
+  // einzigen für die Spargelspinnen-Flotte relevanten Kulturen) - Erdbeeren-
+  // Felder würden hier nur unnötig Linien beitragen.
+  useEffect(() => {
+    (async () => {
+      const { data } = await getSupabaseClient()
+        .from("feld_geojson")
+        .select("*")
+        .eq("aktiv", true)
+        .in("kultur", ["spargel", "gruenspargel"]);
+      setFelder((data as FeldGeojson[]) ?? []);
+    })();
+  }, []);
+
   return (
     <div className="flex flex-col gap-4">
       <ErntewirtschaftTabs />
@@ -88,7 +106,7 @@ function FlottenUeberblick() {
       {loading ? (
         <p className="text-neutral-500">Lädt…</p>
       ) : (
-        <ErnteMaschinenKarte maschinen={maschinen} />
+        <ErnteMaschinenKarte maschinen={maschinen} felder={felder} />
       )}
     </div>
   );
