@@ -36,13 +36,13 @@ export default function LohnTabs() {
   return (
     <div
       ref={ref}
-      className="sticky top-14 z-40 -mt-6 flex gap-4 border-b border-linie bg-sand print:hidden"
+      className="sticky top-14 z-40 -mt-6 flex gap-4 overflow-x-auto border-b border-linie bg-sand [scrollbar-width:thin] sm:flex-wrap sm:overflow-visible print:hidden"
     >
       {tabs.map((tab) => (
         <Link
           key={tab.href}
           href={tab.href}
-          className={`-mb-px border-b-2 pb-2 text-sm ${
+          className={`-mb-px whitespace-nowrap border-b-2 pb-2 text-sm ${
             pathname === tab.href
               ? "border-emerald-700 font-semibold text-emerald-800"
               : "border-transparent text-neutral-600 hover:text-emerald-800"

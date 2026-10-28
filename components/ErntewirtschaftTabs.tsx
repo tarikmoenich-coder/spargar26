@@ -145,7 +145,7 @@ export default function ErntewirtschaftTabs() {
   const aktiv = sichtbar.find((b) => pathname?.startsWith(b.prefix));
 
   const linkCls = (an: boolean) =>
-    `-mb-px border-b-2 pb-2 text-sm ${
+    `-mb-px whitespace-nowrap border-b-2 pb-2 text-sm ${
       an
         ? "border-emerald-700 font-semibold text-emerald-800"
         : "border-transparent text-neutral-600 hover:text-emerald-800"
@@ -156,7 +156,7 @@ export default function ErntewirtschaftTabs() {
       ref={ref}
       className="sticky top-14 z-40 -mt-6 flex flex-col bg-sand print:hidden"
     >
-      <div className="flex gap-4 border-b border-linie">
+      <div className="flex gap-4 overflow-x-auto border-b border-linie [scrollbar-width:thin] sm:flex-wrap sm:overflow-visible">
         {sichtbar.map((b) => (
           <Link key={b.key} href={b.href} className={linkCls(aktiv?.key === b.key)}>
             {b.label}
@@ -164,12 +164,12 @@ export default function ErntewirtschaftTabs() {
         ))}
       </div>
       {aktiv && aktiv.unter.length > 0 && (
-        <div className="flex gap-3 border-b border-linie py-1 pl-1">
+        <div className="flex gap-3 overflow-x-auto border-b border-linie py-1 pl-1 [scrollbar-width:thin] sm:flex-wrap sm:overflow-visible">
           {aktiv.unter.map((u) => (
             <Link
               key={u.href}
               href={u.href}
-              className={`text-xs ${
+              className={`whitespace-nowrap text-xs ${
                 pathname === u.href
                   ? "font-semibold text-emerald-800"
                   : "text-neutral-500 hover:text-emerald-800"
