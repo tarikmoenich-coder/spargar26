@@ -8,8 +8,10 @@
 // gleicher bezeichnung (normalerweise genau eine - zwei nur bei geteilter
 // Sorte im selben Tunnel). Länge/Reihenabstand/Pfl.-pro-lfm/Cotura gelten
 // als physische Eigenschaft des Tunnels und werden beim Bearbeiten auf ALLE
-// Zeilen der Gruppe angewendet; Sorte/Reihenzahl/Standjahr/Pflanztyp sind
-// je Zeile (= je Sorte) eigene Werte.
+// Zeilen der Gruppe angewendet; Sorte/Reihenzahl/Pflanzjahr/Pflanztyp sind
+// je Zeile (= je Sorte) eigene Werte. Das Standjahr für die gewählte Saison
+// wird aus dem Pflanzjahr abgeleitet (Migration 2026-10-31), nicht mehr
+// jährlich von Hand hochgezählt.
 //
 // Pflanzenzahlen und laufende Meter werden gerechnet, nicht getippt -
 // Länge × Reihen × Pflanzen-pro-lfm, wie in der Excel Spalte I (4,37 im
@@ -32,6 +34,13 @@ import {
 import { formatDatumDE, formatZahlDE } from "@/lib/format";
 
 const CURRENT_YEAR = new Date().getFullYear();
+
+// Pflanzjahr ist ein fester Kalenderjahrgang (ändert sich nie) - das
+// Standjahr für eine konkrete Saison wird daraus abgeleitet statt Jahr für
+// Jahr von Hand hochgezählt zu werden (Migration 2026-10-31).
+function berechneStandjahr(pflanzjahr: number, saisonJahr: number): number {
+  return saisonJahr - pflanzjahr + 1;
+}
 
 interface Gruppe {
   bezeichnung: string;
@@ -93,7 +102,7 @@ export default function AnbauErdbeerenPage() {
   const [ziehtIndex, setZiehtIndex] = useState<number | null>(null);
   const [nsSorte, setNsSorte] = useState("");
   const [nsReihen, setNsReihen] = useState("");
-  const [nsStandjahr, setNsStandjahr] = useState("1");
+  const [nsPflanzjahr, setNsPflanzjahr] = useState(String(jahr));
   const [nsPflanztyp, setNsPflanztyp] = useState<Pflanztyp | "">("");
   const [nsPflanzdatum, setNsPflanzdatum] = useState("");
 
@@ -109,7 +118,7 @@ export default function AnbauErdbeerenPage() {
   const [sbVon, setSbVon] = useState("");
   const [sbBis, setSbBis] = useState("");
   const [sbSorte, setSbSorte] = useState("");
-  const [sbStandjahr, setSbStandjahr] = useState("1");
+  const [sbPflanzjahr, setSbPflanzjahr] = useState(String(jahr));
   const [sbPflanztyp, setSbPflanztyp] = useState<Pflanztyp | "">("");
 
   // Tunnel auf anderes Feld verschieben
@@ -256,7 +265,7 @@ export default function AnbauErdbeerenPage() {
       .from("feld_anbau_abschnitt")
       .update({
         sorte: sbSorte.trim(),
-        standjahr: sbStandjahr ? Number(sbStandjahr) : null,
+        pflanzjahr: sbPflanzjahr ? Number(sbPflanzjahr) : null,
         pflanztyp: sbPflanztyp || null,
       })
       .in("id", ids);
@@ -346,7 +355,7 @@ export default function AnbauErdbeerenPage() {
     const gesamt = gruppe.rows[0]?.reihen_anzahl ?? 0;
     const frei = gesamt - belegt;
     setNsReihen(frei > 0 ? String(frei) : "");
-    setNsStandjahr("1");
+    setNsPflanzjahr(String(jahr));
     setNsPflanztyp("");
     setNsPflanzdatum("");
   }
@@ -370,7 +379,7 @@ export default function AnbauErdbeerenPage() {
       position: vorlage.position,
       sorte: nsSorte.trim(),
       reihen_anzahl: nsReihen ? Number(nsReihen) : null,
-      standjahr: nsStandjahr ? Number(nsStandjahr) : null,
+      pflanzjahr: nsPflanzjahr ? Number(nsPflanzjahr) : null,
       pflanztyp: nsPflanztyp || null,
       pflanzdatum: nsPflanzdatum || null,
     });
@@ -382,11 +391,11 @@ export default function AnbauErdbeerenPage() {
 
   async function zeileAendern(
     id: number,
-    feld: "sorte" | "reihen_anzahl" | "standjahr" | "pflanzdatum",
+    feld: "sorte" | "reihen_anzahl" | "pflanzjahr" | "pflanzdatum",
     wert: string
   ) {
     const supabase = getSupabaseClient();
-    const zahlFelder = ["reihen_anzahl", "standjahr"];
+    const zahlFelder = ["reihen_anzahl", "pflanzjahr"];
     const { error } = await supabase
       .from("feld_anbau_abschnitt")
       .update({
@@ -666,12 +675,13 @@ export default function AnbauErdbeerenPage() {
                   className="w-32"
                 />
                 <label>
-                  Standjahr{" "}
+                  Pflanzjahr{" "}
                   <input
                     type="number"
-                    value={sbStandjahr}
-                    onChange={(e) => setSbStandjahr(e.target.value)}
-                    className="w-16"
+                    placeholder="JJJJ"
+                    value={sbPflanzjahr}
+                    onChange={(e) => setSbPflanzjahr(e.target.value)}
+                    className="w-20"
                   />
                 </label>
                 <select
@@ -877,7 +887,7 @@ export default function AnbauErdbeerenPage() {
                               />
                               <span className="text-neutral-500">
                                 R.
-                                {r.standjahr && ` · ${r.standjahr}. Stj.`}
+                                {r.pflanzjahr != null && ` · ${berechneStandjahr(r.pflanzjahr, jahr)}. Stj.`}
                                 {r.pflanztyp && ` · ${PFLANZTYP_LABELS[r.pflanztyp]}`}
                               </span>
                               {canEdit && (
@@ -917,10 +927,10 @@ export default function AnbauErdbeerenPage() {
                                 />
                                 <input
                                   type="number"
-                                  placeholder="Stj."
-                                  value={nsStandjahr}
-                                  onChange={(e) => setNsStandjahr(e.target.value)}
-                                  className="w-14"
+                                  placeholder="Pflanzj."
+                                  value={nsPflanzjahr}
+                                  onChange={(e) => setNsPflanzjahr(e.target.value)}
+                                  className="w-20"
                                 />
                                 <select
                                   value={nsPflanztyp}

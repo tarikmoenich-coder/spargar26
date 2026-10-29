@@ -20,6 +20,13 @@ import { formatMenge, formatZahlDE } from "@/lib/format";
 
 const CURRENT_YEAR = new Date().getFullYear();
 
+// Pflanzjahr ist ein fester Kalenderjahrgang (ändert sich nie) - das
+// Standjahr für eine konkrete Saison wird daraus abgeleitet statt Jahr für
+// Jahr von Hand hochgezählt zu werden (Migration 2026-10-31).
+function berechneStandjahr(pflanzjahr: number, saisonJahr: number): number {
+  return saisonJahr - pflanzjahr + 1;
+}
+
 export default function AnbauSpargelPage() {
   const { profile } = useProfile();
   const canEdit = profile?.role === "admin" || profile?.role === "erntewirtschaft";
@@ -173,11 +180,11 @@ export default function AnbauSpargelPage() {
 
   async function abschnittAendern(
     id: number,
-    feld: "reihen_anzahl" | "reihenlaenge_m" | "reihenabstand_m" | "pflanzen_pro_lfm" | "standjahr" | "pflanzdatum",
+    feld: "reihen_anzahl" | "reihenlaenge_m" | "reihenabstand_m" | "pflanzen_pro_lfm" | "pflanzjahr" | "pflanzdatum",
     wert: string
   ) {
     const supabase = getSupabaseClient();
-    const zahlFelder = ["reihen_anzahl", "reihenlaenge_m", "reihenabstand_m", "pflanzen_pro_lfm", "standjahr"];
+    const zahlFelder = ["reihen_anzahl", "reihenlaenge_m", "reihenabstand_m", "pflanzen_pro_lfm", "pflanzjahr"];
     const { error } = await supabase
       .from("feld_anbau_abschnitt")
       .update({ [feld]: zahlFelder.includes(feld) ? (wert ? Number(wert) : null) : wert || null })
@@ -237,7 +244,7 @@ export default function AnbauSpargelPage() {
 
   async function abschnittHinzufuegen(anbauId: number) {
     const bezeichnung = window.prompt(
-      "Bezeichnung für den zusätzlichen Abschnitt (z.B. bei unterschiedlichem Standjahr auf demselben Feld):",
+      "Bezeichnung für den zusätzlichen Abschnitt (z.B. bei unterschiedlichem Pflanzjahr auf demselben Feld):",
       String((abschnitte[anbauId]?.length ?? 0) + 1)
     );
     if (!bezeichnung) return;
@@ -268,10 +275,12 @@ export default function AnbauSpargelPage() {
         <PageHeader icon={Sprout} titel="Anbauplanung Spargel" />
         <p className="text-sm text-neutral-500">
           Je Feld die Reihen-Daten (Anzahl, Länge, Abstand, Pflanzen je
-          laufendem Meter) und das Standjahr. Netto-Hektarfläche und
-          Pflanzenzahl werden gerechnet. Spargelfelder ändern sich über
-          mehrere Jahre kaum – meist reicht „Aus Vorjahr übernehmen" statt
-          erneuter Eingabe (Standjahr zählt dabei automatisch eins hoch).
+          laufendem Meter) und das Pflanzjahr. Netto-Hektarfläche und
+          Pflanzenzahl werden gerechnet, das Standjahr für die gewählte
+          Saison ergibt sich automatisch aus dem Pflanzjahr. Spargelfelder
+          ändern sich über mehrere Jahre kaum – meist reicht „Aus Vorjahr
+          übernehmen" statt erneuter Eingabe (Pflanzjahr bleibt dabei
+          unverändert).
         </p>
       </div>
 
@@ -291,7 +300,7 @@ export default function AnbauSpargelPage() {
             className="btn-secondary text-xs"
             onClick={vorjahrUebernehmen}
             disabled={laeuft}
-            title={`Felder + Reihen-Daten aus ${jahr - 1} übernehmen, Standjahr +1`}
+            title={`Felder + Reihen-Daten aus ${jahr - 1} übernehmen (Pflanzjahr bleibt unverändert)`}
           >
             Aus {jahr - 1} übernehmen
           </button>
@@ -326,7 +335,9 @@ export default function AnbauSpargelPage() {
                 </th>
                 <th title="Abstand zwischen den Reihen - treibt die Netto-Hektarfläche">Abstand m</th>
                 <th title="Pflanzen je laufendem Meter (optional)">Pfl./lfm</th>
-                <th>Standjahr</th>
+                <th title="Tatsächliches Pflanzjahr - das Standjahr für die gewählte Saison wird daraus berechnet">
+                  Pflanzjahr
+                </th>
                 <th title="Aus der echten Geometrie (ST_Area), unabhängig von der Reihen-Planung">
                   Brutto ha
                 </th>
@@ -444,11 +455,15 @@ export default function AnbauSpargelPage() {
                           <td>
                             <input
                               type="number"
-                              defaultValue={a.standjahr ?? ""}
+                              placeholder="JJJJ"
+                              defaultValue={a.pflanzjahr ?? ""}
                               disabled={!canEdit}
-                              className="w-16"
-                              onBlur={(e) => abschnittAendern(a.id, "standjahr", e.target.value)}
+                              className="w-20"
+                              onBlur={(e) => abschnittAendern(a.id, "pflanzjahr", e.target.value)}
                             />
+                            {a.pflanzjahr != null && (
+                              <div className="text-xs text-neutral-400">{berechneStandjahr(a.pflanzjahr, jahr)}. Stj.</div>
+                            )}
                           </td>
                           {i === 0 ? (
                             <>
@@ -488,7 +503,7 @@ export default function AnbauSpargelPage() {
                                   type="button"
                                   className="text-xs text-emerald-700 underline"
                                   onClick={() => abschnittHinzufuegen(u.anbau_id)}
-                                  title="Weiteren Abschnitt anlegen (z.B. bei unterschiedlichem Standjahr auf demselben Feld)"
+                                  title="Weiteren Abschnitt anlegen (z.B. bei unterschiedlichem Pflanzjahr auf demselben Feld)"
                                 >
                                   + Abschnitt
                                 </button>

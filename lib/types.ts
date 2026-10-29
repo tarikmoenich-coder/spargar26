@@ -1256,7 +1256,12 @@ export interface FeldAnbauAbschnitt {
   pflanzen_pro_lfm: number | null;
   sorte: string | null;
   pflanzdatum: string | null;
-  standjahr: number | null;
+  // Tatsächliches Pflanzjahr (fester Kalenderjahrgang, z.B. 2023) - ändert
+  // sich nie. Das Standjahr für eine Saison wird daraus abgeleitet
+  // (saison_jahr - pflanzjahr + 1), siehe berechneStandjahr() in den
+  // Anbau-Seiten (Migration 2026-10-31, vorher: standjahr als jährlich von
+  // Hand hochgezählter Wert).
+  pflanzjahr: number | null;
   pflanztyp: Pflanztyp | null;
   cotura_nr: string | null;
   position: number | null;
