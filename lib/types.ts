@@ -1262,9 +1262,11 @@ export interface FeldAnbauAbschnitt {
   position: number | null;
   notiz: string | null;
   // Geometrisch berechnete Reihen (Migration 2026-10-29) - aus der echten
-  // Feldkontur + einer eingezeichneten Ausrichtungslinie. Bei rein manuell
-  // gepflegten Abschnitten bleiben alle vier null.
+  // Feldkontur + der eingezeichneten ersten und letzten Reihe (Migration
+  // 2026-10-31, vorher: einer Ausrichtungslinie + pauschalem Randabstand).
+  // Bei rein manuell gepflegten Abschnitten bleiben alle null.
   ausrichtungslinie_geojson: string | null;
+  ausrichtungslinie_letzte_geojson: string | null;
   reihenlaenge_min_m: number | null;
   reihenlaenge_max_m: number | null;
   laufmeter_gesamt_m: number | null;

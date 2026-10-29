@@ -1,11 +1,19 @@
 "use client";
 
-// Werkzeug zum Einzeichnen einer "Ausrichtungslinie" (Position + Richtung
-// EINER Spargel-Reihe) auf der echten Feldkontur und zum serverseitigen
-// Berechnen aller dazu parallelen Reihen (RPC
+// Werkzeug zum Einzeichnen der ERSTEN und LETZTEN Spargel-Reihe eines
+// Abschnitts (jeweils exakt auf der echten Reihe) und zum serverseitigen
+// Berechnen aller dazwischenliegenden, parallelen Reihen (RPC
 // feld_reihen_aus_ausrichtung_berechnen) - liefert exakte Reihenzahl,
 // Laufmeter gesamt und Reihenlänge Min/Max/Ø aus der echten, auch unförmigen
-// Geometrie statt einer groben Schätzung (Nutzer-Vorgabe 2026-10-29).
+// Geometrie statt einer groben Schätzung.
+//
+// Nutzer-Vorgabe 2026-10-31: statt EINER Ausrichtungslinie + einem pauschalen
+// 3m-Randabstand (der bei unförmigen Konturen mal zu viel, mal zu wenig
+// abschnitt) zeichnet der Nutzer die erste UND die letzte echte Reihe von
+// Hand nach - die Reihenzahl ergibt sich dann aus dem Abstand zwischen
+// beiden Linien geteilt durch den Reihenabstand, die Zwischen-Reihen liegen
+// exakt gleichmäßig dazwischen. Robust, weil beide Außengrenzen echte,
+// nachgezeichnete Reihen sind statt einer geschätzten Marge.
 //
 // Eigene, schlanke Kopie der Kartenbausteine aus components/FeldKarte.tsx
 // (OSM/Satellit-Umschalter, Klick-für-Klick-Zeichnen) - bewusst dupliziert
@@ -55,7 +63,8 @@ export interface ReihenErgebnis {
   laengeMax: number;
   laengeAvg: number;
   laufmeterGesamt: number;
-  linieGeojson: string;
+  linieErsteGeojson: string;
+  linieLetzteGeojson: string;
   versatzM: number;
 }
 
@@ -63,7 +72,8 @@ export interface ReihenAusrichtungKarteProps {
   feldId: number;
   feldGeometrieGeojson: string | null;
   reihenabstandM: number | null;
-  bestehendeLinieGeojson?: string | null;
+  bestehendeErsteLinieGeojson?: string | null;
+  bestehendeLetzteLinieGeojson?: string | null;
   /** Zuletzt übernommener seitlicher Versatz (10cm-Schritte) - beim
    *  erneuten Öffnen voreingestellt, damit nicht wieder bei 0 begonnen wird. */
   bestehenderVersatzM?: number;
@@ -78,39 +88,66 @@ function aussenringe(geom: GeoJSON.Polygon | GeoJSON.MultiPolygon): GeoJSON.Posi
     : [geom.coordinates?.[0] ?? []];
 }
 
+type ZeichnenModus = "erste" | "letzte" | null;
+
 export default function ReihenAusrichtungKarte({
   feldId,
   feldGeometrieGeojson,
   reihenabstandM,
-  bestehendeLinieGeojson,
+  bestehendeErsteLinieGeojson,
+  bestehendeLetzteLinieGeojson,
   bestehenderVersatzM,
   onUebernehmen,
 }: ReihenAusrichtungKarteProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<maplibregl.Map | null>(null);
   const [bereit, setBereit] = useState(false);
-  const [zeichnen, setZeichnen] = useState(false);
-  const [punkte, setPunkte] = useState<[number, number][]>([]);
-  const zeichnenRef = useRef(false);
-  const punkteRef = useRef<[number, number][]>([]);
-  const [linie, setLinie] = useState<string | null>(bestehendeLinieGeojson ?? null);
+  const [zeichnenModus, setZeichnenModus] = useState<ZeichnenModus>(null);
+  const zeichnenModusRef = useRef<ZeichnenModus>(null);
+  const [punkteErste, setPunkteErste] = useState<[number, number][]>([]);
+  const punkteErsteRef = useRef<[number, number][]>([]);
+  const [punkteLetzte, setPunkteLetzte] = useState<[number, number][]>([]);
+  const punkteLetzteRef = useRef<[number, number][]>([]);
   const [versatz, setVersatz] = useState(bestehenderVersatzM ?? 0);
   const [teilstuecke, setTeilstuecke] = useState<FeldReihenTeilstueck[]>([]);
   const [laeuft, setLaeuft] = useState(false);
   const [fehler, setFehler] = useState<string | null>(null);
 
-  // Beim Öffnen mit einer schon gespeicherten Ausrichtungslinie direkt die
-  // zuletzt berechneten Reihen (inkl. Versatz) anzeigen, statt den Nutzer
-  // zum erneuten Zeichnen zu zwingen.
   useEffect(() => {
-    if (!bestehendeLinieGeojson) return;
+    zeichnenModusRef.current = zeichnenModus;
+  }, [zeichnenModus]);
+  useEffect(() => {
+    punkteErsteRef.current = punkteErste;
+  }, [punkteErste]);
+  useEffect(() => {
+    punkteLetzteRef.current = punkteLetzte;
+  }, [punkteLetzte]);
+
+  // Beim Öffnen mit schon gespeicherten Linien direkt die zuletzt
+  // berechneten Reihen (inkl. Versatz) anzeigen, statt den Nutzer zum
+  // erneuten Zeichnen zu zwingen. Ist nur die erste Linie vorhanden (ältere,
+  // vor dieser Umstellung berechnete Abschnitte), wird nur sie vorbelegt -
+  // der Nutzer zeichnet dann nur noch die letzte Reihe neu.
+  useEffect(() => {
     try {
-      const geom = JSON.parse(bestehendeLinieGeojson) as GeoJSON.LineString;
-      const pkte = geom.coordinates as [number, number][];
-      if (pkte.length === 2) {
-        setPunkte(pkte);
-        punkteRef.current = pkte;
-        berechnenMit(pkte, bestehenderVersatzM ?? 0);
+      if (bestehendeErsteLinieGeojson) {
+        const geomA = JSON.parse(bestehendeErsteLinieGeojson) as GeoJSON.LineString;
+        const pktA = geomA.coordinates as [number, number][];
+        if (pktA.length === 2) {
+          setPunkteErste(pktA);
+          punkteErsteRef.current = pktA;
+        }
+      }
+      if (bestehendeLetzteLinieGeojson) {
+        const geomB = JSON.parse(bestehendeLetzteLinieGeojson) as GeoJSON.LineString;
+        const pktB = geomB.coordinates as [number, number][];
+        if (pktB.length === 2) {
+          setPunkteLetzte(pktB);
+          punkteLetzteRef.current = pktB;
+        }
+      }
+      if (punkteErsteRef.current.length === 2 && punkteLetzteRef.current.length === 2) {
+        berechnenMit(punkteErsteRef.current, punkteLetzteRef.current, bestehenderVersatzM ?? 0);
       }
     } catch {
       // ungültiges/leeres GeoJSON - ignorieren, Nutzer zeichnet neu.
@@ -119,13 +156,6 @@ export default function ReihenAusrichtungKarte({
     // jeder Prop-Änderung erneut.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
-
-  useEffect(() => {
-    zeichnenRef.current = zeichnen;
-  }, [zeichnen]);
-  useEffect(() => {
-    punkteRef.current = punkte;
-  }, [punkte]);
 
   // Karte einmalig aufbauen - 1:1 Muster aus FeldKarte.tsx.
   useEffect(() => {
@@ -187,54 +217,65 @@ export default function ReihenAusrichtungKarte({
         paint: { "line-color": "#15803d", "line-width": 2 },
       });
 
-      // Laufender Linien-Entwurf - rot, gestrichelt (gleiches Muster wie
-      // FeldKarte's Polygon-Entwurf, hier als Linie statt Fläche).
-      map.addSource("entwurf-linie", {
+      // Erste Reihe - blau gestrichelt (auch als Referenz beim erneuten
+      // Öffnen, siehe Mount-Effekt oben).
+      map.addSource("linie-erste", {
         type: "geojson",
         data: { type: "Feature", geometry: { type: "LineString", coordinates: [] }, properties: {} },
       });
       map.addLayer({
-        id: "entwurf-linie",
+        id: "linie-erste",
         type: "line",
-        source: "entwurf-linie",
-        paint: { "line-color": "#d6262a", "line-width": 2, "line-dasharray": [2, 1] },
+        source: "linie-erste",
+        paint: { "line-color": "#1d4ed8", "line-width": 2, "line-dasharray": [2, 1] },
       });
-      map.addSource("entwurf-punkte", { type: "geojson", data: { type: "FeatureCollection", features: [] } });
+      map.addSource("punkte-erste", { type: "geojson", data: { type: "FeatureCollection", features: [] } });
       map.addLayer({
-        id: "entwurf-punkte",
+        id: "punkte-erste",
         type: "circle",
-        source: "entwurf-punkte",
-        paint: {
-          "circle-radius": 5,
-          "circle-color": "#d6262a",
-          "circle-stroke-width": 2,
-          "circle-stroke-color": "#fff",
-        },
+        source: "punkte-erste",
+        paint: { "circle-radius": 5, "circle-color": "#1d4ed8", "circle-stroke-width": 2, "circle-stroke-color": "#fff" },
       });
 
-      // Zuletzt gespeicherte Ausrichtungslinie (falls vorhanden) - blau,
-      // nur zur Orientierung beim erneuten Öffnen.
-      map.addSource("gespeicherte-linie", {
+      // Letzte Reihe - orange gestrichelt.
+      map.addSource("linie-letzte", {
         type: "geojson",
-        data: { type: "FeatureCollection", features: [] },
+        data: { type: "Feature", geometry: { type: "LineString", coordinates: [] }, properties: {} },
       });
       map.addLayer({
-        id: "gespeicherte-linie",
+        id: "linie-letzte",
         type: "line",
-        source: "gespeicherte-linie",
-        paint: { "line-color": "#1d4ed8", "line-width": 2, "line-dasharray": [1, 1] },
+        source: "linie-letzte",
+        paint: { "line-color": "#d97706", "line-width": 2, "line-dasharray": [2, 1] },
+      });
+      map.addSource("punkte-letzte", { type: "geojson", data: { type: "FeatureCollection", features: [] } });
+      map.addLayer({
+        id: "punkte-letzte",
+        type: "circle",
+        source: "punkte-letzte",
+        paint: { "circle-radius": 5, "circle-color": "#d97706", "circle-stroke-width": 2, "circle-stroke-color": "#fff" },
       });
 
       map.on("click", (e) => {
-        if (!zeichnenRef.current) return;
-        const neu: [number, number][] = [...punkteRef.current, [e.lngLat.lng, e.lngLat.lat]];
-        punkteRef.current = neu;
-        setPunkte(neu);
-        if (neu.length >= 2) {
-          // Genau 2 Punkte nötig (Position + Richtung EINER Reihe) -
-          // Zeichnen-Modus endet automatisch nach dem zweiten Klick.
-          zeichnenRef.current = false;
-          setZeichnen(false);
+        const modus = zeichnenModusRef.current;
+        if (!modus) return;
+        const punkt: [number, number] = [e.lngLat.lng, e.lngLat.lat];
+        if (modus === "erste") {
+          const neu = [...punkteErsteRef.current, punkt];
+          punkteErsteRef.current = neu;
+          setPunkteErste(neu);
+          if (neu.length >= 2) {
+            zeichnenModusRef.current = null;
+            setZeichnenModus(null);
+          }
+        } else {
+          const neu = [...punkteLetzteRef.current, punkt];
+          punkteLetzteRef.current = neu;
+          setPunkteLetzte(neu);
+          if (neu.length >= 2) {
+            zeichnenModusRef.current = null;
+            setZeichnenModus(null);
+          }
         }
       });
 
@@ -251,8 +292,8 @@ export default function ReihenAusrichtungKarte({
   useEffect(() => {
     const map = mapRef.current;
     if (!map || !bereit) return;
-    map.getCanvas().style.cursor = zeichnen ? "crosshair" : "";
-  }, [zeichnen, bereit]);
+    map.getCanvas().style.cursor = zeichnenModus ? "crosshair" : "";
+  }, [zeichnenModus, bereit]);
 
   // Bestehende Feldkontur anzeigen + draufzoomen.
   useEffect(() => {
@@ -274,37 +315,33 @@ export default function ReihenAusrichtungKarte({
     }
   }, [feldGeometrieGeojson, bereit]);
 
-  // Bereits gespeicherte Ausrichtungslinie (falls vorhanden) zur Orientierung.
+  // Erste Reihe (live beim Zeichnen + als Referenz nach dem Laden).
   useEffect(() => {
     const map = mapRef.current;
     if (!map || !bereit) return;
-    const src = map.getSource("gespeicherte-linie") as maplibregl.GeoJSONSource | undefined;
-    if (!src) return;
-    if (!bestehendeLinieGeojson) {
-      src.setData({ type: "FeatureCollection", features: [] });
-      return;
-    }
-    try {
-      const geom = JSON.parse(bestehendeLinieGeojson) as GeoJSON.LineString;
-      src.setData({ type: "FeatureCollection", features: [{ type: "Feature", geometry: geom, properties: {} }] });
-    } catch {
-      // ignorieren
-    }
-  }, [bestehendeLinieGeojson, bereit]);
-
-  // Laufender Linien-Entwurf.
-  useEffect(() => {
-    const map = mapRef.current;
-    if (!map || !bereit) return;
-    const linieSrc = map.getSource("entwurf-linie") as maplibregl.GeoJSONSource | undefined;
-    const punkteSrc = map.getSource("entwurf-punkte") as maplibregl.GeoJSONSource | undefined;
+    const linieSrc = map.getSource("linie-erste") as maplibregl.GeoJSONSource | undefined;
+    const punkteSrc = map.getSource("punkte-erste") as maplibregl.GeoJSONSource | undefined;
     if (!linieSrc || !punkteSrc) return;
     punkteSrc.setData({
       type: "FeatureCollection",
-      features: punkte.map((p) => ({ type: "Feature", geometry: { type: "Point", coordinates: p }, properties: {} })),
+      features: punkteErste.map((p) => ({ type: "Feature", geometry: { type: "Point", coordinates: p }, properties: {} })),
     });
-    linieSrc.setData({ type: "Feature", geometry: { type: "LineString", coordinates: punkte }, properties: {} });
-  }, [punkte, bereit]);
+    linieSrc.setData({ type: "Feature", geometry: { type: "LineString", coordinates: punkteErste }, properties: {} });
+  }, [punkteErste, bereit]);
+
+  // Letzte Reihe (live beim Zeichnen + als Referenz nach dem Laden).
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !bereit) return;
+    const linieSrc = map.getSource("linie-letzte") as maplibregl.GeoJSONSource | undefined;
+    const punkteSrc = map.getSource("punkte-letzte") as maplibregl.GeoJSONSource | undefined;
+    if (!linieSrc || !punkteSrc) return;
+    punkteSrc.setData({
+      type: "FeatureCollection",
+      features: punkteLetzte.map((p) => ({ type: "Feature", geometry: { type: "Point", coordinates: p }, properties: {} })),
+    });
+    linieSrc.setData({ type: "Feature", geometry: { type: "LineString", coordinates: punkteLetzte }, properties: {} });
+  }, [punkteLetzte, bereit]);
 
   // Berechnete Reihen-Teilstücke auf der Karte.
   useEffect(() => {
@@ -322,30 +359,40 @@ export default function ReihenAusrichtungKarte({
     });
   }, [teilstuecke, bereit]);
 
+  // Kompletter Neustart - beide Linien verwerfen, erste Reihe zuerst.
   function zeichnenStarten() {
-    setZeichnen(true);
-    setPunkte([]);
+    setZeichnenModus("erste");
+    setPunkteErste([]);
+    setPunkteLetzte([]);
     setTeilstuecke([]);
     setVersatz(0);
     setFehler(null);
   }
 
+  function letzteZeichnenStarten() {
+    setZeichnenModus("letzte");
+    setPunkteLetzte([]);
+    setTeilstuecke([]);
+    setFehler(null);
+  }
+
   function zeichnenAbbrechen() {
-    setZeichnen(false);
-    setPunkte([]);
+    if (zeichnenModus === "erste") setPunkteErste([]);
+    else if (zeichnenModus === "letzte") setPunkteLetzte([]);
+    setZeichnenModus(null);
   }
 
   // Zentrale Berechnen-Funktion - sowohl für den ersten "Berechnen"-Klick
-  // nach dem Zeichnen als auch für jeden Pfeiltasten-Versatz-Schritt
-  // (gleiche gezeichnete Linie, nur ein anderer p_versatz_m).
-  async function berechnenMit(linienPunkte: [number, number][], versatzWert: number) {
-    if (linienPunkte.length !== 2 || !reihenabstandM) return;
+  // nach dem Zeichnen beider Linien als auch für jeden Pfeiltasten-Versatz-
+  // Schritt (gleiche gezeichnete Linien, nur ein anderer p_versatz_m).
+  async function berechnenMit(erste: [number, number][], letzte: [number, number][], versatzWert: number) {
+    if (erste.length !== 2 || letzte.length !== 2 || !reihenabstandM) return;
     setLaeuft(true);
     setFehler(null);
-    const linieGeojson = JSON.stringify({ type: "LineString", coordinates: linienPunkte });
     const { data, error } = await getSupabaseClient().rpc("feld_reihen_aus_ausrichtung_berechnen", {
       p_feld_id: feldId,
-      p_linie_geojson: linieGeojson,
+      p_linie_erste_geojson: JSON.stringify({ type: "LineString", coordinates: erste }),
+      p_linie_letzte_geojson: JSON.stringify({ type: "LineString", coordinates: letzte }),
       p_reihenabstand_m: reihenabstandM,
       p_versatz_m: versatzWert,
     });
@@ -356,26 +403,20 @@ export default function ReihenAusrichtungKarte({
     }
     const liste = (data as FeldReihenTeilstueck[]) ?? [];
     if (liste.length === 0) {
-      setFehler("Keine Reihen gefunden - liegt die Linie auf dem Feld, oder wurde zu weit verschoben?");
+      setFehler("Keine Reihen gefunden - liegen beide Linien auf dem Feld, oder wurde zu weit verschoben?");
       return;
     }
-    setLinie(linieGeojson);
     setVersatz(versatzWert);
     setTeilstuecke(liste);
   }
 
   function berechnen() {
-    berechnenMit(punkte, 0);
+    berechnenMit(punkteErste, punkteLetzte, 0);
   }
 
   function versatzAendern(richtung: 1 | -1) {
-    if (!linie) return;
-    try {
-      const geom = JSON.parse(linie) as GeoJSON.LineString;
-      berechnenMit(geom.coordinates as [number, number][], Math.round((versatz + richtung * VERSATZ_SCHRITT_M) * 100) / 100);
-    } catch {
-      // ungültiges linie-JSON sollte nicht vorkommen - ignorieren.
-    }
+    if (punkteErste.length !== 2 || punkteLetzte.length !== 2) return;
+    berechnenMit(punkteErste, punkteLetzte, Math.round((versatz + richtung * VERSATZ_SCHRITT_M) * 100) / 100);
   }
 
   const laengen = teilstuecke.map((t) => t.laenge_m);
@@ -385,14 +426,15 @@ export default function ReihenAusrichtungKarte({
   const laengeMax = laengen.length > 0 ? Math.max(...laengen) : 0;
 
   function uebernehmen() {
-    if (!linie || teilstuecke.length === 0) return;
+    if (punkteErste.length !== 2 || punkteLetzte.length !== 2 || teilstuecke.length === 0) return;
     onUebernehmen({
       reihenAnzahl: teilstuecke.length,
       laengeMin,
       laengeMax,
       laengeAvg,
       laufmeterGesamt,
-      linieGeojson: linie,
+      linieErsteGeojson: JSON.stringify({ type: "LineString", coordinates: punkteErste }),
+      linieLetzteGeojson: JSON.stringify({ type: "LineString", coordinates: punkteLetzte }),
       versatzM: versatz,
     });
   }
@@ -400,22 +442,44 @@ export default function ReihenAusrichtungKarte({
   return (
     <div className="flex flex-col gap-2">
       <div className="flex flex-wrap items-center gap-2 text-sm">
-        {!zeichnen && punkte.length < 2 && (
+        {zeichnenModus === null && punkteErste.length < 2 && (
           <button type="button" className="btn-secondary text-xs" onClick={zeichnenStarten}>
-            📍 Ausrichtungslinie zeichnen
+            📍 Erste Reihe einzeichnen
           </button>
         )}
-        {zeichnen && (
+        {zeichnenModus === "erste" && (
           <>
             <span className="text-xs text-neutral-500">
-              Entlang einer echten Reihe auf die Karte klicken ({punkte.length}/2 Punkte gesetzt).
+              Entlang der <strong>ersten</strong> echten Reihe auf die Karte klicken ({punkteErste.length}/2 Punkte
+              gesetzt).
             </span>
             <button type="button" className="btn-secondary text-xs" onClick={zeichnenAbbrechen}>
               Abbrechen
             </button>
           </>
         )}
-        {!zeichnen && punkte.length === 2 && teilstuecke.length === 0 && (
+        {zeichnenModus === null && punkteErste.length === 2 && punkteLetzte.length < 2 && (
+          <>
+            <button type="button" className="btn-secondary text-xs" onClick={letzteZeichnenStarten}>
+              📍 Letzte Reihe einzeichnen
+            </button>
+            <button type="button" className="btn-secondary text-xs" onClick={zeichnenStarten}>
+              Von vorn
+            </button>
+          </>
+        )}
+        {zeichnenModus === "letzte" && (
+          <>
+            <span className="text-xs text-neutral-500">
+              Entlang der <strong>letzten</strong> echten Reihe auf die Karte klicken ({punkteLetzte.length}/2 Punkte
+              gesetzt).
+            </span>
+            <button type="button" className="btn-secondary text-xs" onClick={zeichnenAbbrechen}>
+              Abbrechen
+            </button>
+          </>
+        )}
+        {zeichnenModus === null && punkteErste.length === 2 && punkteLetzte.length === 2 && teilstuecke.length === 0 && (
           <>
             <button type="button" className="btn text-xs" disabled={laeuft || !reihenabstandM} onClick={berechnen}>
               {laeuft ? "Berechnet…" : "Berechnen"}
@@ -425,12 +489,18 @@ export default function ReihenAusrichtungKarte({
             </button>
           </>
         )}
-        {!zeichnen && teilstuecke.length > 0 && (
+        {zeichnenModus === null && teilstuecke.length > 0 && (
           <button type="button" className="btn-secondary text-xs" onClick={zeichnenStarten}>
             Neu zeichnen
           </button>
         )}
       </div>
+      {teilstuecke.length === 0 && (
+        <p className="text-xs text-neutral-500">
+          Erste (blau) und letzte (orange) echte Reihe exakt nachzeichnen - alle Reihen dazwischen werden im
+          eingetragenen Reihenabstand errechnet, ohne pauschale Randmarge.
+        </p>
+      )}
       {!reihenabstandM && (
         <p className="text-xs text-beere-700">Bitte zuerst einen Reihenabstand für diese Zeile eintragen.</p>
       )}
@@ -450,7 +520,7 @@ export default function ReihenAusrichtungKarte({
               type="button"
               className="btn-secondary px-2 py-0.5 text-xs"
               disabled={laeuft}
-              title="Alle Reihen um 10cm verschieben (z.B. näher zum/weiter vom Nachbarn weg) - die äußerste Reihe verschwindet, sobald der Randabstand unterschritten würde"
+              title="Alle Reihen gemeinsam um 10cm verschieben (z.B. näher zum/weiter vom Nachbarn weg) - Reihen, die dadurch ganz aus dem Feld wandern, verschwinden aus der Liste."
               onClick={() => versatzAendern(-1)}
             >
               ◀
