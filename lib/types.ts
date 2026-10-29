@@ -1261,19 +1261,25 @@ export interface FeldAnbauAbschnitt {
   cotura_nr: string | null;
   position: number | null;
   notiz: string | null;
-  // Geometrisch berechnete Reihen (Migration 2026-10-29) - aus der echten
-  // Feldkontur + der eingezeichneten ersten und letzten Reihe (Migration
-  // 2026-10-31, vorher: einer Ausrichtungslinie + pauschalem Randabstand).
-  // Bei rein manuell gepflegten Abschnitten bleiben alle null.
+  // Geometrisch berechnete Reihen (Migration 2026-10-29, Klick-Auswahl aus
+  // dem ganzen Streifen seit Migration 2026-10-31 statt pauschalem
+  // Randabstand) - aus der echten Feldkontur + einer eingezeichneten
+  // Richtungslinie. Bei rein manuell gepflegten Abschnitten bleiben alle
+  // null.
   ausrichtungslinie_geojson: string | null;
-  ausrichtungslinie_letzte_geojson: string | null;
   reihenlaenge_min_m: number | null;
   reihenlaenge_max_m: number | null;
   laufmeter_gesamt_m: number | null;
-  // Seitlicher Versatz der ganzen Reihenschar relativ zur gezeichneten
-  // Ausrichtungslinie (Migration 2026-10-30, 10cm-Pfeiltasten-Feinjustierung
+  // Seitlicher Versatz des ganzen Streifens relativ zur gezeichneten
+  // Richtungslinie (Migration 2026-10-30, 10cm-Pfeiltasten-Feinjustierung
   // z.B. zum Nachbarn hin/weg) - 0, solange nicht nachjustiert wurde.
   reihen_versatz_m: number;
+  // Per Klick gewählte erste/letzte echte Reihe (reihen_index aus
+  // feld_reihen_aus_ausrichtung_berechnen, Migration 2026-10-31) - grenzen
+  // den übers ganze Feld erzeugten Streifen auf die tatsächlichen Reihen
+  // ein. Null, solange noch keine Auswahl getroffen/übernommen wurde.
+  reihen_erster_index: number | null;
+  reihen_letzter_index: number | null;
 }
 
 // Ein zusammenhängendes Reihen-Teilstück aus

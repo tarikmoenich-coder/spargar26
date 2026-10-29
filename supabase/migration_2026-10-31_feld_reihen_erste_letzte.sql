@@ -1,34 +1,42 @@
 -- ============================================================================
--- Migration 2026-10-31: Erste/letzte Reihe statt Randabstand-Puffer
+-- Migration 2026-10-31: Reihen per Klick-Auswahl aus dem ganzen Streifen
 --
 -- Nutzer-Vorgabe: der pauschale 3m-Randabstand (ST_Buffer, Migration
--- 2026-10-30) war bei unförmigen Feldkonturen mal zu viel, mal zu wenig -
--- robuster: der Nutzer zeichnet die ERSTE und die LETZTE echte Reihe exakt
--- nach (statt nur einer "Ausrichtungslinie" irgendwo auf dem Feld). Die
--- Reihenzahl ergibt sich aus dem Abstand zwischen beiden Linien geteilt
--- durch den Reihenabstand, alle Zwischen-Reihen liegen exakt gleichmäßig
--- dazwischen - keine geschätzte Marge mehr nötig, weil beide Außengrenzen
--- selbst schon echte, nachgezeichnete Reihen sind.
+-- 2026-10-30) war bei unförmigen Feldkonturen mal zu viel, mal zu wenig.
+-- Noch robuster UND einfacher als "erste+letzte Reihe von Hand
+-- nachzeichnen": EINE Richtungslinie zeichnen, daraus automatisch alle
+-- parallelen Reihen übers ganze Feld erzeugen (wie ursprünglich am
+-- 2026-10-29, nur wieder ohne Randabstand), und dann per Mausklick auf der
+-- Karte die erste und letzte ECHTE Reihe auswählen - alles außerhalb dieser
+-- Auswahl entfällt. Der Linien-Versatz (Pfeiltasten) bleibt weiterhin
+-- nutzbar, auch nach der Auswahl.
 --
--- ausrichtungslinie_geojson behält seine Bedeutung (jetzt explizit: erste
--- Reihe), neu dazu kommt ausrichtungslinie_letzte_geojson.
+-- Hält die getroffene Auswahl über zwei Index-Spalten fest (reihen_index aus
+-- der RPC-Rückgabe) statt einer zweiten, von Hand nachgezeichneten Linie.
 --
--- In der Supabase SQL-Konsole ausführen (ein Zug). Alle älteren Signaturen
--- von feld_reihen_aus_ausrichtung_berechnen() werden zuerst explizit
--- gedroppt (gleiches Vorgehen wie bei den vorigen Erweiterungen).
+-- In der Supabase SQL-Konsole ausführen (ein Zug).
 -- ============================================================================
 
 alter table feld_anbau_abschnitt
-  add column if not exists ausrichtungslinie_letzte_geojson text;
+  drop column if exists ausrichtungslinie_letzte_geojson;
 
-drop function if exists feld_reihen_aus_ausrichtung_berechnen(bigint, text, numeric);
-drop function if exists feld_reihen_aus_ausrichtung_berechnen(bigint, text, numeric, numeric);
+alter table feld_anbau_abschnitt
+  add column if not exists reihen_erster_index int,
+  add column if not exists reihen_letzter_index int;
+
+comment on column feld_anbau_abschnitt.reihen_erster_index is
+  'reihen_index (aus feld_reihen_aus_ausrichtung_berechnen) der per Klick gewählten ersten echten Reihe - zusammen mit reihen_letzter_index grenzt das den übers ganze Feld erzeugten Streifen auf die tatsächlich vorhandenen Reihen ein.';
+comment on column feld_anbau_abschnitt.reihen_letzter_index is
+  'Siehe reihen_erster_index - kann kleiner als reihen_erster_index sein, falls in umgekehrter Reihenfolge angeklickt.';
+
+drop function if exists feld_reihen_aus_ausrichtung_berechnen(bigint, text, text, numeric, numeric);
 drop function if exists feld_reihen_aus_ausrichtung_berechnen(bigint, text, numeric, numeric, numeric);
+drop function if exists feld_reihen_aus_ausrichtung_berechnen(bigint, text, numeric, numeric);
+drop function if exists feld_reihen_aus_ausrichtung_berechnen(bigint, text, numeric);
 
 create or replace function feld_reihen_aus_ausrichtung_berechnen(
   p_feld_id bigint,
-  p_linie_erste_geojson text,
-  p_linie_letzte_geojson text,
+  p_linie_geojson text,
   p_reihenabstand_m numeric,
   p_versatz_m numeric default 0
 ) returns table (
@@ -41,30 +49,24 @@ declare
   v_poly_4326 geometry;
   v_utm_srid int;
   v_poly geometry;
-  v_linie_a geometry;
-  v_linie_b geometry;
-  v_dir_a_x double precision;
-  v_dir_a_y double precision;
-  v_dir_b_x double precision;
-  v_dir_b_y double precision;
+  v_linie geometry;
+  v_p1 geometry;
+  v_p2 geometry;
+  v_dx double precision;
+  v_dy double precision;
   v_len double precision;
-  v_dir_x double precision;
-  v_dir_y double precision;
-  v_norm_x double precision;
-  v_norm_y double precision;
-  v_mid_a_x double precision;
-  v_mid_a_y double precision;
-  v_mid_b_x double precision;
-  v_mid_b_y double precision;
-  v_delta double precision;
-  v_n int;
-  v_step double precision;
-  v_env geometry;
-  v_diag double precision;
-  i int;
-  v_s double precision;
+  v_ux double precision;
+  v_uy double precision;
   v_px double precision;
   v_py double precision;
+  v_anchor_x double precision;
+  v_anchor_y double precision;
+  v_env geometry;
+  v_diag double precision;
+  v_max_n int;
+  i int;
+  v_offset_x double precision;
+  v_offset_y double precision;
   v_row_line geometry;
   v_clipped geometry;
   v_dump record;
@@ -80,82 +82,50 @@ begin
   end if;
 
   v_utm_srid := 25800 + floor((ST_X(ST_Centroid(v_poly_4326)) + 180) / 6)::int + 1;
-
-  -- Keine Randabstand-Verkleinerung mehr - die volle, echte Feldkontur dient
-  -- als Zuschnitt für die Reihenlänge, die Reihenzahl kommt allein aus dem
-  -- Abstand zwischen den beiden vom Nutzer gezeichneten Grenz-Reihen.
+  -- Keine Randabstand-Verkleinerung - der ganze, echte Streifen wird erzeugt,
+  -- die Begrenzung passiert ausschließlich über die vom Nutzer per Klick
+  -- gewählten reihen_index-Grenzen (Client-seitig gefiltert).
   v_poly := ST_Transform(v_poly_4326, v_utm_srid);
 
-  v_linie_a := ST_Transform(ST_SetSRID(ST_GeomFromGeoJSON(p_linie_erste_geojson), 4326), v_utm_srid);
-  v_linie_b := ST_Transform(ST_SetSRID(ST_GeomFromGeoJSON(p_linie_letzte_geojson), 4326), v_utm_srid);
+  v_linie := ST_Transform(ST_SetSRID(ST_GeomFromGeoJSON(p_linie_geojson), 4326), v_utm_srid);
 
-  v_dir_a_x := ST_X(ST_EndPoint(v_linie_a)) - ST_X(ST_StartPoint(v_linie_a));
-  v_dir_a_y := ST_Y(ST_EndPoint(v_linie_a)) - ST_Y(ST_StartPoint(v_linie_a));
-  v_len := sqrt(power(v_dir_a_x, 2) + power(v_dir_a_y, 2));
+  v_p1 := ST_StartPoint(v_linie);
+  v_p2 := ST_EndPoint(v_linie);
+  v_dx := ST_X(v_p2) - ST_X(v_p1);
+  v_dy := ST_Y(v_p2) - ST_Y(v_p1);
+  v_len := sqrt(power(v_dx, 2) + power(v_dy, 2));
   if v_len = 0 then
-    raise exception 'Erste Reihen-Linie hat keine Länge.';
+    raise exception 'Richtungslinie hat keine Länge.';
   end if;
-  v_dir_a_x := v_dir_a_x / v_len;
-  v_dir_a_y := v_dir_a_y / v_len;
+  v_ux := v_dx / v_len;
+  v_uy := v_dy / v_len;
+  -- Normale (90° gedreht) - Richtung der parallelen Versätze UND des
+  -- manuellen Nutzer-Versatzes (Pfeiltasten).
+  v_px := -v_uy;
+  v_py := v_ux;
 
-  v_dir_b_x := ST_X(ST_EndPoint(v_linie_b)) - ST_X(ST_StartPoint(v_linie_b));
-  v_dir_b_y := ST_Y(ST_EndPoint(v_linie_b)) - ST_Y(ST_StartPoint(v_linie_b));
-  v_len := sqrt(power(v_dir_b_x, 2) + power(v_dir_b_y, 2));
-  if v_len = 0 then
-    raise exception 'Letzte Reihen-Linie hat keine Länge.';
-  end if;
-  v_dir_b_x := v_dir_b_x / v_len;
-  v_dir_b_y := v_dir_b_y / v_len;
-
-  -- Falls die zweite Linie "rückwärts" geklickt wurde (Klickreihenfolge
-  -- entgegengesetzt zur ersten) - Richtung spiegeln, bevor gemittelt wird,
-  -- sonst würden sich beide Richtungsvektoren beim Mitteln aufheben.
-  if (v_dir_a_x * v_dir_b_x + v_dir_a_y * v_dir_b_y) < 0 then
-    v_dir_b_x := -v_dir_b_x;
-    v_dir_b_y := -v_dir_b_y;
-  end if;
-
-  v_dir_x := v_dir_a_x + v_dir_b_x;
-  v_dir_y := v_dir_a_y + v_dir_b_y;
-  v_len := sqrt(power(v_dir_x, 2) + power(v_dir_y, 2));
-  v_dir_x := v_dir_x / v_len;
-  v_dir_y := v_dir_y / v_len;
-  -- Normale (90° gedreht) - Richtung zwischen den Reihen.
-  v_norm_x := -v_dir_y;
-  v_norm_y := v_dir_x;
-
-  v_mid_a_x := (ST_X(ST_StartPoint(v_linie_a)) + ST_X(ST_EndPoint(v_linie_a))) / 2;
-  v_mid_a_y := (ST_Y(ST_StartPoint(v_linie_a)) + ST_Y(ST_EndPoint(v_linie_a))) / 2;
-  v_mid_b_x := (ST_X(ST_StartPoint(v_linie_b)) + ST_X(ST_EndPoint(v_linie_b))) / 2;
-  v_mid_b_y := (ST_Y(ST_StartPoint(v_linie_b)) + ST_Y(ST_EndPoint(v_linie_b))) / 2;
-
-  -- Signierter Abstand von der ersten zur letzten Reihe entlang der Normalen.
-  v_delta := (v_mid_b_x - v_mid_a_x) * v_norm_x + (v_mid_b_y - v_mid_a_y) * v_norm_y;
-  v_n := round(abs(v_delta) / p_reihenabstand_m)::int;
-  if v_n < 1 then
-    raise exception 'Erste und letzte Reihe liegen zu dicht beieinander (Abstand % m) - bitte die letzte Reihe erneut einzeichnen.',
-      round(abs(v_delta)::numeric, 2);
-  end if;
-  -- Effektiver Reihenabstand: verteilt den echten, gemessenen Gesamtabstand
-  -- gleichmäßig auf v_n Intervalle - reproduziert exakt die beiden
-  -- gezeichneten Grenz-Reihen, statt einen eventuellen Rest auf eine Seite
-  -- zu schlagen.
-  v_step := v_delta / v_n;
+  -- Linien-Mittelpunkt als Anker für Versatz 0, plus den manuellen,
+  -- persistierten Nutzer-Versatz - verschiebt den GANZEN Streifen seitlich,
+  -- ohne die ursprünglich gezeichnete Richtungslinie selbst zu verändern.
+  v_anchor_x := (ST_X(v_p1) + ST_X(v_p2)) / 2 + p_versatz_m * v_px;
+  v_anchor_y := (ST_Y(v_p1) + ST_Y(v_p2)) / 2 + p_versatz_m * v_py;
 
   v_env := ST_Envelope(v_poly);
   v_diag := sqrt(
     power(ST_XMax(v_env) - ST_XMin(v_env), 2) + power(ST_YMax(v_env) - ST_YMin(v_env), 2)
   );
+  -- +2 Reihen Sicherheitsmarge über die berechnete Bounding-Box-Diagonale
+  -- hinaus, falls die Richtungslinie nicht exakt zentral liegt.
+  v_max_n := ceil(v_diag / p_reihenabstand_m)::int + 2;
 
-  for i in 0..v_n loop
-    v_s := i * v_step + p_versatz_m;
-    v_px := v_mid_a_x + v_s * v_norm_x;
-    v_py := v_mid_a_y + v_s * v_norm_y;
+  for i in -v_max_n..v_max_n loop
+    v_offset_x := v_anchor_x + i * p_reihenabstand_m * v_px;
+    v_offset_y := v_anchor_y + i * p_reihenabstand_m * v_py;
 
     v_row_line := ST_SetSRID(
       ST_MakeLine(
-        ST_MakePoint(v_px - v_diag * v_dir_x, v_py - v_diag * v_dir_y),
-        ST_MakePoint(v_px + v_diag * v_dir_x, v_py + v_diag * v_dir_y)
+        ST_MakePoint(v_offset_x - v_diag * v_ux, v_offset_y - v_diag * v_uy),
+        ST_MakePoint(v_offset_x + v_diag * v_ux, v_offset_y + v_diag * v_uy)
       ),
       v_utm_srid
     );
@@ -182,10 +152,10 @@ begin
   return;
 end;
 $$;
-grant execute on function feld_reihen_aus_ausrichtung_berechnen(bigint, text, text, numeric, numeric) to authenticated;
+grant execute on function feld_reihen_aus_ausrichtung_berechnen(bigint, text, numeric, numeric) to authenticated;
 
--- feld_anbau_vorjahr_uebernehmen: zweite Linie mit übernehmen, gleiches
--- Prinzip wie die übrigen geometriebezogenen Spalten.
+-- feld_anbau_vorjahr_uebernehmen: Index-Auswahl statt zweiter Linie mit
+-- übernehmen, gleiches Prinzip wie die übrigen geometriebezogenen Spalten.
 create or replace function feld_anbau_vorjahr_uebernehmen(
   p_saison_jahr int,
   p_quelle_jahr int
@@ -217,18 +187,19 @@ begin
         feld_anbau_id, bezeichnung, reihenlaenge_m, reihen_anzahl,
         reihenabstand_m, pflanzen_pro_lfm, sorte, standjahr, pflanztyp,
         cotura_nr, notiz, position,
-        ausrichtungslinie_geojson, ausrichtungslinie_letzte_geojson,
-        reihenlaenge_min_m, reihenlaenge_max_m,
-        laufmeter_gesamt_m, reihen_versatz_m
+        ausrichtungslinie_geojson, reihenlaenge_min_m, reihenlaenge_max_m,
+        laufmeter_gesamt_m, reihen_versatz_m,
+        reihen_erster_index, reihen_letzter_index
       ) values (
         v_neu_anbau_id, v_alt_ab.bezeichnung, v_alt_ab.reihenlaenge_m,
         v_alt_ab.reihen_anzahl, v_alt_ab.reihenabstand_m,
         v_alt_ab.pflanzen_pro_lfm, v_alt_ab.sorte,
         case when v_alt_ab.standjahr is not null then v_alt_ab.standjahr + 1 end,
         v_alt_ab.pflanztyp, v_alt_ab.cotura_nr, v_alt_ab.notiz, v_alt_ab.position,
-        v_alt_ab.ausrichtungslinie_geojson, v_alt_ab.ausrichtungslinie_letzte_geojson,
-        v_alt_ab.reihenlaenge_min_m, v_alt_ab.reihenlaenge_max_m, v_alt_ab.laufmeter_gesamt_m,
-        v_alt_ab.reihen_versatz_m
+        v_alt_ab.ausrichtungslinie_geojson, v_alt_ab.reihenlaenge_min_m,
+        v_alt_ab.reihenlaenge_max_m, v_alt_ab.laufmeter_gesamt_m,
+        v_alt_ab.reihen_versatz_m,
+        v_alt_ab.reihen_erster_index, v_alt_ab.reihen_letzter_index
       );
     end loop;
 
