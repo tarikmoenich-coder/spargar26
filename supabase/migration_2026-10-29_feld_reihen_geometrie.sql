@@ -123,9 +123,15 @@ begin
     -- Lange Parallel-Linie quer durchs ganze Feld (2x Diagonale in beide
     -- Richtungen ab dem Versatzpunkt) - garantiert volle Abdeckung
     -- unabhängig von der Länge der vom Nutzer gezeichneten Linie.
-    v_row_line := ST_MakeLine(
-      ST_MakePoint(v_offset_x - v_diag * v_ux, v_offset_y - v_diag * v_uy),
-      ST_MakePoint(v_offset_x + v_diag * v_ux, v_offset_y + v_diag * v_uy)
+    -- ST_MakePoint/ST_MakeLine setzen KEINE SRID (bleibt 0) - ohne
+    -- ST_SetSRID hier bricht ST_Intersection gegen v_poly (SRID v_utm_srid)
+    -- mit "mixed SRID geometries" ab (Praxis-Fehler 2026-10-30).
+    v_row_line := ST_SetSRID(
+      ST_MakeLine(
+        ST_MakePoint(v_offset_x - v_diag * v_ux, v_offset_y - v_diag * v_uy),
+        ST_MakePoint(v_offset_x + v_diag * v_ux, v_offset_y + v_diag * v_uy)
+      ),
+      v_utm_srid
     );
 
     v_clipped := ST_Intersection(v_row_line, v_poly);
