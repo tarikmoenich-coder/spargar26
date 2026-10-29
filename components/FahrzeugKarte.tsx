@@ -5,38 +5,47 @@ import maplibregl from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
 import type { FahrzeugUebersicht } from "@/lib/types";
 
-// Umschalter Straßenkarte (Standard) <-> Satellit. Kein API-Key: OSM-Raster
-// + Esri World Imagery, wie im Pachtwesen-Modul.
+// Umschalter Straßenkarte (Standard) <-> Satellit <-> amtliches Hessen-
+// Luftbild. Kein API-Key: OSM-Raster + Esri World Imagery + Hessen-DOP
+// (HVBG, Open Data) - letzteres oft aktueller als Esri (Nutzer-Anfrage
+// 2026-10-31).
+const KARTEN = [
+  { id: "osm", icon: "🗺️", titel: "OpenStreetMap" },
+  { id: "satellit", icon: "🛰️", titel: "Satellit (Esri, oft 1-3 Jahre alt)" },
+  { id: "hessen-dop", icon: "📷", titel: "Luftbild Hessen (HVBG, meist aktueller)" },
+] as const;
+
 class BasiskartenControl implements maplibregl.IControl {
   private map?: maplibregl.Map;
   private container?: HTMLDivElement;
-  private satellitAktiv = false;
+  private button?: HTMLButtonElement;
+  private index = 0; // Start: OpenStreetMap (bisheriges Verhalten).
 
   onAdd(map: maplibregl.Map) {
     this.map = map;
     this.container = document.createElement("div");
     this.container.className = "maplibregl-ctrl maplibregl-ctrl-group";
-    const button = document.createElement("button");
-    button.type = "button";
-    button.title = "Zwischen Karte und Satellit wechseln";
-    button.style.fontSize = "16px";
-    button.textContent = "🛰️";
-    button.onclick = () => {
-      this.satellitAktiv = !this.satellitAktiv;
-      this.map?.setLayoutProperty(
-        "satellit",
-        "visibility",
-        this.satellitAktiv ? "visible" : "none"
-      );
-      this.map?.setLayoutProperty(
-        "osm",
-        "visibility",
-        this.satellitAktiv ? "none" : "visible"
-      );
-      button.textContent = this.satellitAktiv ? "🗺️" : "🛰️";
+    this.button = document.createElement("button");
+    this.button.type = "button";
+    this.button.style.fontSize = "16px";
+    this.button.onclick = () => {
+      this.index = (this.index + 1) % KARTEN.length;
+      KARTEN.forEach((k, i) => {
+        this.map?.setLayoutProperty(k.id, "visibility", i === this.index ? "visible" : "none");
+      });
+      this.beschriften();
     };
-    this.container.appendChild(button);
+    this.beschriften();
+    this.container.appendChild(this.button);
     return this.container;
+  }
+
+  private beschriften() {
+    if (!this.button) return;
+    const aktuell = KARTEN[this.index];
+    const naechste = KARTEN[(this.index + 1) % KARTEN.length];
+    this.button.textContent = naechste.icon;
+    this.button.title = `Kartenhintergrund: ${aktuell.titel} - Klicken für ${naechste.titel}`;
   }
 
   onRemove() {
@@ -393,6 +402,23 @@ export default function FahrzeugKarte({
         { id: "satellit", type: "raster", source: "satellit", layout: { visibility: "none" } },
         "osm"
       );
+
+      // Amtliches Luftbild Hessen (DOP20, HVBG/Geoportal Hessen) - Open Data,
+      // für Hessen meist aktueller als Esri. WMS-GetMap als Tile-Quelle über
+      // den {bbox-epsg-3857}-Platzhalter (von MapLibre unterstützt).
+      map.addSource("hessen-dop", {
+        type: "raster",
+        tiles: [
+          "https://gds-srv.hessen.de/cgi-bin/lika-services/ogc-free-images.ows?SERVICE=WMS&VERSION=1.3.0&REQUEST=GetMap&LAYERS=he_dop20_rgb&STYLES=&CRS=EPSG:3857&WIDTH=256&HEIGHT=256&FORMAT=image/jpeg&TRANSPARENT=FALSE&BBOX={bbox-epsg-3857}",
+        ],
+        tileSize: 256,
+        attribution: "Geobasisdaten © Hessische Verwaltung für Bodenmanagement und Geoinformation (HVBG)",
+      });
+      map.addLayer(
+        { id: "hessen-dop", type: "raster", source: "hessen-dop", layout: { visibility: "none" } },
+        "osm"
+      );
+
       map.addControl(new BasiskartenControl(), "top-right");
 
       map.addSource("geofences", {
