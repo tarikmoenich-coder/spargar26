@@ -56,6 +56,7 @@ export interface ReihenErgebnis {
   laengeAvg: number;
   laufmeterGesamt: number;
   linieGeojson: string;
+  versatzM: number;
 }
 
 export interface ReihenAusrichtungKarteProps {
@@ -63,8 +64,13 @@ export interface ReihenAusrichtungKarteProps {
   feldGeometrieGeojson: string | null;
   reihenabstandM: number | null;
   bestehendeLinieGeojson?: string | null;
+  /** Zuletzt übernommener seitlicher Versatz (10cm-Schritte) - beim
+   *  erneuten Öffnen voreingestellt, damit nicht wieder bei 0 begonnen wird. */
+  bestehenderVersatzM?: number;
   onUebernehmen: (ergebnis: ReihenErgebnis) => void;
 }
+
+const VERSATZ_SCHRITT_M = 0.1;
 
 function aussenringe(geom: GeoJSON.Polygon | GeoJSON.MultiPolygon): GeoJSON.Position[][] {
   return geom.type === "MultiPolygon"
@@ -77,6 +83,7 @@ export default function ReihenAusrichtungKarte({
   feldGeometrieGeojson,
   reihenabstandM,
   bestehendeLinieGeojson,
+  bestehenderVersatzM,
   onUebernehmen,
 }: ReihenAusrichtungKarteProps) {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -87,9 +94,31 @@ export default function ReihenAusrichtungKarte({
   const zeichnenRef = useRef(false);
   const punkteRef = useRef<[number, number][]>([]);
   const [linie, setLinie] = useState<string | null>(bestehendeLinieGeojson ?? null);
+  const [versatz, setVersatz] = useState(bestehenderVersatzM ?? 0);
   const [teilstuecke, setTeilstuecke] = useState<FeldReihenTeilstueck[]>([]);
   const [laeuft, setLaeuft] = useState(false);
   const [fehler, setFehler] = useState<string | null>(null);
+
+  // Beim Öffnen mit einer schon gespeicherten Ausrichtungslinie direkt die
+  // zuletzt berechneten Reihen (inkl. Versatz) anzeigen, statt den Nutzer
+  // zum erneuten Zeichnen zu zwingen.
+  useEffect(() => {
+    if (!bestehendeLinieGeojson) return;
+    try {
+      const geom = JSON.parse(bestehendeLinieGeojson) as GeoJSON.LineString;
+      const pkte = geom.coordinates as [number, number][];
+      if (pkte.length === 2) {
+        setPunkte(pkte);
+        punkteRef.current = pkte;
+        berechnenMit(pkte, bestehenderVersatzM ?? 0);
+      }
+    } catch {
+      // ungültiges/leeres GeoJSON - ignorieren, Nutzer zeichnet neu.
+    }
+    // Nur beim Mounten/Öffnen des Panels relevant - läuft bewusst nicht bei
+    // jeder Prop-Änderung erneut.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   useEffect(() => {
     zeichnenRef.current = zeichnen;
@@ -297,6 +326,7 @@ export default function ReihenAusrichtungKarte({
     setZeichnen(true);
     setPunkte([]);
     setTeilstuecke([]);
+    setVersatz(0);
     setFehler(null);
   }
 
@@ -305,15 +335,19 @@ export default function ReihenAusrichtungKarte({
     setPunkte([]);
   }
 
-  async function berechnen() {
-    if (punkte.length !== 2 || !reihenabstandM) return;
+  // Zentrale Berechnen-Funktion - sowohl für den ersten "Berechnen"-Klick
+  // nach dem Zeichnen als auch für jeden Pfeiltasten-Versatz-Schritt
+  // (gleiche gezeichnete Linie, nur ein anderer p_versatz_m).
+  async function berechnenMit(linienPunkte: [number, number][], versatzWert: number) {
+    if (linienPunkte.length !== 2 || !reihenabstandM) return;
     setLaeuft(true);
     setFehler(null);
-    const linieGeojson = JSON.stringify({ type: "LineString", coordinates: punkte });
+    const linieGeojson = JSON.stringify({ type: "LineString", coordinates: linienPunkte });
     const { data, error } = await getSupabaseClient().rpc("feld_reihen_aus_ausrichtung_berechnen", {
       p_feld_id: feldId,
       p_linie_geojson: linieGeojson,
       p_reihenabstand_m: reihenabstandM,
+      p_versatz_m: versatzWert,
     });
     setLaeuft(false);
     if (error) {
@@ -322,11 +356,26 @@ export default function ReihenAusrichtungKarte({
     }
     const liste = (data as FeldReihenTeilstueck[]) ?? [];
     if (liste.length === 0) {
-      setFehler("Keine Reihen gefunden - liegt die Linie auf dem Feld?");
+      setFehler("Keine Reihen gefunden - liegt die Linie auf dem Feld, oder wurde zu weit verschoben?");
       return;
     }
     setLinie(linieGeojson);
+    setVersatz(versatzWert);
     setTeilstuecke(liste);
+  }
+
+  function berechnen() {
+    berechnenMit(punkte, 0);
+  }
+
+  function versatzAendern(richtung: 1 | -1) {
+    if (!linie) return;
+    try {
+      const geom = JSON.parse(linie) as GeoJSON.LineString;
+      berechnenMit(geom.coordinates as [number, number][], Math.round((versatz + richtung * VERSATZ_SCHRITT_M) * 100) / 100);
+    } catch {
+      // ungültiges linie-JSON sollte nicht vorkommen - ignorieren.
+    }
   }
 
   const laengen = teilstuecke.map((t) => t.laenge_m);
@@ -344,6 +393,7 @@ export default function ReihenAusrichtungKarte({
       laengeAvg,
       laufmeterGesamt,
       linieGeojson: linie,
+      versatzM: versatz,
     });
   }
 
@@ -365,7 +415,7 @@ export default function ReihenAusrichtungKarte({
             </button>
           </>
         )}
-        {!zeichnen && punkte.length === 2 && (
+        {!zeichnen && punkte.length === 2 && teilstuecke.length === 0 && (
           <>
             <button type="button" className="btn text-xs" disabled={laeuft || !reihenabstandM} onClick={berechnen}>
               {laeuft ? "Berechnet…" : "Berechnen"}
@@ -374,6 +424,11 @@ export default function ReihenAusrichtungKarte({
               Neu zeichnen
             </button>
           </>
+        )}
+        {!zeichnen && teilstuecke.length > 0 && (
+          <button type="button" className="btn-secondary text-xs" onClick={zeichnenStarten}>
+            Neu zeichnen
+          </button>
         )}
       </div>
       {!reihenabstandM && (
@@ -390,6 +445,26 @@ export default function ReihenAusrichtungKarte({
             Ø {formatMenge(laengeAvg, 1)} m ({formatMenge(laengeMin, 1)}–{formatMenge(laengeMax, 1)} m)
           </span>
           <span>Σ {formatMenge(laufmeterGesamt, 1)} lfm</span>
+          <span className="flex items-center gap-1 border-l border-linie pl-3">
+            <button
+              type="button"
+              className="btn-secondary px-2 py-0.5 text-xs"
+              disabled={laeuft}
+              title="Alle Reihen um 10cm verschieben (z.B. näher zum/weiter vom Nachbarn weg) - die äußerste Reihe verschwindet, sobald der Randabstand unterschritten würde"
+              onClick={() => versatzAendern(-1)}
+            >
+              ◀
+            </button>
+            <span className="text-xs text-neutral-500">Versatz {formatMenge(versatz * 100, 0)} cm</span>
+            <button
+              type="button"
+              className="btn-secondary px-2 py-0.5 text-xs"
+              disabled={laeuft}
+              onClick={() => versatzAendern(1)}
+            >
+              ▶
+            </button>
+          </span>
           <button type="button" className="btn text-xs" onClick={uebernehmen}>
             Übernehmen
           </button>

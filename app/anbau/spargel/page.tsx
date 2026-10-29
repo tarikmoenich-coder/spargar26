@@ -224,6 +224,7 @@ export default function AnbauSpargelPage() {
         reihenlaenge_max_m: Math.round(ergebnis.laengeMax * 100) / 100,
         laufmeter_gesamt_m: Math.round(ergebnis.laufmeterGesamt * 100) / 100,
         ausrichtungslinie_geojson: ergebnis.linieGeojson,
+        reihen_versatz_m: ergebnis.versatzM,
       })
       .eq("id", reihenKarte.abschnitt.id);
     if (error) setFehler(error.message);
@@ -552,6 +553,7 @@ export default function AnbauSpargelPage() {
               feldGeometrieGeojson={felderGeo[reihenKarte.feldId] ?? null}
               reihenabstandM={reihenKarte.abschnitt.reihenabstand_m}
               bestehendeLinieGeojson={reihenKarte.abschnitt.ausrichtungslinie_geojson}
+              bestehenderVersatzM={reihenKarte.abschnitt.reihen_versatz_m}
               onUebernehmen={reihenUebernehmen}
             />
           </div>

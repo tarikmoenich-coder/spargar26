@@ -1268,6 +1268,10 @@ export interface FeldAnbauAbschnitt {
   reihenlaenge_min_m: number | null;
   reihenlaenge_max_m: number | null;
   laufmeter_gesamt_m: number | null;
+  // Seitlicher Versatz der ganzen Reihenschar relativ zur gezeichneten
+  // Ausrichtungslinie (Migration 2026-10-30, 10cm-Pfeiltasten-Feinjustierung
+  // z.B. zum Nachbarn hin/weg) - 0, solange nicht nachjustiert wurde.
+  reihen_versatz_m: number;
 }
 
 // Ein zusammenhängendes Reihen-Teilstück aus
