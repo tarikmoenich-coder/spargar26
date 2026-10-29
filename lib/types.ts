@@ -1261,6 +1261,23 @@ export interface FeldAnbauAbschnitt {
   cotura_nr: string | null;
   position: number | null;
   notiz: string | null;
+  // Geometrisch berechnete Reihen (Migration 2026-10-29) - aus der echten
+  // Feldkontur + einer eingezeichneten Ausrichtungslinie. Bei rein manuell
+  // gepflegten Abschnitten bleiben alle vier null.
+  ausrichtungslinie_geojson: string | null;
+  reihenlaenge_min_m: number | null;
+  reihenlaenge_max_m: number | null;
+  laufmeter_gesamt_m: number | null;
+}
+
+// Ein zusammenhängendes Reihen-Teilstück aus
+// feld_reihen_aus_ausrichtung_berechnen() - eine Kerbe in der Feldkontur
+// kann eine Reihe in mehrere Teile zerschneiden, die einzeln gezählt werden.
+export interface FeldReihenTeilstueck {
+  reihen_index: number;
+  teil_index: number;
+  laenge_m: number;
+  geom_geojson: string;
 }
 
 // Aus der Sicht feld_anbau_abschnitt_berechnet - laufende Meter, Pflanzenzahl

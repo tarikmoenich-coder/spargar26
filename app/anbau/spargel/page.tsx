@@ -14,6 +14,7 @@ import { Fragment, useEffect, useRef, useState } from "react";
 import { getSupabaseClient } from "@/lib/supabase/client";
 import { useProfile } from "@/lib/useProfile";
 import ErntewirtschaftTabs from "@/components/ErntewirtschaftTabs";
+import ReihenAusrichtungKarte, { type ReihenErgebnis } from "@/components/ReihenAusrichtungKarte";
 import type { Feld, FeldAnbauAbschnitt, FeldAnbauUebersicht } from "@/lib/types";
 import { formatMenge, formatZahlDE } from "@/lib/format";
 
@@ -32,6 +33,27 @@ export default function AnbauSpargelPage() {
   const [uebersicht, setUebersicht] = useState<FeldAnbauUebersicht[]>([]);
   const [abschnitte, setAbschnitte] = useState<Record<number, FeldAnbauAbschnitt[]>>({});
   const [laeuft, setLaeuft] = useState(false);
+
+  // Feldkonturen für "Reihen aus Karte berechnen" (Nutzer-Vorgabe 2026-10-29) -
+  // ändern sich kaum, darum einmalig geladen statt bei jedem Saisonwechsel neu,
+  // gleiches Muster wie app/erntewirtschaft/page.tsx.
+  const [felderGeo, setFelderGeo] = useState<Record<number, string | null>>({});
+  const [reihenKarte, setReihenKarte] = useState<{ abschnitt: FeldAnbauAbschnitt; feldId: number } | null>(null);
+
+  useEffect(() => {
+    (async () => {
+      const { data } = await getSupabaseClient()
+        .from("feld_geojson")
+        .select("id, geometrie_geojson")
+        .eq("aktiv", true)
+        .eq("kultur", "spargel");
+      const geo: Record<number, string | null> = {};
+      ((data as { id: number; geometrie_geojson: string | null }[]) ?? []).forEach((f) => {
+        geo[f.id] = f.geometrie_geojson;
+      });
+      setFelderGeo(geo);
+    })();
+  }, []);
 
   // Für den "Länge aus Fläche schätzen"-Knopf: liest die aktuell im Feld
   // stehenden Werte (Reihenzahl/-abstand) direkt aus dem DOM, ohne diese
@@ -188,6 +210,25 @@ export default function AnbauSpargelPage() {
     const input = laengeRefs.current[a.id];
     if (input) input.value = String(laenge);
     abschnittAendern(a.id, "reihenlaenge_m", String(laenge));
+  }
+
+  async function reihenUebernehmen(ergebnis: ReihenErgebnis) {
+    if (!reihenKarte) return;
+    const supabase = getSupabaseClient();
+    const { error } = await supabase
+      .from("feld_anbau_abschnitt")
+      .update({
+        reihen_anzahl: ergebnis.reihenAnzahl,
+        reihenlaenge_m: Math.round(ergebnis.laengeAvg * 100) / 100,
+        reihenlaenge_min_m: Math.round(ergebnis.laengeMin * 100) / 100,
+        reihenlaenge_max_m: Math.round(ergebnis.laengeMax * 100) / 100,
+        laufmeter_gesamt_m: Math.round(ergebnis.laufmeterGesamt * 100) / 100,
+        ausrichtungslinie_geojson: ergebnis.linieGeojson,
+      })
+      .eq("id", reihenKarte.abschnitt.id);
+    if (error) setFehler(error.message);
+    setReihenKarte(null);
+    load();
   }
 
   async function abschnittHinzufuegen(anbauId: number) {
@@ -356,7 +397,22 @@ export default function AnbauSpargelPage() {
                                   📐
                                 </button>
                               )}
+                              {canEdit && i === 0 && (
+                                <button
+                                  type="button"
+                                  className="text-neutral-400 hover:text-emerald-700"
+                                  title="Reihen aus der echten Feldkontur berechnen - eine Ausrichtungslinie einzeichnen, alle parallelen Reihen werden an der Kontur beschnitten (genaue Länge je Reihe statt Schätzung)"
+                                  onClick={() => setReihenKarte({ abschnitt: a, feldId: u.feld_id })}
+                                >
+                                  🧭
+                                </button>
+                              )}
                             </div>
+                            {a.reihenlaenge_min_m != null && a.reihenlaenge_max_m != null && (
+                              <div className="text-[10px] text-neutral-400">
+                                {formatMenge(a.reihenlaenge_min_m, 1)}–{formatMenge(a.reihenlaenge_max_m, 1)} m
+                              </div>
+                            )}
                           </td>
                           <td>
                             <input
@@ -474,6 +530,31 @@ export default function AnbauSpargelPage() {
           <p className="mt-2 text-xs text-neutral-500">
             Neue Felder werden im Reiter „Felder" angelegt (Kultur „Spargel").
           </p>
+        </div>
+      )}
+
+      {reihenKarte && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/30 p-4">
+          <div className="flex max-h-[90vh] w-full max-w-3xl flex-col gap-3 overflow-y-auto rounded-lg bg-white p-4 shadow-xl">
+            <div className="flex items-center justify-between">
+              <h2 className="text-sm font-semibold text-emerald-800">Reihen aus der Feldkontur berechnen</h2>
+              <button
+                type="button"
+                aria-label="Schließen"
+                className="text-neutral-500"
+                onClick={() => setReihenKarte(null)}
+              >
+                ✕
+              </button>
+            </div>
+            <ReihenAusrichtungKarte
+              feldId={reihenKarte.feldId}
+              feldGeometrieGeojson={felderGeo[reihenKarte.feldId] ?? null}
+              reihenabstandM={reihenKarte.abschnitt.reihenabstand_m}
+              bestehendeLinieGeojson={reihenKarte.abschnitt.ausrichtungslinie_geojson}
+              onUebernehmen={reihenUebernehmen}
+            />
+          </div>
         </div>
       )}
     </div>
