@@ -87,6 +87,7 @@ export interface ReihenErgebnis {
   versatzM: number;
   ersterIndex: number;
   letzterIndex: number;
+  fahrgassen: number;
 }
 
 export interface ReihenAusrichtungKarteProps {
@@ -101,6 +102,9 @@ export interface ReihenAusrichtungKarteProps {
    *  direkt wieder angewandt, statt neu auswählen zu müssen. */
   bestehenderErsterIndex?: number | null;
   bestehenderLetzterIndex?: number | null;
+  /** Zuletzt eingegebene Fahrgassen-Anzahl - beim erneuten Öffnen
+   *  voreingestellt. */
+  bestehendeFahrgassen?: number;
   onUebernehmen: (ergebnis: ReihenErgebnis) => void;
 }
 
@@ -120,6 +124,7 @@ export default function ReihenAusrichtungKarte({
   bestehenderVersatzM,
   bestehenderErsterIndex,
   bestehenderLetzterIndex,
+  bestehendeFahrgassen,
   onUebernehmen,
 }: ReihenAusrichtungKarteProps) {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -135,6 +140,7 @@ export default function ReihenAusrichtungKarte({
   const [ersterIndex, setErsterIndex] = useState<number | null>(null);
   const [letzterIndex, setLetzterIndex] = useState<number | null>(null);
   const [bestaetigt, setBestaetigt] = useState(false);
+  const [fahrgassen, setFahrgassen] = useState(bestehendeFahrgassen ?? 0);
   const ersterIndexRef = useRef<number | null>(null);
   const letzterIndexRef = useRef<number | null>(null);
   const bestaetigtRef = useRef(false);
@@ -447,6 +453,7 @@ export default function ReihenAusrichtungKarte({
     setLetzterIndex(null);
     setBestaetigt(false);
     setVersatz(0);
+    setFahrgassen(0);
     setFehler(null);
   }
 
@@ -511,15 +518,23 @@ export default function ReihenAusrichtungKarte({
   }
 
   const laengen = ausgewaehlt.map((t) => t.laenge_m);
-  const laufmeterGesamt = laengen.reduce((s, l) => s + l, 0);
-  const laengeAvg = laengen.length > 0 ? laufmeterGesamt / laengen.length : 0;
+  const laufmeterGesamtRoh = laengen.reduce((s, l) => s + l, 0);
+  const laengeAvg = laengen.length > 0 ? laufmeterGesamtRoh / laengen.length : 0;
   const laengeMin = laengen.length > 0 ? Math.min(...laengen) : 0;
   const laengeMax = laengen.length > 0 ? Math.max(...laengen) : 0;
 
+  // Fahrgassen (unbepflanzte Technikgassen innerhalb der Auswahl) werden
+  // einfach von der Reihenzahl abgezogen - und proportional (über die
+  // Durchschnittslänge) vom Laufmeter, damit beide Werte konsistent
+  // zueinander bleiben (Nutzer-Vorgabe 2026-10-31). Welche der Reihen
+  // konkret Fahrgassen sind, ist für die Zahlen unerheblich.
+  const reihenAnzahl = Math.max(0, ausgewaehlt.length - fahrgassen);
+  const laufmeterGesamt = Math.round(laengeAvg * reihenAnzahl * 100) / 100;
+
   function uebernehmen() {
-    if (!linie || ersterIndex === null || letzterIndex === null || ausgewaehlt.length === 0) return;
+    if (!linie || ersterIndex === null || letzterIndex === null || reihenAnzahl === 0) return;
     onUebernehmen({
-      reihenAnzahl: ausgewaehlt.length,
+      reihenAnzahl,
       laengeMin,
       laengeMax,
       laengeAvg,
@@ -528,6 +543,7 @@ export default function ReihenAusrichtungKarte({
       versatzM: versatz,
       ersterIndex: Math.min(ersterIndex, letzterIndex),
       letzterIndex: Math.max(ersterIndex, letzterIndex),
+      fahrgassen,
     });
   }
 
@@ -606,12 +622,29 @@ export default function ReihenAusrichtungKarte({
       {bestaetigt && (
         <div className="flex flex-wrap items-center gap-3 rounded border border-linie bg-sand p-2 text-sm">
           <span>
-            <strong>{ausgewaehlt.length}</strong> Reihen(-teilstücke)
+            <strong>{reihenAnzahl}</strong> Reihen
+            {fahrgassen > 0 && (
+              <span className="ml-1 text-xs text-neutral-500">
+                ({ausgewaehlt.length} Teilstücke − {fahrgassen} Fahrgasse{fahrgassen === 1 ? "" : "n"})
+              </span>
+            )}
           </span>
+          <label className="flex items-center gap-1 text-xs text-neutral-600">
+            Fahrgassen
+            <input
+              type="number"
+              min={0}
+              max={Math.max(0, ausgewaehlt.length - 1)}
+              value={fahrgassen}
+              onChange={(e) => setFahrgassen(Math.max(0, Math.round(Number(e.target.value) || 0)))}
+              className="w-14 rounded border border-linie px-1 py-0.5 text-xs"
+            />
+          </label>
           <span>
             Ø {formatMenge(laengeAvg, 1)} m ({formatMenge(laengeMin, 1)}–{formatMenge(laengeMax, 1)} m)
           </span>
           <span>Σ {formatMenge(laufmeterGesamt, 1)} lfm</span>
+          {reihenAnzahl === 0 && <span className="text-beere-700">Zu viele Fahrgassen - keine Reihe übrig.</span>}
           <span className="flex items-center gap-1 border-l border-linie pl-3">
             <button
               type="button"
@@ -635,7 +668,7 @@ export default function ReihenAusrichtungKarte({
           <button type="button" className="btn-secondary text-xs" onClick={auswahlAendern}>
             Auswahl ändern
           </button>
-          <button type="button" className="btn text-xs" onClick={uebernehmen}>
+          <button type="button" className="btn text-xs" disabled={reihenAnzahl === 0} onClick={uebernehmen}>
             Übernehmen
           </button>
         </div>

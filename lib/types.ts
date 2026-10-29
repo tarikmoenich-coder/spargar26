@@ -1280,6 +1280,10 @@ export interface FeldAnbauAbschnitt {
   // ein. Null, solange noch keine Auswahl getroffen/übernommen wurde.
   reihen_erster_index: number | null;
   reihen_letzter_index: number | null;
+  // Anzahl unbepflanzter Fahrgassen innerhalb der Auswahl (Migration
+  // 2026-10-31) - bereits von reihen_anzahl/laufmeter_gesamt_m abgezogen,
+  // hier nur zur Anzeige/erneuten Bearbeitung gespeichert.
+  reihen_fahrgassen: number;
 }
 
 // Ein zusammenhängendes Reihen-Teilstück aus

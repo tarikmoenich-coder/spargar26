@@ -227,6 +227,7 @@ export default function AnbauSpargelPage() {
         reihen_versatz_m: ergebnis.versatzM,
         reihen_erster_index: ergebnis.ersterIndex,
         reihen_letzter_index: ergebnis.letzterIndex,
+        reihen_fahrgassen: ergebnis.fahrgassen,
       })
       .eq("id", reihenKarte.abschnitt.id);
     if (error) setFehler(error.message);
@@ -558,6 +559,7 @@ export default function AnbauSpargelPage() {
               bestehenderVersatzM={reihenKarte.abschnitt.reihen_versatz_m}
               bestehenderErsterIndex={reihenKarte.abschnitt.reihen_erster_index}
               bestehenderLetzterIndex={reihenKarte.abschnitt.reihen_letzter_index}
+              bestehendeFahrgassen={reihenKarte.abschnitt.reihen_fahrgassen}
               onUebernehmen={reihenUebernehmen}
             />
           </div>
