@@ -28,12 +28,18 @@ where fa.id = ab.feld_anbau_id
   and ab.standjahr is not null
   and ab.pflanzjahr is null;
 
-alter table feld_anbau_abschnitt
-  drop column if exists standjahr;
-
 comment on column feld_anbau_abschnitt.pflanzjahr is
   'Tatsächliches Pflanzjahr (fester Kalenderjahrgang, z.B. 2023) - ändert sich nie. Das Standjahr für eine Saison wird daraus abgeleitet: saison_jahr - pflanzjahr + 1 (siehe feld_anbau_abschnitt_berechnet).';
 
+-- WICHTIG: muss VOR dem DROP COLUMN unten laufen und darf die bestehende
+-- Spaltenreihenfolge nicht verändern (CREATE OR REPLACE VIEW erlaubt nur
+-- NEUE Spalten am Ende, siehe Postgres-Doku) - deshalb bleibt "standjahr"
+-- exakt an seiner alten Position (jetzt als Berechnung statt Rohspalte),
+-- und "pflanzjahr" wird komplett ans Ende angehängt statt dazwischen.
+-- Erster Anlauf dieser Migration (2026-10-31) scheiterte genau daran: die
+-- View wurde damals NACH dem DROP COLUMN angelegt, der deshalb mit
+-- "other objects depend on it" fehlschlug (die View hing noch an der
+-- Rohspalte standjahr) - diese Fassung tauscht nur die Reihenfolge.
 create or replace view feld_anbau_abschnitt_berechnet as
 select
   ab.id,
@@ -48,7 +54,6 @@ select
   ab.cotura_nr,
   ab.sorte,
   ab.pflanzdatum,
-  ab.pflanzjahr,
   case when ab.pflanzjahr is not null then fa.saison_jahr - ab.pflanzjahr + 1 end as standjahr,
   ab.pflanztyp,
   ab.reihen_anzahl,
@@ -68,12 +73,17 @@ select
       * coalesce(ab.reihenabstand_m, 0)
     ) / 10000.0,
     4
-  ) as netto_ha
+  ) as netto_ha,
+  ab.pflanzjahr
 from feld_anbau_abschnitt ab
 join feld_anbau fa on fa.id = ab.feld_anbau_id
 join feld f on f.id = fa.feld_id;
 alter view feld_anbau_abschnitt_berechnet set (security_invoker = true);
 grant select on feld_anbau_abschnitt_berechnet to authenticated;
+
+-- Jetzt hängt nichts mehr an der Rohspalte standjahr - gefahrlos droppen.
+alter table feld_anbau_abschnitt
+  drop column if exists standjahr;
 
 -- feld_anbau_vorjahr_uebernehmen: pflanzjahr wird UNVERÄNDERT kopiert (kein
 -- +1 mehr - es ist ein fester Kalenderjahrgang, das abgeleitete Standjahr
