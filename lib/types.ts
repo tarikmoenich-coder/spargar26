@@ -1228,6 +1228,17 @@ export const PFLANZTYP_LABELS: Record<Pflanztyp, string> = {
   sonstiges: 'Sonstiges',
 };
 
+// Geplante Verfrühung/Verspätung der Ernte (Migration 2026-10-31) - relevant
+// für die Erntefenster-Abdeckung in der Anbauübersicht.
+export const VERFRUEHUNGEN = ['frueh', 'mittel', 'spaet'] as const;
+export type Verfruehung = (typeof VERFRUEHUNGEN)[number];
+
+export const VERFRUEHUNG_LABELS: Record<Verfruehung, string> = {
+  frueh: 'Früh (Minitunnel + Folie)',
+  mittel: 'Mittel (Folie, schwarze Seite oben)',
+  spaet: 'Spät (Folie, weiße Seite oben)',
+};
+
 // Ein Feld + eine Saison, generalisiert ErdbeerenAnbau.
 export interface FeldAnbau {
   id: number;
@@ -1239,6 +1250,10 @@ export interface FeldAnbau {
   ertrag_einheit: string | null;
   rodung_geplant: string | null;
   notiz: string | null;
+  // Reine Stückzahl-Planung (Migration 2026-10-31, Ernteplanung) - KEINE
+  // Zuordnung zu einzelnen Maschinen (die erkennen ihr Feld später selbst
+  // per GPS, siehe erntewirtschaft-plan.md).
+  geplante_maschinen: number | null;
 }
 
 // Eine benannte, physisch zusammenhängende Pflanzreihe + ihre Sorte -
@@ -1289,6 +1304,9 @@ export interface FeldAnbauAbschnitt {
   // 2026-10-31) - bereits von reihen_anzahl/laufmeter_gesamt_m abgezogen,
   // hier nur zur Anzeige/erneuten Bearbeitung gespeichert.
   reihen_fahrgassen: number;
+  // Geplante Verfrühung/Verspätung (Migration 2026-10-31) - null = keine
+  // Angabe.
+  verfruehung: Verfruehung | null;
 }
 
 // Ein zusammenhängendes Reihen-Teilstück aus

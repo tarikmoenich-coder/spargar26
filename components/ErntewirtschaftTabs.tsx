@@ -53,6 +53,8 @@ const BEREICHE: {
     unter: [
       { href: "/anbau/erdbeeren", label: "Erdbeeren" },
       { href: "/anbau/spargel", label: "Spargel" },
+      { href: "/anbau/uebersicht", label: "Übersicht" },
+      { href: "/anbau/ernteplanung", label: "Ernteplanung" },
       { href: "/anbau/bestellung", label: "Bestellung" },
       { href: "/anbau/felder", label: "Felder" },
     ],

@@ -17,15 +17,10 @@ import ErntewirtschaftTabs from "@/components/ErntewirtschaftTabs";
 import ReihenAusrichtungKarte, { type ReihenErgebnis } from "@/components/ReihenAusrichtungKarte";
 import type { Feld, FeldAnbauAbschnitt, FeldAnbauUebersicht } from "@/lib/types";
 import { formatMenge, formatZahlDE } from "@/lib/format";
+import { berechneStandjahr } from "@/lib/anbau";
+import { VERFRUEHUNGEN, VERFRUEHUNG_LABELS } from "@/lib/types";
 
 const CURRENT_YEAR = new Date().getFullYear();
-
-// Pflanzjahr ist ein fester Kalenderjahrgang (ändert sich nie) - das
-// Standjahr für eine konkrete Saison wird daraus abgeleitet statt Jahr für
-// Jahr von Hand hochgezählt zu werden (Migration 2026-10-31).
-function berechneStandjahr(pflanzjahr: number, saisonJahr: number): number {
-  return saisonJahr - pflanzjahr + 1;
-}
 
 export default function AnbauSpargelPage() {
   const { profile } = useProfile();
@@ -185,7 +180,14 @@ export default function AnbauSpargelPage() {
 
   async function abschnittAendern(
     id: number,
-    feld: "reihen_anzahl" | "reihenlaenge_m" | "reihenabstand_m" | "pflanzen_pro_lfm" | "pflanzjahr" | "pflanzdatum",
+    feld:
+      | "reihen_anzahl"
+      | "reihenlaenge_m"
+      | "reihenabstand_m"
+      | "pflanzen_pro_lfm"
+      | "pflanzjahr"
+      | "pflanzdatum"
+      | "verfruehung",
     wert: string
   ) {
     const supabase = getSupabaseClient();
@@ -343,6 +345,9 @@ export default function AnbauSpargelPage() {
                 <th title="Tatsächliches Pflanzjahr - das Standjahr für die gewählte Saison wird daraus berechnet">
                   Pflanzjahr
                 </th>
+                <th title="Minitunnel+Folie (früh) / nur Folie schwarz (mittel) / Folie weiß (spät) - für die Erntefenster-Abdeckung in der Anbauübersicht">
+                  Verfrühung
+                </th>
                 <th title="Aus der echten Geometrie (ST_Area), unabhängig von der Reihen-Planung">
                   Brutto ha
                 </th>
@@ -368,7 +373,7 @@ export default function AnbauSpargelPage() {
                             <span className="ml-1 text-xs font-normal text-neutral-400">(Grünspargel)</span>
                           )}
                         </td>
-                        <td colSpan={11} className="text-sm text-neutral-500">
+                        <td colSpan={12} className="text-sm text-neutral-500">
                           Noch kein Abschnitt angelegt.{" "}
                           {canEdit && (
                             <button
@@ -483,6 +488,21 @@ export default function AnbauSpargelPage() {
                             {a.pflanzjahr != null && (
                               <div className="text-xs text-neutral-400">{berechneStandjahr(a.pflanzjahr, jahr)}. Stj.</div>
                             )}
+                          </td>
+                          <td>
+                            <select
+                              defaultValue={a.verfruehung ?? ""}
+                              disabled={!canEdit}
+                              className="w-28"
+                              onChange={(e) => abschnittAendern(a.id, "verfruehung", e.target.value)}
+                            >
+                              <option value="">— keine Angabe —</option>
+                              {VERFRUEHUNGEN.map((v) => (
+                                <option key={v} value={v}>
+                                  {VERFRUEHUNG_LABELS[v]}
+                                </option>
+                              ))}
+                            </select>
                           </td>
                           {i === 0 ? (
                             <>

@@ -32,15 +32,9 @@ import {
   type Pflanztyp,
 } from "@/lib/types";
 import { formatDatumDE, formatZahlDE } from "@/lib/format";
+import { berechneStandjahr } from "@/lib/anbau";
 
 const CURRENT_YEAR = new Date().getFullYear();
-
-// Pflanzjahr ist ein fester Kalenderjahrgang (ändert sich nie) - das
-// Standjahr für eine konkrete Saison wird daraus abgeleitet statt Jahr für
-// Jahr von Hand hochgezählt zu werden (Migration 2026-10-31).
-function berechneStandjahr(pflanzjahr: number, saisonJahr: number): number {
-  return saisonJahr - pflanzjahr + 1;
-}
 
 interface Gruppe {
   bezeichnung: string;
