@@ -53,7 +53,7 @@ export default function AnbauSpargelPage() {
         .from("feld_geojson")
         .select("id, geometrie_geojson")
         .eq("aktiv", true)
-        .eq("kultur", "spargel");
+        .in("kultur", ["spargel", "gruenspargel"]);
       const geo: Record<number, string | null> = {};
       ((data as { id: number; geometrie_geojson: string | null }[]) ?? []).forEach((f) => {
         geo[f.id] = f.geometrie_geojson;
@@ -74,12 +74,17 @@ export default function AnbauSpargelPage() {
     setLoading(true);
     const supabase = getSupabaseClient();
     const [{ data: fData }, { data: uData }] = await Promise.all([
-      supabase.from("feld").select("*").eq("aktiv", true).eq("kultur", "spargel").order("bezeichnung"),
+      supabase
+        .from("feld")
+        .select("*")
+        .eq("aktiv", true)
+        .in("kultur", ["spargel", "gruenspargel"])
+        .order("bezeichnung"),
       supabase
         .from("feld_anbau_uebersicht")
         .select("*")
         .eq("saison_jahr", jahr)
-        .eq("kultur", "spargel")
+        .in("kultur", ["spargel", "gruenspargel"])
         .order("feld_bezeichnung"),
     ]);
     setFelder((fData as Feld[]) ?? []);
@@ -357,7 +362,12 @@ export default function AnbauSpargelPage() {
                   <Fragment key={u.anbau_id}>
                     {liste.length === 0 ? (
                       <tr>
-                        <td className="font-medium">{u.feld_bezeichnung}</td>
+                        <td className="font-medium">
+                          {u.feld_bezeichnung}
+                          {u.kultur === "gruenspargel" && (
+                            <span className="ml-1 text-xs font-normal text-neutral-400">(Grünspargel)</span>
+                          )}
+                        </td>
                         <td colSpan={11} className="text-sm text-neutral-500">
                           Noch kein Abschnitt angelegt.{" "}
                           {canEdit && (
@@ -375,7 +385,16 @@ export default function AnbauSpargelPage() {
                       liste.map((a, i) => (
                         <tr key={a.id}>
                           <td className="font-medium">
-                            {i === 0 ? u.feld_bezeichnung : <span className="text-xs text-neutral-400">↳ {a.bezeichnung}</span>}
+                            {i === 0 ? (
+                              <>
+                                {u.feld_bezeichnung}
+                                {u.kultur === "gruenspargel" && (
+                                  <span className="ml-1 text-xs font-normal text-neutral-400">(Grünspargel)</span>
+                                )}
+                              </>
+                            ) : (
+                              <span className="text-xs text-neutral-400">↳ {a.bezeichnung}</span>
+                            )}
                           </td>
                           <td>
                             <input
@@ -543,6 +562,7 @@ export default function AnbauSpargelPage() {
                 onClick={() => anbauAnlegen(f.id)}
               >
                 + {f.bezeichnung}
+                {f.kultur === "gruenspargel" && " (Grünspargel)"}
               </button>
             ))}
           </div>
