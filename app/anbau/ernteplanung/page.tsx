@@ -240,7 +240,7 @@ export default function AnbauErnteplanungPage() {
                         ? { label: "zu viele", klasse: "badge-warn" }
                         : { label: "passt", klasse: "badge-ok" };
                 return (
-                  <tr key={z.anbau_id}>
+                  <tr key={z.anbau_id} className={z.kultur === "gruenspargel" ? "bg-emerald-50" : undefined}>
                     <td className="font-medium">{z.feld_bezeichnung}</td>
                     <td>{z.kultur === "gruenspargel" ? "Grün" : "Weiß"}</td>
                     <td>

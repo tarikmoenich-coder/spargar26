@@ -366,7 +366,7 @@ export default function AnbauSpargelPage() {
                 return (
                   <Fragment key={u.anbau_id}>
                     {liste.length === 0 ? (
-                      <tr>
+                      <tr className={u.kultur === "gruenspargel" ? "bg-emerald-50" : undefined}>
                         <td className="font-medium">
                           {u.feld_bezeichnung}
                           {u.kultur === "gruenspargel" && (
@@ -388,7 +388,7 @@ export default function AnbauSpargelPage() {
                       </tr>
                     ) : (
                       liste.map((a, i) => (
-                        <tr key={a.id}>
+                        <tr key={a.id} className={u.kultur === "gruenspargel" ? "bg-emerald-50" : undefined}>
                           <td className="font-medium">
                             {i === 0 ? (
                               <>
