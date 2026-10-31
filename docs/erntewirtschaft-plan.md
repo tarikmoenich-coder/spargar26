@@ -267,7 +267,42 @@ beim Gartenschlauch-Test (siehe oben) gezielt die Fensternaht besprühen.
 Hält das, aber Konsistenz über 140 Stück fraglich → beim Shop nach
 Variante B fragen.
 
-## Teil A — Traccar auf PostgreSQL (Voraussetzung)
+## Teil A — Traccar auf PostgreSQL (Voraussetzung) — ✅ ERLEDIGT 2026-10-31
+
+**Migration erfolgreich durchgeführt (2026-10-31).** Ergebnis: 46 Geräte,
+2 Nutzer, 73.607 Positionen, 8.970 Events, 4 Geofences, Server-Konfiguration
+und alle übrigen Tabellen von H2 nach PostgreSQL übernommen - keine
+verwaisten Fremdschlüssel, Sequenzen korrekt gesetzt, Dienst läuft
+anschließend sauber (Liquibase erkennt alle 35 ChangeSets als bereits
+angewendet), Web-UI vom Nutzer geprüft („es sieht gut aus").
+
+**Eine bewusste Ausnahme: `tc_keystore` wurde NICHT migriert** (2 Zeilen,
+Spalten `publickey`/`privatekey` als `bytea` - H2s CSV-Export schreibt dort
+rohe Binärbytes, die Postgres' COPY-CSV-Parser nicht als gültiges
+bytea-Textformat interpretieren kann, brach beim ersten Importversuch
+deshalb genau dort ab). Enthält nur ein von Traccar selbst erzeugtes
+TLS-/Signier-Schlüsselpaar, das praktisch ungenutzt ist (nginx terminiert
+TLS, nicht Traccar selbst) und bei Bedarf automatisch neu erzeugt wird -
+unkritisch, kein Datenverlust für Geräte/Nutzer/Historie.
+
+**Vorgehen, falls das als Vorlage für eine ähnliche Migration dient:**
+FK-Trigger je Tabelle per `ALTER TABLE … DISABLE/ENABLE TRIGGER ALL`
+temporär abschalten (braucht den Postgres-**Superuser**, nicht nur den
+Tabellenbesitzer) statt 49 Tabellen von Hand in Abhängigkeits-Reihenfolge
+zu importieren; Sequenzen danach per `pg_get_serial_sequence()`-Schleife
+automatisch auf `MAX(id)` je Tabelle gesetzt, nicht Tabelle für Tabelle von
+Hand. `DATABASECHANGELOG`/`DATABASECHANGELOGLOCK` bewusst nicht migriert
+(von Liquibase beim Postgres-Ersteinrichtungslauf selbst korrekt angelegt).
+Export-Dateien (`/tmp/traccar-migration/`) nach erfolgreicher Prüfung
+gelöscht; H2-Backup (`/opt/traccar/data.h2-backup-20261031_1435`) bleibt
+als Rückfalloption vorerst bestehen.
+
+**Damit ist der einzige verbliebene Software-Blocker vor dem 140er-Rollout
+erledigt** - offen bleibt nur noch die Hardware-Stückzahl (siehe
+Hardware-Entscheidungen oben).
+
+<details>
+<summary>Ursprüngliche Planung (vor der Durchführung) - als Historie erhalten</summary>
 
 140 TRB246 zusätzlich zu Autos/LKW → **H2 → PostgreSQL ist jetzt Pflicht**, bevor
 die Spinnen aufgenommen werden.
@@ -398,6 +433,8 @@ den eigentlichen Hardware-Rollout, nicht mehr die DB-Migration selbst -
 NTRIP ist seit der RTK-Entscheidung ohnehin hinfällig, eine eigene
 Traccar-Gruppe ist seit Teil G nicht mehr nötig (der Poller erkennt seine
 Geräte selbst per IMEI-Abgleich).
+
+</details>
 
 ## Teil B — Datenpfad SpidertrackBox → Spargar
 
