@@ -272,14 +272,132 @@ Variante B fragen.
 140 TRB246 zusätzlich zu Autos/LKW → **H2 → PostgreSQL ist jetzt Pflicht**, bevor
 die Spinnen aufgenommen werden.
 
-1. PostgreSQL bereitstellen (Hetzner-Box oder separat).
-2. `traccar.xml` JDBC auf Postgres; Traccar legt das Schema per Liquibase selbst an.
-   Pilot-H2-Daten sind entbehrlich (frisch starten ist ok).
-3. Je TRB246 in RutOS: whereversim-APN; „GPS → Server" im Teltonika-Protokoll an
-   Port 5027, Identifier = IMEI; Gerät in Traccar anlegen (bulk per `/api/devices`).
-4. NTRIP-Client in RutOS → RTCM an den F9P (nach Hardware-Wahl).
-5. Traccar-Gruppe/Namensschema für die Spinnen, damit der Poller sie vom
-   Fahrzeug-Bestand trennen kann.
+**Korrektur 2026-10-31 (wichtig):** der ursprüngliche Plan unten ging von
+"Pilot-H2-Daten sind entbehrlich, frisch starten ist ok" aus - das stimmt
+nicht mehr. Traccar läuft inzwischen produktiv für die **ganze
+Fahrzeugflotte** (FMB920/TK905B, siehe [[fahrzeuge-traccar]]), nicht nur für
+die eine Pilot-Spinne. Die H2-Datenbank enthält also echte, laufend
+genutzte Geräte/Nutzer/Historie - ein Neustart mit leerer DB würde die
+Fahrzeugflotte zurückwerfen. **Entscheidung (Nutzer, 2026-10-31): Daten
+migrieren, nicht neu anlegen.**
+
+**Bestandsaufnahme auf dem Hetzner-Server (2026-10-31, direkt geprüft):**
+- Traccar **6.15.3**, installiert unter `/opt/traccar`, systemd-Dienst
+  `traccar.service`, Config `/opt/traccar/conf/traccar.xml`.
+- DB aktuell: H2, Datei `/opt/traccar/data/database.mv.db`, **~118 MB**.
+- Web-UI nur auf `127.0.0.1:8082`, nginx+Certbot reverse-proxyt
+  `traccar.spargelhof-moenich.de` dorthin (`/etc/nginx/sites-available/traccar`) -
+  bleibt unverändert.
+- Ports `5027` (Teltonika/FMB920) und `5093` (watch-Protokoll/TK905B) hören
+  bereits, bleiben unverändert.
+- **Kein PostgreSQL auf dem Server installiert** (Ubuntu 24.04, Kandidat
+  `postgresql` Version 16 aus dem Standard-Repo).
+- Ressourcen unkritisch: 7,6 GB RAM, 122 GB freier Plattenplatz.
+- **Keine bestehende Backup-Routine für die Traccar-DB** - muss die
+  Migration selbst mitliefern (Schritt 2 unten).
+- `tools/fahrzeug-poller` und `tools/ernte-poller` sprechen Traccars
+  REST-API/Reports-Endpunkt, nicht direkt die Datenbank - **merken vom
+  Engine-Wechsel nichts**, kein Code in spargar26 muss sich ändern.
+
+### Migrations-Runbook (Wartungsfenster nötig, Traccar ist währenddessen offline)
+
+Alle `sudo`-Schritte macht der Nutzer selbst in seinem SSH-Fenster
+(etablierte Konvention, siehe [[spargar-arbeitsweise]]/[[rudel]]) bzw.
+gemeinsam mit Claude nach ausdrücklicher Freigabe - nichts davon automatisch
+ausführen.
+
+1. **Wartungsfenster beginnen** (ruhige Zeit wählen, wenig Fahrzeuge
+   unterwegs):
+   ```
+   sudo systemctl stop traccar
+   ```
+2. **Backup der H2-Daten** (Rückfalloption, falls etwas schiefgeht):
+   ```
+   sudo cp -a /opt/traccar/data /opt/traccar/data.h2-backup-$(date +%Y%m%d_%H%M)
+   ```
+3. **Tabellenliste abrufen** (jetzt möglich, Datei ist durch den gestoppten
+   Dienst nicht mehr gesperrt) und **je Tabelle nach CSV exportieren**, mit
+   dem in Traccar schon mitgelieferten H2-Jar:
+   ```
+   cd /opt/traccar
+   jre/bin/java -cp lib/h2-2.4.240.jar org.h2.tools.Shell \
+     -url "jdbc:h2:./data/database" -user sa -password "" -sql "SHOW TABLES;"
+   ```
+   Danach für jede angezeigte Tabelle (Traccar-Standardschema, u.a.
+   `tc_users`, `tc_devices`, `tc_groups`, `tc_geofences`, `tc_drivers`,
+   `tc_positions`, `tc_events`, `tc_attributes`, `tc_calendars`,
+   `tc_notifications`, `tc_commands`, `tc_statistics`, plus diverse
+   `tc_*_*`-Zuordnungstabellen wie `tc_user_device`/`tc_device_geofence`) -
+   **exakte Liste erst zur Laufzeit per `SHOW TABLES` nehmen, nicht blind
+   nach Namen raten**:
+   ```
+   -sql "CALL CSVWRITE('/tmp/traccar-migration/<tabelle>.csv', 'SELECT * FROM <tabelle>');"
+   ```
+   (ein Export-Verzeichnis `/tmp/traccar-migration/` vorher anlegen.)
+4. **PostgreSQL installieren + DB/Nutzer anlegen:**
+   ```
+   sudo apt update && sudo apt install -y postgresql
+   sudo -u postgres psql -c "CREATE DATABASE traccar;"
+   sudo -u postgres psql -c "CREATE USER traccar WITH PASSWORD '<starkes Passwort>';"
+   sudo -u postgres psql -c "GRANT ALL PRIVILEGES ON DATABASE traccar TO traccar;"
+   sudo -u postgres psql -d traccar -c "GRANT ALL ON SCHEMA public TO traccar;"
+   ```
+5. **`conf/traccar.xml` auf Postgres umstellen:**
+   ```xml
+   <entry key='database.driver'>org.postgresql.Driver</entry>
+   <entry key='database.url'>jdbc:postgresql://localhost:5432/traccar</entry>
+   <entry key='database.user'>traccar</entry>
+   <entry key='database.password'>&lt;Passwort&gt;</entry>
+   ```
+   Vorher prüfen, ob `/opt/traccar/lib/postgresql-*.jar` schon dabei ist -
+   falls nicht, den offiziellen JDBC-Treiber dort ablegen.
+6. **Traccar einmal kurz starten, damit Liquibase das komplette,
+   Postgres-native Schema automatisch anlegt** (leere Tabellen mit
+   korrekten Typen/Sequenzen), dann sofort wieder stoppen, bevor neue
+   Live-Daten reinkommen:
+   ```
+   sudo systemctl start traccar
+   journalctl -u traccar -n 80 --no-pager   # Liquibase-Log prüfen, keine Fehler
+   sudo systemctl stop traccar
+   ```
+7. **CSV-Daten in die jetzt vorhandenen Postgres-Tabellen laden**, in
+   Eltern-vor-Kind-Reihenfolge wegen Foreign Keys (z.B. `tc_users`/
+   `tc_groups` vor `tc_devices`, `tc_devices` vor `tc_positions`):
+   ```
+   sudo -u postgres psql -d traccar -c "\copy <tabelle> FROM '/tmp/traccar-migration/<tabelle>.csv' WITH (FORMAT csv, HEADER true)"
+   ```
+   Stolperstellen: H2 schreibt Booleans als `TRUE`/`FALSE` (von Postgres-
+   COPY für boolean-Spalten verstanden); Zeitstempel-Format prüfen; BLOB/CLOB-
+   Spalten (bei Traccar selten, meist nur Text/JSON-Attribute) ggf. einzeln
+   gegenprüfen.
+8. **Sequenzen (Auto-Increment-IDs) auf den höchsten importierten Wert
+   setzen**, sonst vergibt Postgres ab 1 neue IDs und kollidiert:
+   ```
+   sudo -u postgres psql -d traccar -c "SELECT setval(pg_get_serial_sequence('<tabelle>','id'), COALESCE(MAX(id),1)) FROM <tabelle>;"
+   ```
+   (für jede Tabelle mit eigener `id`-Spalte wiederholen.)
+9. **Traccar wieder starten und prüfen:**
+   ```
+   sudo systemctl start traccar
+   ```
+   In der Web-UI: alle Fahrzeuge/Geräte sichtbar? Nutzer können sich
+   einloggen? Positions-Historie vorhanden? Danach Live-Test: ein Fahrzeug
+   (oder die Pilot-Spinne) sendet, neue Position kommt auf der Karte an.
+10. **Backup NICHT sofort löschen** - `data.h2-backup-…` einige Tage/Wochen
+    als Rückfalloption behalten, erst danach aufräumen.
+
+**Rollback:** Dienst stoppen, `conf/traccar.xml` zurück auf die H2-Werte,
+`data.h2-backup-…` zurück nach `data/database.mv.db` kopieren, Dienst
+starten - alter Zustand in wenigen Minuten wiederhergestellt, solange das
+Backup aus Schritt 2 noch existiert.
+
+**Danach, sobald die Migration steht:** der einzige verbleibende
+Software-Blocker vor dem 140er-Rollout ist erledigt. Schritte 3-5 des
+alten Plans unten (Geräte-Registrierung, NTRIP, Traccar-Gruppe) betreffen
+den eigentlichen Hardware-Rollout, nicht mehr die DB-Migration selbst -
+NTRIP ist seit der RTK-Entscheidung ohnehin hinfällig, eine eigene
+Traccar-Gruppe ist seit Teil G nicht mehr nötig (der Poller erkennt seine
+Geräte selbst per IMEI-Abgleich).
 
 ## Teil B — Datenpfad SpidertrackBox → Spargar
 
