@@ -1337,6 +1337,85 @@ Telegram-Nachricht. Genaue Melde-Schwelle (z.B. exakt bei `ist_kg >=
 ziel_kg` oder schon kurz davor am gerundeten Schwellwert) noch beim Bauen
 final festzuzurren.
 
+## Teil F4 — Feld-Fortschrittskarte: Maschinen-Status, Kisten, Reihen-Erntestand (Nutzer-Vorgabe 2026-10-31, noch nicht gebaut, wartet auf GPS-/Kisten-Pipeline)
+
+Nutzer-Vorgabe: auf der `/erntewirtschaft`-Übersichtskarte je Feld auf einen
+Blick sehen, ob/wie es gerade bearbeitet wird - Maschinen-Status, Kisten-
+Durchsatz und tatsächlicher Reihen-Erntefortschritt. Baut auf
+`feld_reihen_aus_ausrichtung_berechnen()` (`app/anbau/spargel`, siehe
+Projekt-Notiz „Anbauübersicht + Ernteplanung") und der **noch nicht
+ausgerollten** GPS-Pipeline (Teil A/B/G) auf - nur die Kisten-Kennzahlen
+(Punkt 2, erste Hälfte) sind mit der heutigen Datenlage schon baubar.
+
+**1) Zwei Status-Badges unter dem Feldnamen auf der Karte.**
+Rote Zahl+Kreis = Anzahl Maschinen mit aktueller GPS-Position auf diesem
+Feld (`ernte_position.feld_id`, innerhalb der schon vorhandenen Online-
+Schwelle `offline_warn_min`, gleiches Muster wie `ernte_maschine_live`),
+aber **ohne** offene `ernte_schicht` (kein Fahrer angemeldet). Grüne
+Zahl+Kreis = gleiche Bedingung, aber **mit** offener Schicht. Neue View
+`ernte_feld_maschinen_status` (group by `feld_id`, Join `ernte_position`
+(jeweils letzte Position je Maschine) × `ernte_schicht` (`ende is null`)).
+**Einordnungs-Hinweis für später:** eine rote Zahl ist nicht zwangsläufig
+ein Fehlerzustand (z. B. eine außerhalb der Arbeitszeit geparkte Maschine)
+- relevant wird sie vor allem während der eigentlichen Erntezeit.
+
+**2) Kisten-X/Y + Reihen-N/M, als kompakte Icons.**
+Kisten-Silhouette (einfaches eigenes SVG-Liniensymbol) mit „X/Y": X = heute
+auf diesem Feld befüllte Kisten (`ernte_kiste_zyklus` wo `feld_id` = Feld
+und `befuellt_am::date = heute`), Y = davon bereits gewogen
+(`status = 'gewogen'`). **Schon heute vollständig mit bestehenden Spalten
+baubar** (`ernte_kiste_zyklus.feld_id`/`status`/`befuellt_am` existieren
+seit `migration_2026-10-20_erntewirtschaft_kisten_zyklus.sql`) - nur eine
+aggregierende View fehlt, keine neue Tabelle. Könnte als eigene, frühere
+Teilscheibe vorgezogen werden, sobald echte Feld-Zuordnungen laufen.
+Daneben „N/M Reihen" bzw. „X/Y Laufmeter" - M/Y (Reihen/Laufmeter gesamt)
+kommen aus `feld_anbau_abschnitt`/`feld_anbau_abschnitt_berechnet` (schon
+vorhanden), N/X (heute tatsächlich beerntete Reihen/Laufmeter) ist der
+eigentlich neue Baustein, siehe Punkt 3.
+
+**3) Reihen-Erntestand (der neue, komplexere Baustein).**
+Ersetzt/konkretisiert die vorherige lose Notiz dazu (siehe
+`erntewirtschaft.md`-Memory, „Vorgemerkt 2026-10-31"). Die Reihen-
+Geometrien selbst sind heute **nicht** dauerhaft gespeichert (nur
+Richtungslinie + Versatz + Index-Auswahl + Reihenabstand je
+`feld_anbau_abschnitt`), lassen sich aber jederzeit identisch über
+`feld_reihen_aus_ausrichtung_berechnen()` neu erzeugen. Täglicher Abgleich:
+je frischer Maschinen-Position den nächstgelegenen Reihen-Index des
+zugehörigen Feldes zuordnen (`ST_Distance`/`ST_DWithin`), diesen Index für
+„Feld + heutiges Datum" als beerntet markieren. Neue, einfache Tabelle
+`ernte_reihe_tagesstatus (feld_anbau_abschnitt_id, reihen_index, tag date,
+zuletzt_gesehen timestamptz, primary key (feld_anbau_abschnitt_id,
+reihen_index, tag))` - append-only, leicht zu aggregieren. Darstellung:
+beim Klick aufs Feld jede Reihen-Linie einzeln einfärben nach ihrem
+jüngsten Eintrag - **heute grün, gestern blau, älter ausgeblendet/grau**
+(Nutzer-Vorgabe). **Offener Punkt für den Bau:** bei hoher Positionsrate
+× mehreren Maschinen wäre ein Live-`ST_Distance` gegen alle Reihen bei
+jedem einzelnen Positions-Update ggf. unnötig teuer - wahrscheinlich
+sinnvoller, die Reihen-Linien je Abschnitt einmal zu materialisieren
+(bei Änderung von Linie/Versatz/Auswahl neu), statt sie bei jedem
+Abgleich live aus den RPC-Parametern neu zu rechnen. Endgültige Technik
+erst beim Bauen festzurren, abhängig von der tatsächlichen Positionsrate
+(Teil A/G).
+
+**4) Klick auf ein Feld → Detail-Ansicht.**
+Karte: die Maschinen-Marker dieses Felds (wie heute schon auf
+`/erntewirtschaft`, hier gefiltert) + die eingefärbten Reihen-Linien aus
+Punkt 3. Größere Info-Box: Liste der tatsächlich angemeldeten Mitarbeiter
+(offene `ernte_schicht` auf den Maschinen dieses Felds) mit Foto (gleiches
+Muster wie die bestehenden Marker-Popups, signierte URL aus
+`mitarbeiter-fotos`), je Person/Maschine: Anzahl gescannter/gewogener
+Kisten, zurückgelegte Laufmeter heute **und** gestern. **Offene Frage:**
+Laufmeter aus den Reihen-Treffern (Punkt 3) oder aus der realen
+GPS-Streckenlänge (`ernte_position`, siehe „gefahrene Strecke je Maschine/
+Tag" in den Präzisionsnotizen oben) - beide Wege sind vorbereitet, liefern
+aber leicht unterschiedliche Zahlen; Entscheidung erst beim Bauen.
+
+**5) Übersichtsliste (zusätzlich zur Karte).**
+Gleiche Kennzahlen (Maschinen rot/grün, Kisten X/Y, Reihen N/M, Laufmeter
+heute/gesamt) tabellarisch je Feld, ergänzt um den schon heute ableitbaren
+**Gesamtertrag** je Feld (Saison-Summe `ernte_kiste_zyklus.gewicht_netto_kg`,
+bereits Teil F3s `ist_kg`).
+
 ## Teil G — Poller-Erweiterung
 
 **Gebaut 2026-10-22** (`tools/ernte-poller/`, siehe dessen README) — eigene
