@@ -146,6 +146,26 @@ ausgearbeitete Anforderung, nur als Verwendungszweck festgehalten, damit die
 Investition nicht verloren geht. Eigener Plan/Abschnitt folgt, sobald das
 konkret ansteht.
 
+**Weitere Idee für dasselbe UHF-Material (Nutzer-Vorgabe 2026-11-01, noch
+nicht gebaut, wartet auf die neue Zapfanlage): Diesel-Tankvorgänge je
+Fahrzeug zuordnen.** Tags in der Nähe des Tankdeckels jedes Fahrzeugs,
+Reader an der hofeigenen Zapfsäule - geprüfte Reichweite ~3 m passt genau
+(Zapfsäulen-Umkreis wird zum Tanken ohnehin freigehalten, kein
+Fehlzuordnungsrisiko durch zufällig parkende Nachbarfahrzeuge, anders als
+beim ursprünglich verworfenen UHF-Einsatz für den Kisten-/Badge-Scan - dort
+war die lange Reichweite das Problem, hier passt sie). **Offener Punkt:**
+UHF-Tags vertragen Metall in der Nähe schlecht (siehe TECTUS-Empfehlung
+oben) - ein Tankdeckel sitzt im Blech, es braucht vermutlich spezielle
+"on-metal"-UHF-Tags mit Abstandshalter/Grundplatte statt der schon
+gekauften Standard-Tags. **Mengen-Erfassung:** der Nutzer baut ohnehin eine
+neue Zapfanlage mit moderner Förderpumpe + **LAN-Schnittstelle** - damit
+lässt sich die tatsächlich getankte Menge sauber abgreifen, noch zu klären
+ist nur, ob/wie sich die Pumpe anzapfen lässt. Architektur wäre analog zum
+Waagen-Agent (Teil D): ein kleiner lokaler Dienst am Hof führt UHF-Scan
+(welches Fahrzeug) + Zähler-Signal der Pumpe (wie viel) zusammen. Konkreter
+Plan erst, sobald die neue Zapfanlage ansteht/die Pumpen-Schnittstelle
+bekannt ist.
+
 ## Idee
 
 Lückenlose Kette von der Erntearbeit auf dem Feld bis zum gewogenen Ertrag am Hof,
