@@ -521,15 +521,39 @@ gespeichert (nichts geht verloren) - der Fehlerfall ist sofort erkennbar
 (kein stiller Fall mehr, der erst am Monatsende aus fehlenden Stunden
 auffällt), statt erst über eine tägliche Rückschau.
 
-**Erfolgston am Gerät (noch nicht gebaut):** vier klare, verwechslungsfreie
-Töne möglich, ohne Fehlalarm-Risiko: „Person erkannt" / „Kiste" / „Karte
-gesperrt" / „Badge unbekannt" - je ein einfacher Piezo-Summer an einem
-Digitalausgang des TRB246, unterschiedliche Muster je Ereignis. Ton erst
-**nach der Serverantwort**, nicht schon beim reinen Lesen des Codes, weil
-nur das wirklich bestätigt, dass die Daten sicher angekommen sind. Eine
-durch die Sperrzeit verworfene Wiederholung gilt dabei als Erfolg (der
-Server hat sie ja erhalten) - stumm bleibt es nur bei echten
+**Erfolgston am Gerät (noch nicht gebaut), vereinfacht 2026-11-02:**
+Nutzer-Vorgabe - statt vier unterschiedlicher Töne nur noch zwei:
+**1x lang = erfolgreich übermittelt, mehrfach kurz = fehlgeschlagen/keine
+Antwort.** Einfacher zu merken für die Erntehelfer als vier verschiedene
+Muster. Ein einfacher Piezo-Summer an einem Digitalausgang des TRB246. Ton
+erst **nach der Serverantwort**, nicht schon beim reinen Lesen des Codes,
+weil nur das wirklich bestätigt, dass die Daten sicher angekommen sind.
+Eine durch die Sperrzeit verworfene Wiederholung gilt dabei als Erfolg (der
+Server hat sie ja erhalten) - kurze Töne gibt es nur bei echten
 Übertragungsfehlern.
+
+**Offenes Hardware-Problem, noch nicht gelöst (2026-11-02): kein Digitalausgang
+mehr frei.** Der TRB246 hat laut offizieller Teltonika-Doku insgesamt genau
+**3 konfigurierbare Digitalausgänge** (plus 3 Digitaleingänge + 1
+Analogeingang) - keinen einzigen mehr. In der SpidertrackBox sind alle drei
+(„D1"-„D3") bereits an die Signalleuchte vergeben, für den neuen Summer ist
+also kein nativer vierter Ausgang übrig. Elektrische Spezifikationen je
+Ausgang (Spannung/Strom, ob ein Treibertransistor/Relais nötig ist) stehen
+nicht im öffentlichen Teltonika-Wiki, nur im vollständigen Datenblatt.
+Drei Optionen, noch keine entschieden - **Elektronikentwickler fragen**,
+kennt die Box/Verkabelung ohnehin schon:
+1. **RS485 nutzen** - der Grouper-Scanner hängt am RS232-Anschluss des
+   TRB246, RS485 scheint in der aktuellen Box unbenutzt. Ein kleines,
+   seriell angesteuertes Relais-/Summer-Modul dort wäre unabhängig von
+   D1-D3 und vermutlich die sauberste Lösung.
+2. **RS232-Steuerleitungen (DTR/RTS) prüfen** - manche RS232-Implementierungen
+   haben neben TX/RX/GND noch 1-2 per Software schaltbare Leitungen, die wie
+   ein zusätzlicher Digitalausgang genutzt werden könnten - nicht in der
+   öffentlichen Doku bestätigt, ob der TRB246 das unterstützt bzw. ob die
+   Box diese Leitungen überhaupt verkabelt.
+3. **Eine Leuchten-Stufe opfern** - falls sich zwei der drei
+   Signalleuchten-Zustände kombinieren/zusammenlegen lassen, wird ein
+   D-Pin für den Summer frei.
 
 Payload Maschine (TRB246):
 ```json
