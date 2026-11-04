@@ -135,6 +135,37 @@ Trotzdem wichtig für Dauerbetrieb:
    Telegram-Alarmierung des `fahrzeug-poller` anlehnen
    ([[fahrzeuge-traccar]]), ist aber noch nicht umgesetzt.
 
+### Update aus der Ferne (OpenSSH-Server, Nutzer-Vorgabe 2026-11-04)
+
+Damit ein Update nicht jedes Mal physisch am Gerät passieren muss, einmalig
+auf dem Dell-Desktop (PowerShell als Administrator):
+
+```powershell
+Add-WindowsCapability -Online -Name OpenSSH.Server~~~~0.0.1.0
+Start-Service sshd
+Set-Service -Name sshd -StartupType Automatic
+# Firewall-Regel wird dabei normalerweise automatisch angelegt - prüfen mit:
+Get-NetFirewallRule -Name *ssh*
+```
+
+Danach von einem anderen Rechner im selben Hof-Netz (`192.168.2.x`):
+
+```bash
+ssh <windows-benutzer>@<dell-ip>
+```
+
+Login mit dem Windows-Konto-Passwort. Das Konto braucht Admin-Rechte, da
+`nssm stop/start` das erfordert. Für das eigentliche Update dann `update.ps1`
+in diesem Ordner (fasst `git pull` + `npm ci` + NSSM-Neustart zusammen) -
+entweder nach dem Login ausführen oder direkt als SSH-Einzeiler:
+
+```bash
+ssh <windows-benutzer>@<dell-ip> "powershell -File C:\Pfad\zum\repo\tools\ernte-waage-agent\update.ps1"
+```
+
+Bewusst nur fürs interne Hofnetz gedacht - kein Port-Forwarding am Router
+nach außen einrichten, das wäre ein offener SSH-Zugang aus dem Internet.
+
 <details>
 <summary>Raspberry Pi 3B+ Härtungs-Anleitung (2026-10-26 zurückgestellt zugunsten des Dell-Desktops, für späteren Bedarf aufgehoben)</summary>
 
