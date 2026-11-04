@@ -17,6 +17,48 @@ interface Arbeitsgruppe {
   bezeichnung: string | null;
 }
 
+const FOTO_BUCKET = "mitarbeiter-fotos";
+
+// Gleiches Signier-Muster wie app/erntewirtschaft/ausweise/page.tsx -
+// privater Bucket, Zugriff nur admin/hr (migration_2026-10-22_mitarbeiter_
+// foto.sql), Anzeige über eine zeitlich begrenzte signierte URL.
+function MitarbeiterFoto({ pfad }: { pfad: string | null }) {
+  const [url, setUrl] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!pfad) {
+      setUrl(null);
+      return;
+    }
+    let abgebrochen = false;
+    getSupabaseClient()
+      .storage.from(FOTO_BUCKET)
+      .createSignedUrl(pfad, 60)
+      .then((r) => {
+        if (!abgebrochen) setUrl(r.data?.signedUrl ?? null);
+      });
+    return () => {
+      abgebrochen = true;
+    };
+  }, [pfad]);
+
+  if (!url) {
+    return (
+      <div className="flex h-24 w-20 shrink-0 items-center justify-center rounded border border-linie bg-sand text-center text-[9px] text-neutral-400">
+        kein Foto
+      </div>
+    );
+  }
+  // eslint-disable-next-line @next/next/no-img-element
+  return (
+    <img
+      src={url}
+      alt=""
+      className="h-24 w-20 shrink-0 rounded border border-linie object-cover"
+    />
+  );
+}
+
 function Feld({ label, wert }: { label: string; wert: React.ReactNode }) {
   return (
     <div className="flex flex-col border-b border-linie py-1">
@@ -137,14 +179,17 @@ function StammkarteInner() {
       </div>
 
       <div className="flex items-end justify-between border-b-2 border-emerald-800 pb-2">
-        <div>
-          <h1 className="text-xl font-bold text-emerald-800">
-            Personalstammkarte
-          </h1>
-          <p className="text-sm text-neutral-600">
-            {emp.name}, {emp.vorname}
-            {!emp.aktiv && " · inaktiv"}
-          </p>
+        <div className="flex items-center gap-3">
+          <MitarbeiterFoto pfad={emp.foto_pfad ?? null} />
+          <div>
+            <h1 className="text-xl font-bold text-emerald-800">
+              Personalstammkarte
+            </h1>
+            <p className="text-sm text-neutral-600">
+              {emp.name}, {emp.vorname}
+              {!emp.aktiv && " · inaktiv"}
+            </p>
+          </div>
         </div>
         <div className="text-right">
           <div className="text-2xl font-bold tabular-nums">

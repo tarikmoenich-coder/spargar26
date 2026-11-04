@@ -153,6 +153,10 @@ export interface Employee {
   telefon_privat?: string | null;
   email_privat?: string | null;
   funktion?: string | null;
+  // Profilbild im privaten Storage-Bucket "mitarbeiter-fotos"
+  // (migration_2026-10-22_mitarbeiter_foto.sql) - bisher nur für den
+  // Ausweis-Druck genutzt, jetzt auch auf der Personalstammkarte.
+  foto_pfad?: string | null;
 }
 
 // Jahreshistorie ohne Details: eine Zeile je (Person, Saison-Jahr), gesetzt
