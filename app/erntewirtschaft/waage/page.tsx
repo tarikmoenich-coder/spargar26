@@ -24,6 +24,19 @@ interface ErnteScanZeile {
   waage_id: number | null;
 }
 
+interface ErnteWaageZeile {
+  id: number;
+  name: string;
+  live_gewicht_kg: number | null;
+  live_aktualisiert_am: string | null;
+}
+
+// Ab wie vielen Sekunden ohne frisches live_aktualisiert_am die Anzeige auf
+// "keine Verbindung" springt - deutlich über dem LIVE_POLL_INTERVALL_MS-
+// Default (3s) des Agenten, damit ein einzelner verzögerter Poll nicht
+// sofort als Ausfall gilt.
+const WAAGE_LIVE_TIMEOUT_S = 10;
+
 function formatZeitpunktDE(iso: string): string {
   const d = new Date(iso);
   return d.toLocaleString("de-DE", {
@@ -38,7 +51,7 @@ function formatZeitpunktDE(iso: string): string {
 
 export default function ErntewirtschaftWaagePage() {
   const [zeilen, setZeilen] = useState<ErnteScanZeile[]>([]);
-  const [waagen, setWaagen] = useState<Record<number, string>>({});
+  const [waagen, setWaagen] = useState<ErnteWaageZeile[]>([]);
   const [loading, setLoading] = useState(true);
   const [fehler, setFehler] = useState<string | null>(null);
   const [zuletztAktualisiert, setZuletztAktualisiert] = useState<Date | null>(null);
@@ -53,16 +66,12 @@ export default function ErntewirtschaftWaagePage() {
         .eq("ereignis", "gewicht")
         .order("empfangen_am", { ascending: false })
         .limit(SEITENGROESSE),
-      supabase.from("ernte_waage").select("id, name"),
+      supabase.from("ernte_waage").select("id, name, live_gewicht_kg, live_aktualisiert_am"),
     ]);
 
     setFehler(scanFehler?.message ?? null);
     setZeilen((scanData as ErnteScanZeile[]) ?? []);
-    const waagenMap: Record<number, string> = {};
-    ((waageData as { id: number; name: string }[]) ?? []).forEach((w) => {
-      waagenMap[w.id] = w.name;
-    });
-    setWaagen(waagenMap);
+    setWaagen((waageData as ErnteWaageZeile[]) ?? []);
     setLoading(false);
     setZuletztAktualisiert(new Date());
   }, []);
@@ -95,6 +104,29 @@ export default function ErntewirtschaftWaagePage() {
           </>
         }
       />
+
+      {waagen.length > 0 && (
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+          {waagen.map((w) => {
+            const sekunden = w.live_aktualisiert_am
+              ? Math.round((Date.now() - new Date(w.live_aktualisiert_am).getTime()) / 1000)
+              : null;
+            const verbunden = sekunden !== null && sekunden <= WAAGE_LIVE_TIMEOUT_S;
+            return (
+              <div key={w.id} className="card flex items-center gap-3">
+                <span className={`h-3 w-3 shrink-0 rounded-full ${verbunden ? "bg-emerald-500" : "bg-beere-500"}`} />
+                <div>
+                  <p className="text-sm font-medium text-neutral-800">{w.name}</p>
+                  <p className="text-xs text-neutral-500">
+                    {w.live_gewicht_kg != null ? `${formatMenge(w.live_gewicht_kg)} kg (live)` : "ohne Verbindung"}
+                    {sekunden !== null && ` · vor ${sekunden}s`}
+                  </p>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
 
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
         <div className="card">
@@ -146,7 +178,7 @@ export default function ErntewirtschaftWaagePage() {
                   <td className="whitespace-nowrap">{formatZeitpunktDE(z.empfangen_am)}</td>
                   <td className="font-mono text-sm">{z.tag_uid ?? "—"}</td>
                   <td>{formatMenge(z.gewicht_kg)} kg</td>
-                  <td>{z.waage_id ? waagen[z.waage_id] ?? z.waage_id : "—"}</td>
+                  <td>{z.waage_id ? waagen.find((w) => w.id === z.waage_id)?.name ?? z.waage_id : "—"}</td>
                 </tr>
               ))}
             </tbody>

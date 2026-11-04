@@ -10,6 +10,13 @@ Bei Supabase-Ausfall: lokale Warteschlange (einfache JSON-Zeilen-Datei,
 bewusst kein natives Binary wie SQLite - siehe `queue.mjs`), automatischer
 Retry.
 
+Zusätzlich fragt der Agent unabhängig vom eigentlichen Wiegen alle
+`LIVE_POLL_INTERVALL_MS` (Default 3s) per `<GN7>` das aktuelle Gewicht ab und
+schreibt es in `ernte_waage` (`live_gewicht_kg`/`live_aktualisiert_am`) - rein
+für die Live-Verbindungsanzeige im Kiosk/Admin-Protokoll ("steht die
+Verbindung noch"), siehe `migration_2026-11-04_waage_live_status.sql`.
+Pausiert von selbst während eines laufenden Wiegevorgangs.
+
 ## Scanner-Quelle (heute: Testdaten, echte Hardware folgt)
 
 Der 2D-Scanner ist noch nicht gekauft. Bis dahin per `SCANNER_QUELLE`

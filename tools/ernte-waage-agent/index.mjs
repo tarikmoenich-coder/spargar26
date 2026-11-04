@@ -31,6 +31,11 @@ const MINDESTGEWICHT_KG = envNumber("MINDESTGEWICHT_KG", 2);
 const GEWICHT_POLL_INTERVALL_MS = envNumber("GEWICHT_POLL_INTERVALL_MS", 400);
 const WARTE_AUF_GEWICHT_TIMEOUT_MS = envNumber("WARTE_AUF_GEWICHT_TIMEOUT_MS", 20_000);
 const RETRY_INTERVALL_MS = envNumber("RETRY_INTERVALL_MS", 30_000);
+// Live-Verbindungsanzeige im Kiosk/Admin-Protokoll (Nutzer-Rueckmeldung nach
+// dem ersten Praxistest 2026-11-04) - unabhaengig vom eigentlichen Wiegen in
+// kurzen Abstaenden <GN7> abfragen und in ernte_waage schreiben, siehe
+// migration_2026-11-04_waage_live_status.sql.
+const LIVE_POLL_INTERVALL_MS = envNumber("LIVE_POLL_INTERVALL_MS", 3000);
 const QUEUE_DATEI = env("QUEUE_DATEI", "./ernte-waage-agent-queue.jsonl");
 
 if (!WAAGE_IP) {
@@ -75,6 +80,31 @@ async function schreibenMitQueueFallback(zeile) {
     console.error(`  -> Supabase-Fehler, lege lokal in die Warteschlange: ${e.message}`);
     einreihen(QUEUE_DATEI, zeile);
   }
+}
+
+// true waehrend eines laufenden Wiegevorgangs (wartetAufVeraenderung/fp0Lesen
+// belegen die Waage bereits mit eigenen Anfragen) - das Live-Polling pausiert
+// in dieser Zeit, statt eine zweite parallele TCP-Verbindung zur Waage
+// aufzumachen (die RHEWA 84vario ist auf genau EINE Verbindung ausgelegt).
+let wiegeLaeuft = false;
+
+async function liveStatusAktualisieren() {
+  if (wiegeLaeuft) return;
+  let gewicht;
+  try {
+    gewicht = await gn7Gewicht(WAAGE_IP, WAAGE_PORT);
+  } catch {
+    // Waage gerade nicht erreichbar - kein Log-Spam dafuer (alle 3s), naechster
+    // Versuch kommt von selbst. Fehlender/alter live_aktualisiert_am-Zeitstempel
+    // macht den Ausfall in der UI ohnehin sichtbar.
+    return;
+  }
+  if (!Number.isFinite(gewicht)) return;
+  const { error } = await supabase
+    .from("ernte_waage")
+    .update({ live_gewicht_kg: gewicht, live_aktualisiert_am: new Date().toISOString() })
+    .eq("id", WAAGE_ID);
+  if (error) console.error(`  -> Live-Status konnte nicht geschrieben werden: ${error.message}`);
 }
 
 async function wartendeAbarbeiten() {
@@ -132,56 +162,62 @@ async function wartetAufVeraenderung(tagUid) {
 }
 
 async function kisteWiegen(tagUid) {
-  // Zeitmessung (Nutzer-Rueckmeldung 2026-10-27: Uebermittlung fuehlt sich
-  // langsam an) - zeigt, ob die Zeit beim Warten auf die Gewichtsaenderung
-  // oder beim Schreiben nach Supabase draufgeht, statt das zu erraten.
-  const start = Date.now();
-  console.log(`Code gescannt: ${tagUid} - warte auf Gewichtswechsel auf der Waage ...`);
-  if (!(await wartetAufVeraenderung(tagUid))) return;
-
-  console.log(`  -> Aenderung erkannt nach ${Date.now() - start}ms, frage <FP0> ab ...`);
-  const fp0Start = Date.now();
-  // Nur noch EINE <FP0>-Abfrage (Nutzer-Entscheidung 2026-10-27): die
-  // urspruengliche doppelte Abfrage als Gegenprobe gegen einen falsch-
-  // stabilen Zwischenwert beim Kistenwechsel verdoppelte effektiv die
-  // Standzeit der Kiste auf der Waage (jede Abfrage laesst das Geraet
-  // selbst erneut auf Ruhelage warten) - der Durchsatz war dem Nutzer
-  // wichtiger als diese zusaetzliche Absicherung.
-  let ergebnis;
+  wiegeLaeuft = true;
   try {
-    ergebnis = await fp0Lesen(WAAGE_IP, WAAGE_PORT);
-  } catch (e) {
-    console.error(`  -> Waage nicht erreichbar/Fehler: ${e.message}`);
-    return;
-  }
-  console.log(`  -> <FP0> dauerte ${Date.now() - fp0Start}ms`);
+    // Zeitmessung (Nutzer-Rueckmeldung 2026-10-27: Uebermittlung fuehlt sich
+    // langsam an) - zeigt, ob die Zeit beim Warten auf die Gewichtsaenderung
+    // oder beim Schreiben nach Supabase draufgeht, statt das zu erraten.
+    const start = Date.now();
+    console.log(`Code gescannt: ${tagUid} - warte auf Gewichtswechsel auf der Waage ...`);
+    if (!(await wartetAufVeraenderung(tagUid))) return;
 
-  if (!ergebnis) {
-    console.warn("  -> <FP!> - kein stabiles Gewicht innerhalb von 30s, oder ausserhalb Waegebereich.");
-    return;
-  }
+    console.log(`  -> Aenderung erkannt nach ${Date.now() - start}ms, frage <FP0> ab ...`);
+    const fp0Start = Date.now();
+    // Nur noch EINE <FP0>-Abfrage (Nutzer-Entscheidung 2026-10-27): die
+    // urspruengliche doppelte Abfrage als Gegenprobe gegen einen falsch-
+    // stabilen Zwischenwert beim Kistenwechsel verdoppelte effektiv die
+    // Standzeit der Kiste auf der Waage (jede Abfrage laesst das Geraet
+    // selbst erneut auf Ruhelage warten) - der Durchsatz war dem Nutzer
+    // wichtiger als diese zusaetzliche Absicherung.
+    let ergebnis;
+    try {
+      ergebnis = await fp0Lesen(WAAGE_IP, WAAGE_PORT);
+    } catch (e) {
+      console.error(`  -> Waage nicht erreichbar/Fehler: ${e.message}`);
+      return;
+    }
+    console.log(`  -> <FP0> dauerte ${Date.now() - fp0Start}ms`);
 
-  if (ergebnis.nettoKg < MINDESTGEWICHT_KG) {
-    console.warn(
-      `  -> Netto ${ergebnis.nettoKg} kg liegt unter dem erwarteten Mindestgewicht (${MINDESTGEWICHT_KG} kg) - wird trotzdem gespeichert, zur Kontrolle.`,
-    );
-  }
-  console.log(`  -> Netto ${ergebnis.nettoKg} kg (Brutto ${ergebnis.bruttoKg}, Tara ${ergebnis.taraKg})`);
+    if (!ergebnis) {
+      console.warn("  -> <FP!> - kein stabiles Gewicht innerhalb von 30s, oder ausserhalb Waegebereich.");
+      return;
+    }
 
-  await schreibenMitQueueFallback({
-    quelle: "waage",
-    waage_id: WAAGE_ID,
-    tag_uid: tagUid,
-    ereignis: "gewicht",
-    zeitpunkt: new Date().toISOString(),
-    gewicht_kg: ergebnis.nettoKg,
-    roh: ergebnis,
-  });
+    if (ergebnis.nettoKg < MINDESTGEWICHT_KG) {
+      console.warn(
+        `  -> Netto ${ergebnis.nettoKg} kg liegt unter dem erwarteten Mindestgewicht (${MINDESTGEWICHT_KG} kg) - wird trotzdem gespeichert, zur Kontrolle.`,
+      );
+    }
+    console.log(`  -> Netto ${ergebnis.nettoKg} kg (Brutto ${ergebnis.bruttoKg}, Tara ${ergebnis.taraKg})`);
+
+    await schreibenMitQueueFallback({
+      quelle: "waage",
+      waage_id: WAAGE_ID,
+      tag_uid: tagUid,
+      ereignis: "gewicht",
+      zeitpunkt: new Date().toISOString(),
+      gewicht_kg: ergebnis.nettoKg,
+      roh: ergebnis,
+    });
+  } finally {
+    wiegeLaeuft = false;
+  }
 }
 
 async function main() {
   console.log(`Waagen-Agent gestartet. Waage ${WAAGE_IP}:${WAAGE_PORT}, Scanner-Quelle "${SCANNER_QUELLE_NAME}".`);
   setInterval(() => void wartendeAbarbeiten(), RETRY_INTERVALL_MS);
+  setInterval(() => void liveStatusAktualisieren(), LIVE_POLL_INTERVALL_MS);
 
   for await (const tagUid of scannerQuelle(SCANNER_QUELLE_NAME)) {
     await kisteWiegen(tagUid);
