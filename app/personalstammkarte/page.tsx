@@ -159,6 +159,7 @@ function StammkarteInner() {
   const [vorgaenger, setVorgaenger] = useState<VorgaengerKurz | null>(null);
   const [laedt, setLaedt] = useState(true);
   const [fehler, setFehler] = useState<string | null>(null);
+  const [historieFehler, setHistorieFehler] = useState<string | null>(null);
   const [maskiert, setMaskiert] = useState(false);
 
   useEffect(() => {
@@ -189,7 +190,15 @@ function StammkarteInner() {
       const geladen = empRes.data as Employee;
       setEmp(geladen);
       setGruppen((grpRes.data as Arbeitsgruppe[]) ?? []);
-      setJahre((jahreRes.data as EmployeeSaisonJahr[]) ?? []);
+      // Fehler NICHT stillschweigend verschlucken (2026-11-04 gefunden: die
+      // Sicht employee_saison_jahre fehlte in Supabase, "Aktuelle Saison"
+      // zeigte deshalb bei JEDEM Mitarbeiter fälschlich "—" statt eines
+      // Hinweises auf den eigentlichen Ladefehler).
+      if (jahreRes.error) {
+        setHistorieFehler(jahreRes.error.message);
+      } else {
+        setJahre((jahreRes.data as EmployeeSaisonJahr[]) ?? []);
+      }
       setFsKategorien(
         (fsRes.data as { fuehrerschein_kategorien: string[] | null } | null)
           ?.fuehrerschein_kategorien ?? null
@@ -450,7 +459,11 @@ function StammkarteInner() {
         <h2 className="mb-2 flex items-baseline gap-2 border-b border-emerald-700/40 pb-1 text-[10.5pt] font-semibold uppercase tracking-wide text-emerald-800">
           <span className="text-neutral-400">04</span> Saisonhistorie
         </h2>
-        {historie.anzahl === 0 ? (
+        {historieFehler ? (
+          <p className="text-[10.5pt] text-beere-700">
+            Saisonhistorie konnte nicht geladen werden: {historieFehler}
+          </p>
+        ) : historie.anzahl === 0 ? (
           <p className="text-[10.5pt] text-neutral-400">
             Keine Saisonhistorie hinterlegt.
           </p>
