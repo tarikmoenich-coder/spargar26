@@ -273,7 +273,9 @@ input[type="number"]::-webkit-inner-spin-button {
 }
 
 /* Personalstammkarte (Deckblatt der Personalkartei) - ein Blatt A4 hoch,
-   ohne Bildschirm-Chrome.
+   ohne Bildschirm-Chrome. Redesign 2026-11-04 (professionelles, modernes
+   Personaldatenblatt) - Seitenränder 16mm (Nutzer-Vorgabe: 15-18mm),
+   restliche Feinheiten unten kommentiert.
    WICHTIG (Bugfix 2026-09-16, Nutzer-Meldung "kann auf einmal nicht mehr in
    A3 drucken"): eine UNBENANNTE @page-Regel gilt für den GESAMTEN Druckauftrag
    der App, nicht nur für diese Seite - sie hatte seit 2026-09-04 jeden Druck
@@ -284,16 +286,42 @@ input[type="number"]::-webkit-inner-spin-button {
 @media print {
   @page stammkarte-a4 {
     size: A4 portrait;
-    margin: 14mm;
+    margin: 16mm;
+    /* Echte "Seite X von Y"-Zählung ist in HTML-Browserdruck nicht
+       zuverlässig über alle Browser umsetzbar (CSS Paged Media
+       @page-Randboxen werden von Chrome nicht unterstützt) - wer das
+       braucht, aktiviert im Druckdialog "Weitere Einstellungen" ->
+       "Kopf- und Fußzeilen", das fügt Seitenzahlen automatisch hinzu. Der
+       feste Fuß mit Name/Personalnummer (siehe page.tsx, position: fixed)
+       sorgt zumindest dafür, dass jede Seite eindeutig zuordenbar bleibt.
+       Regel trotzdem gesetzt, falls ein Browser @page-Randboxen künftig
+       unterstützt. */
+    @bottom-center {
+      content: "Seite " counter(page) " / " counter(pages);
+      font-size: 7.5pt;
+      color: #9ca3af;
+    }
   }
   .stammkarte {
     page: stammkarte-a4;
     max-width: none;
     padding: 0;
     font-size: 10.5pt;
+    /* Erzwingt das Drucken von Hintergrundfarben (Status-Badge) unabhängig
+       von der "Hintergrundgrafiken"-Checkbox im Browser-Druckdialog. */
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
   }
   .stammkarte table {
     font-size: 9.5pt;
+  }
+  /* Tabellenzeilen nicht mitten auf der Seite zerreißen; Kopfzeile bei
+     einem Seitenumbruch der Saisonhistorie automatisch wiederholen. */
+  .stammkarte table tr {
+    break-inside: avoid;
+  }
+  .stammkarte thead {
+    display: table-header-group;
   }
 }
 

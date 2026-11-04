@@ -1,27 +1,54 @@
 "use client";
 
+// Personalstammkarte (Druck-/PDF-Ausgabe) - Redesign nach Nutzer-Vorgabe
+// 2026-11-04 ("professionelles, modernes A4-Personaldatenblatt"). Reine
+// Layout-Überarbeitung - Datenanbindung/Ladefunktionen unverändert, nur um
+// die Vorgänger-Namensauflösung (Statuswechsel-Zeile) ergänzt. 4 Abschnitte
+// (01 Persönliche Daten, 02 Beschäftigungsdaten, 03 Abrechnung +
+// Bankverbindung, 04 Saisonhistorie) statt der bisherigen durchgehenden
+// 3-Spalten-Liste. Druck-Feinschliff (Seitenränder, Schriftgrößen,
+// Seitenumbruch-Regeln) in app/globals.css unter ".stammkarte".
 import { Suspense, useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { getSupabaseClient } from "@/lib/supabase/client";
 import { useProfile } from "@/lib/useProfile";
 import { formatDatumDE, formatMenge } from "@/lib/format";
 import { saisonsKompakt } from "@/lib/saisonHistorie";
-import {
-  ABRECHNUNGSART_LABELS,
-  type Employee,
-  type EmployeeSaisonJahr,
-} from "@/lib/types";
+import { type Employee, type EmployeeSaisonJahr } from "@/lib/types";
 
 interface Arbeitsgruppe {
   gruppe_nr: string;
   bezeichnung: string | null;
 }
 
+interface VorgaengerKurz {
+  personal_nr: string;
+  name: string;
+  vorname: string;
+}
+
 const FOTO_BUCKET = "mitarbeiter-fotos";
+
+// Volle, eindeutige Beschriftung nur für diese Druckansicht (Nutzer-Vorgabe
+// 2026-11-04: prüfen, ob "Abrechnungsart" evtl. "Steuerklasse" heißen
+// sollte). Bewusst NICHT umbenannt, da der Wert nur bei EINER der drei
+// Ausprägungen überhaupt eine Steuerklasse ist ("pauschal" = Minijob,
+// "sozialversicherungspflichtig" = SV-Pflicht, keine Steuerklasse) - eine
+// Umbenennung des Feldnamens wäre für die anderen beiden irreführend.
+// Stattdessen bleibt der Feldname, nur der Wert wird ausgeschrieben statt
+// der App-weiten Kurzform (ABRECHNUNGSART_LABELS aus lib/types.ts, die
+// bewusst kurz bleiben soll - siehe Kommentar dort - für Listen/Tabellen).
+const ABRECHNUNGSART_VOLLTEXT: Record<Employee["abrechnungsart"], string> = {
+  pauschal: "Pauschal (geringfügige Beschäftigung)",
+  lohnsteuerklasse_1: "Lohnsteuerklasse 1",
+  sozialversicherungspflichtig: "Sozialversicherungspflichtig",
+};
 
 // Gleiches Signier-Muster wie app/erntewirtschaft/ausweise/page.tsx -
 // privater Bucket, Zugriff nur admin/hr (migration_2026-10-22_mitarbeiter_
-// foto.sql), Anzeige über eine zeitlich begrenzte signierte URL.
+// foto.sql), Anzeige über eine zeitlich begrenzte signierte URL. Rechteckig
+// statt rund (Nutzer-Vorgabe: "einheitlich zugeschnitten" wie ein
+// Ausweis-/Passfoto, nicht wie der runde Kiosk-Avatar).
 function MitarbeiterFoto({ pfad }: { pfad: string | null }) {
   const [url, setUrl] = useState<string | null>(null);
 
@@ -44,7 +71,7 @@ function MitarbeiterFoto({ pfad }: { pfad: string | null }) {
 
   if (!url) {
     return (
-      <div className="flex h-24 w-20 shrink-0 items-center justify-center rounded border border-linie bg-sand text-center text-[9px] text-neutral-400">
+      <div className="flex h-28 w-24 shrink-0 items-center justify-center rounded-sm border border-linie bg-sand text-center text-[8pt] text-neutral-400">
         kein Foto
       </div>
     );
@@ -54,19 +81,68 @@ function MitarbeiterFoto({ pfad }: { pfad: string | null }) {
     <img
       src={url}
       alt=""
-      className="h-24 w-20 shrink-0 rounded border border-linie object-cover"
+      className="h-28 w-24 shrink-0 rounded-sm border border-linie object-cover"
     />
   );
 }
 
-function Feld({ label, wert }: { label: string; wert: React.ReactNode }) {
+// Einfache, lesbare Maskierung für den Datenschutz-Druck (Nutzer-Vorgabe):
+// Anfang + Ende bleiben sichtbar, der Rest wird durch Punkte ersetzt -
+// erkennbar, aber nicht mehr vollständig lesbar. Keine Formatierung in
+// IBAN-4er-Blöcken nötig, reicht als einfache Druckvariante.
+function maskiereWert(wert: string): string {
+  const kompakt = wert.replace(/\s+/g, "");
+  if (kompakt.length <= 6) return "•".repeat(kompakt.length);
+  return `${kompakt.slice(0, 2)} •••• •••• ${kompakt.slice(-4)}`;
+}
+
+function Feld({
+  label,
+  wert,
+  volleBreite,
+  mono,
+}: {
+  label: string;
+  wert: React.ReactNode;
+  volleBreite?: boolean;
+  mono?: boolean;
+}) {
   return (
-    <div className="flex flex-col border-b border-linie py-1">
-      <span className="text-[10px] uppercase tracking-wide text-neutral-500">
+    <div
+      className={`flex flex-col border-b border-linie py-1 ${
+        volleBreite ? "col-span-2 sm:col-span-3" : ""
+      }`}
+    >
+      <span className="text-[8.5pt] uppercase tracking-wide text-neutral-500">
         {label}
       </span>
-      <span className="text-sm">{wert || "—"}</span>
+      <span
+        className={`text-[10.5pt] text-neutral-800 ${
+          mono ? "break-all font-mono" : ""
+        }`}
+      >
+        {wert || "—"}
+      </span>
     </div>
+  );
+}
+
+function Abschnitt({
+  nr,
+  titel,
+  children,
+}: {
+  nr: string;
+  titel: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <section className="break-inside-avoid">
+      <h2 className="mb-2 flex items-baseline gap-2 border-b border-emerald-700/40 pb-1 text-[10.5pt] font-semibold uppercase tracking-wide text-emerald-800">
+        <span className="text-neutral-400">{nr}</span> {titel}
+      </h2>
+      <div className="grid grid-cols-2 gap-x-6 sm:grid-cols-3">{children}</div>
+    </section>
   );
 }
 
@@ -80,8 +156,10 @@ function StammkarteInner() {
   const [gruppen, setGruppen] = useState<Arbeitsgruppe[]>([]);
   const [jahre, setJahre] = useState<EmployeeSaisonJahr[]>([]);
   const [fsKategorien, setFsKategorien] = useState<string[] | null>(null);
+  const [vorgaenger, setVorgaenger] = useState<VorgaengerKurz | null>(null);
   const [laedt, setLaedt] = useState(true);
   const [fehler, setFehler] = useState<string | null>(null);
+  const [maskiert, setMaskiert] = useState(false);
 
   useEffect(() => {
     if (!id || !canView) {
@@ -108,13 +186,27 @@ function StammkarteInner() {
         setLaedt(false);
         return;
       }
-      setEmp(empRes.data as Employee);
+      const geladen = empRes.data as Employee;
+      setEmp(geladen);
       setGruppen((grpRes.data as Arbeitsgruppe[]) ?? []);
       setJahre((jahreRes.data as EmployeeSaisonJahr[]) ?? []);
       setFsKategorien(
         (fsRes.data as { fuehrerschein_kategorien: string[] | null } | null)
           ?.fuehrerschein_kategorien ?? null
       );
+
+      // Statuswechsel-Zeile: konkreten Vorgänger (Personalnummer + Name)
+      // nachladen statt nur "ja (siehe Personalstamm)" anzuzeigen - die
+      // Daten sind schon vorhanden, wurden bisher nur nicht abgefragt.
+      if (geladen.vorgaenger_employee_id) {
+        const { data: vData } = await supabase
+          .from("employees")
+          .select("personal_nr, name, vorname")
+          .eq("id", geladen.vorgaenger_employee_id)
+          .maybeSingle();
+        setVorgaenger((vData as VorgaengerKurz | null) ?? null);
+      }
+
       setLaedt(false);
     })();
   }, [id, canView]);
@@ -163,42 +255,104 @@ function StammkarteInner() {
     ...(fsKategorien ?? []),
   ].filter((v, i, a) => v && a.indexOf(v) === i) as string[];
 
+  const anschrift =
+    [
+      [emp.strasse, emp.hausnummer].filter(Boolean).join(" "),
+      [emp.plz, emp.ort].filter(Boolean).join(" "),
+      emp.land,
+    ]
+      .filter(Boolean)
+      .join(", ") || "";
+
+  const geburtsortHerkunft =
+    [emp.geburtsort, emp.herkunft && emp.herkunft !== emp.geburtsort ? `Herkunft: ${emp.herkunft}` : null]
+      .filter(Boolean)
+      .join(" · ") || "";
+
+  const beschaeftigungszeitraum =
+    [formatDatumDE(emp.saison_beginn), formatDatumDE(emp.saison_ende)]
+      .filter((v) => v && v !== "—")
+      .join(" – ") || "";
+
+  const aktuelleSaison = emp.saison_beginn
+    ? new Date(emp.saison_beginn).getFullYear()
+    : historie.letzte ?? null;
+
+  const svNr = emp.sozialversicherungsnummer
+    ? maskiert
+      ? maskiereWert(emp.sozialversicherungsnummer)
+      : emp.sozialversicherungsnummer
+    : "";
+  const steuerId = emp.steuer_id
+    ? maskiert
+      ? maskiereWert(emp.steuer_id)
+      : emp.steuer_id
+    : "";
+  const iban = emp.iban ? (maskiert ? maskiereWert(emp.iban) : emp.iban) : "";
+
   return (
-    <div className="stammkarte mx-auto flex max-w-3xl flex-col gap-4 p-4">
-      <div className="flex items-center justify-between print:hidden">
+    <div className="stammkarte mx-auto flex max-w-3xl flex-col gap-6 p-4">
+      <div className="flex flex-wrap items-center justify-between gap-2 print:hidden">
         <a href="/mitarbeiter" className="btn-secondary text-xs">
           ← Personalstamm
         </a>
-        <button
-          type="button"
-          className="btn text-xs"
-          onClick={() => window.print()}
-        >
-          Drucken
-        </button>
+        <div className="flex items-center gap-4">
+          <label className="flex items-center gap-1.5 text-xs text-neutral-600">
+            <input
+              type="checkbox"
+              checked={maskiert}
+              onChange={(e) => setMaskiert(e.target.checked)}
+            />
+            Datenschutz-Druck (SV-Nr./Steuer-ID/IBAN maskieren)
+          </label>
+          <button
+            type="button"
+            className="btn text-xs"
+            onClick={() => window.print()}
+          >
+            Drucken
+          </button>
+        </div>
       </div>
 
-      <div className="flex items-end justify-between border-b-2 border-emerald-800 pb-2">
-        <div className="flex items-center gap-3">
+      {/* Kopfbereich */}
+      <div className="flex items-start justify-between gap-4 border-b border-emerald-700 pb-3">
+        <div className="flex items-start gap-4">
           <MitarbeiterFoto pfad={emp.foto_pfad ?? null} />
           <div>
-            <h1 className="text-xl font-bold text-emerald-800">
+            <h1 className="text-[17pt] font-semibold leading-tight text-emerald-800">
               Personalstammkarte
             </h1>
-            <p className="text-sm text-neutral-600">
+            <p className="mt-0.5 text-[13pt] font-medium text-neutral-800">
               {emp.name}, {emp.vorname}
-              {!emp.aktiv && " · inaktiv"}
+            </p>
+            <p className="mt-1 text-[9pt] text-neutral-500">
+              Personalnummer{" "}
+              <span className="font-semibold tabular-nums text-neutral-700">
+                {emp.personal_nr}
+              </span>
             </p>
           </div>
         </div>
-        <div className="text-right">
-          <div className="text-2xl font-bold tabular-nums">
-            {emp.personal_nr}
-          </div>
-          <div className="text-[10px] text-neutral-500">
+        <div className="flex shrink-0 flex-col items-end gap-1.5">
+          <span className={`badge ${emp.aktiv ? "badge-ok" : "badge-neutral"}`}>
+            {emp.aktiv ? "Aktiv" : "Inaktiv"}
+          </span>
+          <span className="whitespace-nowrap text-[8.5pt] text-neutral-400">
             Stand {formatDatumDE(new Date().toISOString())}
-          </div>
+          </span>
         </div>
+      </div>
+
+      {/* Namentlicher Bezug auf jeder gedruckten Seite (Chrome wiederholt
+         position:fixed-Elemente bei mehrseitigem Druck automatisch) -
+         echte "Seite X von Y"-Zählung ist in HTML-Browserdruck nicht
+         zuverlässig umsetzbar, siehe Hinweis an den Nutzer. */}
+      <div className="pointer-events-none fixed inset-x-0 bottom-0 hidden items-center justify-between px-[16mm] py-2 text-[7.5pt] text-neutral-400 print:flex">
+        <span>
+          {emp.name}, {emp.vorname} · Personalnummer {emp.personal_nr}
+        </span>
+        <span>Personalstammkarte · Stand {formatDatumDE(new Date().toISOString())}</span>
       </div>
 
       {emp.schwarze_liste && (
@@ -208,103 +362,106 @@ function StammkarteInner() {
         </div>
       )}
 
-      <div className="grid grid-cols-2 gap-x-6 sm:grid-cols-3">
-        <Feld label="Name" wert={emp.name} />
+      <Abschnitt nr="01" titel="Persönliche Daten">
+        <Feld label="Nachname" wert={emp.name} />
         <Feld label="Vorname" wert={emp.vorname} />
+        {emp.geburtsname && <Feld label="Geburtsname" wert={emp.geburtsname} />}
         <Feld
-          label="Geboren"
-          wert={
-            [
-              emp.geburtsdatum ? formatDatumDE(emp.geburtsdatum) : "",
-              emp.geburtsort,
-            ]
-              .filter(Boolean)
-              .join(" in ") || "—"
-          }
+          label="Geburtsdatum"
+          wert={emp.geburtsdatum ? formatDatumDE(emp.geburtsdatum) : ""}
         />
-        <Feld label="Geburtsname" wert={emp.geburtsname} />
+        {geburtsortHerkunft && (
+          <Feld label="Geburtsort / Herkunft" wert={geburtsortHerkunft} />
+        )}
         <Feld
           label="Staatsangeh. / Nat."
           wert={emp.staatsangehoerigkeit ?? emp.nationalitaet}
         />
-        <Feld label="Herkunft" wert={emp.herkunft} />
+        <Feld label="Geschlecht" wert={emp.geschlecht} />
+        <Feld label="Familienstand" wert={emp.familienstand} />
+        <Feld label="Anschrift" wert={anschrift} volleBreite />
+      </Abschnitt>
+
+      <Abschnitt nr="02" titel="Beschäftigungsdaten">
         <Feld
-          label="Gruppe"
+          label="Personalgruppe"
           wert={
             emp.gruppe_nr
               ? `${emp.gruppe_nr} – ${gruppenLabel[emp.gruppe_nr] ?? "?"}`
-              : "—"
+              : ""
           }
         />
-        <Feld label="Geschlecht" wert={emp.geschlecht} />
-        <Feld label="Familienstand" wert={emp.familienstand} />
+        <Feld label="Beschäftigungsstatus" wert={emp.aktiv ? "Aktiv" : "Inaktiv"} />
+        {historie.erste && (
+          <Feld label="Erstmals beschäftigt" wert={`Saison ${historie.erste}`} />
+        )}
+        {beschaeftigungszeitraum && (
+          <Feld
+            label="Aktueller Beschäftigungszeitraum"
+            wert={beschaeftigungszeitraum}
+          />
+        )}
+        <Feld label="Aktuelle Saison" wert={aktuelleSaison ?? ""} />
         <Feld
-          label="Anschrift"
-          wert={
-            [
-              [emp.strasse, emp.hausnummer].filter(Boolean).join(" "),
-              [emp.plz, emp.ort].filter(Boolean).join(" "),
-              emp.land,
-            ]
-              .filter(Boolean)
-              .join(", ") || "—"
-          }
-        />
-        <Feld
-          label="Abrechnungsart"
-          wert={ABRECHNUNGSART_LABELS[emp.abrechnungsart]}
-        />
-        <Feld
-          label="Stundenlohn (aktuell)"
-          wert={emp.stundenlohn != null ? `${formatMenge(emp.stundenlohn, 2)} €` : "—"}
+          label="Aktueller Stundenlohn"
+          wert={emp.stundenlohn != null ? `${formatMenge(emp.stundenlohn, 2)} €` : ""}
         />
         <Feld
           label="Führerschein"
-          wert={fsKlassen.length ? fsKlassen.join(", ") : "—"}
+          wert={fsKlassen.length ? fsKlassen.join(", ") : ""}
         />
-        <Feld label="SV-Nummer" wert={emp.sozialversicherungsnummer} />
-        <Feld label="Steuer-ID" wert={emp.steuer_id} />
-        <Feld label="IBAN" wert={emp.iban} />
-        <Feld label="BIC" wert={emp.bic} />
+        {emp.vorgaenger_employee_id && (
+          <Feld
+            label="Statuswechsel aus Personalnummer"
+            wert={
+              vorgaenger
+                ? `${vorgaenger.personal_nr} (${vorgaenger.vorname} ${vorgaenger.name})`
+                : "siehe Personalstamm"
+            }
+            volleBreite
+          />
+        )}
+      </Abschnitt>
+
+      <Abschnitt nr="03" titel="Abrechnung und Bankverbindung">
+        <Feld
+          label="Abrechnungsart"
+          wert={ABRECHNUNGSART_VOLLTEXT[emp.abrechnungsart]}
+        />
+        <Feld label="SV-Nummer" wert={svNr} mono />
+        <Feld label="Steuer-ID" wert={steuerId} mono />
+        <Feld label="IBAN" wert={iban} volleBreite mono />
+        <Feld label="BIC" wert={emp.bic} mono />
         <Feld label="Zahlungsempfänger" wert={emp.zahlungsempfaenger} />
-        <Feld
-          label="Saison (aktuell)"
-          wert={
-            [formatDatumDE(emp.saison_beginn), formatDatumDE(emp.saison_ende)]
-              .filter((v) => v && v !== "—")
-              .join(" – ") || "—"
-          }
-        />
-        <Feld label="Status" wert={emp.aktiv ? "aktiv" : "inaktiv"} />
-        <Feld
-          label="Statuswechsel aus Nr."
-          wert={emp.vorgaenger_employee_id ? "ja (siehe Personalstamm)" : "—"}
-        />
-      </div>
+      </Abschnitt>
 
       {emp.notiz && (
-        <div className="border-b border-linie py-1">
-          <span className="text-[10px] uppercase tracking-wide text-neutral-500">
+        <section className="break-inside-avoid border-b border-linie py-1">
+          <span className="text-[8.5pt] uppercase tracking-wide text-neutral-500">
             Notiz
           </span>
-          <p className="whitespace-pre-wrap text-sm">{emp.notiz}</p>
-        </div>
+          <p className="whitespace-pre-wrap text-[10.5pt] text-neutral-800">
+            {emp.notiz}
+          </p>
+        </section>
       )}
 
-      <div>
-        <h2 className="mb-1 mt-2 text-sm font-semibold text-emerald-800">
-          Saison-Historie
+      <section>
+        <h2 className="mb-2 flex items-baseline gap-2 border-b border-emerald-700/40 pb-1 text-[10.5pt] font-semibold uppercase tracking-wide text-emerald-800">
+          <span className="text-neutral-400">04</span> Saisonhistorie
         </h2>
         {historie.anzahl === 0 ? (
-          <p className="text-sm text-neutral-500">
-            Keine Saison-Historie hinterlegt.
+          <p className="text-[10.5pt] text-neutral-400">
+            Keine Saisonhistorie hinterlegt.
           </p>
         ) : (
           <>
-            <p className="mb-1 text-sm">
-              <strong>{historie.anzahl}</strong> Saisons · erstmals{" "}
-              <strong>{historie.erste}</strong> · zuletzt{" "}
-              <strong>{historie.letzte}</strong>
+            <p className="mb-1 text-[9.5pt] text-neutral-600">
+              <strong className="text-neutral-800">{historie.anzahl}</strong>{" "}
+              Saisons · erstmals{" "}
+              <strong className="text-neutral-800">{historie.erste}</strong> ·
+              zuletzt{" "}
+              <strong className="text-neutral-800">{historie.letzte}</strong>
               <span className="text-neutral-500"> · {historie.kompakt}</span>
             </p>
             <table>
@@ -339,13 +496,13 @@ function StammkarteInner() {
                 ))}
               </tbody>
             </table>
-            <p className="mt-1 text-[10px] text-neutral-500">
+            <p className="mt-1 text-[8.5pt] text-neutral-500">
               „Kartei" = aus der importierten Papier-Personalkartei (nur
               Anwesenheit). „App" = in Spargar erfasste Saison.
             </p>
           </>
         )}
-      </div>
+      </section>
     </div>
   );
 }
