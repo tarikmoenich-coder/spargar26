@@ -116,20 +116,24 @@ function MitarbeiterAvatar({
 }
 
 // Kompakte Zusammenfassung einer zurückliegenden Wägung (Nutzer-Vorgabe
-// 2026-11-04) - Foto+Name, Feld, Gewicht, Zeitstempel.
+// 2026-11-04) - Foto+Name, Feld, Gewicht, Zeitstempel. Grünspargel bleibt
+// dauerhaft leicht grün eingefärbt (Nutzer-Vorgabe 2026-11-04, zweiter
+// Praxistest) - "!bg-emerald-50", weil die .card-Klasse (app/globals.css)
+// sonst wegen gleicher Spezifität + späterer Quellreihenfolge gewinnen würde.
 function VerlaufKachel({ wiegung }: { wiegung: ErnteKioskWiegung }) {
+  const istGruenspargel = wiegung.feld_kultur === "gruenspargel";
   return (
-    <div className="card flex items-center gap-3 p-3">
+    <div className={`card flex items-center gap-3 p-3 ${istGruenspargel ? "!bg-emerald-50" : ""}`}>
       <MitarbeiterAvatar pfad={wiegung.mitarbeiter_foto_pfad} groesseKlasse="h-10 w-10" iconKlasse="h-5 w-5" />
       <div className="min-w-0 flex-1">
-        <p className="truncate text-sm font-medium text-neutral-800">
+        <p className="truncate text-base font-medium text-neutral-800">
           {wiegung.employee_id ? `${wiegung.mitarbeiter_vorname} ${wiegung.mitarbeiter_name}` : "Mitarbeiter unbekannt"}
         </p>
-        <p className="truncate text-xs text-neutral-500">{wiegung.feld_id ? wiegung.feld_bezeichnung : "Kein Feld"}</p>
+        <p className="truncate text-sm text-neutral-500">{wiegung.feld_id ? wiegung.feld_bezeichnung : "Kein Feld"}</p>
       </div>
       <div className="shrink-0 text-right">
-        <p className="font-semibold text-emerald-900">{formatMenge(wiegung.gewicht_netto_kg)} kg</p>
-        <p className="text-xs text-neutral-400">{formatZeitpunktDE(wiegung.gewogen_am)}</p>
+        <p className="text-lg font-semibold text-emerald-900">{formatMenge(wiegung.gewicht_netto_kg)} kg</p>
+        <p className="text-sm text-neutral-400">{formatZeitpunktDE(wiegung.gewogen_am)}</p>
       </div>
     </div>
   );
@@ -367,12 +371,12 @@ export default function WaagenKioskPage() {
   return (
     <div className="flex min-h-[85vh] flex-col gap-6 p-2">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <h1 className="flex items-center gap-2 text-xl font-semibold text-emerald-900">
-          <Scale className="h-6 w-6" /> Waagen-Kiosk
+        <h1 className="flex items-center gap-2 text-2xl font-semibold text-emerald-900">
+          <Scale className="h-7 w-7" /> Waagen-Kiosk
         </h1>
-        <div className="flex flex-wrap items-center gap-4">
-          <span className="flex items-center gap-1.5 text-xs text-neutral-500" title="Live-Gewicht laut Waagen-Agent, unabhängig vom Wiegen">
-            <span className={`h-2.5 w-2.5 rounded-full ${waageVerbunden ? "bg-emerald-500" : "bg-beere-500"}`} />
+        <div className="flex flex-wrap items-center gap-5">
+          <span className="flex items-center gap-2 text-lg text-neutral-600" title="Live-Gewicht laut Waagen-Agent, unabhängig vom Wiegen">
+            <span className={`h-4 w-4 rounded-full ${waageVerbunden ? "bg-emerald-500" : "bg-beere-500"}`} />
             {waageLive?.live_gewicht_kg != null
               ? `Waage ${formatMenge(waageLive.live_gewicht_kg)} kg`
               : "Waage ohne Verbindung"}
@@ -384,7 +388,7 @@ export default function WaagenKioskPage() {
                 erfolgSichtbar ? "animate-pulse bg-emerald-500" : "bg-neutral-300"
               }`}
             />
-            <span className="text-sm text-neutral-500">
+            <span className="text-base text-neutral-500">
               {aktuelle ? formatZeitpunktDE(aktuelle.gewogen_am) : "Noch keine Wiegung"}
             </span>
           </div>
@@ -393,26 +397,26 @@ export default function WaagenKioskPage() {
 
       <div className="grid grid-cols-2 gap-3 text-center md:grid-cols-4">
         <div className="card p-3">
-          <p className="text-xs text-neutral-500">Kisten Vormittag</p>
-          <p className="text-2xl font-semibold text-emerald-900">{zaehler.vormittag}</p>
+          <p className="text-sm text-neutral-500">Kisten Vormittag</p>
+          <p className="text-3xl font-semibold text-emerald-900">{zaehler.vormittag}</p>
         </div>
         <div className="card p-3">
-          <p className="text-xs text-neutral-500">Kisten Nachmittag</p>
-          <p className="text-2xl font-semibold text-emerald-900">{zaehler.nachmittag}</p>
+          <p className="text-sm text-neutral-500">Kisten Nachmittag</p>
+          <p className="text-3xl font-semibold text-emerald-900">{zaehler.nachmittag}</p>
         </div>
         <div className="card p-3">
-          <p className="text-xs text-neutral-500">Kisten Gesamt (Waage)</p>
-          <p className="text-2xl font-semibold text-emerald-900">
+          <p className="text-sm text-neutral-500">Kisten Gesamt (Waage)</p>
+          <p className="text-3xl font-semibold text-emerald-900">
             {zaehler.vormittag + zaehler.nachmittag}
           </p>
         </div>
         <div className="card p-3" title="An der Maschine gescannt, noch nicht gewogen">
-          <p className="text-xs text-neutral-500">Kisten im Umlauf</p>
-          <p className="text-2xl font-semibold text-emerald-900">{zaehler.offen}</p>
+          <p className="text-sm text-neutral-500">Kisten im Umlauf</p>
+          <p className="text-3xl font-semibold text-emerald-900">{zaehler.offen}</p>
         </div>
       </div>
 
-      {fehler && <p className="text-sm text-beere-700">Konnte nicht laden: {fehler}</p>}
+      {fehler && <p className="text-base text-beere-700">Konnte nicht laden: {fehler}</p>}
 
       {!aktuelle ? (
         <p className="text-lg text-neutral-500">
@@ -420,21 +424,25 @@ export default function WaagenKioskPage() {
         </p>
       ) : (
         <div className="grid flex-1 grid-cols-1 gap-4 md:grid-cols-2">
-          <div className="card flex flex-col gap-4 p-6">
+          <div
+            className={`card flex flex-col gap-4 p-6 transition-colors duration-700 ${
+              erfolgSichtbar ? "!bg-emerald-100" : ""
+            }`}
+          >
             <div className="flex items-start gap-3">
               <MitarbeiterAvatar pfad={aktuelle.mitarbeiter_foto_pfad} groesseKlasse="h-14 w-14" iconKlasse="h-6 w-6" />
               <div className="min-w-0">
                 {hatMitarbeiter ? (
                   <>
-                    <p className="truncate text-lg font-semibold text-emerald-900">
+                    <p className="truncate text-xl font-semibold text-emerald-900">
                       {aktuelle.mitarbeiter_vorname} {aktuelle.mitarbeiter_name}
                     </p>
-                    <p className="text-xs text-neutral-500">Pers.-Nr. {aktuelle.mitarbeiter_personal_nr}</p>
+                    <p className="text-sm text-neutral-500">Pers.-Nr. {aktuelle.mitarbeiter_personal_nr}</p>
                   </>
                 ) : (
-                  <p className="text-sm text-neutral-400">Mitarbeiter unbekannt</p>
+                  <p className="text-base text-neutral-400">Mitarbeiter unbekannt</p>
                 )}
-                <p className="mt-1 text-sm text-neutral-600">
+                <p className="mt-1 text-base text-neutral-600">
                   {hatFeld ? (
                     <>
                       {aktuelle.feld_bezeichnung}
@@ -448,22 +456,22 @@ export default function WaagenKioskPage() {
             </div>
 
             <div className="flex flex-1 flex-col items-center justify-center gap-2 text-center">
-              <p className="text-sm text-neutral-500">Gewicht (netto)</p>
+              <p className="text-base text-neutral-500">Gewicht (netto)</p>
               <p className="text-7xl font-bold text-emerald-900">
                 {formatMenge(aktuelle.gewicht_netto_kg)} kg
               </p>
-              <p className="text-base text-neutral-500">
+              <p className="text-lg text-neutral-500">
                 Brutto {formatMenge(aktuelle.gewicht_brutto_kg)} kg · Tara{" "}
                 {formatMenge(aktuelle.tara_kg)} kg
               </p>
-              <p className="font-mono text-sm text-neutral-400">{aktuelle.tag_uid}</p>
+              <p className="font-mono text-base text-neutral-400">{aktuelle.tag_uid}</p>
             </div>
           </div>
 
           <div className="flex flex-col gap-2">
-            <p className="text-xs font-medium text-neutral-500">Letzte Wägungen</p>
+            <p className="text-sm font-medium text-neutral-500">Letzte Wägungen</p>
             {verlauf.length === 0 ? (
-              <p className="text-sm text-neutral-400">Noch keine weiteren Wägungen.</p>
+              <p className="text-base text-neutral-400">Noch keine weiteren Wägungen.</p>
             ) : (
               verlauf.map((w) => <VerlaufKachel key={w.id} wiegung={w} />)
             )}

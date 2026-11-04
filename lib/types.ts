@@ -1204,6 +1204,7 @@ export interface ErnteKioskWiegung {
   feld_id: number | null;
   feld_bezeichnung: string | null;
   feld_sorte: string | null;
+  feld_kultur: FeldKultur | null;
   employee_id: string | null;
   mitarbeiter_name: string | null;
   mitarbeiter_vorname: string | null;
