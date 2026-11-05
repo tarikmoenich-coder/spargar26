@@ -318,6 +318,7 @@ export default function WaagenKioskPage() {
         "postgres_changes",
         { event: "INSERT", schema: "public", table: "ernte_kiste_zyklus" },
         (payload) => {
+          console.log("Realtime-Ereignis INSERT:", payload); // temporäre Diagnose
           void ladeZeile((payload.new as { id: number }).id);
           void ladeZaehler();
         },
@@ -326,6 +327,7 @@ export default function WaagenKioskPage() {
         "postgres_changes",
         { event: "UPDATE", schema: "public", table: "ernte_kiste_zyklus" },
         (payload) => {
+          console.log("Realtime-Ereignis UPDATE:", payload); // temporäre Diagnose
           void ladeZeile((payload.new as { id: number }).id);
           void ladeZaehler();
         },
