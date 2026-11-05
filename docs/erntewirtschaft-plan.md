@@ -12,14 +12,29 @@ Konsolen-Neustart übersteht.
 **Statuskorrektur 2026-11-05 (dieser Absatz war veraltet):** Alle
 Hardware-Entscheidungen sind getroffen (siehe Tabelle weiter unten), kein
 RTK, QR-Scan-Modul "Grouper" von Jacob geht bald in Serienfertigung,
-Mitbestimmung mit den Fahrern ist eingeholt. Bereits gebaut UND getestet:
-Traccar→PostgreSQL (Teil A), Poller-Erweiterung (Teil G), Mitarbeiter-
-Ausweise, Edge Function `ernte-ingest` (Teil C, deployt + End-to-End im
-Prototyp erfolgreich getestet), Waagen-Agent (Teil D). Offen: Pilot-Spinne
-komplett aufbauen (Schritt 6 in Teil H), danach Rollout auf die 140
-Maschinen; Teil F2/F3/F4 (Boni/Feldstufen, Zielertrag-Alarm,
-Fortschrittskarte) sind nur konkretisiert, noch nicht gebaut - warten auf
-echte Maschinendaten vom Pilotbetrieb.
+Mitbestimmung mit den Fahrern ist eingeholt. **Der komplette Pilot ist
+gebaut und End-to-End durchgetestet** (Personalkarte scannen → Erntekiste
+scannen → GPS-Daten empfangen → Kiste an der Waage scannen, alles live) -
+der Prototyp ist jetzt bei der Leiterplattenfirma zur Entwicklung des
+Serientyps. Bereits gebaut UND getestet: Traccar→PostgreSQL (Teil A),
+Poller-Erweiterung (Teil G), Mitarbeiter-Ausweise, Edge Function
+`ernte-ingest` (Teil C), Waagen-Agent (Teil D), kompletter Pilot (Teil H).
+
+**Was konkret noch fehlt (Softwareseite, Stand 2026-11-05):**
+- `/erntewirtschaft/stammdaten` (Maschinen-CRUD, Waagen, Felder, Konfig,
+  Excel-/CSV-Import für die 140 Maschinen) - bisher steht nur der Prototyp
+  manuell in der Datenbank, siehe Teil F.
+- GPS-Daten-Auswertung/Übersichtskarten-Ausbau: Tages-Kacheln ("Kisten
+  ohne Zuordnung", "Kisten fehlen heute", braucht `ernte_kette_luecken`),
+  Marker-Clusterung, Prozessor-Anpassung für echte Grünspargel-
+  Gruppenmaschinen - siehe Teil F/E.
+- `/erntewirtschaft/effizienz` (Realitätscheck kg/h, Ertragsdichte) - Teil F.
+- Komplettes Prämien-/Feldstufensystem mit Feld- und Leistungsauswertung -
+  Teil F2 (Boni/Feldstufen), Teil F3 (Feld-Zielertrag + Telegram-Alarm),
+  Teil F4 (Feld-Fortschrittskarte). Der bisherige Blocker "wartet auf
+  GPS-/Kisten-Pipeline" bei Teil F4 ist durch den erfolgreichen Pilotbetrieb
+  jetzt eigentlich erfüllt - reine Umsetzungsfrage, kein Datenproblem mehr.
+Danach: Rollout auf die 140 Maschinen (Teil H Schritt 8).
 
 **Kurswechsel 2026-10-12: RFID → QR-Codes für Kisten- und Badge-Scan.**
 Nach drei Frequenz-Wechseln (UHF→HF→LF, siehe „Frequenz-Verlauf" unten) hat
@@ -1681,9 +1696,12 @@ Traccar-Instanz. Abweichungen gegenüber der ursprünglichen Skizze:
    Prototyp erfolgreich getestet** (siehe Teil C, Nutzer-Korrektur
    2026-11-05).
 5. pg_cron-Processor einrichten.
-6. Eine Spinne als Pilot komplett aufbauen (QR-Scan-Modul + Data-to-Server,
-   ohne RTK), End-to-End testen (Badge → Kiste → LKW → Waage →
-   `ernte_kiste_zyklus` gewogen).
+6. ~~Eine Spinne als Pilot komplett aufbauen, End-to-End testen~~ —
+   **erledigt** (Nutzer-Korrektur 2026-11-05): kompletter Prototyp gebaut
+   und End-to-End durchgetestet - Scannen der Personalkarte, Scannen der
+   Erntekiste, GPS-Daten-Empfang, bis zum Scannen der Kiste an der Waage,
+   alles live. **Der Prototyp ist jetzt bei der Leiterplattenfirma zur
+   Entwicklung des Serientyps.**
 7. Waagen-Agent am Hof aufsetzen — **erledigt** (Teil D, Praxistest
    2026-11-04/05 bestanden).
 8. Rollout auf die 140 Maschinen; whereversim je Maschine zur Saison aktivieren.
