@@ -14,7 +14,11 @@ import { getSupabaseClient } from "@/lib/supabase/client";
 import { useProfile } from "@/lib/useProfile";
 import { formatDatumDE, formatMenge } from "@/lib/format";
 import { saisonsKompakt } from "@/lib/saisonHistorie";
-import { type Employee, type EmployeeSaisonJahr } from "@/lib/types";
+import {
+  type Employee,
+  type EmployeeBeschaeftigungsabschnitt,
+  type EmployeeSaisonJahr,
+} from "@/lib/types";
 
 interface Arbeitsgruppe {
   gruppe_nr: string;
@@ -157,6 +161,7 @@ function StammkarteInner() {
   const [jahre, setJahre] = useState<EmployeeSaisonJahr[]>([]);
   const [fsKategorien, setFsKategorien] = useState<string[] | null>(null);
   const [vorgaenger, setVorgaenger] = useState<VorgaengerKurz | null>(null);
+  const [abschnitte, setAbschnitte] = useState<EmployeeBeschaeftigungsabschnitt[]>([]);
   const [laedt, setLaedt] = useState(true);
   const [fehler, setFehler] = useState<string | null>(null);
   const [historieFehler, setHistorieFehler] = useState<string | null>(null);
@@ -169,7 +174,7 @@ function StammkarteInner() {
     }
     (async () => {
       const supabase = getSupabaseClient();
-      const [empRes, grpRes, jahreRes, fsRes] = await Promise.all([
+      const [empRes, grpRes, jahreRes, fsRes, abschnitteRes] = await Promise.all([
         supabase.from("employees").select("*").eq("id", id).maybeSingle(),
         supabase.from("arbeitsgruppen").select("gruppe_nr, bezeichnung"),
         supabase
@@ -181,6 +186,11 @@ function StammkarteInner() {
           .select("fuehrerschein_kategorien")
           .eq("employee_id", id)
           .maybeSingle(),
+        supabase
+          .from("employee_beschaeftigungsabschnitte")
+          .select("*")
+          .eq("employee_id", id)
+          .order("anmeldedatum", { ascending: true }),
       ]);
       if (empRes.error || !empRes.data) {
         setFehler("Mitarbeiter nicht gefunden.");
@@ -202,6 +212,13 @@ function StammkarteInner() {
       setFsKategorien(
         (fsRes.data as { fuehrerschein_kategorien: string[] | null } | null)
           ?.fuehrerschein_kategorien ?? null
+      );
+      // Admin/hr-only Tabelle (migration_2026-11-04_beschaeftigungsabschnitte.sql)
+      // - Fehler hier bewusst ignoriert (z.B. Migration noch nicht
+      // eingespielt), Ersteintritt/Austrittsdatum werden dann einfach
+      // ausgeblendet statt die ganze Seite zu blockieren.
+      setAbschnitte(
+        (abschnitteRes.data as EmployeeBeschaeftigungsabschnitt[] | null) ?? []
       );
 
       // Statuswechsel-Zeile: konkreten Vorgänger (Personalnummer + Name)
@@ -286,6 +303,18 @@ function StammkarteInner() {
   const aktuelleSaison = emp.saison_beginn
     ? new Date(emp.saison_beginn).getFullYear()
     : historie.letzte ?? null;
+
+  // Ersteintritt/Austrittsdatum (Nutzer-Vorgabe 2026-11-04/05) - aus den
+  // expliziten Beschäftigungsabschnitten statt erfunden. "sofern vorhanden"
+  // ausgeblendet: Ersteintritt nur wenn mind. ein Abschnitt existiert,
+  // Austrittsdatum nur wenn der Mitarbeiter aktuell inaktiv ist UND der
+  // letzte Abschnitt tatsächlich ein Abmeldedatum hat.
+  const ersteintritt = abschnitte.length > 0 ? abschnitte[0].anmeldedatum : null;
+  const letzterAbschnitt = abschnitte[abschnitte.length - 1] ?? null;
+  const austrittsdatum =
+    !emp.aktiv && letzterAbschnitt?.abmeldedatum
+      ? letzterAbschnitt.abmeldedatum
+      : null;
 
   const svNr = emp.sozialversicherungsnummer
     ? maskiert
@@ -401,6 +430,12 @@ function StammkarteInner() {
           }
         />
         <Feld label="Beschäftigungsstatus" wert={emp.aktiv ? "Aktiv" : "Inaktiv"} />
+        {ersteintritt && (
+          <Feld label="Ersteintritt" wert={formatDatumDE(ersteintritt)} />
+        )}
+        {austrittsdatum && (
+          <Feld label="Austrittsdatum" wert={formatDatumDE(austrittsdatum)} />
+        )}
         {historie.erste && (
           <Feld label="Erstmals beschäftigt" wert={`Saison ${historie.erste}`} />
         )}

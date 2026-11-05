@@ -28,12 +28,23 @@ import { formatDatumDE, formatEuro, formatMenge } from "@/lib/format";
 import { generiereDokument } from "@/lib/dokumentGenerator";
 import PersonalTabs from "@/components/PersonalTabs";
 import PageHeader from "@/components/PageHeader";
+import BeschaeftigungsabschnitteHistorie from "@/components/BeschaeftigungsabschnitteHistorie";
 import { Users } from "lucide-react";
 
 const CURRENT_YEAR = new Date().getFullYear();
 
 function todayIso() {
   return new Date().toISOString().slice(0, 10);
+}
+
+// Erster Tag NACH dem letzten SV-freien Tag (austrittsdatum_empfohlen ist
+// bereits der letzte SV-freie Tag) - der korrekte Stichtag für den
+// vorausgefüllten Statuswechsel-Vorschlag (Nutzer-Vorgabe 2026-11-05).
+function naechsterTagIso(datumIso: string | null): string | null {
+  if (!datumIso) return null;
+  const d = new Date(datumIso + "T00:00:00");
+  d.setDate(d.getDate() + 1);
+  return d.toISOString().slice(0, 10);
 }
 
 const emptyForm = {
@@ -89,6 +100,7 @@ function ZeilenAktionen({
   onToggleAktiv,
   onStatuswechsel,
   onDokumente,
+  onBeschaeftigung,
   zeigeStatuswechsel,
 }: {
   emp: Employee;
@@ -96,6 +108,7 @@ function ZeilenAktionen({
   onToggleAktiv: () => void;
   onStatuswechsel: () => void;
   onDokumente: () => void;
+  onBeschaeftigung: () => void;
   zeigeStatuswechsel: boolean;
 }) {
   const [offen, setOffen] = useState(false);
@@ -162,6 +175,16 @@ function ZeilenAktionen({
             }}
           >
             Dokumente
+          </button>
+          <button
+            type="button"
+            className="px-3 py-1.5 text-left text-sm hover:bg-sand"
+            onClick={() => {
+              setOffen(false);
+              onBeschaeftigung();
+            }}
+          >
+            Beschäftigungsabschnitte
           </button>
           <a
             className="px-3 py-1.5 text-left text-sm hover:bg-sand"
@@ -254,6 +277,7 @@ export default function MitarbeiterPage() {
   // möglich, sobald jemand "Vollständig" ist oder nie über die
   // Personalplanung angelegt wurde).
   const [dokumenteId, setDokumenteId] = useState<string | null>(null);
+  const [beschaeftigungId, setBeschaeftigungId] = useState<string | null>(null);
   const [dokumenteVertragsbeginn, setDokumenteVertragsbeginn] = useState("");
   const [dokumenteVertragsende, setDokumenteVertragsende] = useState("");
   const [dokumenteFehler, setDokumenteFehler] = useState<string | null>(null);
@@ -483,11 +507,33 @@ export default function MitarbeiterPage() {
 
   async function toggleActive(emp: Employee) {
     // ADR-011: kein Löschen, nur Deaktivieren/Reaktivieren - Historie bleibt.
+    // Nutzer-Vorgabe 2026-11-04/05: schließt/öffnet dabei zusätzlich den
+    // Beschäftigungsabschnitt - fragt dafür ein Datum ab, statt das Flag
+    // stillschweigend ohne jedes Datum umzukippen.
+    const heute = todayIso();
+    const datum = window.prompt(
+      emp.aktiv
+        ? `Ab welchem Datum ist ${emp.name}, ${emp.vorname} nicht mehr beschäftigt? (Abmeldedatum)`
+        : `Ab welchem Datum ist ${emp.name}, ${emp.vorname} wieder beschäftigt? (Anmeldedatum)`,
+      heute
+    );
+    if (datum === null) return; // abgebrochen
     const supabase = getSupabaseClient();
     await supabase
       .from("employees")
       .update({ aktiv: !emp.aktiv })
       .eq("id", emp.id);
+    const { error: abschnittFehler } = emp.aktiv
+      ? await supabase.rpc("employee_beschaeftigung_abmelden", {
+          p_employee_id: emp.id,
+          p_abmeldedatum: datum || heute,
+        })
+      : await supabase.rpc("employee_beschaeftigung_anmelden", {
+          p_employee_id: emp.id,
+          p_anmeldedatum: datum || heute,
+          p_quelle: "manuell",
+        });
+    if (abschnittFehler) setError(abschnittFehler.message);
     load();
   }
 
@@ -519,18 +565,36 @@ export default function MitarbeiterPage() {
 
   async function bulkStatusSetzen(aktiv: boolean) {
     if (bulkAusgewaehlt.length === 0) return;
-    if (
-      !window.confirm(
-        `${bulkAusgewaehlt.length} Person(en) wirklich ${
-          aktiv ? "reaktivieren" : "deaktivieren"
-        }?`
-      )
-    ) {
-      return;
-    }
+    const heute = todayIso();
+    const datum = window.prompt(
+      `${bulkAusgewaehlt.length} Person(en) wirklich ${
+        aktiv ? "reaktivieren" : "deaktivieren"
+      }? Datum für den Beschäftigungsabschnitt (${
+        aktiv ? "Anmeldedatum" : "Abmeldedatum"
+      }):`,
+      heute
+    );
+    if (datum === null) return;
     setBulkLaufend(true);
     const supabase = getSupabaseClient();
     await supabase.from("employees").update({ aktiv }).in("id", bulkAusgewaehlt);
+    const fehlerListe: string[] = [];
+    for (const id of bulkAusgewaehlt) {
+      const { error } = aktiv
+        ? await supabase.rpc("employee_beschaeftigung_anmelden", {
+            p_employee_id: id,
+            p_anmeldedatum: datum || heute,
+            p_quelle: "manuell",
+          })
+        : await supabase.rpc("employee_beschaeftigung_abmelden", {
+            p_employee_id: id,
+            p_abmeldedatum: datum || heute,
+          });
+      if (error) fehlerListe.push(error.message);
+    }
+    if (fehlerListe.length > 0) {
+      setError([...new Set(fehlerListe)].join(" · "));
+    }
     setBulkLaufend(false);
     setBulkAusgewaehlt([]);
     load();
@@ -634,6 +698,17 @@ export default function MitarbeiterPage() {
   function statuswechselStarten(emp: Employee) {
     setStatuswechselId(emp.id);
     setStatuswechselStichtag(todayIso());
+    setStatuswechselAbrechnungsart("sozialversicherungspflichtig");
+    setStatuswechselFehler(null);
+  }
+
+  // Vorausgefüllter Umwandlungs-Vorschlag bei Erreichen der 105-Tage-Grenze
+  // (Nutzer-Vorgabe 2026-11-05): öffnet denselben Statuswechsel-Dialog,
+  // aber mit dem rechnerisch korrekten Stichtag statt "heute" - HR muss
+  // trotzdem aktiv bestätigen, kein Vollautomatismus.
+  function statuswechselVorschlagStarten(emp: Employee, vorschlagsDatum: string) {
+    setStatuswechselId(emp.id);
+    setStatuswechselStichtag(vorschlagsDatum);
     setStatuswechselAbrechnungsart("sozialversicherungspflichtig");
     setStatuswechselFehler(null);
   }
@@ -813,6 +888,25 @@ export default function MitarbeiterPage() {
       .eq("fahrer_employee_id", alt.id);
 
     await supabase.from("employees").update({ aktiv: false }).eq("id", alt.id);
+
+    // Beschäftigungsabschnitte nachziehen (Nutzer-Vorgabe 2026-11-04/05):
+    // ohne das würde der ALTE employee_id-Abschnitt nie schließen und für
+    // immer weiterzählen, obwohl die Person unter der alten Nummer nicht
+    // mehr beschäftigt ist. Der letzte Tag unter der alten Nummer ist der
+    // Tag vor dem Stichtag (Stunden AB DEM STICHTAG gehören schon zur
+    // neuen Nummer, siehe oben).
+    const stichtagDatum = new Date(statuswechselStichtag + "T00:00:00");
+    stichtagDatum.setDate(stichtagDatum.getDate() - 1);
+    const letzterTagAlt = stichtagDatum.toISOString().slice(0, 10);
+    await supabase.rpc("employee_beschaeftigung_abmelden", {
+      p_employee_id: alt.id,
+      p_abmeldedatum: letzterTagAlt,
+    });
+    await supabase.rpc("employee_beschaeftigung_anmelden", {
+      p_employee_id: neu.id,
+      p_anmeldedatum: statuswechselStichtag,
+      p_quelle: "statuswechsel",
+    });
 
     setStatuswechselLaufend(false);
     setStatuswechselId(null);
@@ -1512,8 +1606,26 @@ export default function MitarbeiterPage() {
                 <td>
                   {sv ? (
                     sv.kritisch ? (
-                      <span className="font-medium text-beere-600">
-                        ⚠ Überschritten
+                      <span className="flex flex-wrap items-center gap-1.5">
+                        <span className="font-medium text-beere-600">
+                          ⚠ Überschritten
+                        </span>
+                        {canEdit &&
+                          emp.abrechnungsart !== "sozialversicherungspflichtig" &&
+                          (() => {
+                            const vorschlag = naechsterTagIso(sv.austrittsdatum_empfohlen);
+                            return vorschlag ? (
+                              <button
+                                type="button"
+                                className="btn-secondary text-xs"
+                                onClick={() =>
+                                  statuswechselVorschlagStarten(emp, vorschlag)
+                                }
+                              >
+                                → In SV-pflichtig umwandeln (ab {formatDatumDE(vorschlag)})
+                              </button>
+                            ) : null;
+                          })()}
                       </span>
                     ) : (
                       <span className="text-emerald-700">OK</span>
@@ -1537,6 +1649,9 @@ export default function MitarbeiterPage() {
                       onToggleAktiv={() => toggleActive(emp)}
                       onStatuswechsel={() => statuswechselStarten(emp)}
                       onDokumente={() => dokumenteStarten(emp)}
+                      onBeschaeftigung={() =>
+                        setBeschaeftigungId((prev) => (prev === emp.id ? null : emp.id))
+                      }
                       zeigeStatuswechsel={
                         emp.aktiv &&
                         emp.abrechnungsart !== "sozialversicherungspflichtig"
@@ -1558,6 +1673,16 @@ export default function MitarbeiterPage() {
               {dokumenteId === emp.id && (
                 <tr>
                   <td colSpan={16}>{dokumenteFormular(emp)}</td>
+                </tr>
+              )}
+              {beschaeftigungId === emp.id && (
+                <tr>
+                  <td colSpan={16}>
+                    <BeschaeftigungsabschnitteHistorie
+                      employeeId={emp.id}
+                      canEdit={canEdit}
+                    />
+                  </td>
                 </tr>
               )}
               </Fragment>

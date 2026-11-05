@@ -487,6 +487,26 @@ export default function PersonalplanungPage() {
         })
         .eq("id", k.id);
 
+      // Expliziter Beschäftigungsabschnitt (Nutzer-Vorgabe 2026-11-04/05):
+      // arbeitsbeginn_datum ist an dieser Stelle in aller Regel noch leer
+      // (wird erst auf der Anreiseliste erfasst, siehe dort
+      // vertragszeitraumSpeichern/beginnFuerGruppeSetzen - die aktualisieren
+      // das Anmeldedatum nachträglich) - heute als Platzhalter reicht, damit
+      // nie ein aktiver Mitarbeiter ganz ohne offenen Abschnitt dasteht.
+      if (employeeId) {
+        const { error: anmeldenFehler } = await supabase.rpc(
+          "employee_beschaeftigung_anmelden",
+          {
+            p_employee_id: employeeId,
+            p_anmeldedatum: k.arbeitsbeginn_datum || new Date().toISOString().slice(0, 10),
+            p_quelle: k.verknuepfter_employee_id ? "reaktivierung" : "aktivierung",
+          }
+        );
+        if (anmeldenFehler) {
+          fehlerListe.push(`${k.name}, ${k.vorname}: ${anmeldenFehler.message}`);
+        }
+      }
+
       // Person in das nächste freie reservierte Haus ihrer Herkunft setzen
       // (geplante Zimmerzuordnung, Wohneinheits-Ebene). Zimmer regelt der
       // Hausmeister bei der Ankunft.

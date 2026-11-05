@@ -180,6 +180,18 @@ export default function AnreiselistePage() {
         arbeitsende_datum: werte?.ende || null,
       })
       .eq("id", k.id);
+    // Das echte Vertrags-Startdatum ist jetzt bekannt - den bei der
+    // Aktivierung nur als Platzhalter (heute) angelegten offenen
+    // Beschäftigungsabschnitt (Nutzer-Vorgabe 2026-11-04/05) darauf
+    // nachziehen, damit die 105-Tage-Prüfung ab dem echten Anmeldedatum
+    // zählt statt ab dem Tag der Aktivierung.
+    if (k.aktivierter_employee_id && werte?.beginn) {
+      await supabase
+        .from("employee_beschaeftigungsabschnitte")
+        .update({ anmeldedatum: werte.beginn })
+        .eq("employee_id", k.aktivierter_employee_id)
+        .is("abmeldedatum", null);
+    }
     load();
   }
 
@@ -230,6 +242,18 @@ export default function AnreiselistePage() {
     if (fehler.length > 0) {
       setDokumentFehler([...new Set(fehler)].join(" · "));
       return;
+    }
+    // Gleicher Nachzieh-Schritt wie in vertragszeitraumSpeichern, nur für
+    // die ganze Gruppe auf einmal.
+    const employeeIds = gruppe
+      .map((k) => k.aktivierter_employee_id)
+      .filter((id): id is string => !!id);
+    if (employeeIds.length > 0) {
+      await supabase
+        .from("employee_beschaeftigungsabschnitte")
+        .update({ anmeldedatum: datum })
+        .in("employee_id", employeeIds)
+        .is("abmeldedatum", null);
     }
     setVertragsfelder((prev) => ({ ...prev, ...neuLokal }));
   }

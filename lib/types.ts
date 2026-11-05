@@ -201,6 +201,22 @@ export interface SaisonAbrechnung {
   auszahlungsbeleg_id: number | null;
 }
 
+// Expliziter Beschäftigungsabschnitt (migration_2026-11-04_beschaeftigungs
+// abschnitte.sql) - Anmeldedatum/Abmeldedatum (NULL = läuft noch), einzige
+// Quelle der Wahrheit für employee_sv_abschnitte UND für Ersteintritt/
+// Austrittsdatum auf der Personalstammkarte. "quelle" sagt, wie der
+// Abschnitt entstanden ist (Aktivierung, Reaktivierung, Statuswechsel,
+// manuell nachgetragen, oder einmalig aus der alten Ableitung migriert).
+export interface EmployeeBeschaeftigungsabschnitt {
+  id: number;
+  employee_id: string;
+  anmeldedatum: string;
+  abmeldedatum: string | null;
+  quelle: "aktivierung" | "reaktivierung" | "manuell" | "migriert" | "statuswechsel";
+  erzeugt_von: string | null;
+  erzeugt_am: string;
+}
+
 // 90-Tage-/15-Wochen-Prüfung (SV-Freiheit landwirtschaftliche Saisonarbeit,
 // OI-004). Reine Tage-/Wochen-Zählung - ersetzt nicht die rechtliche Prüfung
 // selbst (eigenes Formular nötig).

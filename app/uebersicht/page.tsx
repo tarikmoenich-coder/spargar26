@@ -100,6 +100,13 @@ export default function UebersichtPage() {
   const [abrechnenFehler, setAbrechnenFehler] = useState<string | null>(null);
   const [letzterBeleg, setLetzterBeleg] = useState<string | null>(null);
   const [abrechnenZahlungsart, setAbrechnenZahlungsart] = useState("BAR");
+  // Austrittsdatum (Nutzer-Vorgabe 2026-11-04/05): schließt den offenen
+  // Beschäftigungsabschnitt zeitgleich mit der Abrechnung, ein gemeinsames
+  // Datum für die ganze Auswahl - analog zur bereits bestehenden
+  // gemeinsamen Zahlungsart.
+  const [abrechnenAustrittsdatum, setAbrechnenAustrittsdatum] = useState(
+    () => new Date().toISOString().slice(0, 10)
+  );
 
   // Monatsfilter (0 = "Alle", d.h. die normale Saison-Ansicht oben) - für
   // die Monatsabschluss-Kontrolle: eigene Sicht mit Monats-Stunden/-Brutto/
@@ -633,7 +640,8 @@ export default function UebersichtPage() {
       `${ausgewaehlt.size} Person(en) für Saison ${jahr} jetzt abrechnen?\n\n` +
         `${namen.join("\n")}\n\n` +
         `Diese Personen werden danach auf "inaktiv" gesetzt (können bei Bedarf ` +
-        `später wieder reaktiviert werden).` +
+        `später wieder reaktiviert werden) und ihr Beschäftigungsabschnitt wird ` +
+        `zum ${formatDatumDE(abrechnenAustrittsdatum)} geschlossen.` +
         differenzHinweis
     );
     if (!bestaetigt) return;
@@ -649,6 +657,7 @@ export default function UebersichtPage() {
         p_employee_ids: ids,
         p_saison_jahr: jahr,
         p_zahlungsart: abrechnenZahlungsart,
+        p_austrittsdatum: abrechnenAustrittsdatum,
       }
     );
     if (fehler) setAbrechnenFehler(fehler.message);
@@ -1070,6 +1079,16 @@ export default function UebersichtPage() {
               <option value="BAR">BAR</option>
               <option value="AZ">Überweisung (AZ)</option>
             </select>
+          </label>
+        )}
+        {canEdit && monatFilter === 0 && (
+          <label className="text-sm" title="Schließt den Beschäftigungsabschnitt der ausgewählten Personen ab diesem Datum">
+            Austrittsdatum{" "}
+            <input
+              type="date"
+              value={abrechnenAustrittsdatum}
+              onChange={(e) => setAbrechnenAustrittsdatum(e.target.value)}
+            />
           </label>
         )}
         {canEdit && monatFilter === 0 && (
