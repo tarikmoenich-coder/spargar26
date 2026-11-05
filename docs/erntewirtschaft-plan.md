@@ -5,9 +5,21 @@ Feldstufen, Zielertrag-Alarm konkretisiert, siehe jeweilige Abschnitte),
 Frequenz-Entscheidung 2026-09-22 (UHF→HF), TECTUS-Rückmeldung
 2026-09-22 (HF→LF), Präzisionsanforderung präzisiert 2026-09-23 (RTK
 voraussichtlich verzichtbar), **Kurswechsel 2026-10-12: Kisten-/Badge-Scan
-weg von RFID, hin zu QR-Codes** (siehe Abschnitt direkt unter diesem). Arbeitsdokument (wie `unterkunft-plan.md`),
-damit der Planungsstand einen Konsolen-Neustart übersteht. Noch **kein
-Code** — wartet auf die Hardware-Entscheidungen unten.
+weg von RFID, hin zu QR-Codes** (siehe Abschnitt direkt unter diesem).
+Arbeitsdokument (wie `unterkunft-plan.md`), damit der Planungsstand einen
+Konsolen-Neustart übersteht.
+
+**Statuskorrektur 2026-11-05 (dieser Absatz war veraltet):** Alle
+Hardware-Entscheidungen sind getroffen (siehe Tabelle weiter unten), kein
+RTK, QR-Scan-Modul "Grouper" von Jacob geht bald in Serienfertigung,
+Mitbestimmung mit den Fahrern ist eingeholt. Bereits gebaut UND getestet:
+Traccar→PostgreSQL (Teil A), Poller-Erweiterung (Teil G), Mitarbeiter-
+Ausweise, Edge Function `ernte-ingest` (Teil C, deployt + End-to-End im
+Prototyp erfolgreich getestet), Waagen-Agent (Teil D). Offen: Pilot-Spinne
+komplett aufbauen (Schritt 6 in Teil H), danach Rollout auf die 140
+Maschinen; Teil F2/F3/F4 (Boni/Feldstufen, Zielertrag-Alarm,
+Fortschrittskarte) sind nur konkretisiert, noch nicht gebaut - warten auf
+echte Maschinendaten vom Pilotbetrieb.
 
 **Kurswechsel 2026-10-12: RFID → QR-Codes für Kisten- und Badge-Scan.**
 Nach drei Frequenz-Wechseln (UHF→HF→LF, siehe „Frequenz-Verlauf" unten) hat
@@ -247,7 +259,13 @@ Ergebnis:  pro Kiste: Maschine · Fahrer · Feld/Flur (aus GPS) · Zeit · netto
   es in spargar26 nicht und ist zu ignorieren – Karte/Liste der 140 Maschinen
   werden frei nach spargar26-Konventionen gestaltet (Muster: Fahrzeuge-Modul).
 
-## Hardware-Entscheidungen — OFFEN, mit Empfehlung
+## Hardware-Entscheidungen — ENTSCHIEDEN (Stand 2026-11-05)
+
+Alle Zeilen unten sind getroffen - der Tabellenkopf "OFFEN" war veraltet und
+wurde erst jetzt korrigiert (Nutzer-Korrektur 2026-11-05: "Alle
+hardwareseitigen Entscheidungen sind getroffen", vorher versehentlich als
+noch offen dargestellt). Das QR-Scan-Modul ("Grouper" von Jacob) geht in
+Kürze in Serienfertigung.
 
 | Thema | Optionen | Empfehlung |
 |---|---|---|
@@ -473,8 +491,9 @@ Drei Ströme, **getrennt geführt**:
 
 ## Teil C — Ingest Edge Function `ernte-ingest`
 
-**Gebaut 2026-10-17** (`supabase/functions/ernte-ingest/`), noch nicht
-deployt — siehe dessen README für Migration + Deploy-Schritte. Nimmt nur das
+**Gebaut 2026-10-17** (`supabase/functions/ernte-ingest/`) und **deployt,
+End-to-End im Prototyp erfolgreich getestet** (Nutzer-Korrektur 2026-11-05 -
+diese Zeile stand hier fälschlich noch als "noch nicht deployt"). Nimmt nur das
 Maschinen-Payload entgegen (der Waagen-Pfad schreibt weiterhin direkt mit
 Service-Key, siehe Teil D). Idempotenz-Umsetzung musste beim Bauen angepasst
 werden: statt eines Hashs ein Unique-Index auf
@@ -1651,21 +1670,22 @@ Traccar-Instanz. Abweichungen gegenüber der ursprünglichen Skizze:
 
 ## Teil H — Deploy-Reihenfolge (Nutzer)
 
-1. Hardware-Entscheidungen oben treffen (QR-Scan-Modul an der Maschine, RTK-Kette,
-   NTRIP-Quelle) — **vor** dem Kauf der SpidertrackBox-Teile.
-2. Traccar auf PostgreSQL umstellen (noch H2, Stand 2026-10-17 — für EIN
-   Pilotgerät kein Blocker, erst vor dem 140er-Rollout Pflicht).
+1. ~~Hardware-Entscheidungen oben treffen~~ — **erledigt** (siehe Hardware-
+   Entscheidungen-Tabelle oben, Stand 2026-11-05: alles entschieden, kein
+   RTK, QR-Scan-Modul "Grouper" von Jacob geht bald in Serienfertigung).
+2. Traccar auf PostgreSQL umstellen — **erledigt** (Teil A, 2026-10-31).
 3. Migration `erntewirtschaft` in Supabase (PostGIS ist bereits seit Migration
    2026-10-19 aktiviert); `feld` befüllen (Import aus Pachtwesen2026 oder
    Karten-Editor, siehe Phase 2/3 des Feld/Anbau-Plans).
-4. Edge Function `ernte-ingest` deployen; `ERNTE_INGEST_TOKEN` setzen —
-   **gebaut 2026-10-17** (siehe Teil C), Migration
-   `migration_2026-10-17_ernte_scan_idempotenz.sql` davor einspielen, Deploy
-   + Secret steht noch aus.
+4. ~~Edge Function `ernte-ingest` deployen~~ — **erledigt, End-to-End im
+   Prototyp erfolgreich getestet** (siehe Teil C, Nutzer-Korrektur
+   2026-11-05).
 5. pg_cron-Processor einrichten.
-6. Eine Spinne als Pilot komplett aufbauen (RTK + QR-Scan-Modul + Data-to-Server), End-to-End
-   testen (Badge → Kiste → LKW → Waage → `ernte_kiste_zyklus` gewogen).
-7. Waagen-Agent am Hof aufsetzen, sobald die Waage da ist.
+6. Eine Spinne als Pilot komplett aufbauen (QR-Scan-Modul + Data-to-Server,
+   ohne RTK), End-to-End testen (Badge → Kiste → LKW → Waage →
+   `ernte_kiste_zyklus` gewogen).
+7. Waagen-Agent am Hof aufsetzen — **erledigt** (Teil D, Praxistest
+   2026-11-04/05 bestanden).
 8. Rollout auf die 140 Maschinen; whereversim je Maschine zur Saison aktivieren.
    **Standard-Konfiguration je Box** (Praxistest 2026-10-22, senkt die
    Bootzeit bis zur ersten Status-LED-Reaktion von 3:20 auf 2:10 Minuten -
@@ -1677,8 +1697,7 @@ Traccar-Instanz. Abweichungen gegenüber der ursprünglichen Skizze:
    vs. "4G only" sowie "Band Selection" (bewusst auf "Auto" gelassen -
    falsches manuelles Band riskiert Verbindungsabbruch) sind zwei getrennte
    Einstellungen, nicht zu verwechseln.
-9. Mitbestimmung mit den Fahrern klären, bevor der Effizienz-Check scharfgeschaltet
-   wird.
+9. ~~Mitbestimmung mit den Fahrern klären~~ — **erledigt** (2026-11-05).
 
 ## Offene Fragen an den Nutzer
 
@@ -1698,8 +1717,7 @@ Traccar-Instanz. Abweichungen gegenüber der ursprünglichen Skizze:
    bleibt führend, die Maschinenzeit ist Kontroll-/Differenzgröße.
 5. ~~**Tara**~~ — **geklärt (2026-10-12):** es wird immer an der Waage selbst
    tariert, der Agent übernimmt das Netto-Feld direkt (siehe Teil D).
-6. **Mitbestimmung:** die Kette Fahrer→Kiste→kg→Stunden ist personenscharfe
-   Leistungserfassung — vor Scharfschaltung mit den Fahrern/Betriebsrat klären.
+6. ~~**Mitbestimmung**~~ — **geklärt (2026-11-05):** eingeholt, erledigt.
 7. ~~**Laufmeter-Stammdaten**~~ — **geklärt (2026-10-19):** nicht separat
    gepflegt, sondern aus der generischen Anbau-Planung berechnet
    (`feld_anbau_abschnitt`: Reihenlänge × Reihenzahl je Abschnitt, aufsummiert
