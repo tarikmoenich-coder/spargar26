@@ -234,6 +234,43 @@ export default function ErntewirtschaftStammdatenPage() {
     laden();
   }
 
+  // Löschen ist hier (anders als bei Mitarbeitern/Fahrzeugen) unbedenklich:
+  // ernte_position/ernte_kiste_zyklus/ernte_schicht.maschine_id steht auf
+  // "on delete set null", gelöschte Testmaschinen reißen also keine
+  // Bezugsdaten mit (Nutzer-Bedarf 2026-11-05: versehentlich doppelt
+  // importierte Maschinen mit alter Nummerierung wieder entfernen, nachdem
+  // ein zweiter Import mit neuem Nummernschema (SPINNE-001 etc.) lief).
+  async function maschineLoeschen(m: ErnteMaschine) {
+    if (
+      !window.confirm(
+        `Maschine "${m.nummer}"${m.bezeichnung ? ` (${m.bezeichnung})` : ""} endgültig löschen?`
+      )
+    )
+      return;
+    const { error } = await getSupabaseClient().from("ernte_maschine").delete().eq("id", m.id);
+    if (error) {
+      setFehler(error.message);
+      return;
+    }
+    laden();
+  }
+
+  async function bulkLoeschen() {
+    const ids = [...ausgewaehlt];
+    if (ids.length === 0) return;
+    if (!window.confirm(`${ids.length} Maschine(n) endgültig löschen?`)) return;
+    setBulkLaeuft(true);
+    setFehler(null);
+    const { error } = await getSupabaseClient().from("ernte_maschine").delete().in("id", ids);
+    setBulkLaeuft(false);
+    if (error) {
+      setFehler(error.message);
+      return;
+    }
+    setAusgewaehlt(new Set());
+    laden();
+  }
+
   // ---- Maschinen: CSV-/Excel-Import ----
   const [importDateiname, setImportDateiname] = useState<string | null>(null);
   const [importZeilen, setImportZeilen] = useState<ErnteMaschineImportZeile[]>([]);
@@ -477,6 +514,14 @@ export default function ErntewirtschaftStammdatenPage() {
                 </button>
                 <button
                   type="button"
+                  className="text-xs text-beere-600 underline"
+                  disabled={bulkLaeuft}
+                  onClick={bulkLoeschen}
+                >
+                  Löschen
+                </button>
+                <button
+                  type="button"
                   className="text-xs text-neutral-500 underline"
                   onClick={() => setAusgewaehlt(new Set())}
                 >
@@ -629,13 +674,22 @@ export default function ErntewirtschaftStammdatenPage() {
                         </td>
                         <td>
                           {canEditMaschinen && (
-                            <button
-                              type="button"
-                              className="btn-secondary text-xs"
-                              onClick={() => starteMaschineBearbeiten(m)}
-                            >
-                              Bearbeiten
-                            </button>
+                            <div className="flex gap-2">
+                              <button
+                                type="button"
+                                className="btn-secondary text-xs"
+                                onClick={() => starteMaschineBearbeiten(m)}
+                              >
+                                Bearbeiten
+                              </button>
+                              <button
+                                type="button"
+                                className="text-xs text-beere-600 underline"
+                                onClick={() => maschineLoeschen(m)}
+                              >
+                                Löschen
+                              </button>
+                            </div>
                           )}
                         </td>
                       </tr>
