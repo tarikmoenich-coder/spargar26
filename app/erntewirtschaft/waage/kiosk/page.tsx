@@ -330,7 +330,13 @@ export default function WaagenKioskPage() {
           void ladeZaehler();
         },
       )
-      .subscribe();
+      .subscribe((status, err) => {
+        // Temporäre Diagnose (Nutzer-Meldung 2026-11-05: "keine Kiste nach
+        // SQL-Insert, kein WebSocket im Netzwerk-Tab sichtbar") - zeigt den
+        // tatsächlichen Verbindungsstatus/-fehler des Realtime-Abos in der
+        // Konsole. Kann nach Behebung wieder entfernt werden.
+        console.log("Realtime-Status (ernte-kiosk-wiegung):", status, err);
+      });
 
     return () => {
       supabase.removeChannel(channel);
