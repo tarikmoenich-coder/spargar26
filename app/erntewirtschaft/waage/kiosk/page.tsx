@@ -159,23 +159,26 @@ export default function WaagenKioskPage() {
 
     const ctx = audioCtxRef.current;
     if (!ctx) return;
-    // Zwei kurze Pieptöne statt einem - auffälliger in einer lauten
-    // Hof-/Verladeumgebung, besser vom allgemeinen Betriebslärm
-    // unterscheidbar als ein einzelner Dauerton.
-    [0, 0.25].forEach((start) => {
-      const osc = ctx.createOscillator();
-      const gain = ctx.createGain();
-      osc.type = "sine";
-      osc.frequency.value = 880;
-      const t0 = ctx.currentTime + start;
-      gain.gain.setValueAtTime(0.0001, t0);
-      gain.gain.exponentialRampToValueAtTime(1, t0 + 0.02);
-      gain.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.2);
-      osc.connect(gain);
-      gain.connect(ctx.destination);
-      osc.start(t0);
-      osc.stop(t0 + 0.22);
-    });
+    // Ein einzelner, heller und länger gehaltener Ton (Nutzer-Vorgabe
+    // 2026-11-05: der bisherige kurze Doppel-Piepton bei 880 Hz war zu
+    // leise und zu kurz). Höhere Frequenz wirkt heller/durchdringender,
+    // eine Rechteckwelle klingt bei gleicher Lautstärke (Gain bereits auf
+    // Maximum) durch ihre Obertöne lauter/schärfer als eine Sinuswelle -
+    // beides zusammen soll auch in einer lauten Hof-/Verladeumgebung
+    // deutlich auffallen.
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.type = "square";
+    osc.frequency.value = 1568; // G6 - hell, aber noch nicht schrill/unangenehm
+    const t0 = ctx.currentTime;
+    gain.gain.setValueAtTime(0.0001, t0);
+    gain.gain.exponentialRampToValueAtTime(1, t0 + 0.03);
+    gain.gain.setValueAtTime(1, t0 + 0.45);
+    gain.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.55);
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    osc.start(t0);
+    osc.stop(t0 + 0.6);
   }, []);
 
   const uebernehmeZeile = useCallback(
