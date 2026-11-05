@@ -184,6 +184,11 @@ export const MENUE_RECHTE: Record<string, UserRole[]> = {
   // (migration_2026-10-22_ernte_ausweis.sql), der Suffix ist sicherheits-
   // relevant und darf keiner weiteren Rolle sichtbar sein.
   "/erntewirtschaft/ausweise": ["admin", "hr"],
+  // Deckt den am weitesten gefassten der drei canEdit*-Fälle auf der Seite
+  // ab (ernte_maschine_write: admin/hr/erntewirtschaft/zeiterfassung) - die
+  // Seite selbst blendet Waagen-/Konfig-Bearbeitung nach der jeweils
+  // engeren Rolle aus (ernte_waage_write: admin/hr, ernte_konfig_write: admin).
+  "/erntewirtschaft/stammdaten": ["admin", "hr", "erntewirtschaft", "zeiterfassung"],
   "/kasse": ["admin", "kasse", "pruefer", "management"],
   "/management": ["admin", "hr", "management"],
   "/aenderungsprotokoll": ["admin"],

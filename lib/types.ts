@@ -2354,3 +2354,73 @@ export interface Firmenhandy {
   erstellt_am: string;
   updated_at: string;
 }
+
+// ernte_maschine (migration_2026-10-20_erntewirtschaft_kisten_zyklus.sql,
+// max_personen ergänzt in migration_2026-10-27_ernte_maschine_live.sql) -
+// Stammdaten der Spargelspinnen, siehe app/erntewirtschaft/stammdaten.
+export interface ErnteMaschine {
+  id: number;
+  nummer: string;
+  bezeichnung: string | null;
+  box_seriennummer: string | null;
+  traccar_unique_id: string | null;
+  rtk: boolean;
+  aktiv: boolean;
+  notiz: string | null;
+  max_personen: number;
+  erstellt_am: string;
+  updated_at: string;
+}
+
+// ernte_waage (migration_2026-10-12_erntewirtschaft_waage_grundlage.sql,
+// live_gewicht_kg/live_aktualisiert_am ergänzt in
+// migration_2026-11-04_waage_live_status.sql).
+export interface ErnteWaage {
+  id: number;
+  name: string;
+  standort: string | null;
+  ip: string | null;
+  port: number | null;
+  aktiv: boolean;
+  live_gewicht_kg: number | null;
+  live_aktualisiert_am: string | null;
+  erstellt_am: string;
+  updated_at: string;
+}
+
+// ernte_konfig (migration_2026-10-20_erntewirtschaft_kisten_zyklus.sql) -
+// einfache Schlüssel/Wert-Konfiguration, siehe app/erntewirtschaft/stammdaten.
+export interface ErnteKonfig {
+  schluessel: string;
+  wert: string;
+  beschreibung: string | null;
+}
+
+// ernte_ertrag_tag (migration_2026-11-05_erntewirtschaft_ertrag_luecken.sql) -
+// Tagesaggregat je Maschine/Feld, Basis für die Tages-Kacheln auf
+// /erntewirtschaft.
+export interface ErnteErtragTag {
+  tag: string;
+  maschine_id: number | null;
+  feld_id: number | null;
+  netto_kg: number;
+  kisten: number;
+  erste_befuellung: string | null;
+  letzte_wiegung: string | null;
+}
+
+// ernte_kette_luecken (migration_2026-11-05_erntewirtschaft_ertrag_luecken.sql) -
+// Reconciliation-Sicht für auffällige/offene ernte_kiste_zyklus-Zeilen.
+export interface ErnteKetteLuecke {
+  zyklus_id: number;
+  tag_uid: string;
+  employee_id: string | null;
+  maschine_id: number | null;
+  feld_id: number | null;
+  befuellt_am: string;
+  gewogen_am: string | null;
+  status: "offen" | "gewogen" | "verworfen" | "ungeklaert";
+  gewicht_netto_kg: number | null;
+  art: "befuellt_nie_gewogen" | "gewogen_ohne_befuellung" | "implausibles_gewicht" | null;
+  ist_faellig: boolean;
+}

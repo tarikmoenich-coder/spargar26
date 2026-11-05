@@ -21,7 +21,8 @@ type BereichKey =
   | "qualitaet"
   | "ernte"
   | "ausweise"
-  | "waage";
+  | "waage"
+  | "stammdaten";
 
 const BEREICHE: {
   key: BereichKey;
@@ -106,7 +107,15 @@ const BEREICHE: {
     rechteKey: "/erntewirtschaft/waage",
     unter: [],
   },
-  // Muss NACH "ernte"/"ausweise"/"waage" stehen: deren Pfade beginnen
+  {
+    key: "stammdaten",
+    label: "Stammdaten",
+    href: "/erntewirtschaft/stammdaten",
+    prefix: "/erntewirtschaft/stammdaten",
+    rechteKey: "/erntewirtschaft/stammdaten",
+    unter: [],
+  },
+  // Muss NACH "ernte"/"ausweise"/"waage"/"stammdaten" stehen: deren Pfade beginnen
   // ebenfalls mit "/erntewirtschaft", die erste Übereinstimmung in
   // Array-Reihenfolge gewinnt (siehe "aktiv" unten) - sonst würde "ernte"
   // etc. nie als aktiver Reiter erkannt.

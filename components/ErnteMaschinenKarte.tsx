@@ -1,11 +1,13 @@
 "use client";
 
 // Kartenansicht für die Spargelspinnen (docs/erntewirtschaft-plan.md Teil F,
-// Nutzer-Vorgabe 2026-10-27: "besonders wichtig"). Erste, bewusst schlanke
-// Scheibe - nur Marker + Online/Offline-Ampel + Popup, noch KEINE Clusterung
-// (heute 1 Pilotmaschine, Clusterung ist ein eigener, späterer Ausbauschritt
-// für den 140er-Rollout, siehe components/FahrzeugKarte.tsx für das Muster,
-// sobald es gebraucht wird).
+// Nutzer-Vorgabe 2026-10-27: "besonders wichtig").
+//
+// Marker-Clusterung (Nutzer-Vorgabe 2026-11-05, für den 140er-Rollout): 1:1
+// nach dem Vorbild components/FahrzeugKarte.tsx portiert (handgerolltes
+// Greedy-Pixel-Gruppieren, keine Zusatz-Bibliothek - bei einer Flotte dieser
+// Größenordnung bewährt). Ein offenes Popup bleibt von der Gruppierung
+// ausgenommen, damit es beim 15s-Refresh nicht plötzlich verschwindet.
 //
 // Eigene, kleine Kopie von BasiskartenControl statt einer gemeinsamen Basis
 // mit FahrzeugKarte.tsx/FeldKarte.tsx - gleiche Konvention wie dort (siehe
@@ -65,6 +67,18 @@ class BasiskartenControl implements maplibregl.IControl {
     this.container?.parentNode?.removeChild(this.container);
     this.map = undefined;
   }
+}
+
+// Einmalig pro Seite: Hover-Effekt für Cluster-Badges, gleiche Klasse wie
+// components/FahrzeugKarte.tsx.
+let markerStilGesetzt = false;
+function markerStilEinmalig() {
+  if (markerStilGesetzt || typeof document === "undefined") return;
+  markerStilGesetzt = true;
+  const s = document.createElement("style");
+  s.textContent =
+    ".ernte-maschine-cluster{transition:filter .1s}.ernte-maschine-cluster:hover{filter:brightness(1.08)}";
+  document.head.appendChild(s);
 }
 
 function minutenHer(iso: string | null): number | null {
@@ -205,6 +219,133 @@ export default function ErnteMaschinenKarte({
   const autoGezoomtRef = useRef(false);
   const [bereit, setBereit] = useState(false);
 
+  // Clusterung (siehe Kommentar am Dateikopf) - gleiche Ref-Struktur wie
+  // components/FahrzeugKarte.tsx.
+  const clustersRef = useRef<Map<string, maplibregl.Marker>>(new Map());
+  const clusterInfoRef = useRef<
+    Map<string, { lnglat: [number, number][]; count: number }>
+  >(new Map());
+  const clusteredRef = useRef<Set<number>>(new Set());
+  const minByIdRef = useRef<Map<number, number | null>>(new Map());
+  const bereitRef = useRef(false);
+  const clusterRafRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    markerStilEinmalig();
+  }, []);
+
+  // Maschinen-Marker nach Pixel-Nähe zusammenfassen (1:1 aus
+  // components/FahrzeugKarte.tsx übernommen, siehe dortige Begründung).
+  const clustern = () => {
+    const map = mapRef.current;
+    if (!map || !bereitRef.current) return;
+    const RADIUS_PX = 46;
+
+    type P = { id: number; x: number; y: number; lng: number; lat: number; frei: boolean };
+    const pts: P[] = [];
+    markersRef.current.forEach((marker, id) => {
+      const ll = marker.getLngLat();
+      const p = map.project(ll);
+      const frei = marker.getPopup()?.isOpen() === true;
+      pts.push({ id, x: p.x, y: p.y, lng: ll.lng, lat: ll.lat, frei });
+    });
+
+    const belegt = new Set<number>();
+    const gruppen: P[][] = [];
+    for (const a of pts) {
+      if (belegt.has(a.id)) continue;
+      belegt.add(a.id);
+      if (a.frei) {
+        gruppen.push([a]);
+        continue;
+      }
+      const g = [a];
+      for (const b of pts) {
+        if (belegt.has(b.id) || b.frei) continue;
+        if (Math.hypot(a.x - b.x, a.y - b.y) <= RADIUS_PX) {
+          belegt.add(b.id);
+          g.push(b);
+        }
+      }
+      gruppen.push(g);
+    }
+
+    const nunGeclustert = new Set<number>();
+    const gewuenscht = new Map<
+      string,
+      { cx: number; cy: number; lnglat: [number, number][]; count: number; min: number | null }
+    >();
+    for (const g of gruppen) {
+      if (g.length < 2) continue;
+      const key = g
+        .map((p) => p.id)
+        .sort((x, y) => x - y)
+        .join(",");
+      const mins = g
+        .map((p) => minByIdRef.current.get(p.id) ?? null)
+        .filter((m): m is number => m !== null);
+      gewuenscht.set(key, {
+        cx: g.reduce((s, p) => s + p.x, 0) / g.length,
+        cy: g.reduce((s, p) => s + p.y, 0) / g.length,
+        lnglat: g.map((p) => [p.lng, p.lat] as [number, number]),
+        count: g.length,
+        min: mins.length ? Math.min(...mins) : null,
+      });
+      g.forEach((p) => nunGeclustert.add(p.id));
+    }
+
+    markersRef.current.forEach((marker, id) => {
+      const sollWeg = nunGeclustert.has(id);
+      const istWeg = clusteredRef.current.has(id);
+      if (sollWeg && !istWeg) marker.remove();
+      else if (!sollWeg && istWeg) marker.addTo(map);
+    });
+    clusteredRef.current = nunGeclustert;
+
+    clustersRef.current.forEach((m, key) => {
+      if (!gewuenscht.has(key)) {
+        m.remove();
+        clustersRef.current.delete(key);
+        clusterInfoRef.current.delete(key);
+      }
+    });
+
+    gewuenscht.forEach((info, key) => {
+      clusterInfoRef.current.set(key, { lnglat: info.lnglat, count: info.count });
+      let m = clustersRef.current.get(key);
+      if (!m) {
+        const el = document.createElement("div");
+        el.className = "ernte-maschine-cluster";
+        el.style.cursor = "pointer";
+        el.addEventListener("click", () => {
+          const cur = clusterInfoRef.current.get(key);
+          if (!cur) return;
+          const b = new maplibregl.LngLatBounds();
+          cur.lnglat.forEach((c) => b.extend(c));
+          if (b.getNorthEast().distanceTo(b.getSouthWest()) < 5) {
+            map.easeTo({ center: b.getCenter(), zoom: map.getZoom() + 2, duration: 400 });
+          } else {
+            map.fitBounds(b, { padding: 80, maxZoom: 17, duration: 400 });
+          }
+        });
+        m = new maplibregl.Marker({ element: el, anchor: "center" });
+        m.setLngLat(map.unproject([info.cx, info.cy]));
+        m.addTo(map);
+        clustersRef.current.set(key, m);
+      } else {
+        m.setLngLat(map.unproject([info.cx, info.cy]));
+      }
+      const farbe = ampel(info.min);
+      (m.getElement() as HTMLDivElement).innerHTML = `
+        <div style="min-width:30px;height:30px;padding:0 7px;border-radius:9999px;background:${farbe};border:2px solid #fff;box-shadow:0 1px 3px rgba(0,0,0,.45);display:flex;align-items:center;justify-content:center;font:700 13px/1 system-ui;color:#fff">${info.count}</div>`;
+    });
+  };
+
+  const clusterAnstossen = () => {
+    if (clusterRafRef.current != null) cancelAnimationFrame(clusterRafRef.current);
+    clusterRafRef.current = requestAnimationFrame(clustern);
+  };
+
   useEffect(() => {
     if (!containerRef.current) return;
     const map = new maplibregl.Map({
@@ -279,10 +420,20 @@ export default function ErnteMaschinenKarte({
       });
 
       map.addControl(new BasiskartenControl(), "top-right");
+      bereitRef.current = true;
+      map.on("move", clusterAnstossen);
       setBereit(true);
     });
 
     return () => {
+      if (clusterRafRef.current != null) cancelAnimationFrame(clusterRafRef.current);
+      markersRef.current.forEach((m) => m.remove());
+      markersRef.current.clear();
+      clustersRef.current.forEach((m) => m.remove());
+      clustersRef.current.clear();
+      clusterInfoRef.current.clear();
+      clusteredRef.current.clear();
+      bereitRef.current = false;
       map.remove();
       mapRef.current = null;
       setBereit(false);
@@ -299,7 +450,9 @@ export default function ErnteMaschinenKarte({
 
     for (const m of mitPosition) {
       behalten.add(m.maschine_id);
-      const farbe = ampel(minutenHer(m.position_zeitpunkt));
+      const min = minutenHer(m.position_zeitpunkt);
+      minByIdRef.current.set(m.maschine_id, min);
+      const farbe = ampel(min);
 
       let marker = markersRef.current.get(m.maschine_id);
       let el: HTMLDivElement;
@@ -344,6 +497,8 @@ export default function ErnteMaschinenKarte({
       if (!behalten.has(id)) {
         marker.remove();
         markersRef.current.delete(id);
+        minByIdRef.current.delete(id);
+        clusteredRef.current.delete(id);
       }
     });
 
@@ -353,6 +508,12 @@ export default function ErnteMaschinenKarte({
       mitPosition.forEach((m) => b.extend([m.lng!, m.lat!]));
       map.fitBounds(b, { padding: 60, maxZoom: 16, duration: 0 });
     }
+
+    // Nach jeder Daten-Aktualisierung neu clustern - die fitBounds-Animation
+    // oben stößt es über "move" ohnehin an, aber nicht, wenn sich der
+    // Kartenausschnitt dabei nicht ändert.
+    clusterAnstossen();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [maschinen, bereit]);
 
   // Feld-Geometrien + Namens-Label in der Mitte jeder Fläche.
