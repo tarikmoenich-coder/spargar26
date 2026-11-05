@@ -19,7 +19,12 @@ const HEADER_ALIASE: Record<ErnteMaschineImportFeld, string[]> = {
   nummer: ["nummer", "maschinennummer", "nr", "maschinennr"],
   bezeichnung: ["bezeichnung", "name"],
   box_seriennummer: ["boxseriennummer", "seriennummer", "boxsn", "sn"],
-  traccar_unique_id: ["traccaruniqueid", "imei", "uniqueid"],
+  // "traccaruniqueidimei" deckt die vom Tool selbst erzeugte Vorlagen-
+  // Überschrift "Traccar-Unique-ID (IMEI)" ab - normalisiereHeader()
+  // verschmilzt Klammerinhalt und Haupttext zu einer Zeichenkette, ohne das
+  // wäre die eigene Vorlage nicht wiedererkennbar gewesen (Nutzer-Fund
+  // 2026-11-05: 48 importierte Maschinen landeten ohne traccar_unique_id).
+  traccar_unique_id: ["traccaruniqueid", "imei", "uniqueid", "traccaruniqueidimei"],
 };
 
 export function normalisiereHeader(header: string): string {

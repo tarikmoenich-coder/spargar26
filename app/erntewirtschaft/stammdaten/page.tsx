@@ -83,7 +83,11 @@ const TEMPLATE_SPALTEN: Record<ErnteMaschineImportFeld, string> = {
   nummer: "Nummer",
   bezeichnung: "Bezeichnung",
   box_seriennummer: "Box-Seriennummer",
-  traccar_unique_id: "Traccar-Unique-ID (IMEI)",
+  // Bewusst nur "IMEI" statt "Traccar-Unique-ID (IMEI)" - Klammerzusätze in
+  // der Kopfzeile verschmelzen in normalisiereHeader() mit dem Haupttext
+  // und wären sonst nicht mehr zuverlässig wiedererkennbar (siehe Alias-
+  // Liste in lib/ernteMaschineImport.ts).
+  traccar_unique_id: "IMEI",
 };
 
 function ladeVorlage() {
