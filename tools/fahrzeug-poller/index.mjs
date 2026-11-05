@@ -184,10 +184,27 @@ const TYP_TEXT = {
 };
 
 async function lauf() {
-  const [devices, positions] = await Promise.all([
+  const [devicesRoh, positions] = await Promise.all([
     traccar("/api/devices"),
     traccar("/api/positions"),
   ]);
+
+  // Spargelspinnen (Erntewirtschaft) teilen sich dieselbe Traccar-Instanz
+  // (siehe tools/ernte-poller/), sollen aber nicht als Fahrzeug-Tracker in
+  // fahrzeug_tracker/der Fahrzeuge-Stammdatenseite auftauchen (Nutzer-
+  // Vorgabe 2026-11-05) - vor allem anderen herausfiltern, damit sie in
+  // KEINEM der folgenden Schritte (Tracker-Upsert, Prune, Positionen,
+  // Geofences/Events) auch nur ankommen.
+  const { data: ernteMaschinen, error: ernteFehler } = await supa
+    .from("ernte_maschine")
+    .select("traccar_unique_id, box_seriennummer");
+  if (ernteFehler) throw new Error(`ernte_maschine select: ${ernteFehler.message}`);
+  const ernteUids = new Set(
+    (ernteMaschinen ?? [])
+      .flatMap((m) => [m.traccar_unique_id, m.box_seriennummer])
+      .filter((v) => v != null)
+  );
+  const devices = devicesRoh.filter((d) => !ernteUids.has(String(d.uniqueId)));
 
   // 1. Tracker-Zeilen aktualisieren (nur Sync-Felder).
   if (devices.length) {
