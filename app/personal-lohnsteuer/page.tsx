@@ -301,6 +301,7 @@ export default function LohnsteuerPage() {
                             saisonJahr={jahr}
                             canEdit={canEdit}
                             titel={`Doppelte Haushaltsführung ${jahr} - ${emp.name}, ${emp.vorname}`}
+                            employeeFamilienstand={emp.familienstand}
                             onGespeichert={() => {
                               setEditingId(null);
                               load();

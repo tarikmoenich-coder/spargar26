@@ -113,7 +113,7 @@ export interface Employee {
   plz?: string | null;
   staatsangehoerigkeit?: string | null;
   geschlecht?: "M" | "F" | null;
-  familienstand?: string | null;
+  familienstand?: Familienstand | null;
   geburtsname?: string | null;
   geburtsort?: string | null;
   hochzeitsdatum?: string | null;

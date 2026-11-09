@@ -52,6 +52,7 @@ export default function DoppelteHaushaltsfuehrungFormular({
   saisonJahr,
   canEdit,
   titel,
+  employeeFamilienstand,
   onGespeichert,
   onAbbrechen,
 }: {
@@ -59,6 +60,10 @@ export default function DoppelteHaushaltsfuehrungFormular({
   saisonJahr: number;
   canEdit: boolean;
   titel?: string;
+  // Vorbelegung für einen noch nicht erfassten Jahres-Datensatz, aus der
+  // Stammkarte (employees.familienstand) - siehe Anreiseliste, wo der
+  // Familienstand tatsächlich real gepflegt wird.
+  employeeFamilienstand?: Familienstand | null;
   onGespeichert: () => void;
   onAbbrechen: () => void;
 }) {
@@ -81,11 +86,12 @@ export default function DoppelteHaushaltsfuehrungFormular({
       setEntwurf(
         data
           ? entwurfAusDatensatz(data as DoppelteHaushaltsfuehrung)
-          : LEERER_ENTWURF
+          : { ...LEERER_ENTWURF, familienstand: employeeFamilienstand ?? null }
       );
       setLaden(false);
     }
     load();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [employeeId, saisonJahr]);
 
   function feld<K extends keyof Entwurf>(key: K, value: Entwurf[K]) {
@@ -111,6 +117,19 @@ export default function DoppelteHaushaltsfuehrungFormular({
       setFehler(error.message);
       setSpeichernLaeuft(false);
       return;
+    }
+    // Stammkarte aktuell halten: Familienstand kann sich gegenüber der
+    // Vorbelegung geändert haben (z.B. Person heiratet erst in dieser Saison).
+    if (entwurf.familienstand !== (employeeFamilienstand ?? null)) {
+      const { error: stammkarteFehler } = await supabase
+        .from("employees")
+        .update({ familienstand: entwurf.familienstand })
+        .eq("id", employeeId);
+      if (stammkarteFehler) {
+        setFehler(stammkarteFehler.message);
+        setSpeichernLaeuft(false);
+        return;
+      }
     }
     setSpeichernLaeuft(false);
     onGespeichert();

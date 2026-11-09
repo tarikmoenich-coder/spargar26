@@ -17,11 +17,13 @@ import {
   generiereKombiniertesDokument,
   type DokumentSpezifikation,
 } from "@/lib/dokumentGenerator";
-import type {
-  Employee,
-  PersonalKandidat,
-  PersonalKandidatChecklisteRow,
-  VerpflegungsSatz,
+import {
+  FAMILIENSTAND_LABELS,
+  type Employee,
+  type Familienstand,
+  type PersonalKandidat,
+  type PersonalKandidatChecklisteRow,
+  type VerpflegungsSatz,
 } from "@/lib/types";
 import PersonalTabs from "@/components/PersonalTabs";
 import PageHeader from "@/components/PageHeader";
@@ -260,7 +262,7 @@ export default function AnreiselistePage() {
 
   async function checklistFeldSpeichern(
     k: PersonalKandidat,
-    feld: "verheiratet_laut_fragebogen" | "lohnsteuerabzug_antrag_gewuenscht",
+    feld: "lohnsteuerabzug_antrag_gewuenscht",
     wert: boolean
   ) {
     const supabase = getSupabaseClient();
@@ -268,6 +270,26 @@ export default function AnreiselistePage() {
       .from("personal_kandidaten")
       .update({ [feld]: wert })
       .eq("id", k.id);
+    load();
+  }
+
+  // Familienstand/Hochzeitsdatum landen direkt auf der Stammkarte
+  // (employees), nicht mehr in einer eigenen Kopie auf personal_kandidaten -
+  // der employees-Datensatz existiert zu diesem Zeitpunkt schon (wird bei
+  // "Anreise vorbereiten" angelegt, siehe app/personalplanung/page.tsx).
+  async function familienstandSpeichern(
+    employeeId: string,
+    familienstand: Familienstand | null,
+    hochzeitsdatum: string | null
+  ) {
+    const supabase = getSupabaseClient();
+    await supabase
+      .from("employees")
+      .update({
+        familienstand,
+        hochzeitsdatum: familienstand === "verheiratet" ? hochzeitsdatum : null,
+      })
+      .eq("id", employeeId);
     load();
   }
 
@@ -579,7 +601,7 @@ export default function AnreiselistePage() {
                   {canEdit && <th>Dokumente</th>}
                   <th>Gedruckt</th>
                   <th>SV-Fragebogen</th>
-                  <th>Verheiratet</th>
+                  <th>Familienstand</th>
                   <th>Lohnsteuerabzug-Antrag</th>
                   <th>Buskosten Hinfahrt €</th>
                   <th>Checkliste</th>
@@ -593,6 +615,9 @@ export default function AnreiselistePage() {
                   const f = vertragsfelder[k.id] ?? { beginn: "", ende: "" };
                   const bereit = vertragszeitraumBereit(k);
                   const svJahr = svSaisonJahrFuer(k);
+                  const emp = employees.find(
+                    (e) => e.id === k.aktivierter_employee_id
+                  );
                   return (
                     <Fragment key={k.id}>
                     <tr>
@@ -746,18 +771,45 @@ export default function AnreiselistePage() {
                         )}
                       </td>
                       <td>
-                        <input
-                          type="checkbox"
-                          disabled={!canEdit}
-                          checked={k.verheiratet_laut_fragebogen ?? false}
-                          onChange={(e) =>
-                            checklistFeldSpeichern(
-                              k,
-                              "verheiratet_laut_fragebogen",
-                              e.target.checked
-                            )
-                          }
-                        />
+                        {emp && (
+                          <div className="flex items-center gap-1">
+                            <select
+                              disabled={!canEdit}
+                              value={emp.familienstand ?? ""}
+                              onChange={(e) =>
+                                familienstandSpeichern(
+                                  emp.id,
+                                  (e.target.value || null) as Familienstand | null,
+                                  emp.hochzeitsdatum ?? null
+                                )
+                              }
+                            >
+                              <option value="">— bitte wählen —</option>
+                              {(
+                                Object.keys(FAMILIENSTAND_LABELS) as Familienstand[]
+                              ).map((fs) => (
+                                <option key={fs} value={fs}>
+                                  {FAMILIENSTAND_LABELS[fs]}
+                                </option>
+                              ))}
+                            </select>
+                            {emp.familienstand === "verheiratet" && (
+                              <input
+                                type="date"
+                                title="Hochzeitsdatum"
+                                disabled={!canEdit}
+                                value={emp.hochzeitsdatum ?? ""}
+                                onChange={(e) =>
+                                  familienstandSpeichern(
+                                    emp.id,
+                                    "verheiratet",
+                                    e.target.value || null
+                                  )
+                                }
+                              />
+                            )}
+                          </div>
+                        )}
                       </td>
                       <td>
                         <input
