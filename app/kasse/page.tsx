@@ -21,7 +21,7 @@
 // ihn doppelt zu zählen.
 
 import { useEffect, useState } from "react";
-import { formatMenge } from "@/lib/format";
+import { formatDatumDE, formatMenge } from "@/lib/format";
 import { getSupabaseClient } from "@/lib/supabase/client";
 import { useProfile } from "@/lib/useProfile";
 import type {
@@ -43,6 +43,10 @@ import UmbuchungForm from "@/components/UmbuchungForm";
 function monatsSchluessel(d: Date) {
   const mm = String(d.getMonth() + 1).padStart(2, "0");
   return `EZ-${mm}-${d.getFullYear()}`;
+}
+
+function heute() {
+  return new Date().toISOString().slice(0, 10);
 }
 
 // Nur die im Journal benötigten Felder aus cash_checks - Nutzer-Vorgabe
@@ -114,6 +118,7 @@ export default function KassenbuchJournalPage() {
   const [loading, setLoading] = useState(true);
 
   const [betrag, setBetrag] = useState("");
+  const [datum, setDatum] = useState(heute());
   const [zweck, setZweck] = useState("");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -125,6 +130,12 @@ export default function KassenbuchJournalPage() {
     const supabase = getSupabaseClient();
     const jahresAnfang = `${jahr}-01-01T00:00:00Z`;
     const jahresEnde = `${jahr + 1}-01-01T00:00:00Z`;
+    // Einzahlungen/Umbuchungen werden am eingegebenen Kassenbuch-Datum
+    // gefiltert (datum_kassenbuch), nicht am Anlage-Zeitstempel (datum) -
+    // sonst würde ein nachgetragener/rückdatierter Eintrag im Journal des
+    // falschen Jahres auftauchen.
+    const jahresAnfangDatum = `${jahr}-01-01`;
+    const jahresEndeDatum = `${jahr + 1}-01-01`;
 
     // Kassenbücher zuerst - die Lohnkasse-ID wird für den Eröffnungssaldo und
     // die Umbuchungs-Abfrage gebraucht.
@@ -157,9 +168,9 @@ export default function KassenbuchJournalPage() {
       supabase
         .from("cash_deposits")
         .select("*")
-        .gte("datum", jahresAnfang)
-        .lt("datum", jahresEnde)
-        .order("datum", { ascending: true }),
+        .gte("datum_kassenbuch", jahresAnfangDatum)
+        .lt("datum_kassenbuch", jahresEndeDatum)
+        .order("datum_kassenbuch", { ascending: true }),
       supabase
         .from("advances")
         .select("*")
@@ -200,9 +211,9 @@ export default function KassenbuchJournalPage() {
             .from("kassenbuch_buchung")
             .select("*")
             .eq("kassenbuch_id", lkId)
-            .gte("datum", jahresAnfang)
-            .lt("datum", jahresEnde)
-            .order("datum", { ascending: true })
+            .gte("datum_kassenbuch", jahresAnfangDatum)
+            .lt("datum_kassenbuch", jahresEndeDatum)
+            .order("datum_kassenbuch", { ascending: true })
         : Promise.resolve({ data: [] as KassenbuchBuchung[] }),
       supabase.from("profile_namen").select("*"),
     ]);
@@ -247,10 +258,12 @@ export default function KassenbuchJournalPage() {
       belegnummer,
       betrag: Number(betrag),
       verwendungszweck: zweck,
+      datum_kassenbuch: datum,
     });
     if (insertError) setError(insertError.message);
     setBetrag("");
     setZweck("");
+    setDatum(heute());
     setSaving(false);
     load();
   }
@@ -294,7 +307,7 @@ export default function KassenbuchJournalPage() {
   const bewegungsZeilen: JournalZeile[] = [
     ...deposits.map((d) => ({
       key: `einzahlung-${d.id}`,
-      datum: d.datum,
+      datum: d.datum_kassenbuch,
       art: "Einzahlung",
       belegnummer: d.belegnummer,
       betrag: d.storniert ? 0 : Number(d.betrag),
@@ -350,7 +363,7 @@ export default function KassenbuchJournalPage() {
     })),
     ...umbuchungen.map((u) => ({
       key: `umbuchung-${u.id}`,
-      datum: u.datum,
+      datum: u.datum_kassenbuch,
       art: "Umbuchung",
       belegnummer: u.belegnummer,
       betrag: u.storniert
@@ -463,6 +476,12 @@ export default function KassenbuchJournalPage() {
             onChange={(e) => setBetrag(e.target.value)}
           />
           <input
+            type="date"
+            title="Datum"
+            value={datum}
+            onChange={(e) => setDatum(e.target.value)}
+          />
+          <input
             placeholder="Verwendungszweck / Quelle"
             value={zweck}
             onChange={(e) => setZweck(e.target.value)}
@@ -550,7 +569,7 @@ export default function KassenbuchJournalPage() {
                         : ""
                   }
                 >
-                  <td>{new Date(z.datum).toLocaleString("de-DE")}</td>
+                  <td>{formatDatumDE(z.datum)}</td>
                   <td>
                     {z.art}
                     {z.storniert && " (storniert)"}

@@ -7,7 +7,7 @@
 // Journal unter /kasse - hierher gerät man mit ihr nur über einen alten Link.
 
 import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
-import { formatMenge } from "@/lib/format";
+import { formatDatumDE, formatMenge } from "@/lib/format";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { getSupabaseClient } from "@/lib/supabase/client";
@@ -86,6 +86,12 @@ function BuchJournalInner() {
     const supabase = getSupabaseClient();
     const jahresAnfang = `${jahr}-01-01T00:00:00Z`;
     const jahresEnde = `${jahr + 1}-01-01T00:00:00Z`;
+    // Buchungen werden am eingegebenen Kassenbuch-Datum gefiltert
+    // (datum_kassenbuch), nicht am Anlage-Zeitstempel (datum) - sonst würde
+    // ein nachgetragener/rückdatierter Eintrag im Journal des falschen
+    // Jahres auftauchen.
+    const jahresAnfangDatum = `${jahr}-01-01`;
+    const jahresEndeDatum = `${jahr + 1}-01-01`;
     const [{ data: alle }, { data: bch }, { data: er }, { data: namen }, { data: chk }] =
       await Promise.all([
         supabase.from("kassenbuch").select("*").order("reihenfolge"),
@@ -93,9 +99,9 @@ function BuchJournalInner() {
           .from("kassenbuch_buchung")
           .select("*")
           .eq("kassenbuch_id", buchId)
-          .gte("datum", jahresAnfang)
-          .lt("datum", jahresEnde)
-          .order("datum", { ascending: true }),
+          .gte("datum_kassenbuch", jahresAnfangDatum)
+          .lt("datum_kassenbuch", jahresEndeDatum)
+          .order("datum_kassenbuch", { ascending: true }),
         supabase.rpc("kassenbuch_saldo_bis", {
           p_kassenbuch_id: buchId,
           p_bis: jahresAnfang,
@@ -183,7 +189,7 @@ function BuchJournalInner() {
       saldo += delta;
       return {
         key: `buchung-${b.id}`,
-        datum: b.datum,
+        datum: b.datum_kassenbuch,
         buchung: b,
         delta,
         saldo,
@@ -371,9 +377,7 @@ function BuchJournalInner() {
                       const b = z.buchung!;
                       return (
                         <tr key={z.key} className={b.storniert ? "opacity-50" : ""}>
-                          <td>
-                            {new Date(b.datum).toLocaleDateString("de-DE")}
-                          </td>
+                          <td>{formatDatumDE(b.datum_kassenbuch)}</td>
                           <td>{b.belegnummer}</td>
                           <td className="text-neutral-600">
                             {b.umbuchung_id ? "↔ " : ""}
