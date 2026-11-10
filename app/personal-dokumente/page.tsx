@@ -1,6 +1,7 @@
 "use client";
 
-import { Fragment, useEffect, useState } from "react";
+import { Fragment, Suspense, useEffect, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { getSupabaseClient } from "@/lib/supabase/client";
 import { ladeAlleSeiten } from "@/lib/ladeAlle";
 import { useProfile } from "@/lib/useProfile";
@@ -38,16 +39,22 @@ interface Row {
   aktiv: boolean;
 }
 
-export default function PersonalDokumentePage() {
+function PersonalDokumenteInner() {
   const { profile } = useProfile();
   const canView = profile?.role === "admin" || profile?.role === "hr";
+  // Von der Anreiseliste aus ("Dokumente hochladen →") kommt die
+  // Personalnummer der gerade bearbeiteten Person als ?pn=... mit - damit
+  // landet man hier direkt bei genau dieser einen Person, statt erst selbst
+  // suchen zu müssen.
+  const searchParams = useSearchParams();
+  const pnAusUrl = searchParams.get("pn") ?? "";
 
   const [employees, setEmployees] = useState<Row[]>([]);
   const [dokumente, setDokumente] = useState<Record<string, EmployeeDocument[]>>(
     {}
   );
   const [loading, setLoading] = useState(true);
-  const [search, setSearch] = useState("");
+  const [search, setSearch] = useState(pnAusUrl);
 
   const [offenId, setOffenId] = useState<string | null>(null);
   const [kategorie, setKategorie] = useState<DokumentKategorie>(
@@ -442,5 +449,13 @@ export default function PersonalDokumentePage() {
         </div>
       )}
     </div>
+  );
+}
+
+export default function PersonalDokumentePage() {
+  return (
+    <Suspense fallback={<p className="p-4 text-sm text-neutral-500">Lädt…</p>}>
+      <PersonalDokumenteInner />
+    </Suspense>
   );
 }

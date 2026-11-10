@@ -881,7 +881,10 @@ export default function AnreiselistePage() {
                           "—"
                         )}
                         <div>
-                          <a href="/personal-dokumente" className="underline">
+                          <a
+                            href={`/personal-dokumente?pn=${encodeURIComponent(k.personal_nr)}`}
+                            className="underline"
+                          >
                             Dokumente hochladen →
                           </a>
                         </div>
