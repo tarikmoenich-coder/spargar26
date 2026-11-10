@@ -2,6 +2,7 @@
 
 import { Fragment, useEffect, useState } from "react";
 import { getSupabaseClient } from "@/lib/supabase/client";
+import { ladeAlleSeiten } from "@/lib/ladeAlle";
 import { useProfile } from "@/lib/useProfile";
 import {
   DOKUMENT_KATEGORIEN,
@@ -63,19 +64,31 @@ export default function PersonalDokumentePage() {
   async function load() {
     setLoading(true);
     const supabase = getSupabaseClient();
-    const [{ data: emp }, { data: docs }] = await Promise.all([
-      supabase
-        .from("employees")
-        .select("id, personal_nr, herkunft, name, vorname, ort, aktiv")
-        .order("name"),
-      supabase
-        .from("employee_documents")
-        .select("*")
-        .order("hochgeladen_am", { ascending: false }),
+    // Beide Tabellen können inzwischen über 1000 Zeilen haben (Historie-
+    // Import) - ohne ladeAlleSeiten() bricht Supabase/PostgREST die Abfrage
+    // still ab und einzelne Mitarbeiter/Dokumente fehlen dann auf dieser
+    // Seite (siehe lib/ladeAlle.ts).
+    const [emp, docs] = await Promise.all([
+      ladeAlleSeiten<Row>((von, bis) =>
+        supabase
+          .from("employees")
+          .select("id, personal_nr, herkunft, name, vorname, ort, aktiv")
+          .order("name")
+          .order("id")
+          .range(von, bis)
+      ),
+      ladeAlleSeiten<EmployeeDocument>((von, bis) =>
+        supabase
+          .from("employee_documents")
+          .select("*")
+          .order("hochgeladen_am", { ascending: false })
+          .order("id")
+          .range(von, bis)
+      ),
     ]);
-    setEmployees((emp as Row[]) ?? []);
+    setEmployees(emp);
     const map: Record<string, EmployeeDocument[]> = {};
-    ((docs as EmployeeDocument[]) ?? []).forEach((d) => {
+    docs.forEach((d) => {
       if (!map[d.employee_id]) map[d.employee_id] = [];
       map[d.employee_id].push(d);
     });
