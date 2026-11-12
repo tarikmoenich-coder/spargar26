@@ -54,7 +54,7 @@ export default function MitarbeiterAusweisKarte({
           <img src={fotoUrl} alt="Mitarbeiterfoto" className="ausweis2-foto-bild" />
         ) : (
           <div className="ausweis2-foto-platzhalter">
-            <UserRound className="h-6 w-6" strokeWidth={1.25} />
+            <UserRound className="h-8 w-8" strokeWidth={1.25} />
           </div>
         )}
 
