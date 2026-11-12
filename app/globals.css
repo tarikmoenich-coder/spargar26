@@ -470,7 +470,9 @@ input[type="number"]::-webkit-inner-spin-button {
    (print:hidden am Aufrufer). --- */
 .ausweis2-vorschau-rahmen {
   display: flex;
+  flex-wrap: wrap;
   justify-content: center;
+  gap: 1rem;
   padding: 2rem 1rem;
   background: #f0f1ef;
   border-radius: 0.5rem;
@@ -508,16 +510,25 @@ input[type="number"]::-webkit-inner-spin-button {
    gesamten App-Druck beeinflussen, nicht nur diese eine Seite - deshalb
    hier bewusst abweichend vom wörtlichen Vorgabe-Snippet umgesetzt.
 
-   "karte" steht per position:fixed/inset:0 AUSSERHALB des normalen
-   Fluss von <main> (app/layout.tsx: px-4 py-6) - bei der riesigen A4-Seite
-   fällt dessen Padding nicht auf, bei der nur 53,98mm hohen Kartenseite
-   reicht es aber, zusammen mit der Kartenhöhe über eine Seite hinauszugehen
-   und einen zweiten, leeren Blattumbruch zu erzeugen (Bug gefunden
-   2026-11-12: Druckvorschau zeigte 2 Seiten statt 1). */
+   <main> (app/layout.tsx: px-4 py-6) steckt bei der riesigen A4-Seite
+   nicht im Weg, bei der nur 53,98mm hohen Kartenseite reicht sein Padding
+   aber, um über eine Seite hinauszuwachsen und einen Umbruch auf eine
+   zweite, leere Seite zu erzwingen (Bug gefunden 2026-11-12: Druckvorschau
+   zeigte 2 Seiten statt 1) - deshalb pauschal genullt, SOBALD main
+   irgendeinen Ausweis-Druckbogen enthält (betrifft also nur diesen Druck,
+   nicht andere Seiten). Seriendruck (app/erntewirtschaft/ausweise/
+   page.tsx): mehrere .ausweis2-druckbogen als echte Block-Geschwister
+   (NICHT in einem Flex-Container - Fragmentierung/@page-Umbrüche
+   funktionieren darin browserübergreifend nicht zuverlässig), jede Karte
+   bekommt per "+"-Selektor einen Seitenumbruch VOR sich außer der ersten. */
 .ausweis2-druckbogen {
   display: none;
 }
 @media print {
+  main:has(.ausweis2-druckbogen) {
+    padding: 0;
+    margin: 0;
+  }
   @page ausweis2-a4 {
     size: A4 portrait;
     margin: 0;
@@ -542,8 +553,6 @@ input[type="number"]::-webkit-inner-spin-button {
   }
   .ausweis2-druckbogen--karte {
     page: ausweis2-karte;
-    position: fixed;
-    inset: 0;
     width: 85.6mm;
     height: 53.98mm;
   }
@@ -551,6 +560,9 @@ input[type="number"]::-webkit-inner-spin-button {
     position: absolute;
     left: 0;
     top: 0;
+  }
+  .ausweis2-druckbogen + .ausweis2-druckbogen {
+    break-before: page;
   }
   .ausweis2-schnittmarke {
     position: absolute;
