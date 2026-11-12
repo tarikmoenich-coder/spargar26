@@ -24,6 +24,10 @@ export interface MitarbeiterAusweisKarteProps {
   qrSvg: string | null;
   /** "vGeneration.DruckNr", z.B. "v2.1" nach der ersten Verlust-Karte */
   version: string;
+  /** Vermittlungsagentur (employees.herkunft) - NICHT die Nationalität der Person */
+  herkunft: string | null;
+  /** Führerschein-Klassen, z.B. ["B", "CE"] (employee_fuehrerschein_kategorien) */
+  fuehrerschein: string[];
   variante: "vorschau" | "druck";
 }
 
@@ -34,6 +38,8 @@ export default function MitarbeiterAusweisKarte({
   fotoUrl,
   qrSvg,
   version,
+  herkunft,
+  fuehrerschein,
   variante,
 }: MitarbeiterAusweisKarteProps) {
   return (
@@ -50,9 +56,21 @@ export default function MitarbeiterAusweisKarte({
         </div>
       </div>
 
-      <p className="ausweis2-name">
-        {name}, {vorname}
-      </p>
+      <div className="ausweis2-name-zeile">
+        <p className="ausweis2-name">
+          {name}, {vorname}
+        </p>
+        {fuehrerschein.length > 0 && (
+          <div className="ausweis2-fs-badges">
+            {fuehrerschein.map((k) => (
+              <span key={k} className="ausweis2-fs-badge">
+                {k}
+              </span>
+            ))}
+          </div>
+        )}
+      </div>
+      {herkunft && <p className="ausweis2-herkunft">{herkunft}</p>}
 
       <div className="ausweis2-unten">
         {fotoUrl ? (

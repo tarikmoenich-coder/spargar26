@@ -24,7 +24,7 @@ import MitarbeiterAusweisDruckbogen from "@/components/MitarbeiterAusweisDruckbo
 import { getSupabaseClient } from "@/lib/supabase/client";
 import { useProfile } from "@/lib/useProfile";
 import { formatDatumDE } from "@/lib/format";
-import type { Arbeitsgruppe } from "@/lib/types";
+import type { Arbeitsgruppe, FuehrerscheinEintrag } from "@/lib/types";
 
 const FOTO_BUCKET = "mitarbeiter-fotos";
 
@@ -35,6 +35,10 @@ interface MitarbeiterZeile {
   vorname: string;
   foto_pfad: string | null;
   gruppe_nr: string | null;
+  /** Vermittlungsagentur (employees.herkunft) - NICHT die Nationalität */
+  herkunft: string | null;
+  /** aus employee_fuehrerschein_kategorien, z.B. ["B", "CE"] */
+  fuehrerschein_kategorien: string[];
 }
 
 interface AusweisZeile {
@@ -89,19 +93,29 @@ export default function ErntewirtschaftAusweisePage() {
       { data: empData, error: empErr },
       { data: ausweisData, error: ausweisErr },
       { data: gruppenData, error: gruppenErr },
+      { data: fsData, error: fsErr },
     ] = await Promise.all([
       supabase
         .from("employees")
-        .select("id, personal_nr, name, vorname, foto_pfad, gruppe_nr")
+        .select("id, personal_nr, name, vorname, foto_pfad, gruppe_nr, herkunft")
         .eq("aktiv", true)
         .order("name"),
       supabase
         .from("ernte_ausweis")
         .select("employee_id, suffix, erstellt_am, aktualisiert_am, generation, letzter_druck_nr"),
       supabase.from("arbeitsgruppen").select("*").order("reihenfolge"),
+      supabase.from("employee_fuehrerschein_kategorien").select("*"),
     ]);
-    setFehler(empErr?.message ?? ausweisErr?.message ?? gruppenErr?.message ?? null);
-    setMitarbeiter((empData as MitarbeiterZeile[]) ?? []);
+    setFehler(empErr?.message ?? ausweisErr?.message ?? gruppenErr?.message ?? fsErr?.message ?? null);
+    const fuehrerscheinMap = new Map(
+      ((fsData as FuehrerscheinEintrag[]) ?? []).map((f) => [f.employee_id, f.fuehrerschein_kategorien])
+    );
+    setMitarbeiter(
+      ((empData as Omit<MitarbeiterZeile, "fuehrerschein_kategorien">[]) ?? []).map((e) => ({
+        ...e,
+        fuehrerschein_kategorien: fuehrerscheinMap.get(e.id) ?? [],
+      }))
+    );
     setAusweise(
       new Map(((ausweisData as AusweisZeile[]) ?? []).map((a) => [a.employee_id, a]))
     );
@@ -347,6 +361,8 @@ export default function ErntewirtschaftAusweisePage() {
                     fotoUrl={d.fotoUrl}
                     qrSvg={d.qrSvg}
                     version={d.version}
+                    herkunft={d.mitarbeiter.herkunft}
+                    fuehrerschein={d.mitarbeiter.fuehrerschein_kategorien}
                     variante="vorschau"
                   />
                 </div>
@@ -540,6 +556,8 @@ export default function ErntewirtschaftAusweisePage() {
         fotoUrl={d.fotoUrl}
         qrSvg={d.qrSvg}
         version={d.version}
+        herkunft={d.mitarbeiter.herkunft}
+        fuehrerschein={d.mitarbeiter.fuehrerschein_kategorien}
         modus={druckModus}
       />
     ))}

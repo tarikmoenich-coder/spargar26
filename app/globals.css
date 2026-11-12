@@ -394,14 +394,48 @@ input[type="number"]::-webkit-inner-spin-button {
   white-space: nowrap;
 }
 
+.ausweis2-name-zeile {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 1.5mm;
+  margin-bottom: 1mm;
+}
 .ausweis2-name {
-  margin: 0 0 1.5mm;
+  margin: 0;
+  flex: 1;
+  min-width: 0;
   font-size: 4mm;
   font-weight: 600;
   line-height: 1.15;
   color: #202820;
   overflow-wrap: break-word;
   word-break: break-word;
+}
+
+/* Führerschein-Klassen (B/BE/C/CE) rechts neben dem Namen - zeigt dem
+   Vorarbeiter auf einen Blick, wer was fahren darf. */
+.ausweis2-fs-badges {
+  display: flex;
+  flex-shrink: 0;
+  gap: 0.6mm;
+}
+.ausweis2-fs-badge {
+  padding: 0.5mm 0.9mm;
+  border: 0.25mm solid #286b38;
+  border-radius: 0.6mm;
+  font-size: 2mm;
+  font-weight: 700;
+  line-height: 1;
+  color: #286b38;
+}
+
+/* Vermittlungsagentur (employees.herkunft) - bewusst NICHT die Nationalität
+   der Person, nur wer sie vermittelt hat. */
+.ausweis2-herkunft {
+  margin: 0 0 1.5mm;
+  font-size: 1.8mm;
+  color: #737b73;
 }
 
 .ausweis2-unten {
