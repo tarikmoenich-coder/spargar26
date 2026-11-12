@@ -70,6 +70,7 @@ export default function ErntewirtschaftAusweisePage() {
   const [fehler, setFehler] = useState<string | null>(null);
   const [laeuft, setLaeuft] = useState<string | null>(null);
   const [druck, setDruck] = useState<DruckAnsicht | null>(null);
+  const [druckModus, setDruckModus] = useState<"a4" | "karte">("karte");
   const [fotoKameraFuer, setFotoKameraFuer] = useState<MitarbeiterZeile | null>(null);
 
   const laden = useCallback(async () => {
@@ -188,7 +189,7 @@ export default function ErntewirtschaftAusweisePage() {
 
       {druck ? (
         <div className="flex flex-col items-start gap-4">
-          <div className="flex gap-2 print:hidden">
+          <div className="flex flex-wrap items-center gap-2 print:hidden">
             <button
               type="button"
               className="btn-secondary text-xs"
@@ -196,6 +197,22 @@ export default function ErntewirtschaftAusweisePage() {
             >
               ← Zurück zur Liste
             </button>
+            <div className="flex overflow-hidden rounded border border-neutral-300 text-xs">
+              <button
+                type="button"
+                className={`px-2 py-1 ${druckModus === "karte" ? "bg-emerald-600 text-white" : "bg-white text-neutral-600"}`}
+                onClick={() => setDruckModus("karte")}
+              >
+                Kartendrucker (Evolis)
+              </button>
+              <button
+                type="button"
+                className={`px-2 py-1 ${druckModus === "a4" ? "bg-emerald-600 text-white" : "bg-white text-neutral-600"}`}
+                onClick={() => setDruckModus("a4")}
+              >
+                DIN A4 (Schere)
+              </button>
+            </div>
             <button type="button" className="btn text-xs" onClick={() => window.print()}>
               Drucken
             </button>
@@ -220,13 +237,25 @@ export default function ErntewirtschaftAusweisePage() {
             personalNr={druck.mitarbeiter.personal_nr}
             fotoUrl={druck.fotoUrl}
             qrSvg={druck.qrSvg}
+            modus={druckModus}
           />
 
           <p className="text-xs text-neutral-500 print:hidden">
-            Noch kein eigener Kartendrucker vorhanden - Druck auf DIN A4 mit
-            Schnittmarkierungen, Ausweis 20&nbsp;mm vom linken/oberen Blattrand.
-            Im Druckdialog: Skalierung 100&nbsp;%, keine zusätzlichen Ränder,
-            Kopf-/Fußzeilen deaktivieren.
+            {druckModus === "karte" ? (
+              <>
+                Druck randlos exakt im Kartenformat (85,6 × 53,98&nbsp;mm) - im
+                Druckdialog als Drucker &bdquo;Evolis Zenius&ldquo; wählen,
+                Skalierung 100&nbsp;%, keine zusätzlichen Ränder,
+                Kopf-/Fußzeilen deaktivieren.
+              </>
+            ) : (
+              <>
+                Druck auf DIN A4 mit Schnittmarkierungen, Ausweis 20&nbsp;mm
+                vom linken/oberen Blattrand. Im Druckdialog: Skalierung
+                100&nbsp;%, keine zusätzlichen Ränder, Kopf-/Fußzeilen
+                deaktivieren.
+              </>
+            )}
           </p>
         </div>
       ) : (

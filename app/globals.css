@@ -480,9 +480,14 @@ input[type="number"]::-webkit-inner-spin-button {
   }
 }
 
-/* --- DIN-A4-Druck: ein Ausweis, 20mm vom linken/oberen Blattrand, 4
-   Schnittmarkierungen außerhalb der Kartenfläche (siehe
-   components/MitarbeiterAusweisDruckbogen.tsx für deren Geometrie).
+/* --- Zwei Druckvarianten, umschaltbar (app/erntewirtschaft/ausweise/page.tsx):
+   "a4" = ein Ausweis 20mm vom linken/oberen Blattrand eines DIN-A4-Blatts,
+   4 Schnittmarkierungen außerhalb der Kartenfläche (siehe
+   components/MitarbeiterAusweisDruckbogen.tsx für deren Geometrie) - für
+   normale Drucker + Schere.
+   "karte" = randlos exakt 85,6 x 53,98 mm, keine Schnittmarken (die
+   Kartenkante IST die Papierkante) - für Kartendrucker wie den Evolis
+   Zenius, dessen Druckmedium selbst schon die ID-1-Karte ist.
    BENANNTE @page - eine unbenannte @page { size: A4; margin: 0; } würde
    (siehe Bugfix-Hinweis bei .stammkarte weiter oben in dieser Datei) den
    gesamten App-Druck beeinflussen, nicht nur diese eine Seite - deshalb
@@ -495,17 +500,33 @@ input[type="number"]::-webkit-inner-spin-button {
     size: A4 portrait;
     margin: 0;
   }
+  @page ausweis2-karte {
+    size: 85.6mm 53.98mm;
+    margin: 0;
+  }
   .ausweis2-druckbogen {
     display: block;
-    page: ausweis2-a4;
     position: relative;
+  }
+  .ausweis2-druckbogen--a4 {
+    page: ausweis2-a4;
     width: 210mm;
     height: 297mm;
   }
-  .ausweis2-druckbogen .ausweis2-karte {
+  .ausweis2-druckbogen--a4 .ausweis2-karte {
     position: absolute;
     left: 20mm;
     top: 20mm;
+  }
+  .ausweis2-druckbogen--karte {
+    page: ausweis2-karte;
+    width: 85.6mm;
+    height: 53.98mm;
+  }
+  .ausweis2-druckbogen--karte .ausweis2-karte {
+    position: absolute;
+    left: 0;
+    top: 0;
   }
   .ausweis2-schnittmarke {
     position: absolute;

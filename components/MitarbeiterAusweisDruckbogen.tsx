@@ -1,11 +1,15 @@
 "use client";
 
-// DIN-A4-Druckbogen für den Mitarbeiterausweis (app/erntewirtschaft/ausweise) -
-// ein Ausweis exakt 20mm vom linken/oberen Blattrand, 4 dezente
-// Schnittmarkierungen außerhalb der Kartenfläche, Rest der Seite leer.
-// Auf dem Bildschirm per CSS unsichtbar (display:none), erscheint nur unter
-// @media print (siehe .ausweis2-druckbogen in app/globals.css) - deshalb
-// hier keine print:hidden-Klasse nötig, das übernimmt die eigene CSS-Regel.
+// Druckbogen für den Mitarbeiterausweis (app/erntewirtschaft/ausweise) - zwei
+// Varianten per "modus": "a4" (ein Ausweis exakt 20mm vom linken/oberen
+// Blattrand eines DIN-A4-Blatts, 4 dezente Schnittmarkierungen außerhalb der
+// Kartenfläche, Rest der Seite leer - für normale Drucker + Schere) oder
+// "karte" (randlos exakt 85,6 x 53,98 mm, keine Schnittmarken - für
+// Kartendrucker wie den Evolis Zenius, deren Medium selbst schon die Karte
+// ist). Auf dem Bildschirm per CSS unsichtbar (display:none), erscheint nur
+// unter @media print (siehe .ausweis2-druckbogen in app/globals.css) -
+// deshalb hier keine print:hidden-Klasse nötig, das übernimmt die eigene
+// CSS-Regel.
 
 import MitarbeiterAusweisKarte, {
   type MitarbeiterAusweisKarteProps,
@@ -48,24 +52,27 @@ function schnittmarken(): Mark[] {
 
 const MARKEN = schnittmarken();
 
-type Props = Omit<MitarbeiterAusweisKarteProps, "variante">;
+interface Props extends Omit<MitarbeiterAusweisKarteProps, "variante"> {
+  modus: "a4" | "karte";
+}
 
-export default function MitarbeiterAusweisDruckbogen(props: Props) {
+export default function MitarbeiterAusweisDruckbogen({ modus, ...karte }: Props) {
   return (
-    <div className="ausweis2-druckbogen">
-      <MitarbeiterAusweisKarte {...props} variante="druck" />
-      {MARKEN.map((m, i) => (
-        <div
-          key={i}
-          className="ausweis2-schnittmarke"
-          style={{
-            left: `${m.left}mm`,
-            top: `${m.top}mm`,
-            width: `${m.width}mm`,
-            height: `${m.height}mm`,
-          }}
-        />
-      ))}
+    <div className={`ausweis2-druckbogen ausweis2-druckbogen--${modus}`}>
+      <MitarbeiterAusweisKarte {...karte} variante="druck" />
+      {modus === "a4" &&
+        MARKEN.map((m, i) => (
+          <div
+            key={i}
+            className="ausweis2-schnittmarke"
+            style={{
+              left: `${m.left}mm`,
+              top: `${m.top}mm`,
+              width: `${m.width}mm`,
+              height: `${m.height}mm`,
+            }}
+          />
+        ))}
     </div>
   );
 }
