@@ -491,7 +491,14 @@ input[type="number"]::-webkit-inner-spin-button {
    BENANNTE @page - eine unbenannte @page { size: A4; margin: 0; } würde
    (siehe Bugfix-Hinweis bei .stammkarte weiter oben in dieser Datei) den
    gesamten App-Druck beeinflussen, nicht nur diese eine Seite - deshalb
-   hier bewusst abweichend vom wörtlichen Vorgabe-Snippet umgesetzt. */
+   hier bewusst abweichend vom wörtlichen Vorgabe-Snippet umgesetzt.
+
+   "karte" steht per position:fixed/inset:0 AUSSERHALB des normalen
+   Fluss von <main> (app/layout.tsx: px-4 py-6) - bei der riesigen A4-Seite
+   fällt dessen Padding nicht auf, bei der nur 53,98mm hohen Kartenseite
+   reicht es aber, zusammen mit der Kartenhöhe über eine Seite hinauszugehen
+   und einen zweiten, leeren Blattumbruch zu erzeugen (Bug gefunden
+   2026-11-12: Druckvorschau zeigte 2 Seiten statt 1). */
 .ausweis2-druckbogen {
   display: none;
 }
@@ -520,6 +527,8 @@ input[type="number"]::-webkit-inner-spin-button {
   }
   .ausweis2-druckbogen--karte {
     page: ausweis2-karte;
+    position: fixed;
+    inset: 0;
     width: 85.6mm;
     height: 53.98mm;
   }
