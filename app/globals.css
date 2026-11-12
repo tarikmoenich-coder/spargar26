@@ -373,9 +373,9 @@ input[type="number"]::-webkit-inner-spin-button {
 }
 .ausweis2-kopf-rechts {
   display: flex;
-  flex-direction: column;
-  align-items: flex-end;
-  gap: 0.3mm;
+  align-items: baseline;
+  gap: 1mm;
+  white-space: nowrap;
 }
 .ausweis2-typ {
   font-size: 1.9mm;
