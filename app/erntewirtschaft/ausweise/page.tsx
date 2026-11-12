@@ -40,6 +40,8 @@ interface AusweisZeile {
   suffix: string;
   erstellt_am: string;
   aktualisiert_am: string;
+  generation: number;
+  letzter_druck_nr: number;
 }
 
 interface DruckAnsicht {
@@ -47,6 +49,7 @@ interface DruckAnsicht {
   code: string;
   qrSvg: string;
   fotoUrl: string | null;
+  version: string;
 }
 
 // Nur maschinenlesbar (steckt nur im QR-Code, nie als Klartext auf der
@@ -83,7 +86,9 @@ export default function ErntewirtschaftAusweisePage() {
           .select("id, personal_nr, name, vorname, foto_pfad")
           .eq("aktiv", true)
           .order("name"),
-        supabase.from("ernte_ausweis").select("employee_id, suffix, erstellt_am, aktualisiert_am"),
+        supabase
+          .from("ernte_ausweis")
+          .select("employee_id, suffix, erstellt_am, aktualisiert_am, generation, letzter_druck_nr"),
       ]);
     setFehler(empErr?.message ?? ausweisErr?.message ?? null);
     setMitarbeiter((empData as MitarbeiterZeile[]) ?? []);
@@ -97,10 +102,16 @@ export default function ErntewirtschaftAusweisePage() {
     laden();
   }, [laden]);
 
-  async function druckeKarte(m: MitarbeiterZeile, suffix: string) {
-    // Wert/Generierung unverändert (P-<personal_nr>-<suffix>, dieselbe
-    // "qrcode"-Bibliothek) - nur als SVG statt PNG-DataURL, für einen
-    // scharfen Vektor-Druck (Nutzer-Vorgabe 2026-10-22).
+  // Wert/Generierung des Codes unverändert (P-<personal_nr>-<suffix>,
+  // dieselbe "qrcode"-Bibliothek, SVG für scharfen Vektor-Druck) - zeigt
+  // zusätzlich die Versionsnummer "vGeneration.DruckNr" an (Nutzer-Vorgabe
+  // 2026-11-12, migration_2026-11-12_ernte_ausweis_versionierung.sql).
+  async function druckAnzeigen(
+    m: MitarbeiterZeile,
+    suffix: string,
+    generation: number,
+    druckNr: number
+  ) {
     const code = `P-${m.personal_nr}-${suffix}`;
     const supabase = getSupabaseClient();
     const [qrSvg, fotoUrl] = await Promise.all([
@@ -112,37 +123,87 @@ export default function ErntewirtschaftAusweisePage() {
             .then((r) => r.data?.signedUrl ?? null)
         : Promise.resolve(null),
     ]);
-    setDruck({ mitarbeiter: m, code, qrSvg, fotoUrl });
+    setDruck({ mitarbeiter: m, code, qrSvg, fotoUrl, version: `v${generation}.${druckNr}` });
   }
 
-  async function neuenSuffixErzeugenUndDrucken(m: MitarbeiterZeile) {
+  async function protokollieren(
+    m: MitarbeiterZeile,
+    generation: number,
+    druckNr: number,
+    grund: "neu" | "erneut" | "verlust"
+  ) {
+    const { error } = await getSupabaseClient()
+      .from("ernte_ausweis_druck")
+      .insert({ employee_id: m.id, generation, druck_nr: druckNr, grund });
+    if (error) console.error("ernte_ausweis_druck protokollieren fehlgeschlagen", error);
+  }
+
+  async function neueKarteDrucken(m: MitarbeiterZeile) {
     setLaeuft(m.id);
     const suffix = neuerSuffix();
     const { error } = await getSupabaseClient()
       .from("ernte_ausweis")
       .upsert(
-        { employee_id: m.id, suffix, aktualisiert_am: new Date().toISOString() },
+        { employee_id: m.id, suffix, generation: 1, letzter_druck_nr: 1, aktualisiert_am: new Date().toISOString() },
         { onConflict: "employee_id" }
       );
+    if (!error) await protokollieren(m, 1, 1, "neu");
     setLaeuft(null);
     if (error) {
       setFehler(error.message);
       return;
     }
     await laden();
-    await druckeKarte(m, suffix);
+    await druckAnzeigen(m, suffix, 1, 1);
+  }
+
+  async function erneutDrucken(m: MitarbeiterZeile, ausweis: AusweisZeile) {
+    setLaeuft(m.id);
+    const druckNr = ausweis.letzter_druck_nr + 1;
+    const { error } = await getSupabaseClient()
+      .from("ernte_ausweis")
+      .update({ letzter_druck_nr: druckNr })
+      .eq("employee_id", m.id);
+    if (!error) await protokollieren(m, ausweis.generation, druckNr, "erneut");
+    setLaeuft(null);
+    if (error) {
+      setFehler(error.message);
+      return;
+    }
+    await laden();
+    await druckAnzeigen(m, ausweis.suffix, ausweis.generation, druckNr);
+  }
+
+  async function verlustKarteDrucken(m: MitarbeiterZeile, ausweis: AusweisZeile) {
+    setLaeuft(m.id);
+    const suffix = neuerSuffix();
+    const generation = ausweis.generation + 1;
+    const { error } = await getSupabaseClient()
+      .from("ernte_ausweis")
+      .update({ suffix, generation, letzter_druck_nr: 1, aktualisiert_am: new Date().toISOString() })
+      .eq("employee_id", m.id);
+    if (!error) await protokollieren(m, generation, 1, "verlust");
+    setLaeuft(null);
+    if (error) {
+      setFehler(error.message);
+      return;
+    }
+    await laden();
+    await druckAnzeigen(m, suffix, generation, 1);
   }
 
   function handleDrucken(m: MitarbeiterZeile) {
     const bestehend = ausweise.get(m.id);
     if (bestehend) {
-      druckeKarte(m, bestehend.suffix);
+      erneutDrucken(m, bestehend);
     } else {
-      neuenSuffixErzeugenUndDrucken(m);
+      neueKarteDrucken(m);
     }
   }
 
   function handleVerlustKarte(m: MitarbeiterZeile) {
+    const bestehend = ausweise.get(m.id);
+    if (!bestehend) return;
     if (
       !window.confirm(
         `Verlust-Karte für ${m.name}, ${m.vorname} drucken? Die bisherige Karte wird dadurch sofort ungültig.`
@@ -150,7 +211,7 @@ export default function ErntewirtschaftAusweisePage() {
     ) {
       return;
     }
-    neuenSuffixErzeugenUndDrucken(m);
+    verlustKarteDrucken(m, bestehend);
   }
 
   if (!canEdit) {
@@ -226,6 +287,7 @@ export default function ErntewirtschaftAusweisePage() {
                 personalNr={druck.mitarbeiter.personal_nr}
                 fotoUrl={druck.fotoUrl}
                 qrSvg={druck.qrSvg}
+                version={druck.version}
                 variante="vorschau"
               />
             </div>
@@ -237,6 +299,7 @@ export default function ErntewirtschaftAusweisePage() {
             personalNr={druck.mitarbeiter.personal_nr}
             fotoUrl={druck.fotoUrl}
             qrSvg={druck.qrSvg}
+            version={druck.version}
             modus={druckModus}
           />
 
@@ -291,7 +354,10 @@ export default function ErntewirtschaftAusweisePage() {
                         <td className="text-sm text-neutral-600">
                           {ausweis ? (
                             <>
-                              aktiv seit {formatDatumDE(ausweis.erstellt_am)}
+                              <span className="font-medium tabular-nums">
+                                v{ausweis.generation}.{ausweis.letzter_druck_nr}
+                              </span>{" "}
+                              · aktiv seit {formatDatumDE(ausweis.erstellt_am)}
                               {ausweis.aktualisiert_am !== ausweis.erstellt_am && (
                                 <>
                                   {" "}

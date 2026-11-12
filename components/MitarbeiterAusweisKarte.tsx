@@ -22,6 +22,8 @@ export interface MitarbeiterAusweisKarteProps {
   personalNr: string;
   fotoUrl: string | null;
   qrSvg: string | null;
+  /** "vGeneration.DruckNr", z.B. "v2.1" nach der ersten Verlust-Karte */
+  version: string;
   variante: "vorschau" | "druck";
 }
 
@@ -31,6 +33,7 @@ export default function MitarbeiterAusweisKarte({
   personalNr,
   fotoUrl,
   qrSvg,
+  version,
   variante,
 }: MitarbeiterAusweisKarteProps) {
   return (
@@ -41,7 +44,10 @@ export default function MitarbeiterAusweisKarte({
     >
       <div className="ausweis2-kopf">
         <span className="ausweis2-firma">SPARGELHOF MÖMMEL</span>
-        <span className="ausweis2-typ">MITARBEITERAUSWEIS</span>
+        <div className="ausweis2-kopf-rechts">
+          <span className="ausweis2-typ">MITARBEITERAUSWEIS</span>
+          <span className="ausweis2-version">{version}</span>
+        </div>
       </div>
 
       <p className="ausweis2-name">

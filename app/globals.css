@@ -371,11 +371,26 @@ input[type="number"]::-webkit-inner-spin-button {
   color: #286b38;
   white-space: nowrap;
 }
+.ausweis2-kopf-rechts {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 0.3mm;
+}
 .ausweis2-typ {
   font-size: 1.9mm;
   font-weight: 600;
   letter-spacing: 0.4px;
   color: #737b73;
+  white-space: nowrap;
+}
+/* Versionsnummer "vGeneration.DruckNr" - Nutzer-Vorgabe 2026-11-12: damit
+   man einer physischen Karte direkt ansieht, wie oft sie (bzw. eine
+   Verlust-Karte davon) schon gedruckt wurde. */
+.ausweis2-version {
+  font-size: 1.6mm;
+  color: #9aa39a;
+  letter-spacing: 0.2px;
   white-space: nowrap;
 }
 
