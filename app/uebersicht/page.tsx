@@ -98,6 +98,23 @@ export default function UebersichtPage() {
   const [ausgewaehlt, setAusgewaehlt] = useState<Set<string>>(new Set());
   const [abrechnenLaeuft, setAbrechnenLaeuft] = useState(false);
   const [abrechnenFehler, setAbrechnenFehler] = useState<string | null>(null);
+  // Nutzer-Vorgabe 2026-11-16 ("Stundenkonto ist immer Lohn"): Stundenkonto-
+  // Buchungen von vor der Pflichtdatum-Umstellung (datum_bestaetigt = false)
+  // werden vor dem Abrechnen abgefragt - Datum je Buchung nachtragen oder
+  // für alle den heutigen Tag setzen. null = Dialog zu.
+  const [skDatumDialog, setSkDatumDialog] = useState<
+    | {
+        id: number;
+        name: string;
+        stunden: number;
+        art: string;
+        notiz: string | null;
+        datum: string;
+      }[]
+    | null
+  >(null);
+  const [skDatumLaeuft, setSkDatumLaeuft] = useState(false);
+  const [skDatumFehler, setSkDatumFehler] = useState<string | null>(null);
   const [letzterBeleg, setLetzterBeleg] = useState<string | null>(null);
   const [abrechnenZahlungsart, setAbrechnenZahlungsart] = useState("BAR");
   // Austrittsdatum (Nutzer-Vorgabe 2026-11-04/05): schließt den offenen
@@ -581,39 +598,43 @@ export default function UebersichtPage() {
 
     setAbrechnenFehler(null);
 
-    // Sperre (Nutzer-Vorgabe 2026-09-12): ein offenes Stundenkonto muss vor
-    // der Saison-Abrechnung aufgelöst sein (abgefeiert = Freizeitausgleich
-    // buchen, oder in Auszahlung umgewandelt) - sonst wird die Person
-    // deaktiviert und die offenen Stunden gehen faktisch unter. Blockiert
-    // die GANZE Aktion, nicht nur die betroffenen Personen, damit nichts
-    // versehentlich halb durchläuft.
+    // Bis 2026-11-16 stand hier eine Sperre "offenes Stundenkonto" (Nutzer-
+    // Vorgabe 2026-09-12). Entfallen: der Saldo zählt inzwischen sofort zum
+    // Brutto und wird beim Abrechnen automatisch in Zulage umgewandelt
+    // (saison_abrechnen_batch). Geblieben ist nur eine Frage für ALT-
+    // Buchungen ohne bewusst gesetztes Datum - erst wenn die alle ein
+    // bestätigtes Datum haben, geht es weiter (serverseitig zusätzlich
+    // abgesichert).
     const supabaseVorab = getSupabaseClient();
-    const { data: saldenRoh, error: saldenFehler } = await supabaseVorab
-      .from("employee_stundenkonto_saldo")
-      .select("employee_id, saldo")
+    const { data: unbestaetigtRoh, error: unbestaetigtFehler } = await supabaseVorab
+      .from("stundenkonto_bewegungen")
+      .select("id, employee_id, datum, stunden, art, notiz")
       .eq("saison_jahr", jahr)
-      .in("employee_id", Array.from(ausgewaehlt));
-    if (saldenFehler) {
-      setAbrechnenFehler(saldenFehler.message);
+      .eq("datum_bestaetigt", false)
+      .eq("ist_storno", false)
+      .neq("art", "Auszahlung")
+      .in("employee_id", Array.from(ausgewaehlt))
+      .order("datum");
+    if (unbestaetigtFehler) {
+      setAbrechnenFehler(unbestaetigtFehler.message);
       return;
     }
-    const offeneKonten = (saldenRoh ?? [])
-      .filter((s) => Math.abs(Number(s.saldo)) >= 0.01)
-      .map((s) => {
-        const row = ausgewaehlteRows.find((r) => r.employee_id === s.employee_id);
-        return {
-          name: row ? `${row.name}, ${row.vorname}` : s.employee_id,
-          saldo: Number(s.saldo),
-        };
-      })
-      .sort((a, b) => a.name.localeCompare(b.name, "de"));
-    if (offeneKonten.length > 0) {
-      setAbrechnenFehler(
-        `Abrechnen gesperrt: ${offeneKonten.length} Person(en) haben noch ein ` +
-          `offenes Stundenkonto für Saison ${jahr} - erst im Stundenkonto ` +
-          `(Stundenerfassung bzw. Management → Stundenmonitoring) abfeiern ` +
-          `(Freizeitausgleich buchen) oder in Auszahlung umwandeln:\n` +
-          offeneKonten.map((o) => `${o.name}: ${formatMenge(o.saldo, 2)} Std.`).join("\n")
+    if ((unbestaetigtRoh ?? []).length > 0) {
+      setSkDatumFehler(null);
+      setSkDatumDialog(
+        (unbestaetigtRoh ?? [])
+          .map((b) => {
+            const row = ausgewaehlteRows.find((r) => r.employee_id === b.employee_id);
+            return {
+              id: b.id as number,
+              name: row ? `${row.name}, ${row.vorname}` : (b.employee_id as string),
+              stunden: Number(b.stunden),
+              art: b.art as string,
+              notiz: (b.notiz as string | null) ?? null,
+              datum: b.datum as string,
+            };
+          })
+          .sort((x, y) => x.name.localeCompare(y.name, "de") || x.datum.localeCompare(y.datum))
       );
       return;
     }
@@ -675,6 +696,50 @@ export default function UebersichtPage() {
     setAusgewaehlt(new Set());
     setAbrechnenLaeuft(false);
     load();
+  }
+
+  // "Heute" für die Stundenkonto-Datumsabfrage - muss im Saisonjahr liegen
+  // (wird z.B. eine Saison erst im Januar des Folgejahres abgerechnet, ist
+  // der letzte Tag des Saisonjahres der späteste zulässige Tag).
+  function skHeuteImSaisonjahr() {
+    const heute = new Date().toISOString().slice(0, 10);
+    return Number(heute.slice(0, 4)) === jahr ? heute : `${jahr}-12-31`;
+  }
+
+  // Speichert die im Dialog stehenden Daten (bestätigt damit jede Buchung)
+  // und setzt danach "Jetzt Abrechnen" fort.
+  async function skDatumSpeichernUndAbrechnen() {
+    if (!skDatumDialog) return;
+    const ungueltig = skDatumDialog.find(
+      (b) => !b.datum || Number(b.datum.slice(0, 4)) !== jahr
+    );
+    if (ungueltig) {
+      setSkDatumFehler(
+        `Bitte bei jeder Buchung ein Datum im Saisonjahr ${jahr} angeben (${ungueltig.name}).`
+      );
+      return;
+    }
+    setSkDatumLaeuft(true);
+    setSkDatumFehler(null);
+    const supabase = getSupabaseClient();
+    for (const b of skDatumDialog) {
+      const { error } = await supabase.rpc("stundenkonto_datum_setzen", {
+        p_bewegung_id: b.id,
+        p_datum: b.datum,
+      });
+      if (error) {
+        setSkDatumLaeuft(false);
+        setSkDatumFehler(`${b.name}: ${error.message}`);
+        return;
+      }
+    }
+    setSkDatumLaeuft(false);
+    setSkDatumDialog(null);
+    // Monatsansicht kann sich verschoben haben.
+    ladeMonat();
+    // Jetzt ohne offene Alt-Buchungen erneut - läuft in die normale
+    // Bestätigungsfrage.
+    jetztAbrechnen();
   }
 
   async function nettoExternSpeichern(row: SeasonSummaryRow, wert: string) {
@@ -963,17 +1028,20 @@ export default function UebersichtPage() {
   );
 
   // Spaltensummen der Monats-Filter-Ansicht (Std., Tage, Basis-Brutto,
-  // Verpflegung, Unterkunft).
+  // Zulage aus dem Stundenkonto, Verpflegung, Unterkunft). "Brutto Monat" =
+  // Basis-Brutto + Zulage (Nutzer-Vorgabe 2026-11-16: das Stundenkonto des
+  // Monats gehört zum Monats-Brutto).
   function monatsSumme(list: SeasonSummaryMonatRow[]) {
     return list.reduce(
       (acc, r) => ({
         stunden: acc.stunden + Number(r.gesamt_stunden || 0),
         tage: acc.tage + Number(r.anwesenheitstage || 0),
         basis: acc.basis + Number(r.basis_brutto || 0),
+        zulage: acc.zulage + Number(r.stundenkonto_betrag || 0),
         verpflegung: acc.verpflegung + Number(r.abzug_verpflegung || 0),
         wohnen: acc.wohnen + Number(r.abzug_wohnen || 0),
       }),
-      { stunden: 0, tage: 0, basis: 0, verpflegung: 0, wohnen: 0 }
+      { stunden: 0, tage: 0, basis: 0, zulage: 0, verpflegung: 0, wohnen: 0 }
     );
   }
   const summeMonatSichtbar = monatsSumme(gefilterteMonatsRows);
@@ -1163,7 +1231,7 @@ export default function UebersichtPage() {
                 </th>
                 <th
                   className={FARBE_ZULAGE_TH}
-                  title="Aus dem Stundenkonto in Auszahlung umgewandelte Stunden (Stundenerfassung → Stundenkonto) - bereits im Brutto enthalten, hier separat ausgewiesen"
+                  title="Stundenkonto in Euro: offener Saldo × Stundenlohn plus bereits umgewandelte Beträge (Stundenerfassung → Stundenkonto) - bereits im Brutto enthalten, hier separat ausgewiesen"
                 >
                   Zulage €
                 </th>
@@ -1766,6 +1834,18 @@ export default function UebersichtPage() {
                     <th>Std.</th>
                     <th>Tage</th>
                     <th className={FARBE_BRUTTO_TH}>Basis-Brutto €</th>
+                    <th
+                      className={FARBE_ZULAGE_TH}
+                      title="Stundenkonto-Buchungen mit Datum in diesem Monat × Stundenlohn (kann durch Freizeitausgleich/Korrektur negativ sein)"
+                    >
+                      Zulage €
+                    </th>
+                    <th
+                      className={FARBE_BRUTTO_TH}
+                      title="Basis-Brutto + Zulage aus dem Stundenkonto - ohne Saison-Prämien (die werden nur einmal je Saison erfasst)"
+                    >
+                      Brutto Monat €
+                    </th>
                     <th className={FARBE_ABZUG_TH}>Verpflegung €</th>
                     <th className={FARBE_ABZUG_TH}>Unterkunft €</th>
                     <th>Letzter Eintrag</th>
@@ -1773,7 +1853,11 @@ export default function UebersichtPage() {
                 </thead>
                 <tbody>
                   {gefilterteMonatsRows.map((r) => {
-                    const warnung = r.letzter_eintrag < erwartetesEnde;
+                    // letzter_eintrag ist null, wenn die Person in dem Monat
+                    // nur eine Stundenkonto-Buchung hat, aber keinen
+                    // Stundeneintrag.
+                    const warnung =
+                      !r.letzter_eintrag || r.letzter_eintrag < erwartetesEnde;
                     return (
                       <tr
                         key={r.employee_id}
@@ -1797,10 +1881,27 @@ export default function UebersichtPage() {
                         <td>{fmt(r.gesamt_stunden)}</td>
                         <td>{r.anwesenheitstage}</td>
                         <td className={FARBE_BRUTTO_TD}>{fmt(r.basis_brutto)}</td>
+                        <td
+                          title={
+                            Number(r.stundenkonto_stunden || 0) !== 0
+                              ? `${formatMenge(Number(r.stundenkonto_stunden), 2)} Std. Stundenkonto in diesem Monat`
+                              : undefined
+                          }
+                        >
+                          {fmt(r.stundenkonto_betrag)}
+                        </td>
+                        <td className={FARBE_BRUTTO_TD}>
+                          {fmt(
+                            Number(r.basis_brutto || 0) +
+                              Number(r.stundenkonto_betrag || 0)
+                          )}
+                        </td>
                         <td>{fmt(r.abzug_verpflegung)}</td>
                         <td>{fmt(r.abzug_wohnen)}</td>
                         <td>
-                          {formatDatumDE(r.letzter_eintrag)}
+                          {r.letzter_eintrag
+                            ? formatDatumDE(r.letzter_eintrag)
+                            : "kein Stundeneintrag"}
                           {warnung && (
                             <span
                               className="ml-1 text-amber-600"
@@ -1835,6 +1936,8 @@ export default function UebersichtPage() {
                       <td>—</td>
                       <td>—</td>
                       <td>—</td>
+                      <td>—</td>
+                      <td>—</td>
                       <td className="font-medium text-beere-600">
                         ⚠ Keine Einträge
                       </td>
@@ -1843,7 +1946,7 @@ export default function UebersichtPage() {
                   {gefilterteMonatsRows.length === 0 &&
                     fehlendeImMonat.length === 0 && (
                       <tr>
-                        <td colSpan={10} className="text-neutral-500">
+                        <td colSpan={12} className="text-neutral-500">
                           Keine Daten für diesen Monat.
                         </td>
                       </tr>
@@ -1860,6 +1963,10 @@ export default function UebersichtPage() {
                       <td className={FARBE_BRUTTO_TD}>
                         {fmt(summeMonatSichtbar.basis)}
                       </td>
+                      <td>{fmt(summeMonatSichtbar.zulage)}</td>
+                      <td className={FARBE_BRUTTO_TD}>
+                        {fmt(summeMonatSichtbar.basis + summeMonatSichtbar.zulage)}
+                      </td>
                       <td>{fmt(summeMonatSichtbar.verpflegung)}</td>
                       <td>{fmt(summeMonatSichtbar.wohnen)}</td>
                       <td></td>
@@ -1870,6 +1977,103 @@ export default function UebersichtPage() {
             </div>
             </>
           )}
+        </div>
+      )}
+
+      {/* Stundenkonto-Datumsabfrage vor "Jetzt Abrechnen" (Nutzer-Vorgabe
+          2026-11-16): Alt-Buchungen ohne bewusst gesetztes Datum - je
+          Buchung nachtragen oder für alle den heutigen Tag setzen. */}
+      {skDatumDialog && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 print:hidden">
+          <div className="flex max-h-[90vh] w-full max-w-2xl flex-col rounded-lg border border-linie bg-white p-4 shadow-card">
+            <h2 className="text-base font-semibold text-emerald-900">
+              Stundenkonto: Datum bestätigen
+            </h2>
+            <p className="mt-1 text-sm text-neutral-600">
+              {skDatumDialog.length} ältere Stundenkonto-Buchung(en) der
+              ausgewählten Personen haben noch kein bestätigtes Datum. Das
+              Datum bestimmt, zu welchem Monat die Stunden gehören. Bitte je
+              Buchung prüfen bzw. nachtragen – oder für alle den heutigen Tag
+              (Tag der Abrechnung) setzen.
+            </p>
+            <div className="mt-3 overflow-auto">
+              <table className="text-sm">
+                <thead>
+                  <tr>
+                    <th>Name</th>
+                    <th>Stunden</th>
+                    <th>Art</th>
+                    <th>Notiz</th>
+                    <th>Datum</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {skDatumDialog.map((b) => (
+                    <tr key={b.id}>
+                      <td>{b.name}</td>
+                      <td className={b.stunden < 0 ? "text-beere-600" : ""}>
+                        {b.stunden > 0 ? "+" : ""}
+                        {formatMenge(b.stunden, 2)}
+                      </td>
+                      <td>{b.art}</td>
+                      <td className="text-neutral-500">{b.notiz ?? "—"}</td>
+                      <td>
+                        <input
+                          type="date"
+                          className="w-36"
+                          min={`${jahr}-01-01`}
+                          max={`${jahr}-12-31`}
+                          value={b.datum}
+                          onChange={(e) =>
+                            setSkDatumDialog(
+                              (prev) =>
+                                prev?.map((x) =>
+                                  x.id === b.id ? { ...x, datum: e.target.value } : x
+                                ) ?? null
+                            )
+                          }
+                        />
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            {skDatumFehler && (
+              <p className="mt-2 text-sm font-medium text-beere-600">⚠ {skDatumFehler}</p>
+            )}
+            <div className="mt-4 flex flex-wrap justify-end gap-2">
+              <button
+                type="button"
+                className="btn-secondary"
+                disabled={skDatumLaeuft}
+                onClick={() => setSkDatumDialog(null)}
+              >
+                Abbrechen
+              </button>
+              <button
+                type="button"
+                className="btn-secondary"
+                disabled={skDatumLaeuft}
+                onClick={() =>
+                  setSkDatumDialog(
+                    (prev) =>
+                      prev?.map((x) => ({ ...x, datum: skHeuteImSaisonjahr() })) ?? null
+                  )
+                }
+              >
+                Alle auf heute setzen ({formatDatumDE(skHeuteImSaisonjahr())})
+              </button>
+              <button
+                type="button"
+                className="btn"
+                disabled={skDatumLaeuft}
+                onClick={skDatumSpeichernUndAbrechnen}
+              >
+                {skDatumLaeuft ? "Speichert…" : "Datum übernehmen & weiter abrechnen"}
+              </button>
+            </div>
+          </div>
         </div>
       )}
 
@@ -1968,6 +2172,8 @@ export default function UebersichtPage() {
                     <th>Std.</th>
                     <th>Tage</th>
                     <th>Basis-Brutto €</th>
+                    <th>Zulage €</th>
+                    <th>Brutto Monat €</th>
                     <th>Verpflegung €</th>
                     <th>Unterkunft €</th>
                     <th>Letzter Eintrag</th>
@@ -1984,9 +2190,18 @@ export default function UebersichtPage() {
                       <td>{fmt(r.gesamt_stunden)}</td>
                       <td>{r.anwesenheitstage}</td>
                       <td>{fmt(r.basis_brutto)}</td>
+                      <td>{fmt(r.stundenkonto_betrag)}</td>
+                      <td>
+                        {fmt(
+                          Number(r.basis_brutto || 0) +
+                            Number(r.stundenkonto_betrag || 0)
+                        )}
+                      </td>
                       <td>{fmt(r.abzug_verpflegung)}</td>
                       <td>{fmt(r.abzug_wohnen)}</td>
-                      <td>{formatDatumDE(r.letzter_eintrag)}</td>
+                      <td>
+                        {r.letzter_eintrag ? formatDatumDE(r.letzter_eintrag) : "—"}
+                      </td>
                     </tr>
                   ))}
                 </tbody>
@@ -1998,6 +2213,8 @@ export default function UebersichtPage() {
                     <td className="font-semibold">{fmt(s.stunden)}</td>
                     <td className="font-semibold">{s.tage}</td>
                     <td className="font-semibold">{fmt(s.basis)}</td>
+                    <td className="font-semibold">{fmt(s.zulage)}</td>
+                    <td className="font-semibold">{fmt(s.basis + s.zulage)}</td>
                     <td className="font-semibold">{fmt(s.verpflegung)}</td>
                     <td className="font-semibold">{fmt(s.wohnen)}</td>
                     <td></td>

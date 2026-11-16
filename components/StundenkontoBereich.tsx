@@ -2,8 +2,12 @@
 
 // Stundenkonto-Werkzeugleiste (Nutzer-Vorgabe 2026-08-20, erweitert
 // 2026-08-21): laufendes Konto je Mitarbeiter/Saison-Jahr - Buchen
-// (Gutschrift/Korrektur/Freizeitausgleich, keine Lohnwirkung) und "In
-// Auszahlung umwandeln" (echter Lohnbestandteil). Eigene, wiederverwendete
+// (Gutschrift/Korrektur/Freizeitausgleich). Seit 2026-11-16 ("Stundenkonto
+// ist immer Lohn"): der Saldo zählt sofort zum Bruttolohn, jede Buchung
+// braucht ein bewusst gesetztes Datum (Monatszuordnung), der frühere
+// Handknopf "In Auszahlung umwandeln" samt Storno ist entfallen - der
+// Rest-Saldo wird beim Abrechnen automatisch umgewandelt (siehe
+// saison_abrechnen_batch). Eigene, wiederverwendete
 // Komponente, damit die Stundenerfassung UND das Controlling-
 // Stundenmonitoring exakt dieselbe, geprüfte Logik nutzen - ein künftiger
 // Fix (wie der if/elsif-Bug vom 2026-08-20) muss dann nur an EINER Stelle
@@ -14,15 +18,8 @@ import { useEffect, useState } from "react";
 import { getSupabaseClient } from "@/lib/supabase/client";
 import { useProfile } from "@/lib/useProfile";
 import { formatDatumDE, formatMenge } from "@/lib/format";
-import {
-  kannStundenkontoAuszahlen,
-  kannStundenkontoBuchen,
-} from "@/lib/stundenkontoRechte";
+import { kannStundenkontoBuchen } from "@/lib/stundenkontoRechte";
 import type { EmployeeStundenkontoSaldo, StundenkontoBewegung } from "@/lib/types";
-
-function todayIso() {
-  return new Date().toISOString().slice(0, 10);
-}
 
 interface StundenkontoBereichProps {
   employeeId: string;
@@ -34,7 +31,9 @@ interface StundenkontoBereichProps {
   // Tag übernehmen, der im aufrufenden Kontext (Stundenerfassung) gerade
   // bearbeitet wird, statt immer auf heute zu stehen - optional, damit
   // andere Aufrufer (z.B. das Controlling-Stundenmonitoring, das keinen
-  // einzelnen bearbeiteten Tag kennt) unverändert bei "heute" bleiben.
+  // einzelnen bearbeiteten Tag kennt) es weglassen können. Seit 2026-11-16
+  // bleibt das Feld dort LEER statt "heute" - das Datum ist Pflicht und
+  // soll bewusst gewählt werden, nicht versehentlich auf heute stehen.
   bearbeitetesDatum?: string;
 }
 
@@ -47,19 +46,16 @@ export default function StundenkontoBereich({
 }: StundenkontoBereichProps) {
   const { profile } = useProfile();
   const canBuchen = kannStundenkontoBuchen(profile?.role);
-  const canAuszahlen = kannStundenkontoAuszahlen(profile?.role);
 
   const [saldo, setSaldo] = useState(0);
   const [historie, setHistorie] = useState<StundenkontoBewegung[]>([]);
   const [ladeHistorie, setLadeHistorie] = useState(true);
-  const [datum, setDatum] = useState(bearbeitetesDatum ?? todayIso());
+  const [datum, setDatum] = useState(bearbeitetesDatum ?? "");
   const [stunden, setStunden] = useState("");
   const [art, setArt] = useState<
     "Gutschrift" | "Korrektur" | "Freizeitausgleich"
   >("Gutschrift");
   const [notiz, setNotiz] = useState("");
-  const [auszahlungStunden, setAuszahlungStunden] = useState("");
-  const [auszahlungNotiz, setAuszahlungNotiz] = useState("");
   const [laeuft, setLaeuft] = useState(false);
   const [fehler, setFehler] = useState<string | null>(null);
   const [erfolg, setErfolg] = useState<string | null>(null);
@@ -94,12 +90,10 @@ export default function StundenkontoBereich({
   useEffect(() => {
     setFehler(null);
     setErfolg(null);
-    setDatum(bearbeitetesDatum ?? todayIso());
+    setDatum(bearbeitetesDatum ?? "");
     setStunden("");
     setArt("Gutschrift");
     setNotiz("");
-    setAuszahlungStunden("");
-    setAuszahlungNotiz("");
     neuLaden();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [employeeId, saisonJahr, bearbeitetesDatum]);
@@ -108,6 +102,16 @@ export default function StundenkontoBereich({
     const wert = Number(stunden);
     if (!stunden || Number.isNaN(wert) || wert === 0) {
       setFehler("Bitte eine Stundenzahl ungleich 0 angeben.");
+      return;
+    }
+    if (!datum) {
+      setFehler(
+        "Bitte ein Datum angeben - jede Buchung muss einem Tag zugeordnet sein."
+      );
+      return;
+    }
+    if (Number(datum.slice(0, 4)) !== saisonJahr) {
+      setFehler(`Das Datum muss im Saisonjahr ${saisonJahr} liegen.`);
       return;
     }
     setLaeuft(true);
@@ -127,68 +131,11 @@ export default function StundenkontoBereich({
       setFehler(error.message);
       return;
     }
-    setErfolg(`${wert > 0 ? "+" : ""}${wert} Std. (${art}) gebucht.`);
+    setErfolg(
+      `${wert > 0 ? "+" : ""}${formatMenge(wert, 2)} Std. (${art}) zum ${formatDatumDE(datum)} gebucht.`
+    );
     setStunden("");
     setNotiz("");
-    await neuLaden();
-  }
-
-  async function auszahlen() {
-    const wert = Number(auszahlungStunden);
-    if (!auszahlungStunden || Number.isNaN(wert) || wert <= 0) {
-      setFehler("Bitte eine Stundenzahl größer als 0 angeben.");
-      return;
-    }
-    setLaeuft(true);
-    setFehler(null);
-    setErfolg(null);
-    const supabase = getSupabaseClient();
-    const { data, error } = await supabase.rpc(
-      "stundenkonto_in_auszahlung_umwandeln",
-      {
-        p_employee_id: employeeId,
-        p_saison_jahr: saisonJahr,
-        p_stunden: wert,
-        p_notiz: auszahlungNotiz || null,
-      }
-    );
-    setLaeuft(false);
-    if (error) {
-      setFehler(error.message);
-      return;
-    }
-    setErfolg(
-      `${wert} Std. in ${formatMenge(Number(data ?? 0), 2)} € umgewandelt - erscheint auf der Lohnübersicht.`
-    );
-    setAuszahlungStunden("");
-    setAuszahlungNotiz("");
-    await neuLaden();
-  }
-
-  // Nutzer-Vorgabe 2026-08-28: "Ich habe ein Stundenkonto fälschlicherweise
-  // in Auszahlung umgewandelt... ich bekomme sie nicht mehr raus" - bisher
-  // gab es keinen Weg, das rückgängig zu machen.
-  async function stornieren(b: StundenkontoBewegung) {
-    const grund = window.prompt(
-      "Grund für die Stornierung dieser Umwandlung (Pflichtfeld, wird protokolliert):"
-    );
-    if (!grund) return;
-    setLaeuft(true);
-    setFehler(null);
-    setErfolg(null);
-    const supabase = getSupabaseClient();
-    const { error } = await supabase.rpc("stundenkonto_auszahlung_stornieren", {
-      p_bewegung_id: b.id,
-      p_grund: grund,
-    });
-    setLaeuft(false);
-    if (error) {
-      setFehler(error.message);
-      return;
-    }
-    setErfolg(
-      `Umwandlung storniert - ${formatMenge(Math.abs(b.stunden), 2)} Std. sind wieder auf dem Stundenkonto.`
-    );
     await neuLaden();
   }
 
@@ -199,10 +146,11 @@ export default function StundenkontoBereich({
         {formatMenge(saldo, 2)} Std.
       </p>
       <p className="text-xs text-neutral-500">
-        Unabhängig vom oben gewählten Tag - hier werden nur Buchungen für
-        das Jahr {saisonJahr} angezeigt. Wirkt sich erst auf den Lohn aus,
-        wenn Stunden "in Auszahlung" umgewandelt werden (dann wie eine
-        Prämie, live bis zum Abrechnen).
+        Buchungen für das Jahr {saisonJahr}. Der Saldo zählt sofort zum
+        Bruttolohn (Stunden × Stundenlohn, Spalte „Zulage" in der
+        Lohnübersicht). Jede Buchung braucht ein Datum - es bestimmt, zu
+        welchem Monat die Stunden gehören. Was beim Abrechnen noch auf dem
+        Konto steht, wird automatisch in Zulage umgewandelt.
       </p>
 
       {fehler && (
@@ -215,10 +163,13 @@ export default function StundenkontoBereich({
       {canBuchen && (
         <div className="flex flex-wrap items-end gap-2 rounded border border-linie bg-white p-2">
           <label className="flex flex-col text-xs">
-            Datum
+            Datum (Pflicht)
             <input
               type="date"
               className="w-36"
+              required
+              min={`${saisonJahr}-01-01`}
+              max={`${saisonJahr}-12-31`}
               value={datum}
               onChange={(e) => setDatum(e.target.value)}
             />
@@ -266,40 +217,6 @@ export default function StundenkontoBereich({
         </div>
       )}
 
-      {canAuszahlen && (
-        <div className="flex flex-wrap items-end gap-2 rounded border border-emerald-200 bg-white p-2">
-          <label className="flex flex-col text-xs">
-            Stunden in Auszahlung umwandeln
-            <input
-              type="number"
-              step="0.25"
-              min={0}
-              className="w-24"
-              value={auszahlungStunden}
-              onChange={(e) => setAuszahlungStunden(e.target.value)}
-            />
-          </label>
-          <label className="flex flex-col text-xs">
-            Notiz
-            <input
-              type="text"
-              className="w-48"
-              placeholder="optional"
-              value={auszahlungNotiz}
-              onChange={(e) => setAuszahlungNotiz(e.target.value)}
-            />
-          </label>
-          <button
-            type="button"
-            className="btn text-xs"
-            disabled={laeuft}
-            onClick={auszahlen}
-          >
-            In Auszahlung umwandeln
-          </button>
-        </div>
-      )}
-
       <div>
         <p className="mb-1 text-xs font-medium text-neutral-600">
           Letzte Buchungen
@@ -318,13 +235,24 @@ export default function StundenkontoBereich({
                 <th>Stunden</th>
                 <th>Art</th>
                 <th>Notiz</th>
-                {canAuszahlen && <th></th>}
               </tr>
             </thead>
             <tbody>
               {historie.map((b) => (
                 <tr key={b.id} className={b.storniert ? "opacity-50" : ""}>
-                  <td>{formatDatumDE(b.datum)}</td>
+                  <td>
+                    {formatDatumDE(b.datum)}
+                    {!b.datum_bestaetigt &&
+                      b.art !== "Auszahlung" &&
+                      !b.ist_storno && (
+                        <span
+                          className="ml-1 text-amber-600"
+                          title="Buchung von vor der Pflichtdatum-Umstellung - das Datum wird beim Abrechnen abgefragt (bestätigen oder nachtragen)"
+                        >
+                          ⚠ unbestätigt
+                        </span>
+                      )}
+                  </td>
                   <td className={b.stunden < 0 ? "text-beere-600" : ""}>
                     {b.stunden > 0 ? "+" : ""}
                     {formatMenge(Number(b.stunden), 2)}
@@ -334,19 +262,6 @@ export default function StundenkontoBereich({
                     {b.storniert && " (storniert)"}
                   </td>
                   <td>{b.notiz ?? "—"}</td>
-                  {canAuszahlen && (
-                    <td>
-                      {b.art === "Auszahlung" && !b.storniert && (
-                        <button
-                          type="button"
-                          className="btn-secondary text-xs"
-                          onClick={() => stornieren(b)}
-                        >
-                          Stornieren
-                        </button>
-                      )}
-                    </td>
-                  )}
                 </tr>
               ))}
             </tbody>

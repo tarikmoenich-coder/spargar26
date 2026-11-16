@@ -326,7 +326,7 @@ function BelegInner() {
   ];
   if (stundenkonto !== 0) {
     bruttoZeilen.push({
-      label: "Stundenkonto in Auszahlung umgewandelt",
+      label: "Zulage aus Stundenkonto",
       betrag: stundenkonto,
       art: "plus",
     });

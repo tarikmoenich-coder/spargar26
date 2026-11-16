@@ -110,6 +110,29 @@ Enthalten:
   auch bei zwischenzeitlicher Lohnänderung korrekt), inkl. Schnappschuss-/
   Kassenbewegungs-Korrektur, falls die Person bereits abgerechnet ist.
   Migration: `migration_2026-08-28_stundenkonto_auszahlung_stornieren.sql`
+  **Stand 2026-11-16 ("Stundenkonto ist immer Lohn", Nutzer-Vorgabe) -
+  ersetzt Teile des oben Beschriebenen:** (1) Jede Buchung braucht ein
+  bewusst gesetztes Datum im Saisonjahr (Pflicht in Oberfläche und
+  `stundenkonto_buchen`), nicht in einem abgeschlossenen Monat - das Datum
+  ordnet die Stunden genau einem Monat zu. (2) Der offene Saldo zählt
+  SOFORT zum Bruttolohn (Saldo × hinterlegter Stundenlohn, Spalte
+  "Zulage €" = eingefrorene Beträge + offener Saldo, `season_summary`).
+  (3) Monatsfilter der Lohnübersicht: neue Spalten "Zulage €" (Buchungen
+  mit Datum im Monat × Stundenlohn, `season_summary_monat.stundenkonto_
+  betrag`) und "Brutto Monat €", auch in der Druckliste. (4) "Jetzt
+  Abrechnen" sperrt nicht mehr bei offenem Stundenkonto, sondern wandelt
+  den Rest automatisch in Zulage um (fester Euro-Betrag, Konto danach 0;
+  negatives Konto blockiert). Der Handknopf "In Auszahlung umwandeln" samt
+  "Stornieren" ist aus der Oberfläche entfernt (SQL-Funktionen bestehen
+  weiter). (5) Buchungen von vor der Umstellung gelten als "Datum
+  unbestätigt" (`datum_bestaetigt = false`) - beim Abrechnen fragt ein
+  Dialog je Buchung nach dem Datum bzw. bietet "Alle auf heute setzen"
+  (`stundenkonto_datum_setzen`). 'Auszahlung'-Zeilen und Storno-
+  Rückbuchungen (`ist_storno`) zählen in der Monatszuordnung nicht mit.
+  Hinweis: `schema.sql` enthält `saison_abrechnen_batch` nur in einer
+  veralteten 3-Parameter-Fassung - maßgeblich sind die Migrationen
+  2026-11-04 und 2026-11-16.
+  Migration: `migration_2026-11-16_stundenkonto_immer_lohn.sql`
 - "Stundenerfassung → Import" (admin/hr/zeiterfassung): Excel-/CSV-Import
   zum Nacherfassen mehrerer Tage/Personen auf einmal - anderes Format als
   der Personal-Import: Spalte 1 = Personalnummer, ab Spalte 2 je eine

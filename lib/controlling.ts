@@ -28,7 +28,7 @@ export const ABWEICHUNGS_FELDER: {
   { key: "praemien_summe", label: "Prämien", eur: true },
   {
     key: "stundenkonto_auszahlung_betrag",
-    label: "Stundenkonto-Auszahlung",
+    label: "Zulage (Stundenkonto)",
     eur: true,
   },
   { key: "bruttolohn", label: "Bruttolohn", eur: true },

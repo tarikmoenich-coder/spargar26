@@ -6,13 +6,18 @@
 // sonst wirken Felder editierbar, obwohl die Datenbank ablehnt (gleicher
 // Fallstrick wie beim Bugreport 2026-08-08 zu work_entries).
 
-// Buchen (Gutschrift/Korrektur/Freizeitausgleich) - keine Lohnwirkung,
-// wie die Stundenerfassung selbst.
+// Buchen (Gutschrift/Korrektur/Freizeitausgleich) - wie die
+// Stundenerfassung selbst. Seit 2026-11-16 MIT Lohnwirkung (der Saldo
+// zählt sofort zum Brutto) - Nutzer-Vorgabe: zeiterfassung darf trotzdem
+// weiterhin buchen.
 export function kannStundenkontoBuchen(role: string | null | undefined): boolean {
   return role === "admin" || role === "hr" || role === "zeiterfassung";
 }
 
-// "In Auszahlung umwandeln" - erzeugt einen echten Lohnbestandteil.
+// Ursprünglich: "In Auszahlung umwandeln". Seit 2026-11-16 gibt es den
+// Handknopf nicht mehr (der Rest-Saldo wird beim Abrechnen automatisch
+// umgewandelt) - die Funktion regelt nur noch, wer den Stundenkonto-Bereich
+// zusätzlich zu den Buchen-Rollen (lesend) aufklappen darf.
 // Nutzer-Vorgabe 2026-08-21: hr und management dürfen das ebenfalls sehen
 // (nicht nur admin/lohnabrechnung wie beim ursprünglichen Bau am
 // 2026-08-20) - ausdrücklich NICHT zeiterfassung.

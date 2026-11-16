@@ -1344,7 +1344,19 @@ create table stundenkonto_bewegungen (
   -- verhindert eine doppelte Stornierung derselben Zeile - siehe
   -- stundenkonto_auszahlung_stornieren weiter unten.
   betrag numeric(10, 2),
-  storniert boolean not null default false
+  storniert boolean not null default false,
+  -- Nutzer-Vorgabe 2026-11-16 ("Stundenkonto ist immer Lohn"): jede Buchung
+  -- gehört über ihr Datum in genau einen Monat (season_summary_monat).
+  -- Seitdem ist das Datum bei jeder neuen Buchung Pflicht und bewusst
+  -- gesetzt (true). Buchungen von VOR der Umstellung stehen auf false -
+  -- ihr Datum war nur eine Vorbelegung ("heute"), sie müssen spätestens
+  -- beim Abrechnen bestätigt/nachgetragen werden (stundenkonto_datum_setzen).
+  datum_bestaetigt boolean not null default true,
+  -- true nur bei der ausgleichenden 'Korrektur'-Zeile, die
+  -- stundenkonto_auszahlung_stornieren erzeugt - sie ist (wie die
+  -- 'Auszahlung'-Zeile selbst) reine Umbuchung zwischen "offen" und
+  -- "eingefroren" und darf in der Monatszuordnung nicht mitzählen.
+  ist_storno boolean not null default false
 );
 
 create index idx_stundenkonto_bewegungen_employee
@@ -1361,8 +1373,12 @@ group by employee_id, saison_jahr;
 alter view employee_stundenkonto_saldo set (security_invoker = true);
 grant select on employee_stundenkonto_saldo to authenticated;
 
--- Bucht Gutschrift/Korrektur/Freizeitausgleich - alles ohne unmittelbare
--- Lohnwirkung, deshalb dieselben Rechte wie die Stundenerfassung selbst.
+-- Bucht Gutschrift/Korrektur/Freizeitausgleich - dieselben Rechte wie die
+-- Stundenerfassung selbst. Seit 2026-11-16 MIT Lohnwirkung: der Saldo
+-- zählt sofort zum Bruttolohn (season_summary), jede Buchung über ihr
+-- Datum zu genau einem Monat (season_summary_monat). Deshalb ist das Datum
+-- Pflicht, muss im Saisonjahr liegen und darf nicht in einem per
+-- Monatsabschluss gesperrten Monat liegen (wie work_entries).
 create or replace function stundenkonto_buchen(
   p_employee_id uuid,
   p_saison_jahr int,
@@ -1381,6 +1397,22 @@ begin
 
   if p_stunden is null or p_stunden = 0 then
     raise exception 'Bitte eine Stundenzahl ungleich 0 angeben';
+  end if;
+
+  if p_datum is null then
+    raise exception 'Bitte ein Datum angeben - jede Stundenkonto-Buchung muss einem Tag zugeordnet sein';
+  end if;
+  if extract(year from p_datum)::int <> p_saison_jahr then
+    raise exception 'Das Datum muss im Saisonjahr % liegen', p_saison_jahr;
+  end if;
+  if exists (
+    select 1 from periods p
+    where p.saison_jahr = extract(year from p_datum)::int
+      and p.monat = extract(month from p_datum)::int
+      and p.gesperrt = true
+  ) then
+    raise exception 'Der Monat %/% ist abgeschlossen - keine Stundenkonto-Buchung mehr möglich. Bitte den Monat zuerst wieder öffnen.',
+      extract(month from p_datum)::int, extract(year from p_datum)::int;
   end if;
 
   -- Bugfix 2026-08-20: die vorherige if/elsif-Kette prüfte "ist es KEINE
@@ -1410,9 +1442,65 @@ begin
   end if;
 
   insert into stundenkonto_bewegungen (employee_id, saison_jahr, datum, stunden, art, notiz)
-  values (p_employee_id, p_saison_jahr, coalesce(p_datum, current_date), p_stunden, p_art, p_notiz);
+  values (p_employee_id, p_saison_jahr, p_datum, p_stunden, p_art, p_notiz);
 end;
 $$;
+
+-- Datum einer bestehenden Buchung bestätigen bzw. nachtragen (Nutzer-
+-- Vorgabe 2026-11-16): für Buchungen von vor der Pflichtdatum-Umstellung
+-- (datum_bestaetigt = false) - die Lohnübersicht fragt beim "Jetzt
+-- Abrechnen" danach. Unverändertes Datum = reine Bestätigung (auch in
+-- einem bereits abgeschlossenen Monat erlaubt, es ändert sich ja nichts).
+-- Ein GEÄNDERTES Datum verschiebt Lohn zwischen zwei Monaten - dann darf
+-- weder der bisherige noch der neue Monat abgeschlossen sein.
+create or replace function stundenkonto_datum_setzen(
+  p_bewegung_id bigint,
+  p_datum date
+)
+returns void language plpgsql security definer as $$
+declare
+  v_bewegung stundenkonto_bewegungen%rowtype;
+begin
+  if current_role_name() not in ('admin', 'hr', 'zeiterfassung', 'lohnabrechnung') then
+    raise exception 'Keine Berechtigung für das Stundenkonto';
+  end if;
+
+  if p_datum is null then
+    raise exception 'Bitte ein Datum angeben';
+  end if;
+
+  select * into v_bewegung from stundenkonto_bewegungen where id = p_bewegung_id;
+  if not found then
+    raise exception 'Buchung nicht gefunden';
+  end if;
+  if v_bewegung.art = 'Auszahlung' or v_bewegung.ist_storno then
+    raise exception 'Bei dieser Buchung kann das Datum nicht geändert werden';
+  end if;
+  if extract(year from p_datum)::int <> v_bewegung.saison_jahr then
+    raise exception 'Das Datum muss im Saisonjahr % liegen', v_bewegung.saison_jahr;
+  end if;
+
+  if p_datum <> v_bewegung.datum and exists (
+    select 1 from periods p
+    where p.gesperrt = true
+      and (
+        (p.saison_jahr = extract(year from p_datum)::int
+          and p.monat = extract(month from p_datum)::int)
+        or (p.saison_jahr = extract(year from v_bewegung.datum)::int
+          and p.monat = extract(month from v_bewegung.datum)::int)
+      )
+  ) then
+    raise exception 'Das Datum kann nicht von % auf % geändert werden - einer der beiden Monate ist abgeschlossen. Bitte den Monat zuerst wieder öffnen.',
+      to_char(v_bewegung.datum, 'DD.MM.YYYY'), to_char(p_datum, 'DD.MM.YYYY');
+  end if;
+
+  update stundenkonto_bewegungen
+  set datum = p_datum, datum_bestaetigt = true
+  where id = p_bewegung_id;
+end;
+$$;
+
+grant execute on function stundenkonto_datum_setzen(bigint, date) to authenticated;
 
 grant execute on function stundenkonto_buchen(uuid, int, date, numeric, text, text) to authenticated;
 
@@ -1598,10 +1686,14 @@ begin
 
   update stundenkonto_bewegungen set storniert = true where id = p_bewegung_id;
 
-  insert into stundenkonto_bewegungen (employee_id, saison_jahr, stunden, art, notiz)
+  -- ist_storno (2026-11-16): reine Rück-Umbuchung, zählt nicht in der
+  -- Monatszuordnung (season_summary_monat) - die Stunden gehören weiterhin
+  -- zum Monat ihrer ursprünglichen Gutschrift.
+  insert into stundenkonto_bewegungen (employee_id, saison_jahr, stunden, art, notiz, ist_storno)
   values (
     v_bewegung.employee_id, v_bewegung.saison_jahr, abs(v_bewegung.stunden), 'Korrektur',
-    'Storno der Auszahlung vom ' || v_bewegung.datum || ' (' || abs(v_bewegung.stunden) || ' Std.) - ' || p_grund
+    'Storno der Auszahlung vom ' || v_bewegung.datum || ' (' || abs(v_bewegung.stunden) || ' Std.) - ' || p_grund,
+    true
   );
 
   update season_bonuses
@@ -1877,6 +1969,11 @@ end;
 $$;
 
 grant execute on function saison_abrechnen_batch(uuid[], int, text) to authenticated;
+-- HINWEIS 2026-11-16: diese Fassung ist NICHT mehr der Live-Stand - die
+-- aktuelle saison_abrechnen_batch (4 Parameter, p_austrittsdatum, plus
+-- automatische Stundenkonto-Umwandlung) steht in
+-- migration_2026-11-04_beschaeftigungsabschnitte.sql bzw.
+-- migration_2026-11-16_stundenkonto_immer_lohn.sql.
 
 -- ---------------------------------------------------------------------------
 -- Nachträgliche Korrektur eines falsch eingegebenen Netto-Betrags NACH dem
@@ -4621,8 +4718,16 @@ with base as (
       -- Nutzer-Vorgabe 2026-08-20: verhält sich wie eine Prämie (fließt in
       -- Bruttolohn ein, normal lohnsteuerpflichtig), erscheint aber als
       -- eigene Spalte statt in praemien_summe eingerechnet zu werden.
-      + coalesce(b.stundenkonto_auszahlung_betrag, 0) as bruttolohn,
-    coalesce(b.stundenkonto_auszahlung_betrag, 0) as stundenkonto_auszahlung_betrag,
+      -- Nutzer-Vorgabe 2026-11-16 ("Stundenkonto ist immer Lohn"): zusätzlich
+      -- zum bereits eingefrorenen Betrag zählt der noch OFFENE Saldo sofort
+      -- mit (Saldo × hinterlegter Stundenlohn) - nicht erst nach einer
+      -- Umwandlung. Beim Abrechnen wird der Saldo eingefroren
+      -- (saison_abrechnen_batch), die Summe hier bleibt dabei gleich.
+      + coalesce(b.stundenkonto_auszahlung_betrag, 0)
+      + round(coalesce(sk.saldo, 0) * coalesce(e.stundenlohn, 0), 2) as bruttolohn,
+    coalesce(b.stundenkonto_auszahlung_betrag, 0)
+      + round(coalesce(sk.saldo, 0) * coalesce(e.stundenlohn, 0), 2)
+      as stundenkonto_auszahlung_betrag,
     b.netto_extern,
     b.abgerechnet_am,
     b.snapshot,
@@ -4680,6 +4785,12 @@ with base as (
     where ept.employee_id = e.id
       and extract(year from ept.datum) = we.saison_jahr
   ) eb on true
+  left join lateral (
+    select sum(sb.stunden) as saldo
+    from stundenkonto_bewegungen sb
+    where sb.employee_id = e.id
+      and sb.saison_jahr = we.saison_jahr
+  ) sk on true
 ),
 steuer as (
   select
@@ -4760,7 +4871,52 @@ grant select on season_summary to authenticated;
 --       Eintrag im Monat werden im Frontend separat über die volle
 --       Mitarbeiterliste erkannt.
 -- ---------------------------------------------------------------------------
+-- Nutzer-Vorgabe 2026-11-16 ("Stundenkonto ist immer Lohn"): zusätzlich die
+-- Stundenkonto-Buchungen des Monats (nach Buchungsdatum) als
+-- stundenkonto_stunden/stundenkonto_betrag (Stunden × Stundenlohn) - ans
+-- Ende gehängt. 'Auszahlung'-Zeilen und Storno-Korrekturen zählen NICHT
+-- mit: sie buchen nur zwischen "offen" und "eingefroren" um, die Stunden
+-- gehören zum Monat ihrer ursprünglichen Buchung. Deshalb jetzt FULL JOIN
+-- statt reinem work_entries-Join: ein Monat mit Stundenkonto-Buchung, aber
+-- ohne Stundeneintrag, bekommt trotzdem eine Zeile (letzter_eintrag null).
 create or replace view season_summary_monat as
+with we as (
+  select
+    w.employee_id,
+    extract(year from w.datum)::int as saison_jahr,
+    extract(month from w.datum)::int as monat,
+    sum(coalesce(w.stunden, 0) + (case when w.markierung = 'U' then 8 else 0 end)) as gesamt_stunden,
+    count(*) filter (where w.stunden is not null or w.markierung is not null) as anwesenheitstage,
+    max(w.datum) filter (where w.stunden is not null or w.markierung is not null) as letzter_eintrag
+  from work_entries w
+  group by w.employee_id, extract(year from w.datum), extract(month from w.datum)
+),
+sk as (
+  select
+    sb.employee_id,
+    sb.saison_jahr,
+    extract(month from sb.datum)::int as monat,
+    sum(sb.stunden) as stunden
+  from stundenkonto_bewegungen sb
+  where sb.art <> 'Auszahlung' and sb.ist_storno = false
+  group by sb.employee_id, sb.saison_jahr, extract(month from sb.datum)
+  having sum(sb.stunden) <> 0
+),
+m as (
+  select
+    coalesce(we.employee_id, sk.employee_id) as employee_id,
+    coalesce(we.saison_jahr, sk.saison_jahr) as saison_jahr,
+    coalesce(we.monat, sk.monat) as monat,
+    we.gesamt_stunden,
+    we.anwesenheitstage,
+    we.letzter_eintrag,
+    sk.stunden as sk_stunden
+  from we
+  full join sk
+    on sk.employee_id = we.employee_id
+    and sk.saison_jahr = we.saison_jahr
+    and sk.monat = we.monat
+)
 select
   e.id as employee_id,
   e.personal_nr,
@@ -4768,34 +4924,27 @@ select
   e.vorname,
   e.gruppe_nr,
   e.aktiv,
-  extract(year from we.datum)::int as saison_jahr,
-  extract(month from we.datum)::int as monat,
-  sum(coalesce(we.stunden, 0) + (case when we.markierung = 'U' then 8 else 0 end)) as gesamt_stunden,
-  count(*) filter (where we.stunden is not null or we.markierung is not null) as anwesenheitstage,
-  max(we.datum) filter (where we.stunden is not null or we.markierung is not null) as letzter_eintrag,
-  (sum(coalesce(we.stunden, 0) + (case when we.markierung = 'U' then 8 else 0 end))
-    * coalesce(e.stundenlohn, 0)) as basis_brutto,
-  coalesce(v.verpflegung, 0)
-    * count(*) filter (where we.stunden is not null or we.markierung is not null)
-    as abzug_verpflegung,
-  coalesce(v.wohnen, 0)
-    * count(*) filter (where we.stunden is not null or we.markierung is not null)
-    as abzug_wohnen,
+  m.saison_jahr,
+  m.monat,
+  coalesce(m.gesamt_stunden, 0) as gesamt_stunden,
+  coalesce(m.anwesenheitstage, 0) as anwesenheitstage,
+  m.letzter_eintrag,
+  (coalesce(m.gesamt_stunden, 0) * coalesce(e.stundenlohn, 0)) as basis_brutto,
+  coalesce(v.verpflegung, 0) * coalesce(m.anwesenheitstage, 0) as abzug_verpflegung,
+  coalesce(v.wohnen, 0) * coalesce(m.anwesenheitstage, 0) as abzug_wohnen,
   -- Für die druckbare Monatsliste der Buchhaltung (Herkunft statt Gruppe).
-  e.herkunft
-from employees e
-join work_entries we on we.employee_id = e.id
-left join verpflegungssaetze v on v.saison_jahr = extract(year from we.datum)::int
+  e.herkunft,
+  coalesce(m.sk_stunden, 0) as stundenkonto_stunden,
+  round(coalesce(m.sk_stunden, 0) * coalesce(e.stundenlohn, 0), 2) as stundenkonto_betrag
+from m
+join employees e on e.id = m.employee_id
+left join verpflegungssaetze v on v.saison_jahr = m.saison_jahr
 -- Sicherheitsfix 2026-08-12 (Supabase-Advisor "Security Definer View"):
 -- gleicher Grund wie bei season_summary - verpflegungssaetze ist per RLS
 -- admin-only, diese Sicht braucht die Eigentümer-Rechte dafür, darf aber
 -- nicht an zeiterfassung/erntewirtschaft durchgereicht werden.
 where current_role_name() in
-  ('admin', 'hr', 'kasse', 'lohnabrechnung', 'pruefer', 'management')
-group by
-  e.id, e.personal_nr, e.name, e.vorname, e.gruppe_nr, e.aktiv, e.herkunft,
-  extract(year from we.datum), extract(month from we.datum),
-  v.verpflegung, v.wohnen;
+  ('admin', 'hr', 'kasse', 'lohnabrechnung', 'pruefer', 'management');
 
 grant select on season_summary_monat to authenticated;
 

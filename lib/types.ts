@@ -720,9 +720,10 @@ export interface SeasonSummaryRow {
   // z.B. Kantine noch nicht geöffnet) - reduziert nur abzug_verpflegung,
   // nicht anwesenheitstage/abzug_wohnen.
   verpflegungsfreie_tage: number;
-  // Kumulierte Summe aller "in Auszahlung umgewandelten" Stundenkonto-
-  // Buchungen (2026-08-20) - bereits in bruttolohn enthalten, hier nur zur
-  // separaten Anzeige.
+  // "Zulage €" aus dem Stundenkonto - bereits in bruttolohn enthalten, hier
+  // nur zur separaten Anzeige. Seit 2026-11-16 ("Stundenkonto ist immer
+  // Lohn"): bereits eingefrorene Beträge PLUS der noch offene Saldo ×
+  // hinterlegter Stundenlohn.
   stundenkonto_auszahlung_betrag: number;
 }
 
@@ -745,6 +746,13 @@ export interface StundenkontoBewegung {
   // Stornierung (stundenkonto_auszahlung_stornieren).
   betrag: number | null;
   storniert: boolean;
+  // 2026-11-16: false nur bei Buchungen von VOR der Pflichtdatum-
+  // Umstellung - ihr Datum muss spätestens beim Abrechnen bestätigt oder
+  // nachgetragen werden (stundenkonto_datum_setzen).
+  datum_bestaetigt: boolean;
+  // true bei der Rückbuchungs-"Korrektur" einer stornierten Umwandlung -
+  // reine Umbuchung, zählt nicht in der Monatszuordnung.
+  ist_storno: boolean;
 }
 
 // Aus der Sicht employee_stundenkonto_saldo - aktueller Kontostand.
@@ -771,13 +779,19 @@ export interface SeasonSummaryMonatRow {
   gesamt_stunden: number;
   anwesenheitstage: number;
   // Letzter Tag im Monat mit Eintrag (Stunden oder Markierung) - für die
-  // "möglicherweise unvollständig"-Warnung.
-  letzter_eintrag: string;
+  // "möglicherweise unvollständig"-Warnung. null, wenn die Person in dem
+  // Monat nur eine Stundenkonto-Buchung hat, aber keinen Stundeneintrag.
+  letzter_eintrag: string | null;
   basis_brutto: number;
   abzug_verpflegung: number;
   abzug_wohnen: number;
   // Für die druckbare Monatsliste der Buchhaltung (Herkunft statt Gruppe).
   herkunft: string | null;
+  // Stundenkonto-Buchungen mit Datum in diesem Monat (2026-11-16) - Stunden
+  // und Stunden × Stundenlohn ("Zulage €"). Kann negativ sein
+  // (Freizeitausgleich/Korrektur).
+  stundenkonto_stunden: number;
+  stundenkonto_betrag: number;
 }
 
 // Monatsabschluss (periods-Tabelle): sperrt/entsperrt die Stundenerfassung
