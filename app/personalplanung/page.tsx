@@ -42,7 +42,7 @@ import PersonalplanungZeitstrahl from "@/components/PersonalplanungZeitstrahl";
 import PersonalTabs from "@/components/PersonalTabs";
 import PageHeader from "@/components/PageHeader";
 import DokumentKameraAufnahme from "@/components/DokumentKameraAufnahme";
-import { CalendarRange } from "lucide-react";
+import { CalendarRange, Pencil, Trash2 } from "lucide-react";
 
 const emptyForm = {
   personal_nr: "",
@@ -1874,22 +1874,26 @@ export default function PersonalplanungPage() {
                             {!k.platzhalter && (
                             <button
                               type="button"
-                              className="btn-secondary text-xs"
+                              className="btn-secondary px-2 py-1"
+                              title="Bearbeiten"
+                              aria-label="Bearbeiten"
                               onClick={() =>
                                 bearbeitenId === k.id
                                   ? setBearbeitenId(null)
                                   : bearbeitenStarten(k)
                               }
                             >
-                              Bearbeiten
+                              <Pencil className="h-4 w-4" />
                             </button>
                             )}
                             <button
                               type="button"
-                              className="btn-secondary text-xs"
+                              className="btn-secondary px-2 py-1 text-beere-600"
+                              title="Entfernen"
+                              aria-label="Entfernen"
                               onClick={() => entfernen(k)}
                             >
-                              Entfernen
+                              <Trash2 className="h-4 w-4" />
                             </button>
                           </div>
                         </td>
