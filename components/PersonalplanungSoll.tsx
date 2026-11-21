@@ -232,6 +232,83 @@ export default function PersonalplanungSoll({
     <div className="flex flex-col gap-6">
       <div className="flex flex-col gap-2">
         <h2 className="text-base font-semibold text-emerald-800">
+          Verteilung auf Einsatzbereiche
+        </h2>
+        <p className="text-sm text-neutral-500">
+          Nur zur Übersicht (zugesagte Personen inkl. Platzhalter). Den
+          Bereich setzt du in der Namensliste je Person oder für mehrere
+          markierte auf einmal.
+        </p>
+        {matrixZeilen.length === 0 ? (
+          <p className="text-sm text-neutral-500">
+            Noch keine zugesagten Personen für {saisonJahr}.
+          </p>
+        ) : (
+          <div className="overflow-x-auto">
+            <table>
+              <thead>
+                <tr>
+                  <th>Herkunft</th>
+                  {sichtbareBereiche.map((b) => (
+                    <th key={b}>
+                      <span className="flex items-center gap-1">
+                        <span
+                          className="inline-block h-3 w-3 rounded-sm"
+                          style={{
+                            background: bereichFarbe(
+                              einsatzbereiche,
+                              b === "__ohne__" ? null : b
+                            ),
+                          }}
+                        />
+                        {b === "__ohne__" ? "ohne Bereich" : b}
+                      </span>
+                    </th>
+                  ))}
+                  <th>Summe</th>
+                </tr>
+              </thead>
+              <tbody>
+                {matrixZeilen.map((h) => (
+                  <tr key={h}>
+                    <td className="font-medium">
+                      {h === "__ohne__" ? "ohne Herkunft" : h}
+                    </td>
+                    {sichtbareBereiche.map((b) => {
+                      const n = zelle(h, b);
+                      return (
+                        <td
+                          key={b}
+                          className={
+                            b === "__ohne__" && n > 0 ? "text-amber-700" : ""
+                          }
+                        >
+                          {n || "—"}
+                        </td>
+                      );
+                    })}
+                    <td className="font-medium">
+                      {sichtbareBereiche.reduce((s, b) => s + zelle(h, b), 0)}
+                    </td>
+                  </tr>
+                ))}
+                <tr className="border-t-2 border-linie font-semibold">
+                  <td>Summe</td>
+                  {sichtbareBereiche.map((b) => (
+                    <td key={b}>
+                      {matrixZeilen.reduce((s, h) => s + zelle(h, b), 0)}
+                    </td>
+                  ))}
+                  <td>{zugesagteAlle.length}</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+
+      <div className="flex flex-col gap-2">
+        <h2 className="text-base font-semibold text-emerald-800">
           Soll je Herkunft – Saison {saisonJahr}
         </h2>
         <p className="text-sm text-neutral-500">
@@ -488,82 +565,6 @@ export default function PersonalplanungSoll({
         </div>
       </div>
 
-      <div className="flex flex-col gap-2">
-        <h2 className="text-base font-semibold text-emerald-800">
-          Verteilung auf Einsatzbereiche
-        </h2>
-        <p className="text-sm text-neutral-500">
-          Nur zur Übersicht (zugesagte Personen inkl. Platzhalter). Den
-          Bereich setzt du in der Namensliste je Person oder für mehrere
-          markierte auf einmal.
-        </p>
-        {matrixZeilen.length === 0 ? (
-          <p className="text-sm text-neutral-500">
-            Noch keine zugesagten Personen für {saisonJahr}.
-          </p>
-        ) : (
-          <div className="overflow-x-auto">
-            <table>
-              <thead>
-                <tr>
-                  <th>Herkunft</th>
-                  {sichtbareBereiche.map((b) => (
-                    <th key={b}>
-                      <span className="flex items-center gap-1">
-                        <span
-                          className="inline-block h-3 w-3 rounded-sm"
-                          style={{
-                            background: bereichFarbe(
-                              einsatzbereiche,
-                              b === "__ohne__" ? null : b
-                            ),
-                          }}
-                        />
-                        {b === "__ohne__" ? "ohne Bereich" : b}
-                      </span>
-                    </th>
-                  ))}
-                  <th>Summe</th>
-                </tr>
-              </thead>
-              <tbody>
-                {matrixZeilen.map((h) => (
-                  <tr key={h}>
-                    <td className="font-medium">
-                      {h === "__ohne__" ? "ohne Herkunft" : h}
-                    </td>
-                    {sichtbareBereiche.map((b) => {
-                      const n = zelle(h, b);
-                      return (
-                        <td
-                          key={b}
-                          className={
-                            b === "__ohne__" && n > 0 ? "text-amber-700" : ""
-                          }
-                        >
-                          {n || "—"}
-                        </td>
-                      );
-                    })}
-                    <td className="font-medium">
-                      {sichtbareBereiche.reduce((s, b) => s + zelle(h, b), 0)}
-                    </td>
-                  </tr>
-                ))}
-                <tr className="border-t-2 border-linie font-semibold">
-                  <td>Summe</td>
-                  {sichtbareBereiche.map((b) => (
-                    <td key={b}>
-                      {matrixZeilen.reduce((s, h) => s + zelle(h, b), 0)}
-                    </td>
-                  ))}
-                  <td>{zugesagteAlle.length}</td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
-        )}
-      </div>
     </div>
   );
 }
