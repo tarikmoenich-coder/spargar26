@@ -177,6 +177,13 @@ Enthalten:
   Person derselben Herkunft befüllt einen Platzhalter, Anreise/Bereich
   bleiben erhalten.
   Migration: `migration_2026-11-21_personalplanung_soll_anreise.sql`
+  Ergänzt (2026-11-21b): Einsatzbereiche haben eine Farbe (Einstellungen),
+  Zeilen der Namensliste sind danach eingefärbt und innerhalb der Herkunft
+  nach Bereich sortiert; Legende über der Liste filtert per Klick. Je
+  Bereich und Saison ein Von-Bis-Zeitraum (`einsatzbereich_zeitraum`,
+  gepflegt unter "Soll & Übersicht"), im Zeitstrahl als Balken über den
+  Säulen; Säulen wahlweise nach Herkunft oder Einsatzbereich gefärbt.
+  Migration: `migration_2026-11-21b_einsatzbereich_farben_zeitraeume.sql`
 - Eigene Unterseite "Personal → Anreiseliste" (nur admin/hr): Personen aus
   der Planung, gruppiert nach geplantem Ankunftsdatum ("Anreisegruppe").
   Vor dem Drucken müssen Vertragsbeginn/-ende erfasst werden. Danach können

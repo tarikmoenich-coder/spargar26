@@ -13,11 +13,17 @@ import { formatDatumDE } from "@/lib/format";
 import { plusTage } from "@/lib/planungTermine";
 import {
   anwesenheit,
+  bereichFarbe,
   herkunftFarbe,
   istZugesagt,
   kandidatAnzeige,
 } from "@/lib/personalplanung";
-import type { Herkunft, PersonalKandidat } from "@/lib/types";
+import type {
+  Einsatzbereich,
+  EinsatzbereichZeitraum,
+  Herkunft,
+  PersonalKandidat,
+} from "@/lib/types";
 
 interface Props {
   saisonJahr: number;
@@ -25,7 +31,12 @@ interface Props {
   // Alle nicht stornierten Kandidaten DIESES Saisonjahres.
   kandidaten: PersonalKandidat[];
   sollGesamt: number;
+  einsatzbereiche: Einsatzbereich[];
+  // Saisonzeiträume (alle Jahre; gefiltert wird hier).
+  zeitraeume: EinsatzbereichZeitraum[];
 }
+
+type FarbModus = "herkunft" | "bereich";
 
 type Modus = "anwesend" | "anreisen";
 
@@ -59,8 +70,13 @@ export default function PersonalplanungZeitstrahl({
   herkuenfte,
   kandidaten,
   sollGesamt,
+  einsatzbereiche,
+  zeitraeume,
 }: Props) {
   const [modus, setModus] = useState<Modus>("anwesend");
+  // Säulen nach Herkunft oder nach Einsatzbereich einfärben (Nutzer-Vorgabe
+  // 2026-11-21: sehen, ob zur Spargelzeit genug Spargel-Leute da sind).
+  const [farbModus, setFarbModus] = useState<FarbModus>("herkunft");
   const [gewaehlteWoche, setGewaehlteWoche] = useState<string | null>(null);
   const [hoverWoche, setHoverWoche] = useState<string | null>(null);
   const [alsTabelle, setAlsTabelle] = useState(false);
@@ -79,6 +95,25 @@ export default function PersonalplanungZeitstrahl({
   }, [alsTabelle, kandidaten.length]);
 
   const herkunftListe = useMemo(() => herkuenfte.map((h) => h.wert), [herkuenfte]);
+  const bereichListe = useMemo(
+    () => einsatzbereiche.map((b) => b.wert),
+    [einsatzbereiche]
+  );
+  const gruppeVon = (k: PersonalKandidat) =>
+    (farbModus === "herkunft" ? k.herkunft : k.einsatzbereich) ?? OHNE;
+
+  // Saisonzeiträume dieser Saison in Bereichs-Reihenfolge (Balken oben).
+  const baender = useMemo(
+    () =>
+      zeitraeume
+        .filter((z) => z.saison_jahr === saisonJahr)
+        .sort(
+          (a, b) =>
+            bereichListe.indexOf(a.einsatzbereich) -
+            bereichListe.indexOf(b.einsatzbereich)
+        ),
+    [zeitraeume, saisonJahr, bereichListe]
+  );
 
   const personen = useMemo(
     () =>
@@ -95,27 +130,37 @@ export default function PersonalplanungZeitstrahl({
 
   // Herkünfte in fester Reihenfolge (nur die vorkommenden) - bestimmt die
   // Stapel-Reihenfolge und die Legende.
-  const stapelHerkuenfte = useMemo(() => {
-    const vorhanden = new Set(terminiert.map((p) => p.k.herkunft ?? OHNE));
-    const liste = herkunftListe.filter((h) => vorhanden.has(h));
+  const stapelGruppen = useMemo(() => {
+    const vorhanden = new Set(terminiert.map((p) => gruppeVon(p.k)));
+    const reihenfolge = farbModus === "herkunft" ? herkunftListe : bereichListe;
+    const liste = reihenfolge.filter((h) => vorhanden.has(h));
     if (vorhanden.has(OHNE)) liste.push(OHNE);
     return liste;
-  }, [terminiert, herkunftListe]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [terminiert, herkunftListe, bereichListe, farbModus]);
 
   const wochen = useMemo(() => {
-    if (terminiert.length === 0) return [] as string[];
-    let start = montagVon(terminiert.reduce((m, p) => (p.zeit.von < m ? p.zeit.von : m), terminiert[0].zeit.von));
-    const ende =
-      modus === "anwesend"
-        ? terminiert.reduce((m, p) => (p.zeit.bis > m ? p.zeit.bis : m), terminiert[0].zeit.bis)
-        : terminiert.reduce((m, p) => (p.zeit.von > m ? p.zeit.von : m), terminiert[0].zeit.von);
+    // Zeitachse: alle Anwesenheiten bzw. Anreisen PLUS die Saisonzeiträume,
+    // damit z.B. die Spargelzeit auch schon vor den ersten Anreisen sichtbar
+    // ist.
+    const anfaenge = [
+      ...terminiert.map((p) => p.zeit.von),
+      ...baender.map((b) => b.von),
+    ];
+    const enden = [
+      ...terminiert.map((p) => (modus === "anwesend" ? p.zeit.bis : p.zeit.von)),
+      ...baender.map((b) => b.bis),
+    ];
+    if (anfaenge.length === 0) return [] as string[];
+    let start = montagVon(anfaenge.reduce((m, d) => (d < m ? d : m)));
+    const ende = enden.reduce((m, d) => (d > m ? d : m));
     const liste: string[] = [];
     while (start <= ende && liste.length < 80) {
       liste.push(start);
       start = plusTage(start, 7);
     }
     return liste;
-  }, [terminiert, modus]);
+  }, [terminiert, modus, baender]);
 
   // woche -> herkunft -> { namen, platzhalter, personen }
   const daten = useMemo(() => {
@@ -135,7 +180,7 @@ export default function PersonalplanungZeitstrahl({
             ? p.zeit.von <= sonntag && p.zeit.bis >= w
             : p.zeit.von >= w && p.zeit.von <= sonntag;
         if (!trifft) continue;
-        const h = p.k.herkunft ?? OHNE;
+        const h = gruppeVon(p.k);
         const e = proHerkunft.get(h) ?? { namen: 0, platzhalter: 0, liste: [] };
         if (p.k.platzhalter) e.platzhalter += 1;
         else e.namen += 1;
@@ -145,7 +190,8 @@ export default function PersonalplanungZeitstrahl({
       map.set(w, proHerkunft);
     }
     return map;
-  }, [wochen, terminiert, modus]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [wochen, terminiert, modus, farbModus]);
 
   const summeWoche = (w: string) =>
     [...(daten.get(w)?.values() ?? [])].reduce(
@@ -164,9 +210,12 @@ export default function PersonalplanungZeitstrahl({
   // Geometrie
   const links = 40;
   const rechts = 12;
-  const oben = 16;
+  // Oben ein Streifen je Saisonzeitraum (16 px), darunter das Diagramm.
+  const bandH = 16;
+  const bandOben = 8;
+  const oben = 16 + (baender.length > 0 ? bandOben + baender.length * (bandH + 4) : 0);
   const unten = 40;
-  const hoehe = 420;
+  const hoehe = 420 + (oben - 16);
   // Spaltenbreite aus der verfügbaren Breite (mind. 30 px, dann scrollt der
   // Rahmen waagerecht; höchstens 90 px, damit wenige Wochen nicht zu
   // klobigen Blöcken werden).
@@ -180,8 +229,21 @@ export default function PersonalplanungZeitstrahl({
   const y = (v: number) => oben + plotH - (v / yMax) * plotH;
   const balkenB = Math.min(spalte - 8, spalte * 0.7);
 
-  const farbe = (h: string) => herkunftFarbe(herkunftListe, h === OHNE ? null : h);
-  const label = (h: string) => (h === OHNE ? "ohne Herkunft" : h);
+  const farbe = (h: string) =>
+    farbModus === "herkunft"
+      ? herkunftFarbe(herkunftListe, h === OHNE ? null : h)
+      : bereichFarbe(einsatzbereiche, h === OHNE ? null : h);
+  const label = (h: string) =>
+    h === OHNE ? (farbModus === "herkunft" ? "ohne Herkunft" : "ohne Bereich") : h;
+  // x-Position eines Datums (Tage seit dem ersten Montag, je Woche eine Spalte)
+  const xVon = (iso: string) => {
+    if (wochen.length === 0) return links;
+    const tage =
+      (new Date(`${iso}T00:00:00Z`).getTime() -
+        new Date(`${wochen[0]}T00:00:00Z`).getTime()) /
+      86400000;
+    return links + Math.max(0, Math.min(tage / 7, anzahlSpalten)) * spalte;
+  };
 
   const aktiveWoche = gewaehlteWoche ?? hoverWoche;
 
@@ -216,6 +278,26 @@ export default function PersonalplanungZeitstrahl({
             </button>
           ))}
         </div>
+        <div className="flex items-center gap-1 text-sm text-neutral-600">
+          Farbe nach
+          <div className="flex overflow-hidden rounded border border-linie">
+            {(
+              [
+                ["herkunft", "Herkunft"],
+                ["bereich", "Einsatzbereich"],
+              ] as const
+            ).map(([m, text]) => (
+              <button
+                key={m}
+                type="button"
+                className={`px-3 py-1 text-sm ${farbModus === m ? "bg-emerald-700 text-white" : "bg-white text-neutral-700"}`}
+                onClick={() => setFarbModus(m)}
+              >
+                {text}
+              </button>
+            ))}
+          </div>
+        </div>
         <label className="flex items-center gap-1 text-sm text-neutral-600">
           <input
             type="checkbox"
@@ -233,7 +315,7 @@ export default function PersonalplanungZeitstrahl({
 
       {/* Legende */}
       <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-neutral-700">
-        {stapelHerkuenfte.map((h) => (
+        {stapelGruppen.map((h) => (
           <span key={h} className="flex items-center gap-1">
             <span
               className="inline-block h-3 w-3 rounded-sm"
@@ -266,7 +348,7 @@ export default function PersonalplanungZeitstrahl({
               <tr>
                 <th>KW</th>
                 <th>ab</th>
-                {stapelHerkuenfte.map((h) => (
+                {stapelGruppen.map((h) => (
                   <th key={h}>{label(h)}</th>
                 ))}
                 <th>Summe</th>
@@ -281,7 +363,7 @@ export default function PersonalplanungZeitstrahl({
                   <tr key={w}>
                     <td>{kalenderwoche(w)}</td>
                     <td>{formatDatumDE(w)}</td>
-                    {stapelHerkuenfte.map((h) => {
+                    {stapelGruppen.map((h) => {
                       const e = d?.get(h);
                       return <td key={h}>{e ? e.namen + e.platzhalter : "—"}</td>;
                     })}
@@ -308,7 +390,7 @@ export default function PersonalplanungZeitstrahl({
             onMouseLeave={() => setHoverWoche(null)}
           >
             <defs>
-              {stapelHerkuenfte.map((h, i) => (
+              {stapelGruppen.map((h, i) => (
                 <pattern
                   key={h}
                   id={`pp-schraffur-${i}`}
@@ -322,6 +404,52 @@ export default function PersonalplanungZeitstrahl({
                 </pattern>
               ))}
             </defs>
+
+            {/* Saisonzeiträume der Einsatzbereiche */}
+            {baender.map((b, i) => {
+              const x0 = xVon(b.von);
+              const x1 = xVon(plusTage(b.bis, 1));
+              const yb = bandOben + i * (bandH + 4);
+              const c = bereichFarbe(einsatzbereiche, b.einsatzbereich);
+              return (
+                <g key={b.einsatzbereich}>
+                  <title>{`${b.einsatzbereich}: ${formatDatumDE(b.von)} – ${formatDatumDE(b.bis)}`}</title>
+                  <rect
+                    x={x0}
+                    y={yb}
+                    width={Math.max(2, x1 - x0)}
+                    height={bandH}
+                    rx={4}
+                    fill={c}
+                    fillOpacity={0.28}
+                    stroke={c}
+                    strokeWidth={1.5}
+                  />
+                  <text
+                    x={x0 + 6}
+                    y={yb + bandH - 4}
+                    fontSize="11"
+                    fill="currentColor"
+                    fontWeight="600"
+                  >
+                    {b.einsatzbereich}
+                  </text>
+                  {/* dezente Hilfslinien bis in das Diagramm */}
+                  {[x0, x1].map((x, j) => (
+                    <line
+                      key={j}
+                      x1={x}
+                      x2={x}
+                      y1={yb + bandH}
+                      y2={hoehe - unten}
+                      stroke={c}
+                      strokeOpacity={0.35}
+                      strokeDasharray="2 3"
+                    />
+                  ))}
+                </g>
+              );
+            })}
 
             {/* Raster + y-Achse */}
             {Array.from({ length: yMax / yStep + 1 }, (_, i) => i * yStep).map((v) => (
@@ -353,7 +481,7 @@ export default function PersonalplanungZeitstrahl({
               const d = daten.get(w);
               let basis = 0;
               const segmente: React.ReactNode[] = [];
-              stapelHerkuenfte.forEach((h, hi) => {
+              stapelGruppen.forEach((h, hi) => {
                 const e = d?.get(h);
                 if (!e) return;
                 for (const [teil, n] of [
@@ -482,7 +610,7 @@ export default function PersonalplanungZeitstrahl({
             )}
           </p>
           <div className="flex flex-col gap-1">
-            {stapelHerkuenfte.map((h) => {
+            {stapelGruppen.map((h) => {
               const e = daten.get(aktiveWoche)?.get(h);
               if (!e) return null;
               return (

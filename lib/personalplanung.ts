@@ -67,3 +67,13 @@ export function kandidatAnzeige(k: PersonalKandidat): string {
   if (k.platzhalter) return "N.N. (Platzhalter)";
   return `${k.name ?? ""}, ${k.vorname ?? ""}`;
 }
+
+// Farbe eines Einsatzbereichs (einsatzbereiche.farbe, in den Einstellungen
+// änderbar) - ohne Bereich bzw. ohne Farbe grau.
+export function bereichFarbe(
+  bereiche: { wert: string; farbe: string | null }[],
+  wert: string | null
+): string {
+  if (!wert) return FARBE_WEITERE;
+  return bereiche.find((b) => b.wert === wert)?.farbe || FARBE_WEITERE;
+}

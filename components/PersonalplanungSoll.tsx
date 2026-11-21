@@ -10,13 +10,16 @@
 // Einsatzbereiche ist reine Übersicht, ohne eigenes Soll.
 import { useState } from "react";
 import { getSupabaseClient } from "@/lib/supabase/client";
+import { formatDatumDE } from "@/lib/format";
 import {
+  bereichFarbe,
   fuehrerscheinZiel,
   hatFuehrerscheinB,
   istZugesagt,
 } from "@/lib/personalplanung";
 import type {
   Einsatzbereich,
+  EinsatzbereichZeitraum,
   Herkunft,
   PersonalKandidat,
   UnterkunftHerkunftPlan,
@@ -29,6 +32,7 @@ interface Props {
   // Alle nicht stornierten Kandidaten DIESES Saisonjahres.
   kandidaten: PersonalKandidat[];
   sollPlan: UnterkunftHerkunftPlan[];
+  zeitraeume: EinsatzbereichZeitraum[];
   canEdit: boolean;
   onGeaendert: () => void;
 }
@@ -51,6 +55,7 @@ export default function PersonalplanungSoll({
   einsatzbereiche,
   kandidaten,
   sollPlan,
+  zeitraeume,
   canEdit,
   onGeaendert,
 }: Props) {
@@ -151,6 +156,52 @@ export default function PersonalplanungSoll({
       return rest;
     });
     onGeaendert();
+  }
+
+  // Saisonzeitraum eines Bereichs speichern: beide Daten gesetzt -> anlegen/
+  // ändern, beide leer -> entfernen.
+  const zeitraumVon = (bereich: string) =>
+    zeitraeume.find(
+      (z) => z.einsatzbereich === bereich && z.saison_jahr === saisonJahr
+    ) ?? null;
+  const [zeitraumEntwurf, setZeitraumEntwurf] = useState<
+    Record<string, { von: string; bis: string }>
+  >({});
+  const entwurfVon = (bereich: string) =>
+    zeitraumEntwurf[`${saisonJahr}|${bereich}`] ?? {
+      von: zeitraumVon(bereich)?.von ?? "",
+      bis: zeitraumVon(bereich)?.bis ?? "",
+    };
+
+  async function zeitraumSpeichern(bereich: string, von: string, bis: string) {
+    setFehler(null);
+    const alt = zeitraumVon(bereich);
+    if ((alt?.von ?? "") === von && (alt?.bis ?? "") === bis) return;
+    const supabase = getSupabaseClient();
+    if (!von && !bis) {
+      if (!alt) return;
+      const { error } = await supabase
+        .from("einsatzbereich_zeitraum")
+        .delete()
+        .eq("einsatzbereich", bereich)
+        .eq("saison_jahr", saisonJahr);
+      if (error) setFehler(error.message);
+      else onGeaendert();
+      return;
+    }
+    if (!von || !bis) return; // erst speichern, wenn beide Daten da sind
+    if (bis < von) {
+      setFehler(`${bereich}: das Ende liegt vor dem Beginn.`);
+      return;
+    }
+    const { error } = await supabase
+      .from("einsatzbereich_zeitraum")
+      .upsert(
+        { einsatzbereich: bereich, saison_jahr: saisonJahr, von, bis },
+        { onConflict: "einsatzbereich,saison_jahr" }
+      );
+    if (error) setFehler(error.message);
+    else onGeaendert();
   }
 
   // Übersicht Herkunft × Einsatzbereich (nur zugesagte Personen).
@@ -360,6 +411,85 @@ export default function PersonalplanungSoll({
 
       <div className="flex flex-col gap-2">
         <h2 className="text-base font-semibold text-emerald-800">
+          Saisonzeiträume der Einsatzbereiche – {saisonJahr}
+        </h2>
+        <p className="text-sm text-neutral-500">
+          Von–Bis je Bereich (z.B. Spargel, Erdbeeren, Zuckermais). Erscheint im
+          Anreise-Zeitstrahl als Balken über den Säulen. Leer lassen, wenn ein
+          Bereich keinen festen Zeitraum hat; beide Felder leeren entfernt ihn.
+        </p>
+        <div className="overflow-x-auto">
+          <table>
+            <thead>
+              <tr>
+                <th>Bereich</th>
+                <th>von</th>
+                <th>bis</th>
+                <th>Wochen</th>
+              </tr>
+            </thead>
+            <tbody>
+              {einsatzbereiche.map((b) => {
+                const e = entwurfVon(b.wert);
+                const gespeichert = zeitraumVon(b.wert);
+                const wochen = gespeichert
+                  ? Math.round(
+                      (new Date(gespeichert.bis).getTime() -
+                        new Date(gespeichert.von).getTime()) /
+                        (7 * 86400000)
+                    )
+                  : null;
+                const setze = (feld: "von" | "bis", wert: string) =>
+                  setZeitraumEntwurf((prev) => ({
+                    ...prev,
+                    [`${saisonJahr}|${b.wert}`]: { ...e, [feld]: wert },
+                  }));
+                return (
+                  <tr key={b.wert}>
+                    <td>
+                      <span className="flex items-center gap-2">
+                        <span
+                          className="inline-block h-3 w-3 rounded-sm"
+                          style={{ background: bereichFarbe(einsatzbereiche, b.wert) }}
+                        />
+                        {b.wert}
+                      </span>
+                    </td>
+                    {(["von", "bis"] as const).map((feld) => (
+                      <td key={feld}>
+                        {canEdit ? (
+                          <input
+                            type="date"
+                            min={`${saisonJahr}-01-01`}
+                            max={`${saisonJahr}-12-31`}
+                            value={e[feld]}
+                            onChange={(ev) => setze(feld, ev.target.value)}
+                            onBlur={(ev) =>
+                              zeitraumSpeichern(
+                                b.wert,
+                                feld === "von" ? ev.target.value : e.von,
+                                feld === "bis" ? ev.target.value : e.bis
+                              )
+                            }
+                          />
+                        ) : (
+                          formatDatumDE(gespeichert?.[feld] ?? null)
+                        )}
+                      </td>
+                    ))}
+                    <td className="text-neutral-500">
+                      {wochen !== null ? `${wochen} Wo.` : "—"}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <div className="flex flex-col gap-2">
+        <h2 className="text-base font-semibold text-emerald-800">
           Verteilung auf Einsatzbereiche
         </h2>
         <p className="text-sm text-neutral-500">
@@ -378,7 +508,20 @@ export default function PersonalplanungSoll({
                 <tr>
                   <th>Herkunft</th>
                   {sichtbareBereiche.map((b) => (
-                    <th key={b}>{b === "__ohne__" ? "ohne Bereich" : b}</th>
+                    <th key={b}>
+                      <span className="flex items-center gap-1">
+                        <span
+                          className="inline-block h-3 w-3 rounded-sm"
+                          style={{
+                            background: bereichFarbe(
+                              einsatzbereiche,
+                              b === "__ohne__" ? null : b
+                            ),
+                          }}
+                        />
+                        {b === "__ohne__" ? "ohne Bereich" : b}
+                      </span>
+                    </th>
                   ))}
                   <th>Summe</th>
                 </tr>

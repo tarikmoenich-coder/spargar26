@@ -1621,6 +1621,17 @@ export type BenannterKandidat = PersonalKandidat & {
 export interface Einsatzbereich {
   wert: string;
   reihenfolge: number;
+  // Hex-Farbe für Planungsliste/Zeitstrahl (Migration 2026-11-21b).
+  farbe: string | null;
+}
+
+// Saisonzeitraum eines Einsatzbereichs in einem Jahr (z.B. Spargel
+// 01.04.-24.06.), im Anreise-Zeitstrahl sichtbar (Migration 2026-11-21b).
+export interface EinsatzbereichZeitraum {
+  einsatzbereich: string;
+  saison_jahr: number;
+  von: string;
+  bis: string;
 }
 
 export interface PersonalKandidatChecklisteRow {

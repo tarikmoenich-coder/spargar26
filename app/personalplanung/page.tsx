@@ -23,6 +23,7 @@ import {
   FUEHRERSCHEIN_KATEGORIEN,
   type BenannterKandidat,
   type Einsatzbereich,
+  type EinsatzbereichZeitraum,
   type Employee,
   type EmployeeSaisonHistorieAgg,
   type Herkunft,
@@ -32,6 +33,7 @@ import {
   type VerpflegungsSatz,
 } from "@/lib/types";
 import {
+  bereichFarbe,
   fuehrerscheinZiel,
   hatFuehrerscheinB,
   istZugesagt,
@@ -116,6 +118,10 @@ export default function PersonalplanungPage() {
   );
   const [einsatzbereiche, setEinsatzbereiche] = useState<Einsatzbereich[]>([]);
   const [sollPlan, setSollPlan] = useState<UnterkunftHerkunftPlan[]>([]);
+  const [zeitraeume, setZeitraeume] = useState<EinsatzbereichZeitraum[]>([]);
+  // Namensliste auf einen Einsatzbereich filtern (Klick auf die Legende);
+  // "__ohne__" = Personen ohne Bereich.
+  const [bereichFilter, setBereichFilter] = useState<string | null>(null);
   // Platzhalter, in den das Formular oben gerade den Namen einträgt.
   const [platzhalterZielId, setPlatzhalterZielId] = useState<string | null>(
     null
@@ -139,6 +145,7 @@ export default function PersonalplanungPage() {
       { data: shData },
       { data: ebData },
       { data: spData },
+      { data: zrData },
     ] = await Promise.all([
       supabase
         .from("personal_kandidaten")
@@ -166,7 +173,9 @@ export default function PersonalplanungPage() {
       supabase.from("employee_saison_historie_agg").select("*"),
       supabase.from("einsatzbereiche").select("*").order("reihenfolge"),
       supabase.from("unterkunft_herkunft_plan").select("*"),
+      supabase.from("einsatzbereich_zeitraum").select("*"),
     ]);
+    setZeitraeume((zrData as EinsatzbereichZeitraum[]) ?? []);
     setEinsatzbereiche((ebData as Einsatzbereich[]) ?? []);
     setSollPlan((spData as UnterkunftHerkunftPlan[]) ?? []);
     setKandidaten((kData as PersonalKandidat[]) ?? []);
@@ -989,7 +998,14 @@ export default function PersonalplanungPage() {
 
   const gruppen = useMemo(() => {
     const buckets = new Map<string, PersonalKandidat[]>();
-    for (const k of geplante) {
+    const gefiltert = bereichFilter
+      ? geplante.filter((k) =>
+          bereichFilter === "__ohne__"
+            ? !k.einsatzbereich
+            : k.einsatzbereich === bereichFilter
+        )
+      : geplante;
+    for (const k of gefiltert) {
       const key = k.herkunft ?? "__ohne__";
       if (!buckets.has(key)) buckets.set(key, []);
       buckets.get(key)!.push(k);
@@ -1000,8 +1016,12 @@ export default function PersonalplanungPage() {
       if (b === "__ohne__") return -1;
       return (reihenfolge.get(a) ?? 0) - (reihenfolge.get(b) ?? 0);
     });
-    // In der Gruppe: zugesagte Namen, dann Platzhalter, dann Reserve.
-    const rang = (k: PersonalKandidat) => (k.reserve ? 2 : k.platzhalter ? 1 : 0);
+    // In der Gruppe: nach Einsatzbereich (Reihenfolge der Einstellungen,
+    // ohne Bereich zuletzt), darin Namen vor Platzhaltern; Reserve ganz unten.
+    const bereichRang = new Map(einsatzbereiche.map((b, i) => [b.wert, i]));
+    const rangBereich = (k: PersonalKandidat) =>
+      k.einsatzbereich ? bereichRang.get(k.einsatzbereich) ?? 998 : 999;
+    const rang = (k: PersonalKandidat) => (k.reserve ? 2 : 0);
     return keys.map((key) => ({
       key,
       anzeige: key === "__ohne__" ? "Ohne Herkunft" : key,
@@ -1011,11 +1031,13 @@ export default function PersonalplanungPage() {
         .sort(
           (a, b) =>
             rang(a) - rang(b) ||
+            rangBereich(a) - rangBereich(b) ||
+            Number(a.platzhalter) - Number(b.platzhalter) ||
             (a.name ?? "").localeCompare(b.name ?? "") ||
             a.erstellt_am.localeCompare(b.erstellt_am)
         ),
     }));
-  }, [geplante, herkuenfte]);
+  }, [geplante, herkuenfte, einsatzbereiche, bereichFilter]);
 
   function schwarzeListeVon(empId: string | null) {
     if (!empId) return null;
@@ -1126,6 +1148,7 @@ export default function PersonalplanungPage() {
             einsatzbereiche={einsatzbereiche}
             kandidaten={saisonKandidaten}
             sollPlan={sollPlan}
+            zeitraeume={zeitraeume}
             canEdit={canEdit}
             onGeaendert={load}
           />
@@ -1142,6 +1165,8 @@ export default function PersonalplanungPage() {
             sollGesamt={sollPlan
               .filter((p) => p.saison_jahr === saisonJahr)
               .reduce((sm, p) => sm + p.soll_anzahl, 0)}
+            einsatzbereiche={einsatzbereiche}
+            zeitraeume={zeitraeume}
           />
         ))}
 
@@ -1596,6 +1621,55 @@ export default function PersonalplanungPage() {
           </div>
           {terminePanel === "__alle__" &&
             terminePanelJsx(geplante, `alle ${geplante.length} Kandidaten`)}
+          {/* Farblegende der Einsatzbereiche - Klick filtert die Liste */}
+          <div className="flex flex-wrap items-center gap-1.5 text-xs">
+            <span className="mr-1 text-neutral-500">Einsatzbereich:</span>
+            {[
+              ...einsatzbereiche.map((b) => ({
+                wert: b.wert,
+                text: b.wert,
+                n: geplante.filter((k) => k.einsatzbereich === b.wert).length,
+              })),
+              {
+                wert: "__ohne__",
+                text: "ohne Bereich",
+                n: geplante.filter((k) => !k.einsatzbereich).length,
+              },
+            ]
+              .filter((x) => x.n > 0 || bereichFilter === x.wert)
+              .map((x) => {
+                const aktiv = bereichFilter === x.wert;
+                return (
+                  <button
+                    key={x.wert}
+                    type="button"
+                    className={`flex items-center gap-1 rounded-full border px-2 py-0.5 ${aktiv ? "border-emerald-700 bg-emerald-700 text-white" : "border-linie bg-white text-neutral-700 hover:bg-emerald-50"}`}
+                    onClick={() => setBereichFilter(aktiv ? null : x.wert)}
+                    title={aktiv ? "Filter aufheben" : `Nur ${x.text} anzeigen`}
+                  >
+                    <span
+                      className="inline-block h-2.5 w-2.5 rounded-sm"
+                      style={{
+                        background: bereichFarbe(
+                          einsatzbereiche,
+                          x.wert === "__ohne__" ? null : x.wert
+                        ),
+                      }}
+                    />
+                    {x.text} ({x.n})
+                  </button>
+                );
+              })}
+            {bereichFilter && (
+              <button
+                type="button"
+                className="ml-1 text-neutral-600 underline"
+                onClick={() => setBereichFilter(null)}
+              >
+                alle zeigen
+              </button>
+            )}
+          </div>
           {gruppen.map((g) => {
             const zu = eingeklappt.has(g.key);
             const anreisen = [
@@ -1741,16 +1815,21 @@ export default function PersonalplanungPage() {
                   return (
                     <Fragment key={k.id}>
                     <tr
-                      className={
-                        k.reserve
-                          ? "opacity-60"
-                          : k.platzhalter
-                            ? "bg-sand/60"
-                            : undefined
+                      className={k.reserve ? "opacity-60" : undefined}
+                      style={
+                        k.einsatzbereich
+                          ? {
+                              backgroundColor: `${bereichFarbe(einsatzbereiche, k.einsatzbereich)}1f`,
+                            }
+                          : undefined
                       }
                     >
                       {canEdit && (
-                        <td>
+                        <td
+                          style={{
+                            borderLeft: `5px solid ${k.einsatzbereich ? bereichFarbe(einsatzbereiche, k.einsatzbereich) : "transparent"}`,
+                          }}
+                        >
                           <input
                             type="checkbox"
                             title="Shift-Klick markiert einen ganzen Bereich"
@@ -1760,7 +1839,17 @@ export default function PersonalplanungPage() {
                           />
                         </td>
                       )}
-                      <td>{k.personal_nr ?? "—"}</td>
+                      <td
+                        style={
+                          canEdit
+                            ? undefined
+                            : {
+                                borderLeft: `5px solid ${k.einsatzbereich ? bereichFarbe(einsatzbereiche, k.einsatzbereich) : "transparent"}`,
+                              }
+                        }
+                      >
+                        {k.personal_nr ?? "—"}
+                      </td>
                       <td>
                         {k.platzhalter ? (
                           <span className="flex flex-wrap items-center gap-2">

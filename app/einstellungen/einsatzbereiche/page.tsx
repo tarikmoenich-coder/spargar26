@@ -12,7 +12,7 @@ import { useProfile } from "@/lib/useProfile";
 import EinstellungenTabs from "@/components/EinstellungenTabs";
 import type { Einsatzbereich } from "@/lib/types";
 
-const leer = { wert: "", reihenfolge: "0" };
+const leer = { wert: "", reihenfolge: "0", farbe: "#8a8984" };
 
 export default function EinsatzbereichePage() {
   const { profile } = useProfile();
@@ -41,7 +41,11 @@ export default function EinsatzbereichePage() {
 
   function edit(h: Einsatzbereich) {
     setEditWert(h.wert);
-    setForm({ wert: h.wert, reihenfolge: h.reihenfolge.toString() });
+    setForm({
+      wert: h.wert,
+      reihenfolge: h.reihenfolge.toString(),
+      farbe: h.farbe ?? "#8a8984",
+    });
   }
 
   function reset() {
@@ -56,6 +60,7 @@ export default function EinsatzbereichePage() {
     const { error } = await getSupabaseClient().from("einsatzbereiche").upsert({
       wert: form.wert,
       reihenfolge: Number(form.reihenfolge) || 0,
+      farbe: form.farbe,
     });
     setSaving(false);
     if (error) {
@@ -88,7 +93,8 @@ export default function EinsatzbereichePage() {
         <p className="text-sm text-neutral-500">
           Grobe Einsatzbereiche für die Personalplanung (geplanter Bereich je
           Person, Übersicht je Herkunft). Unabhängig von den Arbeitsgruppen
-          der Stundenerfassung. Wird ein Bereich entfernt, wird er bei
+          der Stundenerfassung. Die Farbe färbt die Personen in der
+          Planungsliste und im Anreise-Zeitstrahl. Wird ein Bereich entfernt, wird er bei
           den zugeordneten Personen geleert.
         </p>
       </div>
@@ -111,6 +117,14 @@ export default function EinsatzbereichePage() {
             value={form.reihenfolge}
             onChange={(e) => setForm({ ...form, reihenfolge: e.target.value })}
           />
+          <label className="flex items-center gap-2 text-sm text-neutral-600">
+            Farbe
+            <input
+              type="color"
+              value={form.farbe}
+              onChange={(e) => setForm({ ...form, farbe: e.target.value })}
+            />
+          </label>
           <div className="col-span-full flex items-center gap-2">
             <button type="submit" className="btn" disabled={saving}>
               {editWert ? "Speichern" : "Anlegen"}
@@ -132,6 +146,7 @@ export default function EinsatzbereichePage() {
               <tr>
                 <th>Einsatzbereich</th>
                 <th>Reihenfolge</th>
+                <th>Farbe</th>
                 {isAdmin && <th></th>}
               </tr>
             </thead>
@@ -140,6 +155,12 @@ export default function EinsatzbereichePage() {
                 <tr key={h.wert}>
                   <td>{h.wert}</td>
                   <td>{h.reihenfolge}</td>
+                  <td>
+                    <span
+                      className="inline-block h-4 w-8 rounded"
+                      style={{ background: h.farbe ?? "#8a8984" }}
+                    />
+                  </td>
                   {isAdmin && (
                     <td>
                       <div className="flex gap-1">
