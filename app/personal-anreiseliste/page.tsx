@@ -101,8 +101,8 @@ export default function AnreiselistePage() {
         .order("saison_jahr", { ascending: false }),
       supabase
         .from("season_bonuses")
-        .select("employee_id, bus_hin")
-        .eq("saison_jahr", CURRENT_YEAR),
+        .select("employee_id, saison_jahr, bus_hin")
+        .in("saison_jahr", [CURRENT_YEAR - 1, CURRENT_YEAR, CURRENT_YEAR + 1]),
     ]);
     const kandidatenListe = (kData as PersonalKandidat[]) ?? [];
     setKandidaten(kandidatenListe);
@@ -115,9 +115,10 @@ export default function AnreiselistePage() {
     setSaetze((vData as VerpflegungsSatz[]) ?? []);
     const busMap: Record<string, number> = {};
     (
-      (bData as { employee_id: string; bus_hin: number }[]) ?? []
+      (bData as { employee_id: string; saison_jahr: number; bus_hin: number }[]) ??
+      []
     ).forEach((row) => {
-      busMap[row.employee_id] = row.bus_hin;
+      busMap[`${row.employee_id}|${row.saison_jahr}`] = row.bus_hin;
     });
     // Lokale Eingabefelder nur befüllen, wenn noch keine vorhanden sind -
     // sonst würde ein gerade eingetippter, noch ungespeicherter Wert beim
@@ -138,8 +139,14 @@ export default function AnreiselistePage() {
       const next = { ...prev };
       kandidatenListe.forEach((k) => {
         if (next[k.id] === undefined) {
+          // Gleiches Jahr wie kandidat_buskosten_setzen: Jahr der geplanten
+          // Ankunft, sonst das laufende (vorher fest das laufende Jahr -
+          // Buskosten für 2027 erschienen dadurch als leer).
+          const busJahr = k.geplante_ankunft
+            ? Number(k.geplante_ankunft.slice(0, 4))
+            : CURRENT_YEAR;
           const bestehend = k.aktivierter_employee_id
-            ? busMap[k.aktivierter_employee_id]
+            ? busMap[`${k.aktivierter_employee_id}|${busJahr}`]
             : undefined;
           next[k.id] = bestehend !== undefined ? bestehend.toString() : "";
         }
@@ -355,9 +362,10 @@ export default function AnreiselistePage() {
       ? employees.find((e) => e.id === k.verknuepfter_employee_id) ?? null
       : null;
     const f = vertragsfelder[k.id];
-    // Ab der Anreise gilt für alle Sätze das aktuelle Jahr (Nutzer-Vorgabe
-    // 2026-09-19) - nicht der neueste Eintrag und nicht das Vertragsjahr.
-    const verpflegungssatz = satzFuerJahr(saetze, CURRENT_YEAR);
+    // Tagessätze der Saison des Kandidaten (saison_jahr, seit 2026-11-21) -
+    // vorher das Kalenderjahr, wodurch Verträge für 2027 noch die Sätze 2026
+    // bekamen (Nutzer-Meldung 2026-11-21).
+    const verpflegungssatz = satzFuerJahr(saetze, k.saison_jahr);
     const gemeinsam = {
       Name: k.name,
       Vorname: k.vorname,

@@ -205,20 +205,31 @@ export default function PersonalplanungPage() {
   }, [employees, kandidaten]);
 
   // Vorbelegt den Stundenlohn für NEUE (nicht verknüpfte) Kandidaten mit dem
-  // Mindestlohn des LAUFENDEN Jahres (nicht dem neuesten Eintrag - sonst gälte
-  // schon der Satz des Folgejahres, sobald der angelegt ist). Nur ein
-  // Vorschlag: bei "Anreise vorbereiten" gilt für alle Sätze das dann
-  // aktuelle Jahr (siehe anreiseVorbereiten). Bleibt frei änderbar; läuft
-  // auch nach jedem load() erneut (Formular-Reset).
+  // Mindestlohn der GEWÄHLTEN Saison (Nutzer-Meldung 2026-11-21: bei der
+  // Planung für 2027 galt sonst noch der Satz 2026). Ein noch unveränderter
+  // Standard-Mindestlohn im Formular folgt beim Saisonwechsel mit; ein
+  // bewusst abweichender Lohn bleibt stehen.
   const heuteJahr = new Date().getFullYear();
-  const lohnSatz = satzFuerJahr(saetze, heuteJahr);
+  const lohnSatz = satzFuerJahr(saetze, saisonJahr);
+  const istStandardLohn = (lohn: number | null) =>
+    lohn === null ||
+    saetze.some(
+      (sz) => sz.mindestlohn != null && Number(sz.mindestlohn) === Number(lohn)
+    );
+  const mindestlohnFuer = (jahr: number): number | null => {
+    const m = satzFuerJahr(saetze, jahr)?.mindestlohn;
+    return m != null ? Number(m) : null;
+  };
   useEffect(() => {
     if (verknuepfterId) return;
-    if (form.stundenlohn !== "") return;
     if (lohnSatz?.mindestlohn == null) return;
-    setForm((f) => ({ ...f, stundenlohn: String(lohnSatz.mindestlohn) }));
+    setForm((f) =>
+      f.stundenlohn === "" || istStandardLohn(Number(f.stundenlohn))
+        ? { ...f, stundenlohn: String(lohnSatz.mindestlohn) }
+        : f
+    );
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [saetze]);
+  }, [saetze, saisonJahr]);
 
   function naechsteFreieUebernehmen() {
     const frei = naechsteFreieNummer(belegteNummern, Number(naechsteKreis));
@@ -556,7 +567,7 @@ export default function PersonalplanungPage() {
     }
     if (
       !window.confirm(
-        `${bereit.length} Kandidat(en) jetzt aktivieren${uebersprungen > 0 ? ` (${uebersprungen} Platzhalter/Reserve werden übersprungen)` : ""} und in die Anreiseliste verschieben?\n\nAb jetzt gilt für alle Sätze das aktuelle Jahr ${heuteJahr}: Stundenlohn (sofern nicht individuell abweichend) und Tagessätze Wohnen/Verpflegung.`
+        `${bereit.length} Kandidat(en) jetzt aktivieren${uebersprungen > 0 ? ` (${uebersprungen} Platzhalter/Reserve werden übersprungen)` : ""} und in die Anreiseliste verschieben?\n\nEs gelten die Sätze der jeweiligen Saison (${[...new Set(bereit.map((id) => kandidaten.find((x) => x.id === id)?.saison_jahr ?? saisonJahr))].join(", ")}): Mindestlohn (sofern nicht individuell abweichend) und Tagessätze Wohnen/Verpflegung.`
       )
     ) {
       return;
@@ -606,20 +617,13 @@ export default function PersonalplanungPage() {
     const platziertProWe = new Map<number, number>();
     const ohnePlatz = new Map<string, number>();
 
-    // Ab der Anreise gilt für ALLE Sätze das aktuelle Jahr (Nutzer-Vorgabe
-    // 2026-09-19). Der bei der Planung eingetragene Stundenlohn ist nur
-    // vorläufig: entspricht er einem Standard-Mindestlohn (irgendeines Jahres,
-    // auch leer), wird er auf den des aktuellen Jahres gesetzt. Ein bewusst
-    // abweichender Lohn (z.B. Vorarbeiter) bleibt unangetastet.
-    const mindestHeute =
-      satzFuerJahr(saetze, heuteJahr)?.mindestlohn != null
-        ? Number(satzFuerJahr(saetze, heuteJahr)!.mindestlohn)
-        : null;
-    const istStandardLohn = (lohn: number | null) =>
-      lohn === null ||
-      saetze.some(
-        (sz) => sz.mindestlohn != null && Number(sz.mindestlohn) === Number(lohn)
-      );
+    // Ab der Anreise gelten die Sätze der SAISON des Kandidaten (seit
+    // 2026-11-21 saison_jahr; vorher das Kalenderjahr, wodurch bei der
+    // Planung für 2027 noch der Mindestlohn 2026 griff). Der bei der Planung
+    // eingetragene Stundenlohn ist nur vorläufig: entspricht er einem
+    // Standard-Mindestlohn (irgendeines Jahres, auch leer), wird er auf den
+    // der Saison gesetzt. Ein bewusst abweichender Lohn (z.B. Vorarbeiter)
+    // bleibt unangetastet.
 
     for (const id of bereit) {
       const k = kandidaten.find((x) => x.id === id) as
@@ -627,9 +631,10 @@ export default function PersonalplanungPage() {
         | undefined;
       if (!k || k.status !== "geplant") continue;
       let employeeId: string | null = null;
+      const mindestSaison = mindestlohnFuer(k.saison_jahr);
       const lohn =
-        mindestHeute !== null && istStandardLohn(k.stundenlohn)
-          ? mindestHeute
+        mindestSaison !== null && istStandardLohn(k.stundenlohn)
+          ? mindestSaison
           : k.stundenlohn;
       if (k.verknuepfter_employee_id) {
         const { error } = await supabase
@@ -939,6 +944,37 @@ export default function PersonalplanungPage() {
       ? geplante.filter((k) => k.platzhalter && k.herkunft === form.herkunft)
           .length
       : 0;
+
+  // Geplante Personen dieser Saison mit dem Standard-Mindestlohn eines
+  // ANDEREN Jahres (z.B. 2027 geplant, aber noch mit dem Satz 2026 angelegt).
+  const mindestlohnSaison = mindestlohnFuer(saisonJahr);
+  const veralteterLohn =
+    mindestlohnSaison === null
+      ? []
+      : geplante.filter(
+          (k) =>
+            k.stundenlohn !== null &&
+            istStandardLohn(k.stundenlohn) &&
+            Number(k.stundenlohn) !== mindestlohnSaison
+        );
+
+  async function mindestlohnSaisonUebernehmen() {
+    if (mindestlohnSaison === null || veralteterLohn.length === 0) return;
+    setSammelLaeuft(true);
+    setError(null);
+    const supabase = getSupabaseClient();
+    const fehler: string[] = [];
+    for (const block of inBloecken(veralteterLohn.map((k) => k.id))) {
+      const { error } = await supabase
+        .from("personal_kandidaten")
+        .update({ stundenlohn: mindestlohnSaison })
+        .in("id", block);
+      if (error) fehler.push(error.message);
+    }
+    setSammelLaeuft(false);
+    if (fehler.length > 0) setError([...new Set(fehler)].join(" · "));
+    load();
+  }
 
   function aehnlicheZu(k: PersonalKandidat) {
     if (k.verknuepfter_employee_id || k.platzhalter || !k.name || !k.vorname) {
@@ -1351,8 +1387,8 @@ export default function PersonalplanungPage() {
               Stundenlohn € (für Arbeitsvertrag)
               {lohnSatz?.mindestlohn != null && (
                 <span className="text-[10px] text-neutral-400">
-                  Vorschlag: Mindestlohn {lohnSatz.saison_jahr} (bei Anreise gilt
-                  das dann aktuelle Jahr)
+                  Vorschlag: Mindestlohn {lohnSatz.saison_jahr} (Saison{" "}
+                  {saisonJahr})
                 </span>
               )}
               <input
@@ -1544,6 +1580,17 @@ export default function PersonalplanungPage() {
                 }
               >
                 Anreise für ALLE setzen
+              </button>
+            )}
+            {canEdit && veralteterLohn.length > 0 && mindestlohnSaison !== null && (
+              <button
+                type="button"
+                className="btn-secondary text-xs"
+                disabled={sammelLaeuft}
+                title="Personen dieser Saison, die noch den Mindestlohn eines anderen Jahres stehen haben (bewusst abweichende Löhne bleiben unberührt)"
+                onClick={mindestlohnSaisonUebernehmen}
+              >
+                Mindestlohn {saisonJahr} übernehmen ({veralteterLohn.length})
               </button>
             )}
           </div>
