@@ -8,7 +8,7 @@
 //     Ankunft + 104 Tage) die Woche berührt.
 //   * Anreisen: Personen, die in der Woche ankommen.
 // Gezählt werden nur zugesagte Personen (keine Reserve, keine Stornos).
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { formatDatumDE } from "@/lib/format";
 import { plusTage } from "@/lib/planungTermine";
 import {
@@ -64,6 +64,19 @@ export default function PersonalplanungZeitstrahl({
   const [gewaehlteWoche, setGewaehlteWoche] = useState<string | null>(null);
   const [hoverWoche, setHoverWoche] = useState<string | null>(null);
   const [alsTabelle, setAlsTabelle] = useState(false);
+  // Verfügbare Breite messen, damit die Grafik den Platz ausfüllt statt fest
+  // 30 px je Woche zu nehmen (Nutzer-Meldung 2026-11-21: "sehr klein").
+  const rahmenRef = useRef<HTMLDivElement>(null);
+  const [rahmenBreite, setRahmenBreite] = useState(0);
+  useEffect(() => {
+    const el = rahmenRef.current;
+    if (!el) return;
+    const messen = () => setRahmenBreite(el.clientWidth);
+    messen();
+    const beobachter = new ResizeObserver(messen);
+    beobachter.observe(el);
+    return () => beobachter.disconnect();
+  }, [alsTabelle, kandidaten.length]);
 
   const herkunftListe = useMemo(() => herkuenfte.map((h) => h.wert), [herkuenfte]);
 
@@ -153,12 +166,19 @@ export default function PersonalplanungZeitstrahl({
   const rechts = 12;
   const oben = 16;
   const unten = 40;
-  const hoehe = 280;
-  const spalte = 30;
-  const breite = links + rechts + Math.max(wochen.length, 8) * spalte;
+  const hoehe = 420;
+  // Spaltenbreite aus der verfügbaren Breite (mind. 30 px, dann scrollt der
+  // Rahmen waagerecht; höchstens 90 px, damit wenige Wochen nicht zu
+  // klobigen Blöcken werden).
+  const anzahlSpalten = Math.max(wochen.length, 1);
+  const spalte = Math.min(
+    90,
+    Math.max(30, (rahmenBreite - links - rechts) / anzahlSpalten)
+  );
+  const breite = links + rechts + anzahlSpalten * spalte;
   const plotH = hoehe - oben - unten;
   const y = (v: number) => oben + plotH - (v / yMax) * plotH;
-  const balkenB = spalte - 8;
+  const balkenB = Math.min(spalte - 8, spalte * 0.7);
 
   const farbe = (h: string) => herkunftFarbe(herkunftListe, h === OHNE ? null : h);
   const label = (h: string) => (h === OHNE ? "ohne Herkunft" : h);
@@ -274,7 +294,10 @@ export default function PersonalplanungZeitstrahl({
           </table>
         </div>
       ) : (
-        <div className="relative overflow-x-auto rounded border border-linie bg-white">
+        <div
+          ref={rahmenRef}
+          className="relative overflow-x-auto rounded border border-linie bg-white"
+        >
           <svg
             viewBox={`0 0 ${breite} ${hoehe}`}
             width={breite}
@@ -357,7 +380,7 @@ export default function PersonalplanungZeitstrahl({
               });
               const aktiv = aktiveWoche === w;
               const kw = kalenderwoche(w);
-              const zeigeLabel = wochen.length <= 26 || wi % 2 === 0;
+              const zeigeLabel = spalte >= 40 || wi % 2 === 0;
               return (
                 <g
                   key={w}
@@ -375,7 +398,7 @@ export default function PersonalplanungZeitstrahl({
                     fillOpacity={aktiv ? 0.06 : 0}
                   />
                   {segmente}
-                  {basis > 0 && (aktiv || wochen.length <= 20) && (
+                  {basis > 0 && (aktiv || spalte >= 34) && (
                     <text
                       x={x + balkenB / 2}
                       y={y(basis) - 4}
