@@ -21,7 +21,7 @@ import {
   FAMILIENSTAND_LABELS,
   type Employee,
   type Familienstand,
-  type PersonalKandidat,
+  type BenannterKandidat as PersonalKandidat,
   type PersonalKandidatChecklisteRow,
   type VerpflegungsSatz,
 } from "@/lib/types";

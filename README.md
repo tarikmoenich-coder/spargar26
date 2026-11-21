@@ -160,6 +160,23 @@ Enthalten:
   Personen werden reaktiviert - Historie bleibt an einer ID, neue Personen
   mit ihrer reservierten Nummer angelegt) und er wandert weiter in die
   Anreiseliste
+  **Stand 2026-11-21 (Soll, Platzhalter, Anreise-Zeitstrahl, Nutzer-
+  Vorgabe):** Saison-Auswahl und drei Ansichten. (1) Namensliste: je Person
+  Saisonjahr, grober Einsatzbereich (Einstellungen → Einsatzbereiche) und
+  "Reserve" (mehr Namen als Soll - zählt nirgends mit); Sammelaktionen für
+  markierte Zeilen (Shift-Klick = Bereich): Anreise setzen, Bereich setzen,
+  Reserve/Zusagen, Platzhalter entfernen. (2) Soll & Übersicht: Soll je
+  Herkunft (= `unterkunft_herkunft_plan.soll_anzahl`, dieselbe Zahl wie in
+  der Herkunfts-Bettenplanung), Ist = Namen + Platzhalter ohne Reserve,
+  Führerschein-Ziel pro 5 Personen eine mit B (aufgerundet, B/BE/C/CE),
+  Platzhalter bis zum Soll anlegen, Verteilung Herkunft × Einsatzbereich.
+  (3) Anreise-Zeitstrahl: gestapelte Säulen je KW und Herkunft, Anwesend
+  (Ankunft bis Arbeitsende bzw. +104 Tage) oder Anreisen, Platzhalter
+  schraffiert. Platzhalter = `personal_kandidaten.platzhalter` ohne Name/
+  Personalnummer (nur Status 'geplant'); "Namen eintragen" bzw. eine neue
+  Person derselben Herkunft befüllt einen Platzhalter, Anreise/Bereich
+  bleiben erhalten.
+  Migration: `migration_2026-11-21_personalplanung_soll_anreise.sql`
 - Eigene Unterseite "Personal → Anreiseliste" (nur admin/hr): Personen aus
   der Planung, gruppiert nach geplantem Ankunftsdatum ("Anreisegruppe").
   Vor dem Drucken müssen Vertragsbeginn/-ende erfasst werden. Danach können

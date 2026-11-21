@@ -334,17 +334,36 @@ on conflict (id) do nothing;
 --     wieder frei, weil stornierte Kandidaten beim "belegt"-Zählen nicht
 --     mitzählen.
 -- ---------------------------------------------------------------------------
+-- Einsatzbereiche für die Personalplanung (Migration 2026-11-21), Pflege
+-- unter Einstellungen → Einsatzbereiche. RLS: lesen alle angemeldeten,
+-- schreiben admin/hr (siehe Migration).
+create table einsatzbereiche (
+  wert text primary key,
+  reihenfolge int not null default 0,
+  created_at timestamptz not null default now()
+);
+
 create table personal_kandidaten (
   id uuid primary key default gen_random_uuid(),
   -- Eindeutig nur unter nicht stornierten Kandidaten (partieller Index
   -- weiter unten) - sonst blockierte die Nummer eines stornierten
   -- Kandidaten ihre Wiederverwendung (Migration 2026-09-19).
-  personal_nr text not null,
-  name text not null,
-  vorname text not null,
+  -- Bei Platzhaltern (platzhalter = true) leer, siehe Check-Constraint
+  -- personal_kandidaten_platzhalter_check (Migration 2026-11-21).
+  personal_nr text,
+  name text,
+  vorname text,
   geburtsdatum date,
   nationalitaet text,
   herkunft text references herkuenfte (wert)
+    on update cascade on delete set null,
+  -- Personalplanung (Migration 2026-11-21): Saisonjahr, namenloser
+  -- Platzhalter (solange der Vermittler nur Zahlen meldet), Reserve (mehr
+  -- Namen als Soll - zählt nicht ins Ist) und grober Einsatzbereich.
+  saison_jahr int not null,
+  platzhalter boolean not null default false,
+  reserve boolean not null default false,
+  einsatzbereich text references einsatzbereiche (wert)
     on update cascade on delete set null,
   -- Falls diese Person schon einmal hier war (eigene, ggf. inaktive
   -- employees-Zeile): Verknüpfung macht die Schwarze-Liste-Prüfung möglich
@@ -377,6 +396,12 @@ create table personal_kandidaten (
   -- 'storniert': Absage vor der Anreise, Personalnummer wird wieder frei.
   status text not null default 'geplant'
     check (status in ('geplant', 'anreiseliste', 'storniert')),
+  constraint personal_kandidaten_platzhalter_check check (
+    case
+      when platzhalter then status = 'geplant'
+      else personal_nr is not null and name is not null and vorname is not null
+    end
+  ),
   storniert_grund text,
   notiz text,
   -- Bei Aktivierung ("Anreise vorbereiten") befüllt: welcher employees-
@@ -6749,13 +6774,13 @@ select
   coalesce(bl.eingezogen, 0)::int as eingezogen
 from unterkunft_herkunft_plan p
 left join (
-  select
-    herkunft,
-    coalesce(extract(year from geplante_ankunft)::int,
-             extract(year from current_date)::int) as saison_jahr,
-    count(*) as erfasst
+  -- "erfasst" = zugesagt: Namen + Platzhalter, ohne Reserve
+  -- (Migration 2026-11-21).
+  select herkunft, saison_jahr, count(*) as erfasst
   from personal_kandidaten
-  where status in ('geplant', 'anreiseliste') and herkunft is not null
+  where status in ('geplant', 'anreiseliste')
+    and not reserve
+    and herkunft is not null
   group by 1, 2
 ) k on k.herkunft = p.herkunft and k.saison_jahr = p.saison_jahr
 left join (

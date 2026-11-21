@@ -1,0 +1,499 @@
+"use client";
+
+// Personalplanung → Zeitstrahl (Nutzer-Vorgabe 2026-11-21): wann wie viele
+// Leute von welcher Herkunft da sind. Gestapelte Säulen je Kalenderwoche,
+// eine Farbe je Herkunft; Platzhalter hell + schraffiert, damit sichtbar
+// bleibt, wie viel davon noch unsicher ist. Zwei Ansichten:
+//   * Anwesend: Personen, deren Zeitraum (Ankunft bis Arbeitsende, sonst
+//     Ankunft + 104 Tage) die Woche berührt.
+//   * Anreisen: Personen, die in der Woche ankommen.
+// Gezählt werden nur zugesagte Personen (keine Reserve, keine Stornos).
+import { useMemo, useState } from "react";
+import { formatDatumDE } from "@/lib/format";
+import { plusTage } from "@/lib/planungTermine";
+import {
+  anwesenheit,
+  herkunftFarbe,
+  istZugesagt,
+  kandidatAnzeige,
+} from "@/lib/personalplanung";
+import type { Herkunft, PersonalKandidat } from "@/lib/types";
+
+interface Props {
+  saisonJahr: number;
+  herkuenfte: Herkunft[];
+  // Alle nicht stornierten Kandidaten DIESES Saisonjahres.
+  kandidaten: PersonalKandidat[];
+  sollGesamt: number;
+}
+
+type Modus = "anwesend" | "anreisen";
+
+const OHNE = "__ohne__";
+
+function montagVon(iso: string): string {
+  const d = new Date(`${iso}T00:00:00Z`);
+  const tag = (d.getUTCDay() + 6) % 7; // Mo = 0
+  d.setUTCDate(d.getUTCDate() - tag);
+  return d.toISOString().slice(0, 10);
+}
+
+function kalenderwoche(iso: string): number {
+  // ISO-Kalenderwoche: Woche mit dem Donnerstag entscheidet über das Jahr.
+  const d = new Date(`${iso}T00:00:00Z`);
+  d.setUTCDate(d.getUTCDate() + 3 - ((d.getUTCDay() + 6) % 7));
+  const jahresAnfang = Date.UTC(d.getUTCFullYear(), 0, 1);
+  return Math.ceil(((d.getTime() - jahresAnfang) / 86400000 + 1) / 7);
+}
+
+// "schöne" Skalenschritte für die y-Achse
+function schritt(max: number): number {
+  const roh = max / 4;
+  const pot = Math.pow(10, Math.floor(Math.log10(Math.max(roh, 1))));
+  for (const f of [1, 2, 5, 10]) if (f * pot >= roh) return f * pot;
+  return 10 * pot;
+}
+
+export default function PersonalplanungZeitstrahl({
+  saisonJahr,
+  herkuenfte,
+  kandidaten,
+  sollGesamt,
+}: Props) {
+  const [modus, setModus] = useState<Modus>("anwesend");
+  const [gewaehlteWoche, setGewaehlteWoche] = useState<string | null>(null);
+  const [hoverWoche, setHoverWoche] = useState<string | null>(null);
+  const [alsTabelle, setAlsTabelle] = useState(false);
+
+  const herkunftListe = useMemo(() => herkuenfte.map((h) => h.wert), [herkuenfte]);
+
+  const personen = useMemo(
+    () =>
+      kandidaten
+        .filter(istZugesagt)
+        .map((k) => ({ k, zeit: anwesenheit(k) })),
+    [kandidaten]
+  );
+  const terminiert = personen.filter(
+    (p): p is { k: PersonalKandidat; zeit: { von: string; bis: string } } =>
+      p.zeit !== null
+  );
+  const ohneDatum = personen.length - terminiert.length;
+
+  // Herkünfte in fester Reihenfolge (nur die vorkommenden) - bestimmt die
+  // Stapel-Reihenfolge und die Legende.
+  const stapelHerkuenfte = useMemo(() => {
+    const vorhanden = new Set(terminiert.map((p) => p.k.herkunft ?? OHNE));
+    const liste = herkunftListe.filter((h) => vorhanden.has(h));
+    if (vorhanden.has(OHNE)) liste.push(OHNE);
+    return liste;
+  }, [terminiert, herkunftListe]);
+
+  const wochen = useMemo(() => {
+    if (terminiert.length === 0) return [] as string[];
+    let start = montagVon(terminiert.reduce((m, p) => (p.zeit.von < m ? p.zeit.von : m), terminiert[0].zeit.von));
+    const ende =
+      modus === "anwesend"
+        ? terminiert.reduce((m, p) => (p.zeit.bis > m ? p.zeit.bis : m), terminiert[0].zeit.bis)
+        : terminiert.reduce((m, p) => (p.zeit.von > m ? p.zeit.von : m), terminiert[0].zeit.von);
+    const liste: string[] = [];
+    while (start <= ende && liste.length < 80) {
+      liste.push(start);
+      start = plusTage(start, 7);
+    }
+    return liste;
+  }, [terminiert, modus]);
+
+  // woche -> herkunft -> { namen, platzhalter, personen }
+  const daten = useMemo(() => {
+    const map = new Map<
+      string,
+      Map<string, { namen: number; platzhalter: number; liste: PersonalKandidat[] }>
+    >();
+    for (const w of wochen) {
+      const sonntag = plusTage(w, 6);
+      const proHerkunft = new Map<
+        string,
+        { namen: number; platzhalter: number; liste: PersonalKandidat[] }
+      >();
+      for (const p of terminiert) {
+        const trifft =
+          modus === "anwesend"
+            ? p.zeit.von <= sonntag && p.zeit.bis >= w
+            : p.zeit.von >= w && p.zeit.von <= sonntag;
+        if (!trifft) continue;
+        const h = p.k.herkunft ?? OHNE;
+        const e = proHerkunft.get(h) ?? { namen: 0, platzhalter: 0, liste: [] };
+        if (p.k.platzhalter) e.platzhalter += 1;
+        else e.namen += 1;
+        e.liste.push(p.k);
+        proHerkunft.set(h, e);
+      }
+      map.set(w, proHerkunft);
+    }
+    return map;
+  }, [wochen, terminiert, modus]);
+
+  const summeWoche = (w: string) =>
+    [...(daten.get(w)?.values() ?? [])].reduce(
+      (s, e) => s + e.namen + e.platzhalter,
+      0
+    );
+  const maxWert = Math.max(
+    1,
+    ...wochen.map(summeWoche),
+    modus === "anwesend" ? sollGesamt : 0
+  );
+  // etwas Luft nach oben, damit Soll-Linie und Summen nicht am Rand kleben
+  const yStep = schritt(maxWert * 1.1);
+  const yMax = Math.ceil((maxWert * 1.1) / yStep) * yStep;
+
+  // Geometrie
+  const links = 40;
+  const rechts = 12;
+  const oben = 16;
+  const unten = 40;
+  const hoehe = 280;
+  const spalte = 30;
+  const breite = links + rechts + Math.max(wochen.length, 8) * spalte;
+  const plotH = hoehe - oben - unten;
+  const y = (v: number) => oben + plotH - (v / yMax) * plotH;
+  const balkenB = spalte - 8;
+
+  const farbe = (h: string) => herkunftFarbe(herkunftListe, h === OHNE ? null : h);
+  const label = (h: string) => (h === OHNE ? "ohne Herkunft" : h);
+
+  const aktiveWoche = gewaehlteWoche ?? hoverWoche;
+
+  if (personen.length === 0) {
+    return (
+      <p className="text-sm text-neutral-500">
+        Noch keine zugesagten Personen für {saisonJahr}.
+      </p>
+    );
+  }
+
+  return (
+    <div className="flex flex-col gap-3">
+      <div className="flex flex-wrap items-center gap-3">
+        <div className="flex overflow-hidden rounded border border-linie">
+          {(
+            [
+              ["anwesend", "Anwesend je Woche"],
+              ["anreisen", "Anreisen je Woche"],
+            ] as const
+          ).map(([m, text]) => (
+            <button
+              key={m}
+              type="button"
+              className={`px-3 py-1 text-sm ${modus === m ? "bg-emerald-700 text-white" : "bg-white text-neutral-700"}`}
+              onClick={() => {
+                setModus(m);
+                setGewaehlteWoche(null);
+              }}
+            >
+              {text}
+            </button>
+          ))}
+        </div>
+        <label className="flex items-center gap-1 text-sm text-neutral-600">
+          <input
+            type="checkbox"
+            checked={alsTabelle}
+            onChange={(e) => setAlsTabelle(e.target.checked)}
+          />
+          als Tabelle
+        </label>
+        {ohneDatum > 0 && (
+          <span className="text-sm text-amber-700">
+            ⚠ noch nicht terminiert: {ohneDatum} (fehlen im Zeitstrahl)
+          </span>
+        )}
+      </div>
+
+      {/* Legende */}
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-neutral-700">
+        {stapelHerkuenfte.map((h) => (
+          <span key={h} className="flex items-center gap-1">
+            <span
+              className="inline-block h-3 w-3 rounded-sm"
+              style={{ background: farbe(h) }}
+            />
+            {label(h)}
+          </span>
+        ))}
+        <span className="flex items-center gap-1 text-neutral-500">
+          <svg width="12" height="12" aria-hidden="true">
+            <rect width="12" height="12" rx="2" fill="#8a8984" opacity="0.3" />
+            <path d="M0 12 L12 0 M-3 3 L3 -3 M9 15 L15 9" stroke="#8a8984" strokeWidth="1.5" />
+          </svg>
+          hell/schraffiert = Platzhalter
+        </span>
+        {modus === "anwesend" && sollGesamt > 0 && (
+          <span className="flex items-center gap-1 text-neutral-500">
+            <svg width="16" height="12" aria-hidden="true">
+              <line x1="0" y1="6" x2="16" y2="6" stroke="currentColor" strokeWidth="1.5" strokeDasharray="4 3" />
+            </svg>
+            Soll gesamt ({sollGesamt})
+          </span>
+        )}
+      </div>
+
+      {alsTabelle ? (
+        <div className="overflow-x-auto">
+          <table className="text-sm">
+            <thead>
+              <tr>
+                <th>KW</th>
+                <th>ab</th>
+                {stapelHerkuenfte.map((h) => (
+                  <th key={h}>{label(h)}</th>
+                ))}
+                <th>Summe</th>
+                <th>davon Platzhalter</th>
+              </tr>
+            </thead>
+            <tbody>
+              {wochen.map((w) => {
+                const d = daten.get(w);
+                const ph = [...(d?.values() ?? [])].reduce((s, e) => s + e.platzhalter, 0);
+                return (
+                  <tr key={w}>
+                    <td>{kalenderwoche(w)}</td>
+                    <td>{formatDatumDE(w)}</td>
+                    {stapelHerkuenfte.map((h) => {
+                      const e = d?.get(h);
+                      return <td key={h}>{e ? e.namen + e.platzhalter : "—"}</td>;
+                    })}
+                    <td className="font-medium">{summeWoche(w)}</td>
+                    <td>{ph || "—"}</td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      ) : (
+        <div className="relative overflow-x-auto rounded border border-linie bg-white">
+          <svg
+            viewBox={`0 0 ${breite} ${hoehe}`}
+            width={breite}
+            height={hoehe}
+            role="img"
+            aria-label={`${modus === "anwesend" ? "Anwesende" : "Anreisende"} Personen je Kalenderwoche, gestapelt nach Herkunft, Saison ${saisonJahr}`}
+            className="block text-neutral-700"
+            onMouseLeave={() => setHoverWoche(null)}
+          >
+            <defs>
+              {stapelHerkuenfte.map((h, i) => (
+                <pattern
+                  key={h}
+                  id={`pp-schraffur-${i}`}
+                  width="6"
+                  height="6"
+                  patternUnits="userSpaceOnUse"
+                  patternTransform="rotate(45)"
+                >
+                  <rect width="6" height="6" fill={farbe(h)} opacity="0.3" />
+                  <line x1="0" y1="0" x2="0" y2="6" stroke={farbe(h)} strokeWidth="2" />
+                </pattern>
+              ))}
+            </defs>
+
+            {/* Raster + y-Achse */}
+            {Array.from({ length: yMax / yStep + 1 }, (_, i) => i * yStep).map((v) => (
+              <g key={v}>
+                <line
+                  x1={links}
+                  x2={breite - rechts}
+                  y1={y(v)}
+                  y2={y(v)}
+                  stroke="currentColor"
+                  strokeOpacity={v === 0 ? 0.5 : 0.12}
+                />
+                <text
+                  x={links - 6}
+                  y={y(v) + 4}
+                  textAnchor="end"
+                  fontSize="11"
+                  fill="currentColor"
+                  fillOpacity="0.7"
+                >
+                  {v}
+                </text>
+              </g>
+            ))}
+
+            {/* Säulen */}
+            {wochen.map((w, wi) => {
+              const x = links + wi * spalte + (spalte - balkenB) / 2;
+              const d = daten.get(w);
+              let basis = 0;
+              const segmente: React.ReactNode[] = [];
+              stapelHerkuenfte.forEach((h, hi) => {
+                const e = d?.get(h);
+                if (!e) return;
+                for (const [teil, n] of [
+                  ["namen", e.namen],
+                  ["platzhalter", e.platzhalter],
+                ] as const) {
+                  if (n === 0) continue;
+                  const y1 = y(basis + n);
+                  const y0 = y(basis);
+                  const hgt = Math.max(1, y0 - y1 - 2); // 2px Fuge
+                  segmente.push(
+                    <rect
+                      key={`${h}-${teil}`}
+                      x={x}
+                      y={y1}
+                      width={balkenB}
+                      height={hgt}
+                      rx={2}
+                      fill={teil === "namen" ? farbe(h) : `url(#pp-schraffur-${hi})`}
+                    />
+                  );
+                  basis += n;
+                }
+              });
+              const aktiv = aktiveWoche === w;
+              const kw = kalenderwoche(w);
+              const zeigeLabel = wochen.length <= 26 || wi % 2 === 0;
+              return (
+                <g
+                  key={w}
+                  onMouseEnter={() => setHoverWoche(w)}
+                  onClick={() => setGewaehlteWoche(gewaehlteWoche === w ? null : w)}
+                  style={{ cursor: "pointer" }}
+                >
+                  {/* Trefferfläche größer als die Säule */}
+                  <rect
+                    x={links + wi * spalte}
+                    y={oben}
+                    width={spalte}
+                    height={plotH}
+                    fill="currentColor"
+                    fillOpacity={aktiv ? 0.06 : 0}
+                  />
+                  {segmente}
+                  {basis > 0 && (aktiv || wochen.length <= 20) && (
+                    <text
+                      x={x + balkenB / 2}
+                      y={y(basis) - 4}
+                      textAnchor="middle"
+                      fontSize="11"
+                      fill="currentColor"
+                    >
+                      {basis}
+                    </text>
+                  )}
+                  {zeigeLabel && (
+                    <>
+                      <text
+                        x={x + balkenB / 2}
+                        y={hoehe - unten + 14}
+                        textAnchor="middle"
+                        fontSize="11"
+                        fill="currentColor"
+                        fillOpacity="0.8"
+                      >
+                        KW{kw}
+                      </text>
+                      <text
+                        x={x + balkenB / 2}
+                        y={hoehe - unten + 27}
+                        textAnchor="middle"
+                        fontSize="10"
+                        fill="currentColor"
+                        fillOpacity="0.55"
+                      >
+                        {formatDatumDE(w).slice(0, 6)}
+                      </text>
+                    </>
+                  )}
+                </g>
+              );
+            })}
+
+            {/* Soll-Linie */}
+            {modus === "anwesend" && sollGesamt > 0 && (
+              <line
+                x1={links}
+                x2={breite - rechts}
+                y1={y(sollGesamt)}
+                y2={y(sollGesamt)}
+                stroke="currentColor"
+                strokeWidth="1.5"
+                strokeDasharray="4 3"
+                pointerEvents="none"
+              />
+            )}
+            {modus === "anwesend" && sollGesamt > 0 && (
+              <text
+                x={breite - rechts}
+                y={y(sollGesamt) - 5}
+                textAnchor="end"
+                fontSize="11"
+                fill="currentColor"
+                pointerEvents="none"
+              >
+                Soll gesamt {sollGesamt}
+              </text>
+            )}
+          </svg>
+        </div>
+      )}
+
+      {/* Detail zur gewählten / überfahrenen Woche */}
+      {aktiveWoche && !alsTabelle && (
+        <div className="rounded border border-linie bg-white p-3 text-sm">
+          <p className="mb-2 font-medium">
+            KW {kalenderwoche(aktiveWoche)} ({formatDatumDE(aktiveWoche)} –{" "}
+            {formatDatumDE(plusTage(aktiveWoche, 6))}):{" "}
+            {summeWoche(aktiveWoche)}{" "}
+            {modus === "anwesend" ? "anwesend" : "Anreisen"}
+            {!gewaehlteWoche && (
+              <span className="font-normal text-neutral-500">
+                {" "}
+                – klicken, um die Namen festzuhalten
+              </span>
+            )}
+          </p>
+          <div className="flex flex-col gap-1">
+            {stapelHerkuenfte.map((h) => {
+              const e = daten.get(aktiveWoche)?.get(h);
+              if (!e) return null;
+              return (
+                <div key={h}>
+                  <span className="inline-flex items-center gap-1 font-medium">
+                    <span
+                      className="inline-block h-3 w-3 rounded-sm"
+                      style={{ background: farbe(h) }}
+                    />
+                    {label(h)}: {e.namen + e.platzhalter}
+                  </span>
+                  {e.platzhalter > 0 && (
+                    <span className="text-neutral-500">
+                      {" "}
+                      (davon {e.platzhalter} Platzhalter)
+                    </span>
+                  )}
+                  {gewaehlteWoche && (
+                    <div className="ml-4 text-xs text-neutral-600">
+                      {e.liste
+                        .filter((k) => !k.platzhalter)
+                        .map(
+                          (k) =>
+                            `${kandidatAnzeige(k)}${modus === "anwesend" && k.geplante_ankunft ? ` (ab ${formatDatumDE(k.geplante_ankunft)})` : ""}`
+                        )
+                        .join(" · ") || "nur Platzhalter"}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}

@@ -21,13 +21,24 @@ import {
 } from "@/lib/personalAehnlich";
 import {
   FUEHRERSCHEIN_KATEGORIEN,
+  type BenannterKandidat,
+  type Einsatzbereich,
   type Employee,
   type EmployeeSaisonHistorieAgg,
   type Herkunft,
   type PersonalKandidat,
   type UnterkunftHerkunftKontingent,
+  type UnterkunftHerkunftPlan,
   type VerpflegungsSatz,
 } from "@/lib/types";
+import {
+  fuehrerscheinZiel,
+  hatFuehrerscheinB,
+  istZugesagt,
+  standardPlanungsJahr,
+} from "@/lib/personalplanung";
+import PersonalplanungSoll from "@/components/PersonalplanungSoll";
+import PersonalplanungZeitstrahl from "@/components/PersonalplanungZeitstrahl";
 import PersonalTabs from "@/components/PersonalTabs";
 import PageHeader from "@/components/PageHeader";
 import DokumentKameraAufnahme from "@/components/DokumentKameraAufnahme";
@@ -43,6 +54,7 @@ const emptyForm = {
   stundenlohn: "",
   geplante_ankunft: "",
   fuehrerschein: [] as string[],
+  einsatzbereich: "",
   notiz: "",
 };
 
@@ -96,6 +108,25 @@ export default function PersonalplanungPage() {
     notiz: string;
     fuehrerschein: string[];
   } | null>(null);
+  // Nutzer-Vorgabe 2026-11-21: Saisonjahr, Ansichten (Namensliste / Soll /
+  // Zeitstrahl), Platzhalter, Reserve, Einsatzbereich, Sammelaktionen.
+  const [saisonJahr, setSaisonJahr] = useState(standardPlanungsJahr());
+  const [ansicht, setAnsicht] = useState<"liste" | "soll" | "zeitstrahl">(
+    "liste"
+  );
+  const [einsatzbereiche, setEinsatzbereiche] = useState<Einsatzbereich[]>([]);
+  const [sollPlan, setSollPlan] = useState<UnterkunftHerkunftPlan[]>([]);
+  // Platzhalter, in den das Formular oben gerade den Namen einträgt.
+  const [platzhalterZielId, setPlatzhalterZielId] = useState<string | null>(
+    null
+  );
+  // Neue Person ersetzt automatisch einen Platzhalter derselben Herkunft.
+  const [platzhalterErsetzen, setPlatzhalterErsetzen] = useState(true);
+  // Für Shift-Klick (Bereich markieren).
+  const [letzteAuswahl, setLetzteAuswahl] = useState<string | null>(null);
+  const [sammelDatum, setSammelDatum] = useState("");
+  const [sammelBereich, setSammelBereich] = useState("");
+  const [sammelLaeuft, setSammelLaeuft] = useState(false);
 
   async function load() {
     setLoading(true);
@@ -106,6 +137,8 @@ export default function PersonalplanungPage() {
       { data: hData },
       { data: vData },
       { data: shData },
+      { data: ebData },
+      { data: spData },
     ] = await Promise.all([
       supabase
         .from("personal_kandidaten")
@@ -131,7 +164,11 @@ export default function PersonalplanungPage() {
         .select("*")
         .order("saison_jahr", { ascending: false }),
       supabase.from("employee_saison_historie_agg").select("*"),
+      supabase.from("einsatzbereiche").select("*").order("reihenfolge"),
+      supabase.from("unterkunft_herkunft_plan").select("*"),
     ]);
+    setEinsatzbereiche((ebData as Einsatzbereich[]) ?? []);
+    setSollPlan((spData as UnterkunftHerkunftPlan[]) ?? []);
     setKandidaten((kData as PersonalKandidat[]) ?? []);
     setEmployees(eList);
     setHerkuenfte((hData as Herkunft[]) ?? []);
@@ -160,6 +197,7 @@ export default function PersonalplanungPage() {
     kandidaten
       .filter((k) => k.status !== "storniert")
       .forEach((k) => {
+        if (!k.personal_nr) return; // Platzhalter
         const n = parsePersonalNrNummer(k.personal_nr);
         if (n !== null) belegt.add(n);
       });
@@ -201,7 +239,7 @@ export default function PersonalplanungPage() {
     const inKandidaten = kandidaten.find(
       (k) =>
         k.status !== "storniert" &&
-        k.personal_nr.trim().toLowerCase() === typed
+        (k.personal_nr ?? "").trim().toLowerCase() === typed
     );
     if (inKandidaten) {
       return `${inKandidaten.name}, ${inKandidaten.vorname} (bereits geplant)`;
@@ -313,13 +351,40 @@ export default function PersonalplanungPage() {
     }));
   }
 
+  // Freier Platzhalter derselben Herkunft für eine neue Person: bevorzugt
+  // einer mit passender Führerschein-Planung (B ja/nein), sonst der älteste.
+  function freierPlatzhalter(
+    herkunft: string,
+    mitFuehrerschein: boolean
+  ): PersonalKandidat | null {
+    const frei = kandidaten
+      .filter(
+        (k) =>
+          k.platzhalter &&
+          k.status === "geplant" &&
+          k.saison_jahr === saisonJahr &&
+          k.herkunft === herkunft
+      )
+      .sort((a, b) => a.erstellt_am.localeCompare(b.erstellt_am));
+    return (
+      frei.find((k) => hatFuehrerscheinB(k) === mitFuehrerschein) ??
+      frei[0] ??
+      null
+    );
+  }
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (personalNrKonflikt) return;
     setSaving(true);
     setError(null);
     const supabase = getSupabaseClient();
-    const { error } = await supabase.from("personal_kandidaten").insert({
+    const ziel = platzhalterZielId
+      ? kandidaten.find((k) => k.id === platzhalterZielId) ?? null
+      : platzhalterErsetzen && form.herkunft
+        ? freierPlatzhalter(form.herkunft, form.fuehrerschein.length > 0)
+        : null;
+    const daten = {
       personal_nr: form.personal_nr,
       name: form.name,
       vorname: form.vorname,
@@ -328,11 +393,30 @@ export default function PersonalplanungPage() {
       herkunft: form.herkunft || null,
       verknuepfter_employee_id: verknuepfterId,
       stundenlohn: form.stundenlohn ? Number(form.stundenlohn) : null,
-      geplante_ankunft: form.geplante_ankunft || null,
       fuehrerschein_kategorien:
         form.fuehrerschein.length > 0 ? form.fuehrerschein : null,
-      notiz: form.notiz || null,
-    });
+    };
+    // Wird ein Platzhalter befüllt, bleiben seine Planungsangaben (Anreise,
+    // Bereich, Notiz) stehen, sofern im Formular nichts anderes steht.
+    const { error } = ziel
+      ? await supabase
+          .from("personal_kandidaten")
+          .update({
+            ...daten,
+            platzhalter: false,
+            geplante_ankunft: form.geplante_ankunft || ziel.geplante_ankunft,
+            einsatzbereich: form.einsatzbereich || ziel.einsatzbereich,
+            notiz: form.notiz || ziel.notiz,
+          })
+          .eq("id", ziel.id)
+          .eq("platzhalter", true)
+      : await supabase.from("personal_kandidaten").insert({
+          ...daten,
+          saison_jahr: saisonJahr,
+          geplante_ankunft: form.geplante_ankunft || null,
+          einsatzbereich: form.einsatzbereich || null,
+          notiz: form.notiz || null,
+        });
     setSaving(false);
     if (error) {
       setError(error.message);
@@ -340,13 +424,115 @@ export default function PersonalplanungPage() {
     }
     setForm(emptyForm);
     setVerknuepfterId(null);
+    setPlatzhalterZielId(null);
     load();
   }
 
-  function toggleAusgewaehlt(id: string) {
+  // "Namen eintragen" an einer Platzhalter-Zeile: das Formular oben wird mit
+  // den Planungsangaben des Platzhalters vorbelegt und schreibt beim
+  // Speichern in genau diese Zeile (inkl. Verknüpfen mit bekannter Person).
+  function platzhalterBefuellen(k: PersonalKandidat) {
+    setPlatzhalterZielId(k.id);
+    setVerknuepfterId(null);
+    setForm({
+      ...emptyForm,
+      herkunft: k.herkunft ?? "",
+      geplante_ankunft: k.geplante_ankunft ?? "",
+      einsatzbereich: k.einsatzbereich ?? "",
+      stundenlohn: k.stundenlohn?.toString() ?? "",
+      fuehrerschein: k.fuehrerschein_kategorien ?? [],
+      notiz: k.notiz ?? "",
+    });
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }
+
+  function platzhalterBefuellenAbbrechen() {
+    setPlatzhalterZielId(null);
+    setVerknuepfterId(null);
+    setForm(emptyForm);
+  }
+
+  // Einzelfeld einer Zeile direkt speichern (Bereich, Reserve, geplanter
+  // Führerschein eines Platzhalters).
+  async function zeileSpeichern(
+    k: PersonalKandidat,
+    payload: Partial<PersonalKandidat>
+  ) {
+    setError(null);
+    const { error } = await getSupabaseClient()
+      .from("personal_kandidaten")
+      .update(payload)
+      .eq("id", k.id);
+    if (error) {
+      setError(error.message);
+      return;
+    }
+    setKandidaten((prev) =>
+      prev.map((x) => (x.id === k.id ? { ...x, ...payload } : x))
+    );
+  }
+
+  // Sammelaktion für alle markierten Zeilen.
+  async function sammelSpeichern(payload: Partial<PersonalKandidat>) {
+    if (ausgewaehlt.length === 0) return;
+    setSammelLaeuft(true);
+    setError(null);
+    const supabase = getSupabaseClient();
+    const fehler: string[] = [];
+    for (const block of inBloecken(ausgewaehlt)) {
+      const { error } = await supabase
+        .from("personal_kandidaten")
+        .update(payload)
+        .in("id", block);
+      if (error) fehler.push(error.message);
+    }
+    setSammelLaeuft(false);
+    if (fehler.length > 0) setError([...new Set(fehler)].join(" · "));
+    load();
+  }
+
+  async function sammelEntfernenPlatzhalter() {
+    const ids = ausgewaehlt.filter(
+      (id) => kandidaten.find((k) => k.id === id)?.platzhalter
+    );
+    if (ids.length === 0) return;
+    if (!window.confirm(`${ids.length} markierte Platzhalter entfernen?`)) return;
+    setSammelLaeuft(true);
+    const supabase = getSupabaseClient();
+    const fehler: string[] = [];
+    for (const block of inBloecken(ids)) {
+      const { error } = await supabase
+        .from("personal_kandidaten")
+        .delete()
+        .in("id", block)
+        .eq("platzhalter", true);
+      if (error) fehler.push(error.message);
+    }
+    setSammelLaeuft(false);
+    setAusgewaehlt((prev) => prev.filter((id) => !ids.includes(id)));
+    if (fehler.length > 0) setError([...new Set(fehler)].join(" · "));
+    load();
+  }
+
+  function toggleAusgewaehlt(id: string, mitShift = false) {
+    // Shift-Klick markiert alles zwischen dem zuletzt angeklickten und
+    // diesem Kandidaten (in der angezeigten Reihenfolge, über Gruppen
+    // hinweg).
+    if (mitShift && letzteAuswahl && letzteAuswahl !== id) {
+      const reihenfolge = gruppen.flatMap((g) => g.liste.map((k) => k.id));
+      const a = reihenfolge.indexOf(letzteAuswahl);
+      const b = reihenfolge.indexOf(id);
+      if (a >= 0 && b >= 0) {
+        const bereich = reihenfolge.slice(Math.min(a, b), Math.max(a, b) + 1);
+        setAusgewaehlt((prev) => [...new Set([...prev, ...bereich])]);
+        setLetzteAuswahl(id);
+        return;
+      }
+    }
     setAusgewaehlt((prev) =>
       prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]
     );
+    setLetzteAuswahl(id);
   }
 
   // Erzeugt aus jedem ausgewählten Kandidaten einen echten employees-
@@ -356,10 +542,21 @@ export default function PersonalplanungPage() {
   // Anreiseliste (Personal → Anreiseliste), wo Vertragszeitraum, Dokumente
   // und die weiteren Unterlagen erfasst werden.
   async function anreiseVorbereiten() {
-    if (ausgewaehlt.length === 0) return;
+    // Platzhalter (noch ohne Namen) und Reserve können nicht anreisen.
+    const bereit = ausgewaehlt.filter((id) => {
+      const k = kandidaten.find((x) => x.id === id);
+      return k && k.status === "geplant" && !k.platzhalter && !k.reserve;
+    });
+    const uebersprungen = ausgewaehlt.length - bereit.length;
+    if (bereit.length === 0) {
+      setError(
+        "Unter den markierten Zeilen ist niemand, der anreisen kann – Platzhalter brauchen erst einen Namen, Reserve muss erst zugesagt werden."
+      );
+      return;
+    }
     if (
       !window.confirm(
-        `${ausgewaehlt.length} Kandidat(en) jetzt aktivieren und in die Anreiseliste verschieben?\n\nAb jetzt gilt für alle Sätze das aktuelle Jahr ${heuteJahr}: Stundenlohn (sofern nicht individuell abweichend) und Tagessätze Wohnen/Verpflegung.`
+        `${bereit.length} Kandidat(en) jetzt aktivieren${uebersprungen > 0 ? ` (${uebersprungen} Platzhalter/Reserve werden übersprungen)` : ""} und in die Anreiseliste verschieben?\n\nAb jetzt gilt für alle Sätze das aktuelle Jahr ${heuteJahr}: Stundenlohn (sofern nicht individuell abweichend) und Tagessätze Wohnen/Verpflegung.`
       )
     ) {
       return;
@@ -377,12 +574,10 @@ export default function PersonalplanungPage() {
     // (Saison, Herkunft) und die aktuelle Belegung/Planung je Wohneinheit.
     const jahre = [
       ...new Set(
-        ausgewaehlt.map((id) => {
-          const k = kandidaten.find((x) => x.id === id);
-          return k?.geplante_ankunft
-            ? new Date(k.geplante_ankunft).getFullYear()
-            : new Date().getFullYear();
-        })
+        bereit.map(
+          (id) =>
+            kandidaten.find((x) => x.id === id)?.saison_jahr ?? saisonJahr
+        )
       ),
     ];
     const [{ data: kontData }, { data: ueberData }] = await Promise.all([
@@ -426,8 +621,10 @@ export default function PersonalplanungPage() {
         (sz) => sz.mindestlohn != null && Number(sz.mindestlohn) === Number(lohn)
       );
 
-    for (const id of ausgewaehlt) {
-      const k = kandidaten.find((x) => x.id === id);
+    for (const id of bereit) {
+      const k = kandidaten.find((x) => x.id === id) as
+        | BenannterKandidat
+        | undefined;
       if (!k || k.status !== "geplant") continue;
       let employeeId: string | null = null;
       const lohn =
@@ -511,9 +708,7 @@ export default function PersonalplanungPage() {
       // (geplante Zimmerzuordnung, Wohneinheits-Ebene). Zimmer regelt der
       // Hausmeister bei der Ankunft.
       if (employeeId && k.herkunft) {
-        const saisonJ = k.geplante_ankunft
-          ? new Date(k.geplante_ankunft).getFullYear()
-          : new Date().getFullYear();
+        const saisonJ = k.saison_jahr;
         const kont = kontingentByHerkunft.get(`${saisonJ}|${k.herkunft}`) ?? [];
         let platziert = false;
         for (const we of kont) {
@@ -549,7 +744,7 @@ export default function PersonalplanungPage() {
       }
     }
     setAktivierenLaufend(false);
-    setAusgewaehlt([]);
+    setAusgewaehlt((prev) => prev.filter((id) => !bereit.includes(id)));
     if (ohnePlatz.size > 0) {
       fehlerListe.push(
         "Ohne reservierten Platz: " +
@@ -615,8 +810,11 @@ export default function PersonalplanungPage() {
 
   // Geplante Anreise für viele Kandidaten auf einmal setzen (eine
   // Herkunfts-Gruppe oder alle).
-  async function anreiseSetzen(ziele: PersonalKandidat[]) {
-    if (ziele.length === 0 || !terminAnreise) return;
+  async function anreiseSetzen(
+    ziele: PersonalKandidat[],
+    datum: string = terminAnreise
+  ) {
+    if (ziele.length === 0 || !datum) return;
     setTerminLaeuft(true);
     setError(null);
     const supabase = getSupabaseClient();
@@ -624,7 +822,7 @@ export default function PersonalplanungPage() {
     for (const block of inBloecken(ziele.map((k) => k.id))) {
       const { error } = await supabase
         .from("personal_kandidaten")
-        .update({ geplante_ankunft: terminAnreise })
+        .update({ geplante_ankunft: datum })
         .in("id", block);
       if (error) fehler.push(error.message);
     }
@@ -651,8 +849,8 @@ export default function PersonalplanungPage() {
   function bearbeitenStarten(k: PersonalKandidat) {
     setBearbeitenId(k.id);
     setBearbeitenForm({
-      name: k.name,
-      vorname: k.vorname,
+      name: k.name ?? "",
+      vorname: k.vorname ?? "",
       geburtsdatum: k.geburtsdatum ?? "",
       nationalitaet: k.nationalitaet ?? "",
       herkunft: k.herkunft ?? "",
@@ -715,11 +913,42 @@ export default function PersonalplanungPage() {
     load();
   }
 
-  const geplante = kandidaten.filter((k) => k.status === "geplant");
+  // Alle nicht stornierten Kandidaten des gewählten Saisonjahres (für
+  // Soll/Zeitstrahl - inkl. der schon auf der Anreiseliste) und die noch
+  // geplanten davon (Namensliste).
+  const saisonKandidaten = kandidaten.filter(
+    (k) => k.saison_jahr === saisonJahr && k.status !== "storniert"
+  );
+  const geplante = saisonKandidaten.filter((k) => k.status === "geplant");
+  const saisonJahre = [
+    ...new Set([
+      heuteJahr,
+      heuteJahr + 1,
+      saisonJahr,
+      ...kandidaten.map((k) => k.saison_jahr),
+    ]),
+  ].sort((a, b) => a - b);
+  const sollVon = (herkunft: string) =>
+    sollPlan.find((p) => p.saison_jahr === saisonJahr && p.herkunft === herkunft)
+      ?.soll_anzahl ?? 0;
+  const zielPlatzhalter = platzhalterZielId
+    ? kandidaten.find((k) => k.id === platzhalterZielId) ?? null
+    : null;
+  const freieAutoPlatzhalter =
+    !platzhalterZielId && form.herkunft
+      ? geplante.filter((k) => k.platzhalter && k.herkunft === form.herkunft)
+          .length
+      : 0;
 
   function aehnlicheZu(k: PersonalKandidat) {
-    if (k.verknuepfter_employee_id) return [];
-    return findeAehnliche(personenIndex, k);
+    if (k.verknuepfter_employee_id || k.platzhalter || !k.name || !k.vorname) {
+      return [];
+    }
+    return findeAehnliche(personenIndex, {
+      name: k.name,
+      vorname: k.vorname,
+      geburtsdatum: k.geburtsdatum,
+    });
   }
 
   const gruppen = useMemo(() => {
@@ -735,10 +964,20 @@ export default function PersonalplanungPage() {
       if (b === "__ohne__") return -1;
       return (reihenfolge.get(a) ?? 0) - (reihenfolge.get(b) ?? 0);
     });
+    // In der Gruppe: zugesagte Namen, dann Platzhalter, dann Reserve.
+    const rang = (k: PersonalKandidat) => (k.reserve ? 2 : k.platzhalter ? 1 : 0);
     return keys.map((key) => ({
       key,
       anzeige: key === "__ohne__" ? "Ohne Herkunft" : key,
-      liste: buckets.get(key)!,
+      liste: buckets
+        .get(key)!
+        .slice()
+        .sort(
+          (a, b) =>
+            rang(a) - rang(b) ||
+            (a.name ?? "").localeCompare(b.name ?? "") ||
+            a.erstellt_am.localeCompare(b.erstellt_am)
+        ),
     }));
   }, [geplante, herkuenfte]);
 
@@ -797,14 +1036,99 @@ export default function PersonalplanungPage() {
             Anreiseliste
           </a>{" "}
           weiter, wo Vertragszeitraum und Unterlagen erfasst werden.
+          Solange ein Vermittler nur eine Zahl meldet, planst du mit
+          Platzhaltern (Ansicht „Soll &amp; Übersicht"); die echten Namen
+          werden später in die Platzhalter eingetragen.
         </p>
       </div>
 
-      {canEdit && (
+      <div className="flex flex-wrap items-center gap-3">
+        <label className="flex items-center gap-2 text-sm font-medium text-neutral-700">
+          Saison
+          <select
+            value={saisonJahr}
+            onChange={(e) => {
+              setSaisonJahr(Number(e.target.value));
+              setAusgewaehlt([]);
+              platzhalterBefuellenAbbrechen();
+            }}
+          >
+            {saisonJahre.map((j) => (
+              <option key={j} value={j}>
+                {j}
+              </option>
+            ))}
+          </select>
+        </label>
+        <div className="flex overflow-hidden rounded border border-linie">
+          {(
+            [
+              ["liste", "Namensliste"],
+              ["soll", "Soll & Übersicht"],
+              ["zeitstrahl", "Anreise-Zeitstrahl"],
+            ] as const
+          ).map(([a, text]) => (
+            <button
+              key={a}
+              type="button"
+              className={`px-3 py-1.5 text-sm ${ansicht === a ? "bg-emerald-700 text-white" : "bg-white text-neutral-700 hover:bg-emerald-50"}`}
+              onClick={() => setAnsicht(a)}
+            >
+              {text}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {ansicht === "soll" &&
+        (loading ? (
+          <p className="text-neutral-500">Lädt…</p>
+        ) : (
+          <PersonalplanungSoll
+            saisonJahr={saisonJahr}
+            herkuenfte={herkuenfte}
+            einsatzbereiche={einsatzbereiche}
+            kandidaten={saisonKandidaten}
+            sollPlan={sollPlan}
+            canEdit={canEdit}
+            onGeaendert={load}
+          />
+        ))}
+
+      {ansicht === "zeitstrahl" &&
+        (loading ? (
+          <p className="text-neutral-500">Lädt…</p>
+        ) : (
+          <PersonalplanungZeitstrahl
+            saisonJahr={saisonJahr}
+            herkuenfte={herkuenfte}
+            kandidaten={saisonKandidaten}
+            sollGesamt={sollPlan
+              .filter((p) => p.saison_jahr === saisonJahr)
+              .reduce((sm, p) => sm + p.soll_anzahl, 0)}
+          />
+        ))}
+
+      {canEdit && ansicht === "liste" && (
         <form
           onSubmit={handleSubmit}
-          className="flex flex-col gap-3 rounded border border-linie bg-white p-4"
+          className={`flex flex-col gap-3 rounded border bg-white p-4 ${zielPlatzhalter ? "border-emerald-400 ring-2 ring-emerald-200" : "border-linie"}`}
         >
+          {zielPlatzhalter && (
+            <div className="flex flex-wrap items-center gap-2 rounded bg-emerald-50 px-2 py-1.5 text-sm text-emerald-900">
+              Namen für einen Platzhalter
+              {zielPlatzhalter.herkunft ? ` (${zielPlatzhalter.herkunft})` : ""}{" "}
+              eintragen – Anreise, Bereich und Notiz des Platzhalters bleiben
+              erhalten.
+              <button
+                type="button"
+                className="btn-secondary text-xs"
+                onClick={platzhalterBefuellenAbbrechen}
+              >
+                Abbrechen
+              </button>
+            </div>
+          )}
           <div className="flex flex-col gap-1">
             <label className="text-sm font-medium text-neutral-700">
               Bereits einmal hier gewesen?
@@ -1000,6 +1324,19 @@ export default function PersonalplanungPage() {
                 </option>
               ))}
             </select>
+            <select
+              value={form.einsatzbereich}
+              onChange={(e) =>
+                setForm({ ...form, einsatzbereich: e.target.value })
+              }
+            >
+              <option value="">— Einsatzbereich —</option>
+              {einsatzbereiche.map((b) => (
+                <option key={b.wert} value={b.wert}>
+                  {b.wert}
+                </option>
+              ))}
+            </select>
             <label className="flex flex-col gap-0.5 text-xs text-neutral-500">
               Geplante Ankunft
               <input
@@ -1052,24 +1389,106 @@ export default function PersonalplanungPage() {
             />
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-3">
             <button
               type="submit"
               className="btn"
               disabled={saving || !!personalNrKonflikt}
             >
-              Kandidat anlegen
+              {zielPlatzhalter
+                ? "In Platzhalter eintragen"
+                : `Kandidat anlegen (Saison ${saisonJahr})`}
             </button>
+            {!zielPlatzhalter && freieAutoPlatzhalter > 0 && (
+              <label className="flex items-center gap-1 text-sm text-neutral-700">
+                <input
+                  type="checkbox"
+                  checked={platzhalterErsetzen}
+                  onChange={(e) => setPlatzhalterErsetzen(e.target.checked)}
+                />
+                ersetzt einen der {freieAutoPlatzhalter} Platzhalter von{" "}
+                {form.herkunft}
+              </label>
+            )}
             {error && <span className="text-sm text-beere-600">{error}</span>}
           </div>
         </form>
       )}
 
-      {canEdit && ausgewaehlt.length > 0 && (
-        <div className="sticky top-[calc(3.5rem+var(--subtabs-h,2.5rem))] z-30 flex items-center gap-3 rounded border border-emerald-300 bg-emerald-50 px-3 py-2">
+      {canEdit && ansicht === "liste" && ausgewaehlt.length > 0 && (
+        <div className="sticky top-[calc(3.5rem+var(--subtabs-h,2.5rem))] z-30 flex flex-wrap items-center gap-x-4 gap-y-2 rounded border border-emerald-300 bg-emerald-50 px-3 py-2">
           <span className="text-sm font-medium text-emerald-800">
-            {ausgewaehlt.length} ausgewählt
+            {ausgewaehlt.length} markiert
           </span>
+          <span className="flex items-center gap-1">
+            <input
+              type="date"
+              value={sammelDatum}
+              onChange={(e) => setSammelDatum(e.target.value)}
+            />
+            <button
+              type="button"
+              className="btn-secondary text-xs"
+              disabled={sammelLaeuft || !sammelDatum}
+              onClick={() =>
+                anreiseSetzen(
+                  kandidaten.filter((k) => ausgewaehlt.includes(k.id)),
+                  sammelDatum
+                )
+              }
+            >
+              Anreise setzen
+            </button>
+          </span>
+          <span className="flex items-center gap-1">
+            <select
+              value={sammelBereich}
+              onChange={(e) => setSammelBereich(e.target.value)}
+            >
+              <option value="">— Bereich —</option>
+              {einsatzbereiche.map((b) => (
+                <option key={b.wert} value={b.wert}>
+                  {b.wert}
+                </option>
+              ))}
+            </select>
+            <button
+              type="button"
+              className="btn-secondary text-xs"
+              disabled={sammelLaeuft || !sammelBereich}
+              onClick={() => sammelSpeichern({ einsatzbereich: sammelBereich })}
+            >
+              Bereich setzen
+            </button>
+          </span>
+          <button
+            type="button"
+            className="btn-secondary text-xs"
+            disabled={sammelLaeuft}
+            onClick={() => sammelSpeichern({ reserve: true })}
+          >
+            Als Reserve
+          </button>
+          <button
+            type="button"
+            className="btn-secondary text-xs"
+            disabled={sammelLaeuft}
+            onClick={() => sammelSpeichern({ reserve: false })}
+          >
+            Zusagen
+          </button>
+          {ausgewaehlt.some(
+            (id) => kandidaten.find((k) => k.id === id)?.platzhalter
+          ) && (
+            <button
+              type="button"
+              className="btn-secondary text-xs"
+              disabled={sammelLaeuft}
+              onClick={sammelEntfernenPlatzhalter}
+            >
+              Platzhalter entfernen
+            </button>
+          )}
           <button
             type="button"
             className="btn"
@@ -1078,14 +1497,24 @@ export default function PersonalplanungPage() {
           >
             Anreise vorbereiten
           </button>
+          <button
+            type="button"
+            className="text-xs text-neutral-600 underline"
+            onClick={() => setAusgewaehlt([])}
+          >
+            Markierung aufheben
+          </button>
+          {error && <span className="text-sm text-beere-600">{error}</span>}
         </div>
       )}
 
-      {loading ? (
+      {ansicht !== "liste" ? null : loading ? (
         <p className="text-neutral-500">Lädt…</p>
       ) : geplante.length === 0 ? (
         <p className="text-sm text-neutral-500">
-          Keine geplanten Kandidaten.
+          Keine geplanten Kandidaten für die Saison {saisonJahr}. Mit Zahlen
+          der Vermittler planen: Ansicht „Soll &amp; Übersicht" → Platzhalter
+          anlegen.
         </p>
       ) : (
         <>
@@ -1152,6 +1581,56 @@ export default function PersonalplanungPage() {
               <span className="text-sm text-neutral-600">
                 Geplante Anreise: {anreiseText}
               </span>
+              {g.key !== "__ohne__" &&
+                (() => {
+                  const soll = sollVon(g.key);
+                  const alle = saisonKandidaten.filter(
+                    (k) => k.herkunft === g.key
+                  );
+                  const zu = alle.filter(istZugesagt);
+                  const ph = zu.filter((k) => k.platzhalter).length;
+                  const res = alle.filter((k) => k.reserve).length;
+                  const fs = zu.filter(hatFuehrerscheinB).length;
+                  const fsZiel = fuehrerscheinZiel(soll > 0 ? soll : zu.length);
+                  const diff = zu.length - soll;
+                  return (
+                    <span className="flex flex-wrap gap-x-3 text-sm">
+                      <span
+                        className={
+                          soll === 0
+                            ? "text-neutral-500"
+                            : diff === 0
+                              ? "text-emerald-700"
+                              : diff < 0
+                                ? "text-amber-700"
+                                : "text-beere-600"
+                        }
+                        title="Zugesagt (Namen + Platzhalter, inkl. schon auf der Anreiseliste) / Soll"
+                      >
+                        {zu.length} / Soll {soll || "—"}
+                        {soll > 0 && diff !== 0 && ` (${diff > 0 ? "+" : ""}${diff})`}
+                      </span>
+                      {ph > 0 && (
+                        <span className="text-neutral-500">
+                          {ph} Platzhalter
+                        </span>
+                      )}
+                      {res > 0 && (
+                        <span className="text-neutral-500">{res} Reserve</span>
+                      )}
+                      {fsZiel > 0 && (
+                        <span
+                          className={
+                            fs >= fsZiel ? "text-emerald-700" : "text-amber-700"
+                          }
+                          title="Führerschein B (oder höher): vorhanden / Ziel (pro 5 Personen eine)"
+                        >
+                          {fs >= fsZiel ? "✓" : "⚠"} Führerschein {fs}/{fsZiel}
+                        </span>
+                      )}
+                    </span>
+                  );
+                })()}
               {canEdit && (
                 <label className="flex items-center gap-1 text-xs text-neutral-600">
                   <input
@@ -1195,7 +1674,11 @@ export default function PersonalplanungPage() {
                   <th>Geburtsdatum</th>
                   <th>Geplante Ankunft</th>
                   <th>Stundenlohn €</th>
+                  <th>Bereich</th>
                   <th>Führerschein</th>
+                  <th title="Mehr Namen als Soll: Reserve zählt nicht ins Ist, den Zeitstrahl und die Bettenplanung">
+                    Reserve
+                  </th>
                   <th>Verknüpft</th>
                   <th>Notiz</th>
                   {canEdit && <th></th>}
@@ -1206,21 +1689,55 @@ export default function PersonalplanungPage() {
                   const blacklisted = schwarzeListeVon(
                     k.verknuepfter_employee_id
                   );
+                  const platzhalterNr =
+                    g.liste.filter((x) => x.platzhalter).indexOf(k) + 1;
                   return (
                     <Fragment key={k.id}>
-                    <tr>
+                    <tr
+                      className={
+                        k.reserve
+                          ? "opacity-60"
+                          : k.platzhalter
+                            ? "bg-sand/60"
+                            : undefined
+                      }
+                    >
                       {canEdit && (
                         <td>
                           <input
                             type="checkbox"
+                            title="Shift-Klick markiert einen ganzen Bereich"
                             checked={ausgewaehlt.includes(k.id)}
-                            onChange={() => toggleAusgewaehlt(k.id)}
+                            readOnly
+                            onClick={(e) => toggleAusgewaehlt(k.id, e.shiftKey)}
                           />
                         </td>
                       )}
-                      <td>{k.personal_nr}</td>
+                      <td>{k.personal_nr ?? "—"}</td>
                       <td>
-                        {k.name}
+                        {k.platzhalter ? (
+                          <span className="flex flex-wrap items-center gap-2">
+                            <span className="italic text-neutral-500">
+                              N.N. – Platzhalter {platzhalterNr}
+                            </span>
+                            {canEdit && (
+                              <button
+                                type="button"
+                                className="btn-secondary text-xs"
+                                onClick={() => platzhalterBefuellen(k)}
+                              >
+                                Namen eintragen
+                              </button>
+                            )}
+                          </span>
+                        ) : (
+                          k.name
+                        )}
+                        {k.reserve && (
+                          <span className="ml-1.5 rounded bg-neutral-200 px-1 py-0.5 align-middle text-[10px] font-semibold uppercase text-neutral-700">
+                            Reserve
+                          </span>
+                        )}
                         {(() => {
                           if (k.verknuepfter_employee_id) return null;
                           const aehnlich = aehnlicheZu(k);
@@ -1245,7 +1762,7 @@ export default function PersonalplanungPage() {
                           );
                         })()}
                       </td>
-                      <td>{k.vorname}</td>
+                      <td>{k.vorname ?? ""}</td>
                       <td>{formatDatumDE(k.geburtsdatum)}</td>
                       {(
                         [
@@ -1273,10 +1790,66 @@ export default function PersonalplanungPage() {
                         </td>
                       ))}
                       <td>
-                        {k.fuehrerschein_kategorien &&
-                        k.fuehrerschein_kategorien.length > 0
-                          ? k.fuehrerschein_kategorien.join(", ")
-                          : "—"}
+                        {canEdit ? (
+                          <select
+                            value={k.einsatzbereich ?? ""}
+                            onChange={(e) =>
+                              zeileSpeichern(k, {
+                                einsatzbereich: e.target.value || null,
+                              })
+                            }
+                          >
+                            <option value="">—</option>
+                            {einsatzbereiche.map((b) => (
+                              <option key={b.wert} value={b.wert}>
+                                {b.wert}
+                              </option>
+                            ))}
+                          </select>
+                        ) : (
+                          k.einsatzbereich ?? "—"
+                        )}
+                      </td>
+                      <td>
+                        {k.platzhalter && canEdit ? (
+                          <label
+                            className="flex items-center gap-1 text-xs"
+                            title="Für diesen Platzhalter eine Person mit Führerschein B einplanen"
+                          >
+                            <input
+                              type="checkbox"
+                              checked={hatFuehrerscheinB(k)}
+                              onChange={(e) =>
+                                zeileSpeichern(k, {
+                                  fuehrerschein_kategorien: e.target.checked
+                                    ? ["B"]
+                                    : null,
+                                })
+                              }
+                            />
+                            B geplant
+                          </label>
+                        ) : k.fuehrerschein_kategorien &&
+                          k.fuehrerschein_kategorien.length > 0 ? (
+                          k.fuehrerschein_kategorien.join(", ")
+                        ) : (
+                          "—"
+                        )}
+                      </td>
+                      <td>
+                        {canEdit ? (
+                          <input
+                            type="checkbox"
+                            checked={k.reserve}
+                            onChange={(e) =>
+                              zeileSpeichern(k, { reserve: e.target.checked })
+                            }
+                          />
+                        ) : k.reserve ? (
+                          "Ja"
+                        ) : (
+                          "—"
+                        )}
                       </td>
                       <td>
                         {k.verknuepfter_employee_id ? (
@@ -1298,6 +1871,7 @@ export default function PersonalplanungPage() {
                       {canEdit && (
                         <td>
                           <div className="flex gap-1">
+                            {!k.platzhalter && (
                             <button
                               type="button"
                               className="btn-secondary text-xs"
@@ -1309,6 +1883,7 @@ export default function PersonalplanungPage() {
                             >
                               Bearbeiten
                             </button>
+                            )}
                             <button
                               type="button"
                               className="btn-secondary text-xs"

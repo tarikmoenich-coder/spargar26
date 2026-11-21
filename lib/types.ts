@@ -1557,9 +1557,20 @@ export type KandidatStatus = 'geplant' | 'anreiseliste' | 'storniert';
 
 export interface PersonalKandidat {
   id: string;
-  personal_nr: string;
-  name: string;
-  vorname: string;
+  // Bei Platzhaltern (platzhalter = true) leer - Name und Personalnummer
+  // kommen erst, wenn die echte Namensliste des Vermittlers da ist
+  // (Migration 2026-11-21).
+  personal_nr: string | null;
+  name: string | null;
+  vorname: string | null;
+  saison_jahr: number;
+  // Namenloser Planungs-Platz ("N.N.") - nur im Status 'geplant' möglich.
+  platzhalter: boolean;
+  // Mehr Namen als Soll: Person bleibt auf der Liste, zählt aber nicht ins
+  // Ist, den Zeitstrahl und die Bettenplanung.
+  reserve: boolean;
+  // Grober Einsatzbereich (Tabelle einsatzbereiche).
+  einsatzbereich: string | null;
   geburtsdatum: string | null;
   nationalitaet: string | null;
   herkunft: string | null;
@@ -1596,6 +1607,22 @@ export interface PersonalKandidat {
 // gedruckt/fragebogen_erfasst/buskosten_erfasst-Feldern oben ergibt das die
 // "Offen"/"Vollständig"-Anzeige, siehe VOLLSTAENDIG_HELFER in
 // app/personal-anreiseliste/page.tsx).
+// Kandidat mit Namen und Personalnummer - alles ab der Anreiseliste
+// (Platzhalter können nicht "Anreise vorbereiten", siehe Constraint
+// personal_kandidaten_platzhalter_check).
+export type BenannterKandidat = PersonalKandidat & {
+  personal_nr: string;
+  name: string;
+  vorname: string;
+};
+
+// Einstellungen → Einsatzbereiche (Migration 2026-11-21): grobe Einteilung
+// für die Personalplanung (Spargel, Sortierung, Traktorfahrer, ...).
+export interface Einsatzbereich {
+  wert: string;
+  reihenfolge: number;
+}
+
 export interface PersonalKandidatChecklisteRow {
   kandidat_id: string;
   employee_id: string | null;

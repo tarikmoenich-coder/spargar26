@@ -14,6 +14,7 @@ const tabs = [
   { href: "/einstellungen", label: "Allgemein" },
   { href: "/einstellungen/arbeitsgruppen", label: "Arbeitsgruppen" },
   { href: "/einstellungen/herkuenfte", label: "Herkünfte" },
+  { href: "/einstellungen/einsatzbereiche", label: "Einsatzbereiche" },
   { href: "/einstellungen/nutzer", label: "Nutzer & Rollen" },
 ];
 

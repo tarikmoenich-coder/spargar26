@@ -118,6 +118,7 @@ const items: NavItem[] = [
     auchAktivBei: [
       "/einstellungen/arbeitsgruppen",
       "/einstellungen/herkuenfte",
+      "/einstellungen/einsatzbereiche",
       "/einstellungen/nutzer",
     ],
   },

@@ -288,7 +288,10 @@ export default function UnterkunftPlanungPage() {
           <p className="max-w-2xl text-sm text-neutral-500">
             Je Herkunft die Planzahl setzen und Häuser stapeln, bis genug
             Betten reserviert sind. Die HR füllt die Plätze beim „Anreise
-            vorbereiten" der Kandidaten mit echten Namen.
+            vorbereiten" der Kandidaten mit echten Namen. Die Planzahl ist
+            dieselbe wie das Soll in der Personalplanung (Änderungen gelten
+            in beiden Ansichten); „zugesagt" = Namen + Platzhalter der
+            Personalplanung ohne Reserve.
           </p>
         </div>
         <label className="text-sm">
@@ -451,7 +454,7 @@ export default function UnterkunftPlanungPage() {
 
               <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-sm text-neutral-600">
                 <span>
-                  erfasst <span className="font-medium">{a.erfasst}</span>
+                  zugesagt <span className="font-medium">{a.erfasst}</span>
                 </span>
                 <span>· davon verplant {a.verplant}</span>
                 <span>· eingezogen {a.eingezogen}</span>
@@ -566,7 +569,7 @@ export default function UnterkunftPlanungPage() {
           <p className="text-amber-800">
             Herkunft ohne Reservierung:{" "}
             {ohneReservierung
-              .map((a) => `${a.herkunft} (${a.erfasst} erfasst)`)
+              .map((a) => `${a.herkunft} (${a.erfasst} zugesagt)`)
               .join(" · ")}
           </p>
         )}
