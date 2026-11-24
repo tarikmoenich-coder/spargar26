@@ -52,7 +52,10 @@ der Saison, gleiche Person und Nummer. Innerhalb einer Saison kein Wechsel.
 1. Mehrere Rollen je Nutzer. "Vertrieb" = Vorlage: Rollen HR +
    Lohnabrechnung + Kasse, nur Personalstamm VT.
 2. Kassenbücher: MLK + MÖ = Mömmel Agrar, ML = Mönich Landwirtschaft,
-   MD = Mönich Direkt (Vertrieb). LW zahlt weiter alles aus der MLK, VT aus MD.
+   MD = Mönich Direkt (Vertrieb). Nachtrag 2026-11-24: **jede Firma zahlt
+   aus ihrem eigenen Kassenbuch** (Mömmel → MLK, Mönich Landwirtschaft → ML,
+   Mönich Direkt → MD). Bisher lief alles über MLK, weil die App nur eine
+   Firma kannte.
 3. Personalnummern Vertrieb mit Präfix `V-`, gespeichert im Feld
    `personal_nr` (bleibt app-weit eindeutig, ~335 Codestellen unverändert).
 4. Herkünfte gemeinsam; Arbeitsgruppen je Personalstamm (VT = Stände);
@@ -127,18 +130,25 @@ Jede Migration vorher in der lokalen Postgres-Kopie getestet.
   Personalstamm) ersetzt `firmen_bankdaten`; Bestandswerte übernommen als
   Mömmel Agrar.
 - `kassenbuch.firma_id`.
-- Tabelle `employee_saison` (employee_id, saison_jahr, firma_id null,
-  mit_unterkunft default true, mit_verpflegung default true). Fehlende
-  Zeile = wie heute (ja/ja, keine Firma) - keine bestehende Abrechnung
-  ändert sich.
-- `season_summary`/`season_summary_monat`: Abzug Wohnen/Verpflegung nur bei
-  `mit_unterkunft`/`mit_verpflegung`; Sätze aus `verpflegungssaetze` je
+- Tabelle `employee_saison` (employee_id, saison_jahr, firma_id null).
+- Unterkunft/Verpflegung als **Zeiträume** statt Ja/Nein (Vertriebs-
+  Anforderung "ohne Essen ab einem bestimmten Monat"): Tabelle
+  `employee_abzug_zeitraum` (employee_id, art unterkunft|verpflegung, von,
+  bis null, berechnen bool). Ohne Eintrag = wie heute (beides an jedem
+  Anwesenheitstag) - keine bestehende Abrechnung ändert sich.
+- `season_summary`/`season_summary_monat`: Abzug Wohnen/Verpflegung nur an
+  Anwesenheitstagen innerhalb eines berechneten Zeitraums; Sätze aus `verpflegungssaetze` je
   (saison_jahr, personalstamm) - Mindestlohn bleibt je Jahr für alle.
   Vorher/nachher-Vergleich aller bisherigen Abrechnungen = identisch.
 - Kassenbuch je Bar-Buchung: `advances`, Auszahlungsbelege, Kautionen
-  bekommen `kassenbuch_id`; Vorbelegung aus dem Personalstamm (LW → MLK,
-  VT → MD); Bestand = MLK. `kassenbestand_bis()`/`kassenbuch_saldo_bis()`
-  rechnen je Buch. Kassenprüfung bleibt korrekt (Bestand unverändert).
+  bekommen `kassenbuch_id`; Vorbelegung aus der **Firma der Saison**
+  (`employee_saison.firma_id` → Lohn-Kassenbuch der Firma); ohne Firma
+  Rückfall auf den Personalstamm (LW → MLK, VT → MD). Bestand = MLK.
+  Jede Firma braucht ein Lohn-Kassenbuch (`kassenbuch.typ`/Kennzeichen
+  "Lohnbuchungen erlaubt" für MLK, ML, MD). `kassenbestand_bis()`/
+  `kassenbuch_saldo_bis()` rechnen je Buch. Kassenprüfung je Buch
+  (Kassenbücher Phase 2, bisher offen) wird damit Pflicht, weil ML und MD
+  echtes Lohn-Bargeld führen.
 - SEPA-Datei, Lohnsteuer-Sammelantrag, Lohnübersicht/Monatsdruck: je Firma
   (aus `employee_saison`) bzw. Personalstamm filter-/trennbar.
 - `abrechnungsart` + `minijob`: keine App-Lohnsteuer, Netto aus HSC
@@ -157,6 +167,11 @@ Jede Migration vorher in der lokalen Postgres-Kopie getestet.
 - Vertriebs-Nutzer mit Vorlage anlegen; Rechte-Test mit echten Rollen,
   Probelauf eine Woche Stunden + Vorschüsse.
 
+### Stufe 5 - Vertriebs-Funktionen (aus der Anforderungsliste)
+
+Siehe Abschnitt "Abgleich Anforderungsliste Vertrieb" - Reihenfolge und
+Umfang nach Klärung der offenen Fragen.
+
 ### Später (eigene Planung)
 
 Personalplanung Vertrieb, Prämien Vertrieb, Firma je Saison in der
@@ -171,3 +186,29 @@ Personalplanung vorbelegen, Entfernen von `profiles.role`.
 | Kassenbestand MLK verschiebt sich | Bestand bleibt MLK; Vergleich `kassenbuch_saldo_bis` vor/nach |
 | Performance durch Prüffunktion in jeder Regel | Index auf `employees(id, personalstamm)`, stabile Funktion; Messung mit Bestandsdaten |
 | Datenleck über Views/RPCs mit erhöhten Rechten | Alle Views `security_invoker`; jede security-definer-Funktion prüft `darf_mitarbeiter` selbst; Teil des Rechte-Tests |
+
+## Abgleich Anforderungsliste Vertrieb (2026-11-24)
+
+Legende: **vorhanden** = gibt es schon, ggf. nur für VT freizuschalten;
+**im Plan** = durch Stufe 0-4 abgedeckt; **neu** = zusätzlicher Bau.
+
+| # | Anforderung | Stand | Anmerkung |
+|---|---|---|---|
+| 1.1 | HSC-Anmeldung erfassen/kontrollieren | neu (klein) | Feld je Person+Saison "bei HSC angemeldet am" + Prüfliste "noch nicht angemeldet"; passt zu `employee_saison` |
+| 1.2 | Freibetrag-Beantragung | vorhanden | `/personal-lohnsteuer` (Verfahrensstand bis "Freibetrag erteilt") - zu prüfen, ob für Deutsche/Vertrieb passend |
+| 1.3 | Fahrer eindeutig kennzeichnen (anderer Lohn) | teilweise | Stundenlohn je Person, Führerschein, Feld `funktion` vorhanden. Offen: ganzer Lohn anders oder nur an Fahrtagen? |
+| 2.1 | Standorte statt Gruppen | im Plan | Arbeitsgruppen je Personalstamm, im VT als "Standort" bezeichnet |
+| 2.2 | Standorte mit Öffnungszeiten | neu (klein) | Öffnungszeiten je Standort (+ Saison-Zeitraum), Anzeige bei der Stundenkontrolle |
+| 2.3 | Einsatzplan im Programm | neu (groß) | Dienstplan Person × Tag × Standort; eigenes Modul, nach Stufe 4 |
+| 2.4 | Abfahrtszeiten vermerken | neu | Teil des Einsatzplans |
+| 2.5 | Wochenstundenzettel je Person | neu (klein) | Druckansicht aus der vorhandenen KW-Wochenansicht |
+| 3.1 | Sonntags-/Feiertagszuschläge (Deutsche); Urlaub getrennt | neu (mittel) | App weist So-/Feiertagsstunden (Feiertagskalender Hessen) und Urlaub (`U`) getrennt aus; Zuschlag rechnet HSC |
+| 3.2 | Zulagen direkt in Euro | teilweise | `season_bonuses.fahrer_zulage` je Saison in €; monatliche Zulagen in € je Person = neu (Tabelle Zulagen) |
+| 3.3 | Monatliche Abrechnung deutscher Verkäufer per Überweisung | neu (groß) | Abrechnung ist heute **saisonbezogen** (`saison_abrechnen`); Monatsabrechnung + SEPA je Monat ist ein eigener Umbau im Lohnbereich |
+| 3.4 | "Mömmel-Leute" - Abrechnung über anderes Spargar? | klären | siehe Rückfragen |
+| 3.5 | Stunden, Vorschüsse, Zulagen monatlich drucken | teilweise | Monatsdruck `/uebersicht` (Summen) vorhanden; Einzelnachweis je Person/Monat = neu (klein) |
+| 3.6 | Saisonprämie ohne Stunden | neu (klein) | `season_summary` entsteht heute nur aus Stundeneinträgen - Person ohne Stunden erscheint nicht |
+| 4.1 | Strafzettel | vorhanden | Vorschuss mit Pflicht-Beleg (Strafzettel/Rechnung) |
+| 4.2 | Zimmerkaution | vorhanden | `zimmer_kaution`, Kautionsübergabe |
+| 4.3 | Fahrerkaution (Auto) | vorhanden | `fahrer_kaution` - Regeln nochmal besprechen |
+| 5.1 | Ohne Essen; Wechsel "ohne Essen" ab Monat | im Plan | Abzugs-Zeiträume (Stufe 3) |
