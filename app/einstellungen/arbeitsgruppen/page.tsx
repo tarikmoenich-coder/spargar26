@@ -10,14 +10,17 @@ import { Users } from "lucide-react";
 import { useEffect, useState } from "react";
 import { getSupabaseClient } from "@/lib/supabase/client";
 import { useProfile } from "@/lib/useProfile";
+import { useBereiche } from "@/lib/useBereiche";
 import EinstellungenTabs from "@/components/EinstellungenTabs";
 import { KULTUREN, KULTUR_LABELS, type Arbeitsgruppe } from "@/lib/types";
 
 import { hatRolle } from "@/lib/rollen";
-const leer = { gruppe_nr: "", bezeichnung: "", reihenfolge: "0", kultur: "" };
+const leer = { gruppe_nr: "", bezeichnung: "", reihenfolge: "0", kultur: "", bereich: "" };
 
 export default function ArbeitsgruppenPage() {
   const { profile } = useProfile();
+  // Geschäftsbereich (Stufe 2): Vertriebs-Stände sind eigene Gruppen.
+  const bereiche = useBereiche(profile);
   // admin und zeiterfassung dürfen Arbeitsgruppen pflegen (RLS: arbeitsgruppen_write)
   const isAdmin = hatRolle(profile, "admin", "zeiterfassung");
 
@@ -49,6 +52,7 @@ export default function ArbeitsgruppenPage() {
       bezeichnung: g.bezeichnung,
       reihenfolge: g.reihenfolge.toString(),
       kultur: g.kultur ?? "",
+      bereich: g.bereich ?? "LW",
     });
   }
 
@@ -66,6 +70,7 @@ export default function ArbeitsgruppenPage() {
       bezeichnung: form.bezeichnung,
       reihenfolge: Number(form.reihenfolge) || 0,
       kultur: form.kultur || null,
+      bereich: form.bereich || bereiche.standard,
     });
     setSaving(false);
     if (error) {
@@ -116,6 +121,21 @@ export default function ArbeitsgruppenPage() {
             value={form.reihenfolge}
             onChange={(e) => setForm({ ...form, reihenfolge: e.target.value })}
           />
+          {!editNr && bereiche.mehrere && (
+            <select
+              value={form.bereich || bereiche.standard}
+              onChange={(e) => setForm({ ...form, bereich: e.target.value })}
+              title="Bereich der Gruppe"
+            >
+              {bereiche.alle
+                .filter((b) => bereiche.erlaubt.includes(b.kuerzel))
+                .map((b) => (
+                  <option key={b.kuerzel} value={b.kuerzel}>
+                    {b.bezeichnung}
+                  </option>
+                ))}
+            </select>
+          )}
           <select
             value={form.kultur}
             onChange={(e) => setForm({ ...form, kultur: e.target.value })}
@@ -150,6 +170,7 @@ export default function ArbeitsgruppenPage() {
                 <th>Bezeichnung</th>
                 <th>Reihenfolge</th>
                 <th>Kultur</th>
+                {bereiche.mehrere && <th>Bereich</th>}
                 {isAdmin && <th></th>}
               </tr>
             </thead>
@@ -160,6 +181,7 @@ export default function ArbeitsgruppenPage() {
                   <td>{g.bezeichnung}</td>
                   <td>{g.reihenfolge}</td>
                   <td>{g.kultur ? KULTUR_LABELS[g.kultur] : "—"}</td>
+                  {bereiche.mehrere && <td>{bereiche.label(g.bereich)}</td>}
                   {isAdmin && (
                     <td>
                       <button

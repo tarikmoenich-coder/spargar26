@@ -12,6 +12,8 @@ import {
   type ImportZeile,
 } from "@/lib/personalImport";
 import PersonalTabs from "@/components/PersonalTabs";
+import { useProfile } from "@/lib/useProfile";
+import { personalNrFuerBereich, useBereiche } from "@/lib/useBereiche";
 import PageHeader from "@/components/PageHeader";
 import { Upload } from "lucide-react";
 
@@ -61,6 +63,10 @@ function ladeVorlage() {
 }
 
 export default function PersonalImportPage() {
+  // Geschäftsbereich (Stufe 2): importiert wird in den gewählten Bereich
+  // (Umschalter oben bzw. einziger erlaubter Bereich).
+  const { profile } = useProfile();
+  const bereiche = useBereiche(profile);
   const [dateiname, setDateiname] = useState<string | null>(null);
   const [erkannteSpalten, setErkannteSpalten] = useState<string[]>([]);
   const [unbekannteSpalten, setUnbekannteSpalten] = useState<string[]>([]);
@@ -181,7 +187,8 @@ export default function PersonalImportPage() {
     vorgaenger_employee_id: string | null
   ) {
     return {
-      personal_nr: z.personal_nr,
+      personal_nr: personalNrFuerBereich(z.personal_nr, bereiche.praefix(bereiche.standard)),
+      bereich: bereiche.standard,
       gruppe_nr: z.gruppe_nr,
       name: z.name,
       vorname: z.vorname,

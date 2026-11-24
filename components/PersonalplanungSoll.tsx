@@ -34,6 +34,8 @@ interface Props {
   sollPlan: UnterkunftHerkunftPlan[];
   zeitraeume: EinsatzbereichZeitraum[];
   canEdit: boolean;
+  // Geschäftsbereich neuer Platzhalter (Stufe 2)
+  bereich: string;
   onGeaendert: () => void;
 }
 
@@ -57,6 +59,7 @@ export default function PersonalplanungSoll({
   sollPlan,
   zeitraeume,
   canEdit,
+  bereich,
   onGeaendert,
 }: Props) {
   const [fehler, setFehler] = useState<string | null>(null);
@@ -138,6 +141,7 @@ export default function PersonalplanungSoll({
     setFehler(null);
     const zeilenNeu = Array.from({ length: anzahl }, () => ({
       platzhalter: true,
+      bereich,
       herkunft,
       saison_jahr: saisonJahr,
       status: "geplant",

@@ -12,8 +12,9 @@ export function kreisBereich(kreis: number): [number, number] {
 
 // Extrahiert den führenden Zahlenanteil, z.B. "8226a" -> 8226.
 // Personalnummern ohne führende Ziffer (selten) liefern null.
+// Ein Bereichs-Präfix wie "V-" (Vertrieb, Stufe 2) wird übersprungen.
 export function parsePersonalNrNummer(personalNr: string): number | null {
-  const match = personalNr.match(/^(\d+)/);
+  const match = personalNr.match(/^(?:[A-Za-z]+-)?(\d+)/);
   if (!match) return null;
   return Number(match[1]);
 }
@@ -27,4 +28,10 @@ export function naechsteFreieNummer(
     if (!belegteNummern.has(n)) return n;
   }
   return null;
+}
+
+// Gehört die Personalnummer zum Bereich mit diesem Präfix? (Landwirtschaft:
+// kein Präfix = Nummer ohne "X-" am Anfang.)
+export function personalNrImBereich(personalNr: string, praefix: string): boolean {
+  return praefix ? personalNr.startsWith(praefix) : !/^[A-Za-z]+-/.test(personalNr);
 }

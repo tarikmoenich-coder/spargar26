@@ -3,6 +3,7 @@
 import { Fragment, useEffect, useMemo, useState } from "react";
 import { getSupabaseClient } from "@/lib/supabase/client";
 import { useProfile } from "@/lib/useProfile";
+import { personalNrFuerBereich, useBereiche } from "@/lib/useBereiche";
 import {
   ANZAHL_PERSONALNUMMERN_KREISE,
   kreisBereich,
@@ -63,6 +64,7 @@ const emptyForm = {
 
 export default function PersonalplanungPage() {
   const { profile } = useProfile();
+  const bereiche = useBereiche(profile);
   const canEdit = hatRolle(profile, "admin", "hr");
 
   const [kandidaten, setKandidaten] = useState<PersonalKandidat[]>([]);
@@ -405,8 +407,11 @@ export default function PersonalplanungPage() {
       : platzhalterErsetzen && form.herkunft
         ? freierPlatzhalter(form.herkunft, form.fuehrerschein.length > 0)
         : null;
+    // Bereich (Stufe 2): Platzhalter behalten ihren, neue Kandidaten nehmen
+    // die gewählte Ansicht bzw. den einzigen erlaubten Bereich.
+    const kandidatBereich = ziel?.bereich ?? bereiche.standard;
     const daten = {
-      personal_nr: form.personal_nr,
+      personal_nr: personalNrFuerBereich(form.personal_nr, bereiche.praefix(kandidatBereich)),
       name: form.name,
       vorname: form.vorname,
       geburtsdatum: form.geburtsdatum || null,
@@ -433,6 +438,7 @@ export default function PersonalplanungPage() {
           .eq("platzhalter", true)
       : await supabase.from("personal_kandidaten").insert({
           ...daten,
+          bereich: kandidatBereich,
           saison_jahr: saisonJahr,
           geplante_ankunft: form.geplante_ankunft || null,
           einsatzbereich: form.einsatzbereich || null,
@@ -668,7 +674,8 @@ export default function PersonalplanungPage() {
         const { data, error } = await supabase
           .from("employee_personaldaten")
           .insert({
-            personal_nr: k.personal_nr,
+            personal_nr: personalNrFuerBereich(k.personal_nr, bereiche.praefix(k.bereich)),
+            bereich: k.bereich ?? "LW",
             name: k.name,
             vorname: k.vorname,
             geburtsdatum: k.geburtsdatum,
@@ -1151,6 +1158,7 @@ export default function PersonalplanungPage() {
             sollPlan={sollPlan}
             zeitraeume={zeitraeume}
             canEdit={canEdit}
+            bereich={bereiche.standard}
             onGeaendert={load}
           />
         ))}

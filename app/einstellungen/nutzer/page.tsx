@@ -19,6 +19,7 @@ import { useProfile } from "@/lib/useProfile";
 import { formatDatumDE } from "@/lib/format";
 import { ROLLEN, rolleLabel, hatRolle, rollenVon } from "@/lib/rollen";
 import EinstellungenTabs from "@/components/EinstellungenTabs";
+import { useBereiche } from "@/lib/useBereiche";
 import type { UserRole } from "@/lib/types";
 
 interface Nutzer {
@@ -26,9 +27,20 @@ interface Nutzer {
   full_name: string;
   role: UserRole;
   rollen: UserRole[];
+  bereiche: string[];
   aktiv: boolean;
   created_at: string;
 }
+
+// Vorlage "Vertrieb" (Nutzer-Vorgabe 2026-11-24): darf für den Vertrieb,
+// was HR + Buchhaltung (Lohnabrechnung, Kasse) für die Landwirtschaft
+// dürfen - nur Bereich Vertrieb.
+const VORLAGE_VERTRIEB: { rollen: UserRole[]; bereiche: string[] } = {
+  rollen: ["hr", "lohnabrechnung", "kasse"],
+  bereiche: ["VT"],
+};
+// Diese Rollen sehen ohnehin alle Bereiche (wie current_bereiche()).
+const ROLLEN_ALLE_BEREICHE: UserRole[] = ["admin", "management", "pruefer"];
 
 // Rollen in fester Reihenfolge (wie ROLLEN), Hauptrolle zuerst gültig halten.
 function sortiert(rollen: UserRole[]): UserRole[] {
@@ -38,6 +50,7 @@ function sortiert(rollen: UserRole[]): UserRole[] {
 export default function NutzerVerwaltungPage() {
   const { profile } = useProfile();
   const istAdmin = hatRolle(profile, "admin");
+  const bereiche = useBereiche(profile);
 
   const [nutzer, setNutzer] = useState<Nutzer[]>([]);
   const [loading, setLoading] = useState(true);
@@ -63,6 +76,7 @@ export default function NutzerVerwaltungPage() {
       ((data as Nutzer[]) ?? []).map((n) => ({
         ...n,
         rollen: n.rollen && n.rollen.length > 0 ? n.rollen : [n.role],
+        bereiche: n.bereiche ?? ["LW"],
       }))
     );
     setLoading(false);
@@ -107,6 +121,32 @@ export default function NutzerVerwaltungPage() {
     // Hauptrolle bleibt, solange sie noch gewählt ist - sonst die erste.
     const hauptrolle = neu.includes(n.role) ? n.role : neu[0];
     patch(n.id, { rollen: neu, role: hauptrolle });
+  }
+
+  async function bereichUmschalten(n: Nutzer, bereich: string, an: boolean) {
+    const neu = bereiche.alle
+      .map((b) => b.kuerzel)
+      .filter((k) => (k === bereich ? an : n.bereiche.includes(k)));
+    if (neu.length === 0) {
+      setFehler("Ein Nutzer braucht mindestens einen Bereich.");
+      return;
+    }
+    patch(n.id, { bereiche: neu });
+  }
+
+  async function vorlageVertrieb(n: Nutzer) {
+    if (
+      !window.confirm(
+        `${n.full_name}: Rollen auf Personal (HR) + Lohnabrechnung + Kasse und Bereich auf NUR Vertrieb setzen?`
+      )
+    ) {
+      return;
+    }
+    patch(n.id, {
+      rollen: VORLAGE_VERTRIEB.rollen,
+      role: "hr",
+      bereiche: VORLAGE_VERTRIEB.bereiche,
+    });
   }
 
   async function hauptrolleSetzen(n: Nutzer, rolle: UserRole) {
@@ -186,7 +226,10 @@ export default function NutzerVerwaltungPage() {
         <p className="text-sm text-neutral-500">
           Name, Rollen und Aktiv-Status je Nutzer. Ein Nutzer kann mehrere
           Rollen haben und darf dann alles, was eine seiner Rollen darf. Die
-          Hauptrolle bestimmt nur die Startseite. Der Login (E-Mail/Passwort)
+          Hauptrolle bestimmt nur die Startseite. Bereiche (Landwirtschaft /
+          Vertrieb) legen fest, wessen Personal, Stunden und Löhne der Nutzer
+          sieht - Administrator, Management und Prüfer sehen immer alle. Der
+          Login (E-Mail/Passwort)
           wird in Supabase → Authentication → Users angelegt; hier wird
           anschließend das Profil gepflegt. Rollenwechsel landen im
           Änderungsprotokoll.
@@ -206,6 +249,7 @@ export default function NutzerVerwaltungPage() {
                   <th>Name</th>
                   <th>Rollen</th>
                   <th>Hauptrolle</th>
+                  <th>Bereiche</th>
                   <th>Aktiv</th>
                   <th>Angelegt</th>
                   <th>Auth-UID</th>
@@ -259,6 +303,42 @@ export default function NutzerVerwaltungPage() {
                           </option>
                         ))}
                       </select>
+                    </td>
+                    <td>
+                      {n.rollen.some((r) => ROLLEN_ALLE_BEREICHE.includes(r)) ? (
+                        <span
+                          className="text-xs text-neutral-500"
+                          title="Administrator, Management und Prüfer sehen immer alle Bereiche"
+                        >
+                          alle (Rolle)
+                        </span>
+                      ) : (
+                        <div className="flex flex-col gap-0.5">
+                          {bereiche.alle.map((b) => (
+                            <label
+                              key={b.kuerzel}
+                              className="inline-flex items-center gap-1 whitespace-nowrap text-xs"
+                            >
+                              <input
+                                type="checkbox"
+                                checked={n.bereiche.includes(b.kuerzel)}
+                                onChange={(e) =>
+                                  bereichUmschalten(n, b.kuerzel, e.target.checked)
+                                }
+                              />
+                              {b.bezeichnung}
+                            </label>
+                          ))}
+                        </div>
+                      )}
+                      <button
+                        type="button"
+                        className="mt-1 text-xs text-emerald-700 underline"
+                        onClick={() => vorlageVertrieb(n)}
+                        title="Rollen HR + Lohnabrechnung + Kasse, nur Bereich Vertrieb"
+                      >
+                        Vorlage Vertrieb
+                      </button>
                     </td>
                     <td>
                       <input

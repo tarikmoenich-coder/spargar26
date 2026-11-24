@@ -25,6 +25,7 @@ import { getSupabaseClient } from "@/lib/supabase/client";
 import { useProfile } from "@/lib/useProfile";
 import { SPRACHEN, type Sprache } from "@/lib/i18n";
 import { darfMenue, rollenVon, rolleLabel } from "@/lib/rollen";
+import { useBereiche } from "@/lib/useBereiche";
 
 interface NavItem {
   href: string;
@@ -128,6 +129,7 @@ export default function Nav() {
   const pathname = usePathname();
   const router = useRouter();
   const { profile } = useProfile();
+  const bereiche = useBereiche(profile);
   // Unter `lg` (Telefon/kleines Tablet) sind die Bereichs-Links + Name/Rolle
   // + Sprache + Abmelden in eine Schublade ausgelagert - vorher lagen alle
   // ~13 Links plus der Rolle-Block in einer festen 56px-Zeile und
@@ -188,6 +190,35 @@ export default function Nav() {
       .eq("id", profile.id);
     window.location.reload();
   }
+
+  // Umschalter Geschäftsbereich (Stufe 2): nur für Nutzer mit mehreren
+  // Bereichen. Speichert die Ansicht im eigenen Profil - die Datenbank
+  // filtert dann jede Seite automatisch.
+  async function bereichAendern(neu: string) {
+    if (!profile) return;
+    await getSupabaseClient()
+      .from("profiles")
+      .update({ bereich_ansicht: neu || null })
+      .eq("id", profile.id);
+    window.location.reload();
+  }
+  const bereichWahl = profile && bereiche.mehrere && (
+    <select
+      value={bereiche.ansicht ?? ""}
+      onChange={(e) => bereichAendern(e.target.value)}
+      title="Welcher Bereich wird angezeigt (Landwirtschaft / Vertrieb)"
+      className={`text-xs ${bereiche.ansicht ? "border-amber-400 bg-amber-50" : ""}`}
+    >
+      <option value="">Alle Bereiche</option>
+      {bereiche.alle
+        .filter((b) => bereiche.erlaubt.includes(b.kuerzel))
+        .map((b) => (
+          <option key={b.kuerzel} value={b.kuerzel}>
+            {b.bezeichnung}
+          </option>
+        ))}
+    </select>
+  );
 
   const sichtbareItems = items.filter(
     (item) =>
@@ -251,6 +282,7 @@ export default function Nav() {
                   {profile.full_name} ·{" "}
                   <span className="italic">{rollenVon(profile).map(rolleLabel).join(", ")}</span>
                 </span>
+                {bereichWahl}
                 {sprachWahl}
               </>
             )}
@@ -331,6 +363,12 @@ export default function Nav() {
                   {profile.full_name} ·{" "}
                   <span className="italic">{rollenVon(profile).map(rolleLabel).join(", ")}</span>
                 </div>
+                {bereichWahl && (
+                  <label className="mb-3 flex items-center gap-2">
+                    Bereich
+                    {bereichWahl}
+                  </label>
+                )}
                 <label className="mb-3 flex items-center gap-2">
                   Sprache
                   {sprachWahl}

@@ -44,6 +44,10 @@ export interface Profile {
   // hatNurRollen() aus lib/rollen.ts verwenden, nie role direkt vergleichen.
   role: UserRole;
   rollen: UserRole[];
+  // Freigegebene Geschäftsbereiche (nur admin änderbar) und die selbst
+  // gewählte Ansicht (null = alle freigegebenen), Stufe 2 2026-11-24.
+  bereiche?: string[] | null;
+  bereich_ansicht?: string | null;
   aktiv: boolean;
   // UI-Sprache je Nutzer (nicht je Rolle) - siehe lib/i18n.ts. Betrifft
   // nur die Bedienoberfläche, keine Dokumente/Formulare.
@@ -102,6 +106,9 @@ export interface FuehrerscheinEintrag {
 export interface Employee {
   id: string;
   personal_nr: string;
+  // Geschäftsbereich = Rechte-Grenze (Stufe 2, 2026-11-24): 'LW'
+  // Landwirtschaft, 'VT' Vertrieb (Personalnummer beginnt mit "V-").
+  bereich: string;
   gruppe_nr: string | null;
   herkunft: string | null;
   nationalitaet: string | null;
@@ -947,9 +954,17 @@ export const KULTUR_LABELS: Record<Kultur, string> = {
 
 export interface Arbeitsgruppe {
   gruppe_nr: string;
+  bereich: string;
   bezeichnung: string;
   reihenfolge: number;
   kultur: Kultur | null;
+}
+
+export interface Geschaeftsbereich {
+  kuerzel: string;
+  bezeichnung: string;
+  personalnummer_praefix: string;
+  reihenfolge: number;
 }
 
 export interface Herkunft {
@@ -1561,6 +1576,7 @@ export type KandidatStatus = 'geplant' | 'anreiseliste' | 'storniert';
 
 export interface PersonalKandidat {
   id: string;
+  bereich: string;
   // Bei Platzhaltern (platzhalter = true) leer - Name und Personalnummer
   // kommen erst, wenn die echte Namensliste des Vermittlers da ist
   // (Migration 2026-11-21).

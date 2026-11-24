@@ -6,6 +6,7 @@ import { ladeAlleSeiten } from "@/lib/ladeAlle";
 import { satzFuerJahr } from "@/lib/satzFuerJahr";
 import { naechsteStatuswechselNr } from "@/lib/statuswechselNummer";
 import { useProfile } from "@/lib/useProfile";
+import { personalNrFuerBereich, useBereiche } from "@/lib/useBereiche";
 import {
   ABRECHNUNGSART_LABELS,
   type Abrechnungsart,
@@ -23,6 +24,7 @@ import {
   kreisBereich,
   naechsteFreieNummer,
   parsePersonalNrNummer,
+  personalNrImBereich,
 } from "@/lib/personalnummern";
 import { formatDatumDE, formatEuro, formatMenge } from "@/lib/format";
 import { generiereDokument } from "@/lib/dokumentGenerator";
@@ -50,6 +52,9 @@ function naechsterTagIso(datumIso: string | null): string | null {
 
 const emptyForm = {
   personal_nr: "",
+  // Geschäftsbereich (Stufe 2): nur beim Anlegen wählbar - ein Wechsel
+  // Landwirtschaft <-> Vertrieb ist eine neue Person mit neuer Nummer.
+  bereich: "",
   herkunft: "",
   name: "",
   vorname: "",
@@ -203,6 +208,7 @@ function ZeilenAktionen({
 
 export default function MitarbeiterPage() {
   const { profile } = useProfile();
+  const bereiche = useBereiche(profile);
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [gruppen, setGruppen] = useState<Arbeitsgruppe[]>([]);
   const [herkuenfte, setHerkuenfte] = useState<Herkunft[]>([]);
@@ -408,7 +414,9 @@ export default function MitarbeiterPage() {
 
   function naechsteFreieUebernehmen() {
     const belegt = new Set<number>();
+    const praefix = bereiche.praefix(form.bereich || bereiche.standard);
     allePersonalNummern.forEach((r) => {
+      if (!personalNrImBereich(r.personal_nr, praefix)) return;
       const n = parsePersonalNrNummer(r.personal_nr);
       if (n !== null) belegt.add(n);
     });
@@ -427,6 +435,7 @@ export default function MitarbeiterPage() {
     setEditingId(emp.id);
     setForm({
       personal_nr: emp.personal_nr,
+      bereich: emp.bereich ?? "LW",
       herkunft: emp.herkunft ?? "",
       name: emp.name,
       vorname: emp.vorname,
@@ -460,8 +469,10 @@ export default function MitarbeiterPage() {
     setSaving(true);
     setError(null);
     const supabase = getSupabaseClient();
+    const bereich = form.bereich || bereiche.standard;
     const payload = {
-      personal_nr: form.personal_nr,
+      bereich,
+      personal_nr: personalNrFuerBereich(form.personal_nr, bereiche.praefix(bereich)),
       herkunft: form.herkunft || null,
       name: form.name,
       vorname: form.vorname,
@@ -786,6 +797,7 @@ export default function MitarbeiterPage() {
       .from("employee_personaldaten")
       .insert({
         personal_nr: neuePersonalNr,
+        bereich: alt.bereich,
         gruppe_nr: alt.gruppe_nr,
         herkunft: alt.herkunft,
         nationalitaet: alt.nationalitaet,
@@ -941,6 +953,26 @@ export default function MitarbeiterPage() {
       >
         <Abschnitt titel="Person">
           <div className="col-span-2 flex flex-col gap-1">
+            {!editingId && bereiche.mehrere && (
+              <label className="flex flex-col gap-0.5 text-xs text-neutral-500">
+                Bereich
+                <select
+                  value={form.bereich || bereiche.standard}
+                  onChange={(e) => setForm({ ...form, bereich: e.target.value })}
+                >
+                  {bereiche.alle
+                    .filter((b) => bereiche.erlaubt.includes(b.kuerzel))
+                    .map((b) => (
+                      <option key={b.kuerzel} value={b.kuerzel}>
+                        {b.bezeichnung}
+                        {b.personalnummer_praefix
+                          ? ` (Personalnummer mit „${b.personalnummer_praefix}“)`
+                          : ""}
+                      </option>
+                    ))}
+                </select>
+              </label>
+            )}
             <label className="flex flex-col gap-0.5 text-xs text-neutral-500">
               Personalnummer
               <div className="flex gap-2">
@@ -1560,7 +1592,14 @@ export default function MitarbeiterPage() {
                     />
                   </td>
                 )}
-                <td>{emp.personal_nr}</td>
+                <td>
+                  {emp.personal_nr}
+                  {bereiche.mehrere && !bereiche.ansicht && emp.bereich !== "LW" && (
+                    <span className="badge-neutral ml-1 text-[10px]" title="Bereich">
+                      {bereiche.label(emp.bereich)}
+                    </span>
+                  )}
+                </td>
                 <td>
                   {emp.gruppe_nr
                     ? `${emp.gruppe_nr} – ${

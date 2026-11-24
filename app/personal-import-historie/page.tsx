@@ -6,6 +6,7 @@ import { useMemo, useState } from "react";
 import * as XLSX from "xlsx";
 import { getSupabaseClient } from "@/lib/supabase/client";
 import { useProfile } from "@/lib/useProfile";
+import { personalNrFuerBereich, useBereiche } from "@/lib/useBereiche";
 import {
   baueZeile,
   erkenneSpalten,
@@ -74,6 +75,8 @@ function ladeVerdachtCsv(personen: HistoriePerson[]) {
 
 export default function PersonalImportHistoriePage() {
   const { profile } = useProfile();
+  // Geschäftsbereich (Stufe 2) - Vertriebs-Historie folgt in Stufe 4.
+  const bereiche = useBereiche(profile);
   const canEdit = hatRolle(profile, "admin", "hr");
 
   const [dateiname, setDateiname] = useState<string | null>(null);
@@ -230,7 +233,8 @@ export default function PersonalImportHistoriePage() {
 
     for (const block of bloecke(neuePersonen)) {
       const payload = block.map((p) => ({
-        personal_nr: p.personal_nr,
+        personal_nr: personalNrFuerBereich(p.personal_nr, bereiche.praefix(bereiche.standard)),
+        bereich: bereiche.standard,
         gruppe_nr: p.gruppe_nr,
         name: p.name,
         vorname: p.vorname,

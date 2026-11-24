@@ -143,6 +143,15 @@ Nutzerverwaltung mit Rollen-Häkchen + Hauptrolle.
 
 ### Stufe 2 - Personalstamm als Rechte-Grenze
 
+Stand 2026-11-24: gebaut (Branch), umbenannt in **Geschäftsbereich**
+(LW/VT), weil der Nutzer die drei Firmen "Personalstämme" nennt. Nutzer-
+Entscheidung: Mönich und Mömmel brauchen keine Rechte-Trennung (nur
+Kassenbuch/Lohn-Monatsfilter/Kosten je Firma -> Stufe 3). Umsetzung über
+zusätzliche einschränkende Policies (bestehende Rollen-Regeln unverändert),
+Filter in 10 Eigentümer-Views, Prüfung in 15 Funktionen. Unterkunft-
+Belegung bereichsübergreifend; auszahlungsbeleg_summary bleibt bis Stufe 3
+ungefiltert (speist den Kassenbestand). Bestehende Nutzer: nur LW.
+
 - Tabelle `personalstamm` (`LW`, `VT`; Bezeichnung, Personalnummer-Präfix,
   Standard-Kassenbuch).
 - `employees.personalstamm` not null, Bestand = `LW`.

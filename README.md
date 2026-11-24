@@ -1442,6 +1442,21 @@ In der Datenbank prüfen alle Regeln über `hat_rolle(...)` /
 nie `profile.role` direkt vergleichen. Deaktivierte Nutzer haben keine
 Rollen (Datenbank und Menü).
 
+**Geschäftsbereiche (seit 2026-11-24, Stufe 2):** Landwirtschaft (`LW`) und
+Vertrieb (`VT`, Personalnummer mit `V-`) sind eine harte Rechte-Grenze.
+Jede Person (`employees.bereich`), jeder Planungskandidat und jede
+Arbeitsgruppe gehört zu einem Bereich; jeder Nutzer bekommt in der
+Nutzerverwaltung seine Bereiche (`profiles.bereiche`; admin, management und
+pruefer sehen immer alle). Die Datenbank filtert über einschränkende
+Policies (`bereich_grenze`), Filter in den Eigentümer-Views und Prüfungen
+in den security-definer-Funktionen (`current_bereiche()`,
+`darf_mitarbeiter()`). Wer mehrere Bereiche sieht, wählt oben in der
+Kopfleiste die Ansicht (`profiles.bereich_ansicht`) - alle Seiten zeigen
+dann nur diesen Bereich. Unterkunft-Belegung (wer wohnt wo) ist bewusst
+bereichsübergreifend. Vorlage "Vertrieb" in der Nutzerverwaltung: HR +
+Lohnabrechnung + Kasse, nur Bereich Vertrieb. Test:
+`supabase/tests/bereich_test.sql`.
+
 | Rolle | Sichtbare Menüpunkte | Kernrechte |
 |---|---|---|
 | `admin` | Alle | Voller Zugriff auf alles, inkl. Einstellungen, Kassenprüfungen freigeben, Änderungsprotokoll (Seite "Protokoll") |
