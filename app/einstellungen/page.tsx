@@ -1,6 +1,7 @@
 "use client";
 
-// Einstellungen → Allgemein: Firmen-Bankdaten (SEPA-Auftraggeber) und die je
+// Einstellungen → Allgemein: Firmen (SEPA-Auftraggeber, Lohnsteuer-Antrag;
+// seit Stufe 3a je Firma) und die je
 // Saisonjahr versionierten Sätze für Verpflegung/Unterkunft/Mindestlohn/
 // Arbeitskleidung. Arbeitsgruppen, Herkünfte und Nutzer & Rollen sind eigene
 // Unterseiten (components/EinstellungenTabs.tsx).
@@ -12,7 +13,7 @@ import { formatMenge } from "@/lib/format";
 import { getSupabaseClient } from "@/lib/supabase/client";
 import { useProfile } from "@/lib/useProfile";
 import EinstellungenTabs from "@/components/EinstellungenTabs";
-import type { FirmenBankdaten, VerpflegungsSatz } from "@/lib/types";
+import type { Firma, VerpflegungsSatz } from "@/lib/types";
 
 import { hatRolle } from "@/lib/rollen";
 const CURRENT_YEAR = new Date().getFullYear();
@@ -35,7 +36,10 @@ export default function EinstellungenAllgemeinPage() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const [bankdaten, setBankdaten] = useState<FirmenBankdaten | null>(null);
+  // Firmen (Stufe 3a): Bankdaten/Anschrift je Firma statt einer Einzeile.
+  const [firmen, setFirmen] = useState<Firma[]>([]);
+  const [firmaKuerzel, setFirmaKuerzel] = useState("MA");
+  const bankdaten = firmen.find((f) => f.kuerzel === firmaKuerzel) ?? null;
   const [bankdatenForm, setBankdatenForm] = useState({
     name: "",
     iban: "",
@@ -58,11 +62,17 @@ export default function EinstellungenAllgemeinPage() {
         .from("verpflegungssaetze")
         .select("*")
         .order("saison_jahr", { ascending: false }),
-      supabase.from("firmen_bankdaten").select("*").eq("id", 1).maybeSingle(),
+      supabase.from("firma").select("*").order("reihenfolge"),
     ]);
     if (!error) setSaetze((data as VerpflegungsSatz[]) ?? []);
-    const bd = (bankdatenData as FirmenBankdaten) ?? null;
-    setBankdaten(bd);
+    const liste = (bankdatenData as Firma[]) ?? [];
+    setFirmen(liste);
+    formAusFirma(liste.find((f) => f.kuerzel === firmaKuerzel) ?? liste[0] ?? null);
+    setLoading(false);
+  }
+
+  function formAusFirma(bd: Firma | null) {
+    if (bd) setFirmaKuerzel(bd.kuerzel);
     setBankdatenForm({
       name: bd?.name ?? "",
       iban: bd?.iban ?? "",
@@ -73,7 +83,6 @@ export default function EinstellungenAllgemeinPage() {
       plz: bd?.plz ?? "",
       ort: bd?.ort ?? "",
     });
-    setLoading(false);
   }
 
   useEffect(() => {
@@ -86,7 +95,7 @@ export default function EinstellungenAllgemeinPage() {
     setBankdatenError(null);
     setBankdatenGespeichert(false);
     const { error } = await getSupabaseClient()
-      .from("firmen_bankdaten")
+      .from("firma")
       .update({
         name: bankdatenForm.name,
         iban: bankdatenForm.iban || null,
@@ -96,8 +105,10 @@ export default function EinstellungenAllgemeinPage() {
         hausnummer: bankdatenForm.hausnummer || null,
         plz: bankdatenForm.plz || null,
         ort: bankdatenForm.ort || null,
+        updated_by: profile?.id ?? null,
+        updated_at: new Date().toISOString(),
       })
-      .eq("id", 1);
+      .eq("kuerzel", firmaKuerzel);
     setBankdatenSaving(false);
     if (error) {
       setBankdatenError(error.message);
@@ -152,7 +163,7 @@ export default function EinstellungenAllgemeinPage() {
       <div>
         <PageHeader icon={Settings} titel="Einstellungen – Allgemein" />
         <p className="mt-1 text-sm text-neutral-500">
-          Firmen-Bankdaten für den SEPA-Export sowie die je Saisonjahr
+          Firmen (Bankdaten/Anschrift für SEPA und Lohnsteuer-Antrag) sowie die je Saisonjahr
           versionierten Sätze (ADR-007) für Verpflegung, Unterkunft,
           Mindestlohn und Arbeitskleidung. Änderungen wirken nur auf das
           jeweilige Saisonjahr; bereits berechnete Jahre bleiben unverändert.
@@ -163,16 +174,33 @@ export default function EinstellungenAllgemeinPage() {
 
       <div>
         <h2 className="text-lg font-semibold text-emerald-800">
-          Firmen-Bankdaten
+          Firmen
         </h2>
         <p className="text-sm text-neutral-500">
-          Auftraggeber-Konto für den SEPA-Überweisungs-Export bei Vorschüssen
-          (Zahlungsart Banküberweisung) sowie Steuernummer/Anschrift für den
-          Lohnsteuerabzug-Sammelantrag (Finanzamt Bensheim). Nur admin/kasse/hr
-          können diese Daten lesen.
+          Je Firma das Auftraggeber-Konto für SEPA-Überweisungen (Vorschüsse,
+          Auszahlungen) sowie Steuernummer/Anschrift für den Lohnsteuerabzug-
+          Sammelantrag. Jede Person gehört je Saison zu einer Firma -
+          Landwirtschaft standardmäßig Mömmel Agrar, Vertrieb Mönich Direkt.
         </p>
       </div>
 
+      {firmen.length > 1 && (
+        <div className="flex flex-wrap gap-2">
+          {firmen.map((f) => (
+            <button
+              key={f.kuerzel}
+              type="button"
+              className={f.kuerzel === firmaKuerzel ? "btn" : "btn-secondary"}
+              onClick={() => {
+                setBankdatenGespeichert(false);
+                formAusFirma(f);
+              }}
+            >
+              {f.name}
+            </button>
+          ))}
+        </div>
+      )}
       {isAdmin ? (
         <form
           onSubmit={handleBankdatenSubmit}
@@ -256,8 +284,8 @@ export default function EinstellungenAllgemeinPage() {
       ) : (
         <p className="text-sm text-neutral-500">
           {bankdaten?.iban
-            ? "Firmen-Bankdaten sind hinterlegt."
-            : "Keine Firmen-Bankdaten hinterlegt."}{" "}
+            ? "Bankdaten dieser Firma sind hinterlegt."
+            : "Für diese Firma sind keine Bankdaten hinterlegt."}{" "}
           Nur admin kann sie ändern.
         </p>
       )}

@@ -1457,6 +1457,17 @@ bereichsübergreifend. Vorlage "Vertrieb" in der Nutzerverwaltung: HR +
 Lohnabrechnung + Kasse, nur Bereich Vertrieb. Test:
 `supabase/tests/bereich_test.sql`.
 
+**Firmen (seit 2026-11-24, Stufe 3a):** Mömmel Agrar GmbH & Co. KG (`MA`,
+Standard Landwirtschaft), Mönich Landwirtschaft GmbH & Co. KG (`ML`), Mönich
+Direkt GmbH & Co. KG (`MD`, Vertrieb). Tabelle `firma` (Bankdaten,
+Anschrift, Steuernummer, Lohn-Kassenbuch; Einstellungen → Allgemein →
+Firmen) ersetzt `firmen_bankdaten`. Jede Person gehört je Saison zu einer
+Firma (`employee_saison`; ohne Eintrag die Standard-Firma ihres Bereichs,
+`firma_fuer()` / `lib/firmen.ts`). Gesetzt in der Personalplanung (Kandidat,
+übernommen bei "Anreise vorbereiten") und in der Lohnübersicht ("Firma
+setzen"). Lohnübersicht/Monatsdruck filterbar nach Firma; SEPA-Dateien je
+Firma (gemischte Belege -> eine Datei je Firma); Lohnsteuer-Antrag je Firma.
+
 | Rolle | Sichtbare Menüpunkte | Kernrechte |
 |---|---|---|
 | `admin` | Alle | Voller Zugriff auf alles, inkl. Einstellungen, Kassenprüfungen freigeben, Änderungsprotokoll (Seite "Protokoll") |

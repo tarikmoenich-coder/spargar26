@@ -4,6 +4,7 @@ import { Fragment, useEffect, useMemo, useState } from "react";
 import { getSupabaseClient } from "@/lib/supabase/client";
 import { useProfile } from "@/lib/useProfile";
 import { personalNrFuerBereich, useBereiche } from "@/lib/useBereiche";
+import { firmaKurz, standardFirma } from "@/lib/firmen";
 import {
   ANZAHL_PERSONALNUMMERN_KREISE,
   kreisBereich,
@@ -24,6 +25,7 @@ import {
   FUEHRERSCHEIN_KATEGORIEN,
   type BenannterKandidat,
   type Einsatzbereich,
+  type Firma,
   type EinsatzbereichZeitraum,
   type Employee,
   type EmployeeSaisonHistorieAgg,
@@ -59,6 +61,8 @@ const emptyForm = {
   geplante_ankunft: "",
   fuehrerschein: [] as string[],
   einsatzbereich: "",
+  // geplante Firma (Stufe 3a); leer = Standard (Mömmel Agrar / Mönich Direkt)
+  firma: "",
   notiz: "",
 };
 
@@ -135,6 +139,8 @@ export default function PersonalplanungPage() {
   const [letzteAuswahl, setLetzteAuswahl] = useState<string | null>(null);
   const [sammelDatum, setSammelDatum] = useState("");
   const [sammelBereich, setSammelBereich] = useState("");
+  const [sammelFirma, setSammelFirma] = useState("");
+  const [firmen, setFirmen] = useState<Firma[]>([]);
   const [sammelLaeuft, setSammelLaeuft] = useState(false);
 
   async function load() {
@@ -149,6 +155,7 @@ export default function PersonalplanungPage() {
       { data: ebData },
       { data: spData },
       { data: zrData },
+      { data: firmaData },
     ] = await Promise.all([
       supabase
         .from("personal_kandidaten")
@@ -177,8 +184,10 @@ export default function PersonalplanungPage() {
       supabase.from("einsatzbereiche").select("*").order("reihenfolge"),
       supabase.from("unterkunft_herkunft_plan").select("*"),
       supabase.from("einsatzbereich_zeitraum").select("*"),
+      supabase.from("firma").select("*").order("reihenfolge"),
     ]);
     setZeitraeume((zrData as EinsatzbereichZeitraum[]) ?? []);
+    setFirmen((firmaData as Firma[]) ?? []);
     setEinsatzbereiche((ebData as Einsatzbereich[]) ?? []);
     setSollPlan((spData as UnterkunftHerkunftPlan[]) ?? []);
     setKandidaten((kData as PersonalKandidat[]) ?? []);
@@ -432,6 +441,7 @@ export default function PersonalplanungPage() {
             platzhalter: false,
             geplante_ankunft: form.geplante_ankunft || ziel.geplante_ankunft,
             einsatzbereich: form.einsatzbereich || ziel.einsatzbereich,
+            firma: form.firma || ziel.firma,
             notiz: form.notiz || ziel.notiz,
           })
           .eq("id", ziel.id)
@@ -442,6 +452,7 @@ export default function PersonalplanungPage() {
           saison_jahr: saisonJahr,
           geplante_ankunft: form.geplante_ankunft || null,
           einsatzbereich: form.einsatzbereich || null,
+          firma: form.firma || null,
           notiz: form.notiz || null,
         });
     setSaving(false);
@@ -705,6 +716,20 @@ export default function PersonalplanungPage() {
           stundenlohn: lohn,
         })
         .eq("id", k.id);
+
+      // Geplante Firma für die Saison übernehmen (Stufe 3a) - ohne Angabe
+      // gilt die Standard-Firma des Bereichs, kein Eintrag nötig.
+      if (employeeId && k.firma) {
+        const { error: firmaFehler } = await supabase
+          .from("employee_saison")
+          .upsert(
+            { employee_id: employeeId, saison_jahr: k.saison_jahr, firma: k.firma },
+            { onConflict: "employee_id,saison_jahr" }
+          );
+        if (firmaFehler) {
+          fehlerListe.push(`${k.name}, ${k.vorname}: Firma nicht übernommen - ${firmaFehler.message}`);
+        }
+      }
 
       // Expliziter Beschäftigungsabschnitt (Nutzer-Vorgabe 2026-11-04/05):
       // arbeitsbeginn_datum ist an dieser Stelle in aller Regel noch leer
@@ -1407,6 +1432,24 @@ export default function PersonalplanungPage() {
                 </option>
               ))}
             </select>
+            {firmen.filter((f) => f.bereich === bereiche.standard).length > 1 && (
+              <select
+                value={form.firma}
+                onChange={(e) => setForm({ ...form, firma: e.target.value })}
+                title="Firma, bei der die Person in dieser Saison angestellt wird"
+              >
+                <option value="">
+                  Firma: Standard ({firmaKurz(firmen, standardFirma(firmen, bereiche.standard)?.kuerzel)})
+                </option>
+                {firmen
+                  .filter((f) => f.bereich === bereiche.standard)
+                  .map((f) => (
+                    <option key={f.kuerzel} value={f.kuerzel}>
+                      {firmaKurz(firmen, f.kuerzel)}
+                    </option>
+                  ))}
+              </select>
+            )}
             <label className="flex flex-col gap-0.5 text-xs text-neutral-500">
               Geplante Ankunft
               <input
@@ -1531,6 +1574,27 @@ export default function PersonalplanungPage() {
               Bereich setzen
             </button>
           </span>
+          {firmen.length > 1 && (
+            <span className="flex items-center gap-1">
+              <select value={sammelFirma} onChange={(e) => setSammelFirma(e.target.value)}>
+                <option value="">Firma: Standard</option>
+                {firmen.map((f) => (
+                  <option key={f.kuerzel} value={f.kuerzel}>
+                    {firmaKurz(firmen, f.kuerzel)}
+                  </option>
+                ))}
+              </select>
+              <button
+                type="button"
+                className="btn-secondary text-xs"
+                disabled={sammelLaeuft}
+                onClick={() => sammelSpeichern({ firma: sammelFirma || null })}
+                title="Geplante Firma der markierten Kandidaten (wird bei 'Anreise vorbereiten' für die Saison übernommen)"
+              >
+                Firma setzen
+              </button>
+            </span>
+          )}
           <button
             type="button"
             className="btn-secondary text-xs"

@@ -4,12 +4,12 @@ import { Fragment, useEffect, useState } from "react";
 import { formatMenge } from "@/lib/format";
 import { getSupabaseClient } from "@/lib/supabase/client";
 import { useProfile } from "@/lib/useProfile";
+import { nachFirmaGruppieren } from "@/lib/firmen";
 import type {
   Advance,
   AdvanceRecipientDetail,
   Arbeitsgruppe,
   Employee,
-  FirmenBankdaten,
   Herkunft,
   SepaExport,
 } from "@/lib/types";
@@ -132,10 +132,8 @@ export default function VorschuessePage() {
   const [belastungLaeuft, setBelastungLaeuft] = useState<number | null>(null);
 
   // SEPA-Überweisungsdatei (Nutzer-Vorgabe 2026-08-25): Auftraggeber-Konto
-  // kommt aus den Einstellungen (firmen_bankdaten), Zahlungsdatum ist frei
+  // je Firma (Einstellungen → Firmen, Stufe 3a), Zahlungsdatum ist frei
   // wählbar (Standard: heute).
-  const [firmenBankdaten, setFirmenBankdaten] =
-    useState<FirmenBankdaten | null>(null);
   const [sepaDatum, setSepaDatum] = useState(heuteIsoDatum());
   const [sepaFehler, setSepaFehler] = useState<string | null>(null);
   // Vermerk "SEPA-Datei schon erzeugt" je Vorschussbeleg (advance.id -> Export).
@@ -171,7 +169,6 @@ export default function VorschuessePage() {
       { data: emp },
       { data: gr },
       { data: hk },
-      { data: bankdaten },
       { data: sepaEx },
       { data: empBank },
     ] = await Promise.all([
@@ -187,10 +184,6 @@ export default function VorschuessePage() {
         .order("name"),
       supabase.from("arbeitsgruppen").select("*").order("reihenfolge"),
       supabase.from("herkuenfte").select("*").order("reihenfolge"),
-      // Kein Fehler, falls RLS den Zugriff verweigert (nicht admin/kasse) -
-      // dann bleibt firmenBankdaten einfach null und der SEPA-Button prüft
-      // das selbst ab.
-      supabase.from("firmen_bankdaten").select("*").eq("id", 1).maybeSingle(),
       supabase.from("sepa_export").select("*").eq("art", "vorschuss"),
       // Bankverbindung nur über employee_bankdaten (Stufe 0c, 2026-11-24):
       // liefert nur für admin/hr/kasse/lohnabrechnung Zeilen - management
@@ -216,7 +209,6 @@ export default function VorschuessePage() {
     );
     setGruppen((gr as Arbeitsgruppe[]) ?? []);
     setHerkuenfte((hk as Herkunft[]) ?? []);
-    setFirmenBankdaten((bankdaten as FirmenBankdaten) ?? null);
     const sm: Record<number, SepaExport> = {};
     ((sepaEx as SepaExport[]) ?? []).forEach((e) => (sm[e.beleg_id] = e));
     setSepaExporte(sm);
@@ -741,12 +733,6 @@ export default function VorschuessePage() {
   // nicht bezahlt.
   async function sepaErstellen(beleg: Beleg, datum: string) {
     setSepaFehler(null);
-    if (!firmenBankdaten?.iban || !firmenBankdaten?.bic) {
-      setSepaFehler(
-        "Bitte zuerst IBAN/BIC von Mömmel Agrar unter Einstellungen hinterlegen."
-      );
-      return;
-    }
     const ohneIban = beleg.empfaenger.filter((p) => !p.iban || !p.bic);
     if (ohneIban.length > 0) {
       setSepaFehler(
@@ -757,24 +743,41 @@ export default function VorschuessePage() {
       return;
     }
     const summe = beleg.empfaenger.reduce((s, p) => s + p.anteil, 0);
-    const xml = erzeugeSepaXml(
-      {
-        name: firmenBankdaten.name,
-        iban: firmenBankdaten.iban,
-        bic: firmenBankdaten.bic,
-      },
-      beleg.empfaenger.map((p) => ({
-        employeeId: p.employee_id,
-        name: p.zahlungsempfaenger || `${p.vorname} ${p.name}`,
-        iban: p.iban as string,
-        bic: p.bic as string,
-        betrag: p.anteil,
-        verwendungszweck: `${beleg.belegnummer}, ${p.name}, ${p.vorname}`,
-      })),
-      datum,
-      beleg.belegnummer
-    );
-    sepaDateiHerunterladen(xml, `SEPA_${beleg.belegnummer}_${datum}.xml`);
+    // Stufe 3a (2026-11-24): Auftraggeber = Firma der Person in der Saison
+    // des Vorschusses; gemischte Belege -> eine Datei je Firma.
+    const saisonJahr = Number((beleg.datum ?? datum).slice(0, 4));
+    const gruppen = await nachFirmaGruppieren(getSupabaseClient(), beleg.empfaenger, saisonJahr);
+    const ohneKonto = gruppen.filter((g) => !g.firma?.iban || !g.firma?.bic);
+    if (ohneKonto.length > 0) {
+      setSepaFehler(
+        `Bitte zuerst IBAN/BIC unter Einstellungen → Firmen hinterlegen für: ${ohneKonto
+          .map((g) => g.firma?.name ?? "unbekannte Firma")
+          .join("; ")}`
+      );
+      return;
+    }
+    for (const g of gruppen) {
+      const firma = g.firma!;
+      const xml = erzeugeSepaXml(
+        { name: firma.name, iban: firma.iban as string, bic: firma.bic as string },
+        g.zeilen.map((p) => ({
+          employeeId: p.employee_id,
+          name: p.zahlungsempfaenger || `${p.vorname} ${p.name}`,
+          iban: p.iban as string,
+          bic: p.bic as string,
+          betrag: p.anteil,
+          verwendungszweck: `${beleg.belegnummer}, ${p.name}, ${p.vorname}`,
+        })),
+        datum,
+        gruppen.length > 1 ? `${beleg.belegnummer}-${firma.kuerzel}` : beleg.belegnummer
+      );
+      sepaDateiHerunterladen(
+        xml,
+        gruppen.length > 1
+          ? `SEPA_${beleg.belegnummer}_${firma.kuerzel}_${datum}.xml`
+          : `SEPA_${beleg.belegnummer}_${datum}.xml`
+      );
+    }
 
     // Vermerk speichern ("SEPA schon erzeugt" + Datum neben dem Beleg).
     const eintrag: SepaExport = {

@@ -2,11 +2,11 @@
 
 import { useEffect, useState } from "react";
 import { getSupabaseClient } from "@/lib/supabase/client";
+import { nachFirmaGruppieren } from "@/lib/firmen";
 import { useProfile } from "@/lib/useProfile";
 import type {
   AuszahlungsbelegSummary,
   AuszahlungsbelegZeile,
-  FirmenBankdaten,
   Kautionsuebergabe,
   SeasonSummaryRow,
   SepaExport,
@@ -262,9 +262,8 @@ export default function AuszahlungenPage() {
     { name: string; vorname: string; personal_nr: string }[]
   >([]);
 
-  // SEPA-Überweisungsdatei je Auszahlungsbeleg mit Zahlungsart Überweisung.
-  const [firmenBankdaten, setFirmenBankdaten] =
-    useState<FirmenBankdaten | null>(null);
+  // SEPA-Überweisungsdatei je Auszahlungsbeleg mit Zahlungsart Überweisung
+  // (Auftraggeber je Firma, Stufe 3a).
   const [sepaExporte, setSepaExporte] = useState<Record<number, SepaExport>>({});
   const [sepaBelegId, setSepaBelegId] = useState<number | null>(null);
   const [sepaBelegDatum, setSepaBelegDatum] = useState(heuteIso());
@@ -276,7 +275,6 @@ export default function AuszahlungenPage() {
     const [
       { data, error },
       { data: kautionenData },
-      { data: bankdaten },
       { data: sepaEx },
     ] = await Promise.all([
       supabase
@@ -287,11 +285,9 @@ export default function AuszahlungenPage() {
         .from("kautionsuebergaben")
         .select("*")
         .eq("storniert", false),
-      supabase.from("firmen_bankdaten").select("*").eq("id", 1).maybeSingle(),
       supabase.from("sepa_export").select("*").eq("art", "auszahlung"),
     ]);
     if (!error) setBelege((data as AuszahlungsbelegSummary[]) ?? []);
-    setFirmenBankdaten((bankdaten as FirmenBankdaten) ?? null);
     const sm: Record<number, SepaExport> = {};
     ((sepaEx as SepaExport[]) ?? []).forEach((e) => (sm[e.beleg_id] = e));
     setSepaExporte(sm);
@@ -424,12 +420,6 @@ export default function AuszahlungenPage() {
   // ab und wird namentlich genannt, niemand wird still übersprungen.
   async function sepaErstellen(beleg: AuszahlungsbelegSummary) {
     setSepaFehler(null);
-    if (!firmenBankdaten?.iban || !firmenBankdaten?.bic) {
-      setSepaFehler(
-        "Bitte zuerst IBAN/BIC von Mömmel Agrar unter Einstellungen hinterlegen."
-      );
-      return;
-    }
     const supabase = getSupabaseClient();
     const { data, error } = await supabase
       .from("auszahlungsbeleg_zeilen")
@@ -484,27 +474,40 @@ export default function AuszahlungenPage() {
       return;
     }
     const summe = zuZahlen.reduce((s, r) => s + r.betrag, 0);
-    const xml = erzeugeSepaXml(
-      {
-        name: firmenBankdaten.name,
-        iban: firmenBankdaten.iban,
-        bic: firmenBankdaten.bic,
-      },
-      zuZahlen.map((r) => ({
-        employeeId: r.employee_id,
-        name: r.zahlungsempfaenger || `${r.vorname} ${r.name}`,
-        iban: r.iban,
-        bic: r.bic,
-        betrag: r.betrag,
-        verwendungszweck: `Lohnauszahlung ${beleg.belegnummer}, ${r.name}, ${r.vorname}`,
-      })),
-      sepaBelegDatum,
-      beleg.belegnummer
-    );
-    sepaDateiHerunterladen(
-      xml,
-      `SEPA_${beleg.belegnummer}_${sepaBelegDatum}.xml`
-    );
+    // Stufe 3a (2026-11-24): Auftraggeber = Firma der Person in der Saison
+    // des Belegs; gemischte Belege -> eine Datei je Firma.
+    const gruppen = await nachFirmaGruppieren(supabase, zuZahlen, beleg.saison_jahr);
+    const ohneKonto = gruppen.filter((g) => !g.firma?.iban || !g.firma?.bic);
+    if (ohneKonto.length > 0) {
+      setSepaFehler(
+        `Bitte zuerst IBAN/BIC unter Einstellungen → Firmen hinterlegen für: ${ohneKonto
+          .map((g) => g.firma?.name ?? "unbekannte Firma")
+          .join("; ")}`
+      );
+      return;
+    }
+    for (const g of gruppen) {
+      const firma = g.firma!;
+      const xml = erzeugeSepaXml(
+        { name: firma.name, iban: firma.iban as string, bic: firma.bic as string },
+        g.zeilen.map((r) => ({
+          employeeId: r.employee_id,
+          name: r.zahlungsempfaenger || `${r.vorname} ${r.name}`,
+          iban: r.iban,
+          bic: r.bic,
+          betrag: r.betrag,
+          verwendungszweck: `Lohnauszahlung ${beleg.belegnummer}, ${r.name}, ${r.vorname}`,
+        })),
+        sepaBelegDatum,
+        gruppen.length > 1 ? `${beleg.belegnummer}-${firma.kuerzel}` : beleg.belegnummer
+      );
+      sepaDateiHerunterladen(
+        xml,
+        gruppen.length > 1
+          ? `SEPA_${beleg.belegnummer}_${firma.kuerzel}_${sepaBelegDatum}.xml`
+          : `SEPA_${beleg.belegnummer}_${sepaBelegDatum}.xml`
+      );
+    }
     const eintrag: SepaExport = {
       art: "auszahlung",
       beleg_id: beleg.id,

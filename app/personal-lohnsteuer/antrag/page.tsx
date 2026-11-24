@@ -25,6 +25,7 @@ import PageHeader from "@/components/PageHeader";
 import { FileText } from "lucide-react";
 import { Fragment, useEffect, useMemo, useState } from "react";
 import { getSupabaseClient } from "@/lib/supabase/client";
+import { firmaFuer, firmaKurz } from "@/lib/firmen";
 import { ladeAlleSeiten } from "@/lib/ladeAlle";
 import { useProfile } from "@/lib/useProfile";
 import PersonalTabs from "@/components/PersonalTabs";
@@ -38,7 +39,7 @@ import {
   type DoppelteHaushaltsfuehrung,
   type Employee,
   type EmployeeDocument,
-  type FirmenBankdaten,
+  type Firma,
   type Lohnsteuerantrag,
   type LohnsteuerantragErgebnis,
   type LohnsteuerantragPosition,
@@ -155,7 +156,11 @@ export default function LohnsteuerantragPage() {
   const [dokumente, setDokumente] = useState<Record<string, EmployeeDocument[]>>(
     {}
   );
-  const [firma, setFirma] = useState<FirmenBankdaten | null>(null);
+  // Antragstellende Firma (Stufe 3a): Absender/Steuernummer des Antrags;
+  // zur Auswahl stehen nur Personen, die im Jahr zu dieser Firma gehören.
+  const [firma, setFirma] = useState<Firma | null>(null);
+  const [firmenListe, setFirmenListe] = useState<Firma[]>([]);
+  const [saisonFirma, setSaisonFirma] = useState<Map<string, string>>(new Map());
   const [fruehereGenehmigt, setFruehereGenehmigt] = useState<Set<string>>(
     new Set()
   );
@@ -179,12 +184,20 @@ export default function LohnsteuerantragPage() {
 
   async function ladeAntraege() {
     const supabase = getSupabaseClient();
-    const { data } = await supabase
-      .from("lohnsteuerantrag")
-      .select("*")
-      .eq("jahr", jahr)
-      .order("id");
+    const [{ data }, { data: firmenDaten }, { data: saisonDaten }] = await Promise.all([
+      supabase.from("lohnsteuerantrag").select("*").eq("jahr", jahr).order("id"),
+      supabase.from("firma").select("*").order("reihenfolge"),
+      ladeAlleSeiten<{ employee_id: string; firma: string }>((von, bis) =>
+        supabase
+          .from("employee_saison")
+          .select("employee_id, firma")
+          .eq("saison_jahr", jahr)
+          .range(von, bis)
+      ).then((rows) => ({ data: rows })),
+    ]);
     setAntraege((data as Lohnsteuerantrag[]) ?? []);
+    setFirmenListe((firmenDaten as Firma[]) ?? []);
+    setSaisonFirma(new Map((saisonDaten ?? []).map((r) => [r.employee_id, r.firma])));
   }
 
   useEffect(() => {
@@ -203,7 +216,11 @@ export default function LohnsteuerantragPage() {
           .select("*")
           .eq("antrag_id", antragId)
           .order("id"),
-        supabase.from("firmen_bankdaten").select("*").eq("id", 1).maybeSingle(),
+        supabase
+          .from("firma")
+          .select("*")
+          .eq("kuerzel", antraege.find((a) => a.id === antragId)?.firma ?? "MA")
+          .maybeSingle(),
         ladeAlleSeiten<Employee>((von, bis) =>
           supabase
             .from("employee_personaldaten")
@@ -215,7 +232,7 @@ export default function LohnsteuerantragPage() {
       ]);
     const pos = (posData as LohnsteuerantragPosition[]) ?? [];
     setPositionen(pos);
-    setFirma((firmaData as FirmenBankdaten) ?? null);
+    setFirma((firmaData as Firma) ?? null);
     setAlleAktiven(aktivEmployees);
     const empMap: Record<string, Employee> = {};
     aktivEmployees.forEach((e) => {
@@ -284,11 +301,11 @@ export default function LohnsteuerantragPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [aktivId]);
 
-  async function neuerAntrag() {
+  async function neuerAntrag(firmaKuerzel: string) {
     const supabase = getSupabaseClient();
     const { data, error } = await supabase
       .from("lohnsteuerantrag")
-      .insert({ jahr })
+      .insert({ jahr, firma: firmaKuerzel })
       .select()
       .single();
     if (error || !data) {
@@ -320,6 +337,8 @@ export default function LohnsteuerantragPage() {
     const q = hinzufuegenSuche.toLowerCase();
     return alleAktiven.filter((e) => {
       if (positionsEmployeeIds.has(e.id)) return false;
+      // nur Personen, die im Antragsjahr zur Firma des Antrags gehören
+      if (firma && firmaFuer(firmenListe, e, saisonFirma)?.kuerzel !== firma.kuerzel) return false;
       if (!q) return true;
       return (
         e.name.toLowerCase().includes(q) ||
@@ -327,7 +346,7 @@ export default function LohnsteuerantragPage() {
         e.personal_nr.toLowerCase().includes(q)
       );
     });
-  }, [alleAktiven, positionsEmployeeIds, hinzufuegenSuche]);
+  }, [alleAktiven, positionsEmployeeIds, hinzufuegenSuche, firma, firmenListe, saisonFirma]);
 
   async function personenHinzufuegen() {
     if (!aktivId || hinzufuegenAusgewaehlt.size === 0) return;
@@ -643,14 +662,21 @@ export default function LohnsteuerantragPage() {
             className={a.id === aktivId ? "btn text-xs" : "btn-secondary text-xs"}
             onClick={() => setAktivId(a.id)}
           >
-            Antrag #{a.id} · {LOHNSTEUERANTRAG_STATUS_LABELS[a.status]}
+            Antrag #{a.id} · {firmaKurz(firmenListe, a.firma)} ·{" "}
+            {LOHNSTEUERANTRAG_STATUS_LABELS[a.status]}
           </button>
         ))}
-        {canEdit && (
-          <button type="button" className="btn-secondary text-xs" onClick={neuerAntrag}>
-            + Neuer Antrag {jahr}
-          </button>
-        )}
+        {canEdit &&
+          firmenListe.map((f) => (
+            <button
+              key={f.kuerzel}
+              type="button"
+              className="btn-secondary text-xs"
+              onClick={() => neuerAntrag(f.kuerzel)}
+            >
+              + Neuer Antrag {jahr} · {firmaKurz(firmenListe, f.kuerzel)}
+            </button>
+          ))}
       </div>
 
       {!aktiv ? (

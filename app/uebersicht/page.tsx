@@ -2,9 +2,11 @@
 
 import { Fragment, useEffect, useState } from "react";
 import { getSupabaseClient } from "@/lib/supabase/client";
+import { firmaFuer, firmaKurz, firmaName } from "@/lib/firmen";
 import { ladeAlleSeiten } from "@/lib/ladeAlle";
 import { useProfile } from "@/lib/useProfile";
 import {
+  type Firma,
   ABRECHNUNGSART_LABELS,
   type Arbeitsgruppe,
   type EmployeeStatusChain,
@@ -70,6 +72,15 @@ export default function UebersichtPage() {
   const [rows, setRows] = useState<SeasonSummaryRow[]>([]);
   const [gruppen, setGruppen] = useState<Arbeitsgruppe[]>([]);
   const [gruppeFilter, setGruppeFilter] = useState("");
+  // Firma je Person und Saison (Stufe 3a, 2026-11-24): Filter + Spalte +
+  // "Firma setzen" (Mehrfachauswahl). Ohne Eintrag gilt die Standard-Firma
+  // des Bereichs (Landwirtschaft: Mömmel Agrar, Vertrieb: Mönich Direkt).
+  const [firmaFilter, setFirmaFilter] = useState("");
+  const [firmen, setFirmen] = useState<Firma[]>([]);
+  const [saisonFirma, setSaisonFirma] = useState<Map<string, string>>(new Map());
+  const [bereichNachId, setBereichNachId] = useState<Map<string, string>>(new Map());
+  const [firmaSetzenZiel, setFirmaSetzenZiel] = useState("");
+  const [firmaSetzenLaeuft, setFirmaSetzenLaeuft] = useState(false);
   // Suchfilter nach Name/Personalnummer (Nutzer-Vorgabe 2026-08-14, wie
   // schon auf "Personal") - wirkt zusätzlich zum Gruppen-Filter, auf beide
   // Ansichten (Saison-Summe und Monats-Kontrolle).
@@ -241,7 +252,72 @@ export default function UebersichtPage() {
   // anderes zeigte.
   useEffect(() => {
     setAusgewaehlt(new Set());
-  }, [gruppeFilter]);
+  }, [gruppeFilter, firmaFilter]);
+
+  async function ladeFirmen() {
+    const supabase = getSupabaseClient();
+    const [{ data: f }, saison, personen] = await Promise.all([
+      supabase.from("firma").select("*").order("reihenfolge"),
+      ladeAlleSeiten<{ employee_id: string; firma: string }>((von, bis) =>
+        supabase
+          .from("employee_saison")
+          .select("employee_id, firma")
+          .eq("saison_jahr", jahr)
+          .range(von, bis)
+      ),
+      ladeAlleSeiten<{ id: string; bereich: string }>((von, bis) =>
+        supabase.from("employees").select("id, bereich").order("id").range(von, bis)
+      ),
+    ]);
+    setFirmen((f as Firma[]) ?? []);
+    setSaisonFirma(new Map(saison.map((r) => [r.employee_id, r.firma])));
+    setBereichNachId(new Map(personen.map((p) => [p.id, p.bereich])));
+  }
+
+  useEffect(() => {
+    ladeFirmen();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [jahr]);
+
+  const firmaVon = (employeeId: string) =>
+    firmaFuer(firmen, { id: employeeId, bereich: bereichNachId.get(employeeId) }, saisonFirma)
+      ?.kuerzel ?? "";
+  const passtZurFirma = (employeeId: string) =>
+    !firmaFilter || firmaVon(employeeId) === firmaFilter;
+  const canFirmaSetzen = hatRolle(profile, "admin", "hr", "lohnabrechnung");
+
+  async function firmaSetzen() {
+    if (!firmaSetzenZiel || ausgewaehlt.size === 0) return;
+    const ziel = firmen.find((f) => f.kuerzel === firmaSetzenZiel);
+    if (!ziel) return;
+    const ids = Array.from(ausgewaehlt);
+    // Firma muss zum Bereich passen (Vertrieb immer Mönich Direkt)
+    const passend = ids.filter((id) => (bereichNachId.get(id) ?? "LW") === ziel.bereich);
+    const unpassend = ids.length - passend.length;
+    if (
+      !window.confirm(
+        `${passend.length} Person(en) für Saison ${jahr} der Firma „${ziel.name}" zuordnen?` +
+          (unpassend > 0 ? `\n\n${unpassend} Person(en) aus einem anderen Bereich werden übersprungen.` : "")
+      )
+    ) {
+      return;
+    }
+    setFirmaSetzenLaeuft(true);
+    setAbrechnenFehler(null);
+    const { error } = await getSupabaseClient()
+      .from("employee_saison")
+      .upsert(
+        passend.map((id) => ({ employee_id: id, saison_jahr: jahr, firma: ziel.kuerzel })),
+        { onConflict: "employee_id,saison_jahr" }
+      );
+    setFirmaSetzenLaeuft(false);
+    if (error) {
+      setAbrechnenFehler(`Firma setzen fehlgeschlagen: ${error.message}`);
+      return;
+    }
+    setAusgewaehlt(new Set());
+    ladeFirmen();
+  }
 
   useEffect(() => {
     async function ladeGruppen() {
@@ -564,6 +640,7 @@ export default function UebersichtPage() {
           ? !r.gruppe_nr
           : r.gruppe_nr === gruppeFilter
     )
+    .filter((r) => passtZurFirma(r.employee_id))
     .filter(passtZurSuche);
 
   function toggleAuswahl(employeeId: string) {
@@ -1010,13 +1087,17 @@ export default function UebersichtPage() {
   }
 
   const gefilterteMonatsRows = sortiereMonat(
-    monatsRows.filter((r) => passtZurGruppe(r.gruppe_nr)).filter(passtZurSuche)
+    monatsRows
+      .filter((r) => passtZurGruppe(r.gruppe_nr))
+      .filter((r) => passtZurFirma(r.employee_id))
+      .filter(passtZurSuche)
   );
   const fehlendeImMonat = sortiereMonat(
     alleAktiven.filter(
       (m) =>
         !monatsRowsById.has(m.id) &&
         passtZurGruppe(m.gruppe_nr) &&
+        passtZurFirma(m.id) &&
         passtZurSuche(m)
     )
   );
@@ -1105,6 +1186,19 @@ export default function UebersichtPage() {
             <option value={OHNE_GRUPPE_KEY}>Ohne Gruppe</option>
           </select>
         </label>
+        {firmen.length > 1 && (
+          <label className="text-sm">
+            Firma{" "}
+            <select value={firmaFilter} onChange={(e) => setFirmaFilter(e.target.value)}>
+              <option value="">Alle</option>
+              {firmen.map((f) => (
+                <option key={f.kuerzel} value={f.kuerzel}>
+                  {firmaKurz(firmen, f.kuerzel)}
+                </option>
+              ))}
+            </select>
+          </label>
+        )}
         <label className="flex items-center gap-1 text-sm">
           <input
             type="checkbox"
@@ -1185,6 +1279,30 @@ export default function UebersichtPage() {
               : "Stunden-/Vorschussübersicht drucken"}
           </button>
         )}
+        {monatFilter === 0 && canFirmaSetzen && firmen.length > 1 && (
+          <span className="flex items-center gap-1 text-sm">
+            <select
+              value={firmaSetzenZiel}
+              onChange={(e) => setFirmaSetzenZiel(e.target.value)}
+              title={`Firma der ausgewählten Personen für Saison ${jahr}`}
+            >
+              <option value="">Firma setzen …</option>
+              {firmen.map((f) => (
+                <option key={f.kuerzel} value={f.kuerzel}>
+                  {firmaKurz(firmen, f.kuerzel)}
+                </option>
+              ))}
+            </select>
+            <button
+              type="button"
+              className="btn-secondary"
+              disabled={ausgewaehlt.size === 0 || !firmaSetzenZiel || firmaSetzenLaeuft}
+              onClick={firmaSetzen}
+            >
+              {firmaSetzenLaeuft ? "Speichert…" : "Zuordnen"}
+            </button>
+          </span>
+        )}
         {monatFilter === 0 && abrechnenFehler && (
           <span className="whitespace-pre-line text-sm text-beere-600">{abrechnenFehler}</span>
         )}
@@ -1219,6 +1337,7 @@ export default function UebersichtPage() {
                 <th>Pers.-Nr.</th>
                 <th>Name</th>
                 <th>Gruppe</th>
+                {firmen.length > 1 && <th>Firma</th>}
                 <th>Führerschein</th>
                 <th>Std.</th>
                 <th>Tage</th>
@@ -1282,6 +1401,16 @@ export default function UebersichtPage() {
                         }`
                       : "—"}
                   </td>
+                  {firmen.length > 1 && (
+                    <td
+                      className={`text-sm ${
+                        saisonFirma.has(r.employee_id) ? "" : "text-neutral-400"
+                      }`}
+                      title={saisonFirma.has(r.employee_id) ? "eingetragen" : "Standard-Firma (nicht eingetragen)"}
+                    >
+                      {firmaKurz(firmen, firmaVon(r.employee_id))}
+                    </td>
+                  )}
                   <td>
                     {fuehrerschein[r.employee_id] ? (
                       <span className="text-emerald-700">
@@ -2151,6 +2280,7 @@ export default function UebersichtPage() {
                           }`
                     }`
                   : ""}
+                {firmaFilter ? ` · Firma: ${firmaName(firmen, firmaFilter)}` : ""}
                 {" · "}
                 {druckMonat.mitAusgezahlten
                   ? "inkl. bereits ausgezahlter Personen"

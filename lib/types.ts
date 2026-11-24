@@ -630,6 +630,8 @@ export const LOHNSTEUERANTRAG_ERGEBNIS_LABELS: Record<
 export interface Lohnsteuerantrag {
   id: number;
   jahr: number;
+  // Antragstellende Firma (Stufe 3a) - eigene Steuernummer je Firma
+  firma: string | null;
   status: LohnsteuerantragStatus;
   erstellt_von: string | null;
   erstellt_am: string;
@@ -917,6 +919,34 @@ export interface VerpflegungsSatz {
 // Auftraggeber-Konto für den SEPA-Überweisungs-Export bei Vorschüssen
 // (Nutzer-Vorgabe 2026-08-25) - Singleton-Zeile, siehe firmen_bankdaten in
 // schema.sql.
+// Firma (Stufe 3a, 2026-11-24): Mömmel Agrar (MA, Standard Landwirtschaft),
+// Mönich Landwirtschaft (ML), Mönich Direkt (MD, Vertrieb). Ersetzt die
+// Einzeile firmen_bankdaten (gleiche Felder) als SEPA-Auftraggeber und
+// Absender des Lohnsteuer-Antrags.
+export interface Firma {
+  kuerzel: string;
+  name: string;
+  bereich: string;
+  ist_standard: boolean;
+  iban: string | null;
+  bic: string | null;
+  steuernummer: string | null;
+  strasse: string | null;
+  hausnummer: string | null;
+  plz: string | null;
+  ort: string | null;
+  lohn_kassenbuch_id: number | null;
+  reihenfolge: number;
+}
+
+// Firma einer Person in einer Saison (ohne Eintrag: Standard-Firma des
+// Bereichs, siehe firma_fuer() in der Datenbank / lib/firmen.ts).
+export interface EmployeeSaison {
+  employee_id: string;
+  saison_jahr: number;
+  firma: string;
+}
+
 export interface FirmenBankdaten {
   id: number;
   name: string;
@@ -1577,6 +1607,8 @@ export type KandidatStatus = 'geplant' | 'anreiseliste' | 'storniert';
 export interface PersonalKandidat {
   id: string;
   bereich: string;
+  // geplante Firma (Stufe 3a); leer = Standard-Firma des Bereichs
+  firma: string | null;
   // Bei Platzhaltern (platzhalter = true) leer - Name und Personalnummer
   // kommen erst, wenn die echte Namensliste des Vermittlers da ist
   // (Migration 2026-11-21).
