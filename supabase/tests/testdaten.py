@@ -22,6 +22,8 @@ FEST = {
     "geschaeftsbereich.kuerzel": "'LW'",
     # live ist nur MLK eine Lohnkasse - die Test-Zeile ist ein allgemeines Buch
     "kassenbuch.typ": "'allgemein'",
+    # bereich_saetze gilt nur für Bereiche außer LW (Check-Constraint)
+    "bereich_saetze.bereich": "'VT'",
     "geschaeftsbereich.bezeichnung": "'Landwirtschaft'",
     "work_entries.stunden": "8",
     "personal_kandidaten.status": "'anreiseliste'",
@@ -156,10 +158,10 @@ for n in reihenfolge:
         s = c["c"]
         if c["id"] or c["gen"]:
             continue
-        if s in fkspalte:
-            v = fkspalte[s]
-        elif FEST.get(f"{n}.{s}"):
+        if FEST.get(f"{n}.{s}"):
             v = FEST[f"{n}.{s}"]
+        elif s in fkspalte:
+            v = fkspalte[s]
         elif c["nn"] and c["def"] and "auth.uid()" in c["def"]:
             v = "'00000000-0000-0000-0000-0000000000a1'::uuid"
         elif not c["nn"] or c["def"] is not None:
