@@ -71,6 +71,10 @@ export default function PersonalImportPage() {
   const [dateiname, setDateiname] = useState<string | null>(null);
   const [erkannteSpalten, setErkannteSpalten] = useState<string[]>([]);
   const [unbekannteSpalten, setUnbekannteSpalten] = useState<string[]>([]);
+  // HSC-Export (Vertrieb) erkannt -> hier NICHT importieren (falscher Bereich,
+  // Nummern ohne "V-", keine Firma/Saisons) - Verweis auf /personal-import-hsc
+  // (Nutzer-Vorfall 2026-11-25: HSC-Datei in den allgemeinen Import geladen).
+  const [istHscExport, setIstHscExport] = useState(false);
   const [zeilen, setZeilen] = useState<ImportZeile[]>([]);
   const [parsing, setParsing] = useState(false);
   const [importing, setImporting] = useState(false);
@@ -131,6 +135,9 @@ export default function PersonalImportPage() {
       headers.filter((h) => spaltenMap[h] !== null)
     );
     setUnbekannteSpalten(headers.filter((h) => spaltenMap[h] === null));
+    setIstHscExport(
+      ["Abrechnungsjahr", "PGS", "VersicherungsNummer", "Eintrittsdatum"].every((h) => headers.includes(h))
+    );
 
     const gebaut = rohZeilen.map((roh, i) => {
       const werte: Partial<Record<ImportFeld, string>> = {};
@@ -303,6 +310,17 @@ export default function PersonalImportPage() {
             Import Vertrieb (HSC)
           </Link>
         </p>
+        {istHscExport && (
+          <p className="mb-2 rounded border border-beere-300 bg-beere-50 p-2 text-sm text-beere-800">
+            Diese Datei ist ein HSC-Export des Vertriebs. Hier würde sie falsch
+            (Landwirtschaft, ohne „V-“, ohne Firma/Saisons) importiert - der
+            Import ist deshalb gesperrt. Bitte{" "}
+            <Link href="/personal-import-hsc" className="underline">
+              Import Vertrieb (HSC)
+            </Link>{" "}
+            verwenden.
+          </p>
+        )}
         <p className="text-sm text-neutral-500">
           Excel- oder CSV-Datei mit einer Zeile pro Mitarbeiter hochladen.
           Personalnummer, Name und Vorname sind Pflicht; alle anderen Spalten
@@ -405,7 +423,7 @@ export default function PersonalImportPage() {
             <button
               type="button"
               className="btn"
-              disabled={importing || importierbareAnzahl === 0}
+              disabled={importing || importierbareAnzahl === 0 || istHscExport}
               onClick={handleImport}
             >
               {importierbareAnzahl} Zeile(n) importieren
