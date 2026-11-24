@@ -177,4 +177,13 @@ out.append("revoke all on public._seed_sql from anon, authenticated;")
 for n, sql in seed_sql:
     out.append("insert into public._seed_sql values (%s, %s) on conflict (tab) do update set sql = excluded.sql;"
                % ("'" + n + "'", "$q$" + sql + "$q$"))
+# Stammdaten, die live per Migration befüllt sind (die Strukturkopie hat
+# keine Daten). Nur einfügen, wenn die Tabelle existiert.
+STAMMDATEN = {
+    "geschaeftsbereich": "insert into public.geschaeftsbereich (kuerzel, bezeichnung, personalnummer_praefix, reihenfolge) values ('VT', 'Vertrieb', 'V-', 20) on conflict do nothing;",
+    "kassenbuch": "insert into public.kassenbuch (bezeichnung, kuerzel, typ, reihenfolge) values ('Mömmel Lohnkasse', 'MLK', 'lohnkasse', 1), ('Mömmel', 'MÖ', 'allgemein', 2), ('Mönich Landwirtschaft', 'ML', 'allgemein', 3), ('Mönich Direkt', 'MD', 'allgemein', 4) on conflict do nothing;",
+}
+for tab, sql in STAMMDATEN.items():
+    if tab in tabellen:
+        out.append(sql)
 print("\n".join(out))
