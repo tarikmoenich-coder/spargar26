@@ -20,6 +20,8 @@ FEST = {
     "ernte_ausweis.suffix": "'ABCDEF12'",
     # Stammdaten, die live per Migration befüllt sind (Kopie hat keine Daten)
     "geschaeftsbereich.kuerzel": "'LW'",
+    # live ist nur MLK eine Lohnkasse - die Test-Zeile ist ein allgemeines Buch
+    "kassenbuch.typ": "'allgemein'",
     "geschaeftsbereich.bezeichnung": "'Landwirtschaft'",
     "work_entries.stunden": "8",
     "personal_kandidaten.status": "'anreiseliste'",
@@ -181,9 +183,14 @@ for n, sql in seed_sql:
 # keine Daten). Nur einfügen, wenn die Tabelle existiert.
 STAMMDATEN = {
     "geschaeftsbereich": "insert into public.geschaeftsbereich (kuerzel, bezeichnung, personalnummer_praefix, reihenfolge) values ('VT', 'Vertrieb', 'V-', 20) on conflict do nothing;",
+    "firma": "insert into public.firma (kuerzel, name, bereich, ist_standard, reihenfolge) values ('MA', 'Mömmel Agrar GmbH & Co. KG', 'LW', true, 10), ('ML', 'Mönich Landwirtschaft GmbH & Co. KG', 'LW', false, 20), ('MD', 'Mönich Direkt GmbH & Co. KG', 'VT', true, 30) on conflict do nothing;",
     "kassenbuch": "insert into public.kassenbuch (bezeichnung, kuerzel, typ, reihenfolge) values ('Mömmel Lohnkasse', 'MLK', 'lohnkasse', 1), ('Mömmel', 'MÖ', 'allgemein', 2), ('Mönich Landwirtschaft', 'ML', 'allgemein', 3), ('Mönich Direkt', 'MD', 'allgemein', 4) on conflict do nothing;",
 }
 for tab, sql in STAMMDATEN.items():
     if tab in tabellen:
         out.append(sql)
+if "kassenbuch" in tabellen and any(c["c"] == "firma" for c in tabellen["kassenbuch"]["cols"]):
+    out.append("update public.kassenbuch set firma = case kuerzel when 'MLK' then 'MA' when 'MÖ' then 'MA' when 'ML' then 'ML' when 'MD' then 'MD' end where kuerzel in ('MLK','MÖ','ML','MD');")
+if "firma" in tabellen and "kassenbuch" in tabellen:
+    out.append("update public.firma f set lohn_kassenbuch_id = kb.id from public.kassenbuch kb where (f.kuerzel, kb.kuerzel) in (('MA','MLK'),('ML','ML'),('MD','MD'));")
 print("\n".join(out))
