@@ -34,6 +34,7 @@ import {
 import { formatDatumDE, formatZahlDE } from "@/lib/format";
 import { berechneStandjahr } from "@/lib/anbau";
 
+import { hatRolle } from "@/lib/rollen";
 const CURRENT_YEAR = new Date().getFullYear();
 
 interface Gruppe {
@@ -75,7 +76,7 @@ function gruppieren(rows: FeldAnbauAbschnitt[]): Gruppe[] {
 export default function AnbauErdbeerenPage() {
   const { profile } = useProfile();
   const canEdit =
-    profile?.role === "admin" || profile?.role === "erntewirtschaft";
+    hatRolle(profile, "admin", "erntewirtschaft");
 
   const [jahr, setJahr] = useState(CURRENT_YEAR);
   const [loading, setLoading] = useState(true);

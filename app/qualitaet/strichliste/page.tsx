@@ -21,8 +21,8 @@ import { getSupabaseClient } from "@/lib/supabase/client";
 import { useProfile } from "@/lib/useProfile";
 import ErntewirtschaftTabs from "@/components/ErntewirtschaftTabs";
 import { formatDatumDE } from "@/lib/format";
-import { MENUE_RECHTE } from "@/lib/rollen";
-import type { Employee, UserRole } from "@/lib/types";
+import { hatRolle, darfMenue } from "@/lib/rollen";
+import type { Employee } from "@/lib/types";
 
 function heuteIso() {
   return new Date().toISOString().slice(0, 10);
@@ -52,12 +52,9 @@ export default function StrichlistePage() {
   const { profile } = useProfile();
   const canSee =
     !!profile &&
-    (MENUE_RECHTE["/qualitaet"] ?? []).includes(profile.role as UserRole);
+    darfMenue(profile, "/qualitaet");
   const canWrite =
-    profile?.role === "admin" ||
-    profile?.role === "hr" ||
-    profile?.role === "zeiterfassung" ||
-    profile?.role === "erntewirtschaft";
+    hatRolle(profile, "admin", "hr", "zeiterfassung", "erntewirtschaft");
 
   const [datum, setDatum] = useState(gesternIso());
 

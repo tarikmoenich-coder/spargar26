@@ -39,7 +39,11 @@ export const ABRECHNUNGSART_LABELS: Record<Abrechnungsart, string> = {
 export interface Profile {
   id: string;
   full_name: string;
+  // Hauptrolle (Anzeige, Startseite). Rechte ergeben sich aus ALLEN Rollen
+  // in `rollen` (Stufe 1, 2026-11-24) - für Prüfungen immer hatRolle()/
+  // hatNurRollen() aus lib/rollen.ts verwenden, nie role direkt vergleichen.
   role: UserRole;
+  rollen: UserRole[];
   aktiv: boolean;
   // UI-Sprache je Nutzer (nicht je Rolle) - siehe lib/i18n.ts. Betrifft
   // nur die Bedienoberfläche, keine Dokumente/Formulare.

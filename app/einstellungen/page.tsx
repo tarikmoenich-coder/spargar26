@@ -14,11 +14,12 @@ import { useProfile } from "@/lib/useProfile";
 import EinstellungenTabs from "@/components/EinstellungenTabs";
 import type { FirmenBankdaten, VerpflegungsSatz } from "@/lib/types";
 
+import { hatRolle } from "@/lib/rollen";
 const CURRENT_YEAR = new Date().getFullYear();
 
 export default function EinstellungenAllgemeinPage() {
   const { profile } = useProfile();
-  const isAdmin = profile?.role === "admin";
+  const isAdmin = hatRolle(profile, "admin");
 
   const [saetze, setSaetze] = useState<VerpflegungsSatz[]>([]);
   const [loading, setLoading] = useState(true);

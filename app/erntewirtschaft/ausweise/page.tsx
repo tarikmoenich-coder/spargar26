@@ -26,6 +26,7 @@ import { useProfile } from "@/lib/useProfile";
 import { formatDatumDE } from "@/lib/format";
 import type { Arbeitsgruppe, FuehrerscheinEintrag } from "@/lib/types";
 
+import { hatRolle } from "@/lib/rollen";
 const FOTO_BUCKET = "mitarbeiter-fotos";
 
 interface MitarbeiterZeile {
@@ -71,7 +72,7 @@ function neuerSuffix(): string {
 
 export default function ErntewirtschaftAusweisePage() {
   const { profile } = useProfile();
-  const canEdit = profile?.role === "admin" || profile?.role === "hr";
+  const canEdit = hatRolle(profile, "admin", "hr");
 
   const [mitarbeiter, setMitarbeiter] = useState<MitarbeiterZeile[]>([]);
   const [ausweise, setAusweise] = useState<Map<string, AusweisZeile>>(new Map());

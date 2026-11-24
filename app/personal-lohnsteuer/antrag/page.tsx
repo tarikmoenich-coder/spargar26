@@ -44,6 +44,7 @@ import {
   type LohnsteuerantragPosition,
 } from "@/lib/types";
 
+import { hatRolle } from "@/lib/rollen";
 const CURRENT_YEAR = new Date().getFullYear();
 
 interface Checkpunkt {
@@ -139,7 +140,7 @@ function rueckmeldungZuEntwurf(p: LohnsteuerantragPosition): RueckmeldungEntwurf
 
 export default function LohnsteuerantragPage() {
   const { profile } = useProfile();
-  const canEdit = profile?.role === "admin" || profile?.role === "hr";
+  const canEdit = hatRolle(profile, "admin", "hr");
 
   const [jahr, setJahr] = useState(CURRENT_YEAR);
   const [antraege, setAntraege] = useState<Lohnsteuerantrag[]>([]);

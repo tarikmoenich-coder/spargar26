@@ -27,6 +27,7 @@ import {
   FARBE_ZULAGE_TH,
 } from "@/lib/farben";
 
+import { hatRolle } from "@/lib/rollen";
 function monatsSchluessel(d: Date) {
   const mm = String(d.getMonth() + 1).padStart(2, "0");
   return `KU-${mm}-${d.getFullYear()}`;
@@ -217,9 +218,7 @@ const MONATSNAMEN = [
 export default function AuszahlungenPage() {
   const { profile } = useProfile();
   const canKaution =
-    profile?.role === "admin" ||
-    profile?.role === "kasse" ||
-    profile?.role === "lohnabrechnung";
+    hatRolle(profile, "admin", "kasse", "lohnabrechnung");
   const canSepa = canKaution;
 
   const [belege, setBelege] = useState<AuszahlungsbelegSummary[]>([]);

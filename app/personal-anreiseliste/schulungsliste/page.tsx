@@ -26,6 +26,7 @@ import PersonalTabs from "@/components/PersonalTabs";
 import PageHeader from "@/components/PageHeader";
 import { ClipboardCheck } from "lucide-react";
 
+import { hatRolle } from "@/lib/rollen";
 interface Teilnehmer {
   employeeId: string;
   personalNr: string;
@@ -39,7 +40,7 @@ function heuteIso(): string {
 
 export default function SchulungslistePage() {
   const { profile, loading: profilLaedt } = useProfile();
-  const canView = profile?.role === "admin" || profile?.role === "hr";
+  const canView = hatRolle(profile, "admin", "hr");
 
   const [titel, setTitel] = useState("Arbeitssicherheits- und Hygieneschulung");
   const [datum, setDatum] = useState(heuteIso());

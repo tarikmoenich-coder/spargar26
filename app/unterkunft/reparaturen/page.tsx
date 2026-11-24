@@ -31,6 +31,7 @@ import {
   type UnterkunftZimmer,
 } from "@/lib/types";
 
+import { hatRolle, nurHausmeisterSicht } from "@/lib/rollen";
 const VERURSACHUNG_REIHENFOLGE: UnterkunftMangelVerursachung[] = [
   "bewohner",
   "verschleiss",
@@ -47,10 +48,8 @@ interface EmployeeMini {
 export default function UnterkunftReparaturenPage() {
   const { profile } = useProfile();
   const canEdit =
-    profile?.role === "admin" ||
-    profile?.role === "hr" ||
-    profile?.role === "hausmeister";
-  const istHausmeister = profile?.role === "hausmeister";
+    hatRolle(profile, "admin", "hr", "hausmeister");
+  const istHausmeister = nurHausmeisterSicht(profile);
 
   const [gebaeude, setGebaeude] = useState<UnterkunftGebaeude[]>([]);
   const [wohneinheiten, setWohneinheiten] = useState<UnterkunftWohneinheit[]>([]);

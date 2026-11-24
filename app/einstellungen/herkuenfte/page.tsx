@@ -11,11 +11,12 @@ import { useProfile } from "@/lib/useProfile";
 import EinstellungenTabs from "@/components/EinstellungenTabs";
 import type { Herkunft } from "@/lib/types";
 
+import { hatRolle } from "@/lib/rollen";
 const leer = { wert: "", reihenfolge: "0" };
 
 export default function HerkuenftePage() {
   const { profile } = useProfile();
-  const isAdmin = profile?.role === "admin";
+  const isAdmin = hatRolle(profile, "admin");
 
   const [herkuenfte, setHerkuenfte] = useState<Herkunft[]>([]);
   const [loading, setLoading] = useState(true);

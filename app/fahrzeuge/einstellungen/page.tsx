@@ -8,6 +8,7 @@ import type { FahrzeugArbeitszeit, FahrzeugGeofence } from "@/lib/types";
 import FahrzeugeTabs from "@/components/FahrzeugeTabs";
 import PageHeader from "@/components/PageHeader";
 
+import { hatRolle } from "@/lib/rollen";
 const WOCHENTAGE = [
   "Montag",
   "Dienstag",
@@ -20,7 +21,7 @@ const WOCHENTAGE = [
 
 export default function FahrzeugeEinstellungenPage() {
   const { profile } = useProfile();
-  const canEdit = profile?.role === "admin" || profile?.role === "hr";
+  const canEdit = hatRolle(profile, "admin", "hr");
 
   const [zeiten, setZeiten] = useState<FahrzeugArbeitszeit[]>([]);
   const [geofences, setGeofences] = useState<FahrzeugGeofence[]>([]);

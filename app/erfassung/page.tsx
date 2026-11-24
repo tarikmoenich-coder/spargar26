@@ -34,6 +34,7 @@ import {
   type ZettelZeiten,
 } from "@/lib/zettelZeiten";
 
+import { hatRolle, rollenVon, rolleLabel } from "@/lib/rollen";
 const OHNE_GRUPPE_KEY = "__ohne__";
 
 function todayIso() {
@@ -142,7 +143,7 @@ function ErfassungInner() {
   const { profile } = useProfile();
   const t = uebersetzung(profile?.sprache);
   const canGruppeAendern =
-    profile?.role === "admin" || profile?.role === "hr";
+    hatRolle(profile, "admin", "hr");
   // Nutzer-Vorgabe 2026-09-21: die Spalte "Markierung" ist entfallen. Urlaub
   // wird im Controlling (Urlaub / Arbeitstage am Stück) erfasst, "F" (Fahrer)
   // gibt es nicht mehr. Bestehende Markierungen bleiben in den Daten und
@@ -153,14 +154,12 @@ function ErfassungInner() {
   // aber lautlos von der Datenbank abgelehnt wurde - Nutzer-Bugreport
   // 2026-08-08 ("eingetippte Stunden nach Neuladen wieder weg").
   const canEditStunden =
-    profile?.role === "admin" ||
-    profile?.role === "hr" ||
-    profile?.role === "zeiterfassung";
+    hatRolle(profile, "admin", "hr", "zeiterfassung");
   // Stundenkonto: Rollenregeln zentral in lib/stundenkontoRechte.ts - hier
   // nur zur Anzeige des "Verwalten"-Umschalters (die eigentliche Prüfung
   // je Aktion steckt in StundenkontoBereich/schema.sql).
-  const canStundenkontoBuchen = kannStundenkontoBuchen(profile?.role);
-  const canStundenkontoAuszahlen = kannStundenkontoAuszahlen(profile?.role);
+  const canStundenkontoBuchen = kannStundenkontoBuchen(profile);
+  const canStundenkontoAuszahlen = kannStundenkontoAuszahlen(profile);
   // useSearchParams() statt window.location.search: reagiert zuverlässig
   // auch auf clientseitige <Link>-Navigation, bei der Next.js diese Route
   // wiederverwendet statt sie neu zu mounten (sonst würde ein Sprung-Link
@@ -1005,7 +1004,7 @@ function ErfassungInner() {
 
         {!canEditStunden && (
           <p className="rounded border border-amber-300 bg-amber-50 px-3 py-2 text-sm font-medium text-amber-800">
-            {t("erfassung.rollegesperrt", { rolle: profile?.role ?? "" })}
+            {t("erfassung.rollegesperrt", { rolle: rollenVon(profile).map(rolleLabel).join(", ") })}
           </p>
         )}
 

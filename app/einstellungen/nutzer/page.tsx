@@ -3,9 +3,13 @@
 // Nutzer- & Rollenverwaltung (nur admin). Ersetzt das bisherige
 // Von-Hand-Pflegen im Supabase-Table-Editor. Der Login selbst (E-Mail +
 // Passwort) wird weiterhin im Supabase-Dashboard angelegt - hier werden
-// Name, Rolle und Aktiv-Status gepflegt. Absicherung: RLS-Policy
-// profiles_admin_all + Trigger trg_profiles_schutz (role/aktiv nur durch
-// admin) + Audit-Trigger trg_audit_profiles.
+// Name, Rollen und Aktiv-Status gepflegt. Absicherung: RLS-Policy
+// profiles_admin_all + Trigger trg_profiles_schutz (role/rollen/aktiv nur
+// durch admin) + Audit-Trigger trg_audit_profiles.
+//
+// Stufe 1 (2026-11-24): mehrere Rollen je Nutzer (profiles.rollen), Rechte
+// = Vereinigung. "Hauptrolle" (profiles.role) bestimmt nur Anzeige und
+// Startseite und ist immer eine der gewählten Rollen.
 
 import PageHeader from "@/components/PageHeader";
 import { UserCog } from "lucide-react";
@@ -13,7 +17,7 @@ import { useCallback, useEffect, useState } from "react";
 import { getSupabaseClient } from "@/lib/supabase/client";
 import { useProfile } from "@/lib/useProfile";
 import { formatDatumDE } from "@/lib/format";
-import { ROLLEN, rolleLabel } from "@/lib/rollen";
+import { ROLLEN, rolleLabel, hatRolle, rollenVon } from "@/lib/rollen";
 import EinstellungenTabs from "@/components/EinstellungenTabs";
 import type { UserRole } from "@/lib/types";
 
@@ -21,13 +25,19 @@ interface Nutzer {
   id: string;
   full_name: string;
   role: UserRole;
+  rollen: UserRole[];
   aktiv: boolean;
   created_at: string;
 }
 
+// Rollen in fester Reihenfolge (wie ROLLEN), Hauptrolle zuerst gültig halten.
+function sortiert(rollen: UserRole[]): UserRole[] {
+  return ROLLEN.map((r) => r.wert).filter((w) => rollen.includes(w));
+}
+
 export default function NutzerVerwaltungPage() {
   const { profile } = useProfile();
-  const istAdmin = profile?.role === "admin";
+  const istAdmin = hatRolle(profile, "admin");
 
   const [nutzer, setNutzer] = useState<Nutzer[]>([]);
   const [loading, setLoading] = useState(true);
@@ -35,7 +45,7 @@ export default function NutzerVerwaltungPage() {
 
   const [neuId, setNeuId] = useState("");
   const [neuName, setNeuName] = useState("");
-  const [neuRolle, setNeuRolle] = useState<UserRole>("zeiterfassung");
+  const [neuRollen, setNeuRollen] = useState<UserRole[]>(["zeiterfassung"]);
   const [anlegen, setAnlegen] = useState(false);
 
   const laden = useCallback(async () => {
@@ -46,10 +56,15 @@ export default function NutzerVerwaltungPage() {
     setLoading(true);
     const { data, error } = await getSupabaseClient()
       .from("profiles")
-      .select("id, full_name, role, aktiv, created_at")
+      .select("*")
       .order("full_name");
     if (error) setFehler(error.message);
-    setNutzer((data as Nutzer[]) ?? []);
+    setNutzer(
+      ((data as Nutzer[]) ?? []).map((n) => ({
+        ...n,
+        rollen: n.rollen && n.rollen.length > 0 ? n.rollen : [n.role],
+      }))
+    );
     setLoading(false);
   }, [istAdmin]);
 
@@ -73,17 +88,28 @@ export default function NutzerVerwaltungPage() {
     }
   }
 
-  async function rolleSetzen(n: Nutzer, rolle: UserRole) {
+  async function rolleUmschalten(n: Nutzer, rolle: UserRole, an: boolean) {
+    const neu = sortiert(an ? [...n.rollen, rolle] : n.rollen.filter((r) => r !== rolle));
+    if (neu.length === 0) {
+      setFehler("Ein Nutzer braucht mindestens eine Rolle - zum Sperren \"Aktiv\" abwählen.");
+      return;
+    }
     if (
       n.id === profile?.id &&
-      n.role === "admin" &&
-      rolle !== "admin" &&
+      rolle === "admin" &&
+      !an &&
       !window.confirm(
         "Du entziehst dir selbst die Administrator-Rolle. Danach kommst du nicht mehr in diese Verwaltung. Fortfahren?"
       )
     ) {
       return;
     }
+    // Hauptrolle bleibt, solange sie noch gewählt ist - sonst die erste.
+    const hauptrolle = neu.includes(n.role) ? n.role : neu[0];
+    patch(n.id, { rollen: neu, role: hauptrolle });
+  }
+
+  async function hauptrolleSetzen(n: Nutzer, rolle: UserRole) {
     patch(n.id, { role: rolle });
   }
 
@@ -112,10 +138,19 @@ export default function NutzerVerwaltungPage() {
       setFehler("Name ist ein Pflichtfeld.");
       return;
     }
+    if (neuRollen.length === 0) {
+      setFehler("Bitte mindestens eine Rolle wählen.");
+      return;
+    }
     setAnlegen(true);
     const { error } = await getSupabaseClient()
       .from("profiles")
-      .insert({ id, full_name: neuName.trim(), role: neuRolle });
+      .insert({
+        id,
+        full_name: neuName.trim(),
+        role: sortiert(neuRollen)[0],
+        rollen: sortiert(neuRollen),
+      });
     setAnlegen(false);
     if (error) {
       setFehler(
@@ -127,7 +162,7 @@ export default function NutzerVerwaltungPage() {
     }
     setNeuId("");
     setNeuName("");
-    setNeuRolle("zeiterfassung");
+    setNeuRollen(["zeiterfassung"]);
     laden();
   }
 
@@ -149,7 +184,9 @@ export default function NutzerVerwaltungPage() {
       <div>
         <PageHeader icon={UserCog} titel="Nutzer &amp; Rollen" />
         <p className="text-sm text-neutral-500">
-          Name, Rolle und Aktiv-Status je Nutzer. Der Login (E-Mail/Passwort)
+          Name, Rollen und Aktiv-Status je Nutzer. Ein Nutzer kann mehrere
+          Rollen haben und darf dann alles, was eine seiner Rollen darf. Die
+          Hauptrolle bestimmt nur die Startseite. Der Login (E-Mail/Passwort)
           wird in Supabase → Authentication → Users angelegt; hier wird
           anschließend das Profil gepflegt. Rollenwechsel landen im
           Änderungsprotokoll.
@@ -167,7 +204,8 @@ export default function NutzerVerwaltungPage() {
               <thead>
                 <tr>
                   <th>Name</th>
-                  <th>Rolle</th>
+                  <th>Rollen</th>
+                  <th>Hauptrolle</th>
                   <th>Aktiv</th>
                   <th>Angelegt</th>
                   <th>Auth-UID</th>
@@ -188,15 +226,36 @@ export default function NutzerVerwaltungPage() {
                       />
                     </td>
                     <td>
+                      <div className="flex max-w-md flex-wrap gap-x-3 gap-y-1">
+                        {ROLLEN.map((r) => (
+                          <label
+                            key={r.wert}
+                            className="inline-flex items-center gap-1 whitespace-nowrap text-xs"
+                          >
+                            <input
+                              type="checkbox"
+                              checked={n.rollen.includes(r.wert)}
+                              onChange={(e) =>
+                                rolleUmschalten(n, r.wert, e.target.checked)
+                              }
+                            />
+                            {r.label}
+                          </label>
+                        ))}
+                      </div>
+                    </td>
+                    <td>
                       <select
                         value={n.role}
                         onChange={(e) =>
-                          rolleSetzen(n, e.target.value as UserRole)
+                          hauptrolleSetzen(n, e.target.value as UserRole)
                         }
+                        disabled={n.rollen.length < 2}
+                        title="Bestimmt nur die Startseite nach der Anmeldung"
                       >
-                        {ROLLEN.map((r) => (
-                          <option key={r.wert} value={r.wert}>
-                            {r.label}
+                        {n.rollen.map((r) => (
+                          <option key={r} value={r}>
+                            {rolleLabel(r)}
                           </option>
                         ))}
                       </select>
@@ -249,20 +308,30 @@ export default function NutzerVerwaltungPage() {
                   onChange={(e) => setNeuName(e.target.value)}
                 />
               </label>
-              <label className="text-sm">
-                Rolle
-                <select
-                  className="mt-1 block"
-                  value={neuRolle}
-                  onChange={(e) => setNeuRolle(e.target.value as UserRole)}
-                >
+              <fieldset className="text-sm">
+                <legend>Rollen</legend>
+                <div className="mt-1 flex max-w-md flex-wrap gap-x-3 gap-y-1">
                   {ROLLEN.map((r) => (
-                    <option key={r.wert} value={r.wert}>
+                    <label
+                      key={r.wert}
+                      className="inline-flex items-center gap-1 whitespace-nowrap text-xs"
+                    >
+                      <input
+                        type="checkbox"
+                        checked={neuRollen.includes(r.wert)}
+                        onChange={(e) =>
+                          setNeuRollen((prev) =>
+                            e.target.checked
+                              ? [...prev, r.wert]
+                              : prev.filter((x) => x !== r.wert)
+                          )
+                        }
+                      />
                       {r.label}
-                    </option>
+                    </label>
                   ))}
-                </select>
-              </label>
+                </div>
+              </fieldset>
               <button type="submit" className="btn" disabled={anlegen}>
                 {anlegen ? "Legt an…" : "Anlegen"}
               </button>
@@ -287,7 +356,7 @@ export default function NutzerVerwaltungPage() {
               ))}
             </dl>
             <p className="mt-2 text-xs text-neutral-400">
-              Rolle {rolleLabel(profile?.role)} · angemeldet als{" "}
+              Rollen {rollenVon(profile).map(rolleLabel).join(", ") || "—"} · angemeldet als{" "}
               {profile?.full_name}
             </p>
           </div>

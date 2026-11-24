@@ -22,6 +22,7 @@ import {
 } from "@/lib/personalImportHistorie";
 import PersonalTabs from "@/components/PersonalTabs";
 
+import { hatRolle } from "@/lib/rollen";
 const BLOCK = 200;
 
 function bloecke<T>(arr: T[], groesse = BLOCK): T[][] {
@@ -73,7 +74,7 @@ function ladeVerdachtCsv(personen: HistoriePerson[]) {
 
 export default function PersonalImportHistoriePage() {
   const { profile } = useProfile();
-  const canEdit = profile?.role === "admin" || profile?.role === "hr";
+  const canEdit = hatRolle(profile, "admin", "hr");
 
   const [dateiname, setDateiname] = useState<string | null>(null);
   const [erkannteSpalten, setErkannteSpalten] = useState<string[]>([]);

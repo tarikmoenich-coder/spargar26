@@ -25,7 +25,7 @@ import ErntewirtschaftTabs from "@/components/ErntewirtschaftTabs";
 import ErnteMaschinenKarte, { type MaschineLive } from "@/components/ErnteMaschinenKarte";
 import { getSupabaseClient } from "@/lib/supabase/client";
 import { useProfile } from "@/lib/useProfile";
-import { MENUE_RECHTE } from "@/lib/rollen";
+import { darfMenue } from "@/lib/rollen";
 import { formatMenge } from "@/lib/format";
 import type { ErnteErtragTag, ErnteKetteLuecke, FeldGeojson } from "@/lib/types";
 
@@ -44,11 +44,8 @@ function UeberblickRedirect() {
 
   useEffect(() => {
     if (loading) return;
-    const rolle = profile?.role;
     const ziel =
-      BEREICHE.find(
-        ([rechteKey]) => rolle && (MENUE_RECHTE[rechteKey] ?? []).includes(rolle)
-      )?.[1] ?? "/dashboard";
+      BEREICHE.find(([rechteKey]) => darfMenue(profile, rechteKey))?.[1] ?? "/dashboard";
     router.replace(ziel);
   }, [loading, profile, router]);
 
@@ -238,8 +235,7 @@ export default function ErntewirtschaftPage() {
   const { loading, profile } = useProfile();
 
   if (loading) return <p className="p-4 text-sm text-neutral-500">Lädt…</p>;
-  const sichtRollen = MENUE_RECHTE["/erntewirtschaft/ueberblick"] ?? [];
-  if (profile?.role && sichtRollen.includes(profile.role)) {
+  if (darfMenue(profile, "/erntewirtschaft/ueberblick")) {
     return <FlottenUeberblick />;
   }
   return <UeberblickRedirect />;

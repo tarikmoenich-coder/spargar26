@@ -20,11 +20,12 @@ import { formatMenge, formatZahlDE } from "@/lib/format";
 import { berechneStandjahr } from "@/lib/anbau";
 import { VERFRUEHUNGEN, VERFRUEHUNG_LABELS } from "@/lib/types";
 
+import { hatRolle } from "@/lib/rollen";
 const CURRENT_YEAR = new Date().getFullYear();
 
 export default function AnbauSpargelPage() {
   const { profile } = useProfile();
-  const canEdit = profile?.role === "admin" || profile?.role === "erntewirtschaft";
+  const canEdit = hatRolle(profile, "admin", "erntewirtschaft");
 
   const [jahr, setJahr] = useState(CURRENT_YEAR);
   const [loading, setLoading] = useState(true);

@@ -29,6 +29,7 @@ import PageHeader from "@/components/PageHeader";
 import ControllingTabs from "@/components/ControllingTabs";
 import TageRaster from "@/components/TageRaster";
 
+import { hatRolle } from "@/lib/rollen";
 const CURRENT_YEAR = new Date().getFullYear();
 
 // Sortier-Rang je Gesamtstatus - dringendster Fall zuerst, wie bei
@@ -58,9 +59,7 @@ export default function ControllingUrlaubPage() {
   // Muss zu work_entries_write/-update (RLS) passen - wie Stundenerfassung/
   // Arbeitstage.
   const canEditStunden =
-    profile?.role === "admin" ||
-    profile?.role === "hr" ||
-    profile?.role === "zeiterfassung";
+    hatRolle(profile, "admin", "hr", "zeiterfassung");
 
   const [jahr, setJahr] = useState(CURRENT_YEAR);
   const [zeilen, setZeilen] = useState<EmployeeUrlaubstage[]>([]);

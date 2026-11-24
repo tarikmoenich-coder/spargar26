@@ -28,6 +28,7 @@ import {
   FARBE_ZULAGE_TH,
 } from "@/lib/farben";
 
+import { hatRolle } from "@/lib/rollen";
 const OHNE_GRUPPE_KEY = "__ohne__";
 
 const CURRENT_YEAR = new Date().getFullYear();
@@ -210,10 +211,10 @@ export default function UebersichtPage() {
     useState<string | null>(null);
 
   const canEdit =
-    profile?.role === "admin" || profile?.role === "lohnabrechnung";
+    hatRolle(profile, "admin", "lohnabrechnung");
   // Monatsabschluss: eigene Berechtigung, deckt sich mit der RLS-Policy
   // "periods_write" (nicht mit canEdit/lohnabrechnung).
-  const canCloseMonth = profile?.role === "admin" || profile?.role === "hr";
+  const canCloseMonth = hatRolle(profile, "admin", "hr");
 
   async function load() {
     setLoading(true);

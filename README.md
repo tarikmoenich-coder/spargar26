@@ -1432,6 +1432,16 @@ größenoptimierte Fassung der 2,4-MB-Originaldatei aus. Auf dieselbe
 eigenen Containers (Nutzer-Meldung: "Da ist das Bild angepasst auf die
 Breite des Login Feldes. So sieht das nicht gut aus").
 
+**Mehrere Rollen je Nutzer (seit 2026-11-24, Stufe 1):** ein Nutzer kann
+mehrere Rollen haben (`profiles.rollen`) und darf alles, was eine seiner
+Rollen darf. Die Hauptrolle (`profiles.role`) bestimmt nur die Startseite.
+In der Datenbank prüfen alle Regeln über `hat_rolle(...)` /
+`hat_aktive_rolle()` / `hat_rolle_ausser(...)` (nicht mehr
+`current_role_name()`), im Code über `hatRolle(profile, ...)` /
+`hatNurRollen` / `nurHausmeisterSicht` / `darfMenue` aus `lib/rollen.ts` -
+nie `profile.role` direkt vergleichen. Deaktivierte Nutzer haben keine
+Rollen (Datenbank und Menü).
+
 | Rolle | Sichtbare Menüpunkte | Kernrechte |
 |---|---|---|
 | `admin` | Alle | Voller Zugriff auf alles, inkl. Einstellungen, Kassenprüfungen freigeben, Änderungsprotokoll (Seite "Protokoll") |

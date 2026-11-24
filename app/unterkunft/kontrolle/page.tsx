@@ -37,6 +37,7 @@ import {
   type UnterkunftZimmer,
 } from "@/lib/types";
 
+import { hatRolle, nurHausmeisterSicht } from "@/lib/rollen";
 interface PosEntwurf {
   zustand: UnterkunftPositionZustand;
   bemerkung: string;
@@ -48,10 +49,10 @@ export default function UnterkunftKontrollePage() {
   const { profile } = useProfile();
   const router = useRouter();
   useEffect(() => {
-    if (profile?.role === "hausmeister") router.replace("/unterkunft/reparaturen");
-  }, [profile?.role, router]);
+    if (nurHausmeisterSicht(profile)) router.replace("/unterkunft/reparaturen");
+  }, [profile, router]);
   // Zwischenkontrollen macht eine höhere Rolle - der Hausmeister nicht mehr.
-  const canEdit = profile?.role === "admin" || profile?.role === "hr";
+  const canEdit = hatRolle(profile, "admin", "hr");
 
   const [gebaeude, setGebaeude] = useState<UnterkunftGebaeude[]>([]);
   const [wohneinheiten, setWohneinheiten] = useState<UnterkunftWohneinheit[]>([]);

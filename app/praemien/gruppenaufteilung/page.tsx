@@ -19,6 +19,7 @@ import { useProfile } from "@/lib/useProfile";
 import ErntewirtschaftTabs from "@/components/ErntewirtschaftTabs";
 import type { Arbeitsgruppe, Employee, Herkunft } from "@/lib/types";
 
+import { hatRolle } from "@/lib/rollen";
 type Kultur = "praemien_zuckermais" | "praemien_erdbeeren" | "praemien_spargel";
 
 const KULTUREN: { wert: Kultur; label: string }[] = [
@@ -29,7 +30,7 @@ const KULTUREN: { wert: Kultur; label: string }[] = [
 
 export default function PraemienGruppenaufteilungPage() {
   const { profile } = useProfile();
-  const canEdit = profile?.role === "admin" || profile?.role === "hr";
+  const canEdit = hatRolle(profile, "admin", "hr");
 
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [gruppen, setGruppen] = useState<Arbeitsgruppe[]>([]);

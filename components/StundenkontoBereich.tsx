@@ -45,7 +45,7 @@ export default function StundenkontoBereich({
   bearbeitetesDatum,
 }: StundenkontoBereichProps) {
   const { profile } = useProfile();
-  const canBuchen = kannStundenkontoBuchen(profile?.role);
+  const canBuchen = kannStundenkontoBuchen(profile);
 
   const [saldo, setSaldo] = useState(0);
   const [historie, setHistorie] = useState<StundenkontoBewegung[]>([]);

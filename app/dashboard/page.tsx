@@ -8,6 +8,7 @@ import { useProfile } from "@/lib/useProfile";
 import { formatMenge, formatZahlDE } from "@/lib/format";
 import MaisStatistikKachel from "@/components/MaisStatistikKachel";
 
+import { hatRolle } from "@/lib/rollen";
 const CURRENT_YEAR = new Date().getFullYear();
 // Muss zum Wert auf der Controlling-Seite passen (app/management/page.tsx -
 // Route/Rollenname "management" bewusst unverändert, nur die sichtbare
@@ -111,15 +112,15 @@ export default function DashboardPage() {
   const [ebHeuteSumme, setEbHeuteSumme] = useState(0);
   const [zmKolbenSaison, setZmKolbenSaison] = useState(0);
 
-  const zeigeHr = profile?.role === "admin" || profile?.role === "hr";
-  const zeigeKasse = profile?.role === "admin" || profile?.role === "kasse";
+  const zeigeHr = hatRolle(profile, "admin", "hr");
+  const zeigeKasse = hatRolle(profile, "admin", "kasse");
   const zeigeLohnabrechnung =
-    profile?.role === "admin" || profile?.role === "lohnabrechnung";
-  const zeigePruefer = profile?.role === "admin" || profile?.role === "pruefer";
+    hatRolle(profile, "admin", "lohnabrechnung");
+  const zeigePruefer = hatRolle(profile, "admin", "pruefer");
   const zeigeManagement =
-    profile?.role === "admin" || profile?.role === "management";
+    hatRolle(profile, "admin", "management");
   const zeigeErntewirtschaft =
-    profile?.role === "admin" || profile?.role === "erntewirtschaft";
+    hatRolle(profile, "admin", "erntewirtschaft");
   const keinDashboard =
     !!profile &&
     !zeigeHr &&
@@ -352,10 +353,10 @@ export default function DashboardPage() {
       setLoading(false);
     }
     load();
-    // profile?.role reicht als Abhängigkeit - die zeige*-Variablen hängen
+    // profile reicht als Abhängigkeit - die zeige*-Variablen hängen
     // nur davon ab und ändern sich nie unabhängig davon.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [profile?.role, keinDashboard]);
+  }, [profile, keinDashboard]);
 
   if (!profile) {
     return <p className="text-neutral-500">Lädt…</p>;
@@ -363,7 +364,7 @@ export default function DashboardPage() {
 
   if (keinDashboard) {
     const ziel =
-      profile.role === "hausmeister"
+      hatRolle(profile, "hausmeister")
         ? { href: "/unterkunft/reparaturen", text: "Zu den Reparaturen" }
         : { href: "/erfassung", text: "Zur Stundenerfassung" };
     return (
@@ -599,7 +600,7 @@ export default function DashboardPage() {
                   wert={formatZahlDE(zmKolbenSaison)}
                   unterzeile="Zuckermais, Saison-Summe - Details in der Statistik"
                 />
-                {profile?.role === "admin" && (
+                {hatRolle(profile, "admin") && (
                   <Kachel
                     href="/praemien/gruppenaufteilung"
                     titel="Gruppenaufteilung"

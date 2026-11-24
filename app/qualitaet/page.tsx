@@ -14,8 +14,8 @@ import { getSupabaseClient } from "@/lib/supabase/client";
 import { useProfile } from "@/lib/useProfile";
 import ErntewirtschaftTabs from "@/components/ErntewirtschaftTabs";
 import { formatDatumDE, formatMenge } from "@/lib/format";
-import { MENUE_RECHTE } from "@/lib/rollen";
-import type { QsKontrolle, QsSchicht, UserRole, ZuckermaisSatz } from "@/lib/types";
+import { hatRolle, darfMenue } from "@/lib/rollen";
+import type { QsKontrolle, QsSchicht, ZuckermaisSatz } from "@/lib/types";
 
 const KULTUR = "zuckermais";
 // Nutzer-Vorgabe 2026-09-15: Stichprobe von 20 auf 50 Kolben erhöht - eine
@@ -100,19 +100,14 @@ export default function QualitaetPage() {
   const { profile } = useProfile();
   const canSee =
     !!profile &&
-    (MENUE_RECHTE["/qualitaet"] ?? []).includes(profile.role as UserRole);
+    darfMenue(profile, "/qualitaet");
   const canWrite =
-    profile?.role === "admin" ||
-    profile?.role === "hr" ||
-    profile?.role === "zeiterfassung" ||
-    profile?.role === "erntewirtschaft";
+    hatRolle(profile, "admin", "hr", "zeiterfassung", "erntewirtschaft");
   const canDelete =
-    profile?.role === "admin" ||
-    profile?.role === "hr" ||
-    profile?.role === "erntewirtschaft";
+    hatRolle(profile, "admin", "hr", "erntewirtschaft");
   // Den Satz (zuckermais_saetze) darf nur admin ändern (RLS), siehe
   // app/praemien/zuckermais/page.tsx.
-  const canSatzAendern = profile?.role === "admin";
+  const canSatzAendern = hatRolle(profile, "admin");
 
   // --- Formular ---
   const [datum, setDatum] = useState(heuteIso());

@@ -22,6 +22,7 @@ import {
 import FahrzeugeTabs from "@/components/FahrzeugeTabs";
 import PageHeader from "@/components/PageHeader";
 
+import { hatRolle } from "@/lib/rollen";
 // Foto client-seitig auf eine kleine Kante herunterrechnen und als JPEG-data-URL
 // zurückgeben. Reicht, um auf der Karte das Auto zum Kennzeichen zu erkennen.
 function fotoVerkleinern(
@@ -244,7 +245,7 @@ function FahrerZelle({
 
 export default function FahrzeugeStammdatenPage() {
   const { profile } = useProfile();
-  const canEdit = profile?.role === "admin" || profile?.role === "hr";
+  const canEdit = hatRolle(profile, "admin", "hr");
 
   const [fahrzeuge, setFahrzeuge] = useState<Fahrzeug[]>([]);
   const [tracker, setTracker] = useState<FahrzeugTracker[]>([]);

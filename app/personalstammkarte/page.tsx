@@ -20,6 +20,7 @@ import {
   type EmployeeSaisonJahr,
 } from "@/lib/types";
 
+import { hatRolle } from "@/lib/rollen";
 interface Arbeitsgruppe {
   gruppe_nr: string;
   bezeichnung: string | null;
@@ -154,7 +155,7 @@ function StammkarteInner() {
   const params = useSearchParams();
   const id = params.get("id");
   const { profile, loading: profilLaedt } = useProfile();
-  const canView = profile?.role === "admin" || profile?.role === "hr";
+  const canView = hatRolle(profile, "admin", "hr");
 
   const [emp, setEmp] = useState<Employee | null>(null);
   const [gruppen, setGruppen] = useState<Arbeitsgruppe[]>([]);

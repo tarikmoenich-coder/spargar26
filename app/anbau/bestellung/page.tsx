@@ -17,12 +17,13 @@ import ErntewirtschaftTabs from "@/components/ErntewirtschaftTabs";
 import type { ErdbeerenBestellungUebersicht } from "@/lib/types";
 import { formatZahlDE } from "@/lib/format";
 
+import { hatRolle } from "@/lib/rollen";
 const CURRENT_YEAR = new Date().getFullYear();
 
 export default function AnbauBestellungPage() {
   const { profile } = useProfile();
   const canEdit =
-    profile?.role === "admin" || profile?.role === "erntewirtschaft";
+    hatRolle(profile, "admin", "erntewirtschaft");
 
   const [jahr, setJahr] = useState(CURRENT_YEAR);
   const [zeilen, setZeilen] = useState<ErdbeerenBestellungUebersicht[]>([]);

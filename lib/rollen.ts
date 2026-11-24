@@ -3,10 +3,15 @@
 // - ROLLEN / ROLLEN_LABELS: für die Nutzerverwaltung und überall, wo eine
 //   Rolle angezeigt wird.
 // - MENUE_RECHTE: welche Rolle welchen Menüpunkt sieht (components/Nav.tsx
-//   zieht daraus).
+//   zieht daraus, über darfMenue()).
+// - hatRolle/hatNurRollen/nurHausmeisterSicht/darfMenue: Rechte-Prüfungen im
+//   Code. Seit Stufe 1 (2026-11-24) hat ein Nutzer MEHRERE Rollen
+//   (profiles.rollen) - Rechte = Vereinigung. Nie profile.role direkt
+//   vergleichen (das ist nur die Hauptrolle für die Startseite).
 //
 // WICHTIG: Die tatsächlichen Server-Rechte stehen als Row Level Security in
-// supabase/schema.sql (~156 current_role_name()-Prüfungen). MENUE_RECHTE
+// der Datenbank (Prüfungen über hat_rolle()/hat_aktive_rolle(), siehe
+// migration_2026-11-24f_mehrfachrollen.sql; schema.sql ist nicht aktuell). MENUE_RECHTE
 // steuert NUR die Menü-Sichtbarkeit. Bei JEDER Rechte-Änderung (RLS-Policy,
 // security-definer-Funktion, Client-canWrite) immer mit anpassen:
 //   1. MENUE_RECHTE (falls sich die Menü-Sichtbarkeit ändert),
@@ -80,6 +85,47 @@ export const ROLLEN: RolleInfo[] = [
 export const ROLLEN_LABELS: Record<UserRole, string> = Object.fromEntries(
   ROLLEN.map((r) => [r.wert, r.label])
 ) as Record<UserRole, string>;
+
+// Rollen eines Profils für Rechte-Prüfungen (Stufe 1, 2026-11-24): alle
+// Rollen aus profiles.rollen; deaktivierte Profile haben keine (die
+// Datenbank verweigert ihnen ohnehin alles).
+export function rollenVon(
+  profile: { role: UserRole; rollen?: UserRole[] | null; aktiv?: boolean } | null | undefined
+): UserRole[] {
+  if (!profile || profile.aktiv === false) return [];
+  return profile.rollen && profile.rollen.length > 0 ? profile.rollen : [profile.role];
+}
+
+// Hat das Profil mindestens eine der genannten Rollen? (Rechte = Vereinigung)
+export function hatRolle(
+  profile: Parameters<typeof rollenVon>[0],
+  ...rollen: UserRole[]
+): boolean {
+  return rollenVon(profile).some((r) => rollen.includes(r));
+}
+
+// Hat das Profil NUR Rollen aus der Liste? Für einschränkende Ansichten
+// (z.B. "nur Hausmeister -> nur Reparaturen zeigen"): wer zusätzlich eine
+// weitere Rolle hat, bekommt die vollere Ansicht.
+export function hatNurRollen(
+  profile: Parameters<typeof rollenVon>[0],
+  ...rollen: UserRole[]
+): boolean {
+  const eigene = rollenVon(profile);
+  return eigene.length > 0 && eigene.every((r) => rollen.includes(r));
+}
+
+// Eingeschränkte Hausmeister-Sicht der Unterkunft (nur Reparaturen,
+// Übergaben, Planung lesend) - nur wenn keine Rolle mit vollem Unterkunft-
+// Zugriff dazukommt.
+export function nurHausmeisterSicht(profile: Parameters<typeof rollenVon>[0]): boolean {
+  return hatRolle(profile, "hausmeister") && !hatRolle(profile, "admin", "hr", "erntewirtschaft");
+}
+
+// Darf das Profil einen Menüpunkt sehen? (MENUE_RECHTE)
+export function darfMenue(profile: Parameters<typeof rollenVon>[0], href: string): boolean {
+  return hatRolle(profile, ...(MENUE_RECHTE[href] ?? []));
+}
 
 export function rolleLabel(r: UserRole | null | undefined): string {
   return r ? ROLLEN_LABELS[r] ?? r : "—";

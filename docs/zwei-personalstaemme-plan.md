@@ -121,6 +121,14 @@ Jede Migration vorher in der lokalen Postgres-Kopie getestet.
 
 ### Stufe 1 - Mehrere Rollen je Nutzer
 
+Stand 2026-11-24: gebaut (Branch). Migration `2026-11-24f_mehrfachrollen`
+schreibt alle Prüfungen automatisch aus dem Live-Stand um und bricht ab,
+falls eine übrig bleibt; Rechte-Matrix Einzelrollen vorher/nachher
+identisch, Mehrfachrolle = Vereinigung. Code: ~200 Prüfungen in 60 Dateien
+auf `hatRolle()`; einschränkende Sichten (Hausmeister, Arbeitsgruppen-only)
+gelten nur ohne weitere "größere" Rolle; Startseite nach Hauptrolle.
+Nutzerverwaltung mit Rollen-Häkchen + Hauptrolle.
+
 - `profiles.rollen user_role[]` (Pflicht, nicht leer), befüllt aus `role`.
   `role` bleibt zunächst als "Hauptrolle" für Anzeige/Rückwärtskompatibilität.
 - SQL-Helfer `hat_rolle(variadic user_role[])`; alle Policies/Funktionen von

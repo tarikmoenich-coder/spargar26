@@ -30,6 +30,7 @@ import type {
   ZuckermaisSatz,
 } from "@/lib/types";
 
+import { hatRolle } from "@/lib/rollen";
 function heuteIso() {
   return new Date().toISOString().slice(0, 10);
 }
@@ -62,11 +63,8 @@ interface Entwurf {
 export default function PraemienZuckermaisPage() {
   const { profile } = useProfile();
   const canEdit =
-    profile?.role === "admin" ||
-    profile?.role === "hr" ||
-    profile?.role === "zeiterfassung" ||
-    profile?.role === "erntewirtschaft";
-  const isAdmin = profile?.role === "admin";
+    hatRolle(profile, "admin", "hr", "zeiterfassung", "erntewirtschaft");
+  const isAdmin = hatRolle(profile, "admin");
 
   const [datum, setDatum] = useState(gesternIso());
   const [employees, setEmployees] = useState<Employee[]>([]);
