@@ -34,16 +34,25 @@ interface Vorhanden {
   bereich: string;
 }
 
+// Firma aus dem Dateinamen raten - Umlaute auf dem Mac sind zerlegt (NFD),
+// deshalb vorher Akzente entfernen ("MöDi" -> "modi").
 function firmaRaten(dateiname: string): string {
-  const n = dateiname.toLowerCase();
+  const n = dateiname
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase();
   if (n.includes("anita")) return "AM";
-  if (n.includes("mödi") || n.includes("moedi") || n.includes("direkt") || n.includes("modi")) return "MD";
+  if (n.includes("modi") || n.includes("moedi") || n.includes("direkt")) return "MD";
   return "";
 }
 
 export default function PersonalImportHscPage() {
   const { profile } = useProfile();
   const darf = hatRolle(profile, "admin", "hr");
+  // Steht der Bereichs-Umschalter auf "Landwirtschaft", blendet die
+  // Datenbank die Vertriebs-Firmen aus - dann klarer Hinweis statt leerer
+  // Auswahl.
+  const ansichtNurLw = profile?.bereich_ansicht === "LW";
   const [firmen, setFirmen] = useState<Firma[]>([]);
   const [dateien, setDateien] = useState<HscDatei[]>([]);
   const [personen, setPersonen] = useState<HscPerson[] | null>(null);
@@ -200,6 +209,13 @@ export default function PersonalImportHscPage() {
       />
 
       <div className="card flex flex-col gap-3">
+        {(ansichtNurLw || firmen.length === 0) && (
+          <p className="rounded border border-amber-300 bg-amber-50 p-2 text-sm text-amber-900">
+            {ansichtNurLw
+              ? "Oben ist der Bereich „Landwirtschaft“ gewählt - dadurch sind die Vertriebs-Firmen ausgeblendet. Bitte oben auf „Alle Bereiche“ oder „Vertrieb“ umstellen."
+              : "Keine Vertriebs-Firma sichtbar - für den Import braucht dein Nutzer den Bereich „Vertrieb“ (Einstellungen → Nutzer & Rollen)."}
+          </p>
+        )}
         <input type="file" accept=".csv,text/csv" multiple onChange={(e) => dateienWaehlen(e.target.files)} />
         {dateien.map((d, i) => (
           <div key={d.name} className="flex flex-wrap items-center gap-2 text-sm">
