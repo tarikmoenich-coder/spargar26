@@ -169,8 +169,11 @@ Jede Migration vorher in der lokalen Postgres-Kopie getestet.
 
 ### Stufe 5 - Vertriebs-Funktionen (aus der Anforderungsliste)
 
-Siehe Abschnitt "Abgleich Anforderungsliste Vertrieb" - Reihenfolge und
-Umfang nach Klärung der offenen Fragen.
+Aus dem Abgleich unten, Stand 2026-11-24 - Kandidaten für den Start des
+Vertriebs: Monatsabschlag (Vorschussliste + SEPA), HSC-Anmeldung,
+Saisonprämie ohne Stunden, So-/Feiertags- und Urlaubsstunden getrennt,
+Wochenstundenzettel, Monatsnachweis je Person. Zurückgestellt: Standorte/
+Öffnungszeiten, Einsatzplan/Abfahrtszeiten, Fahrerlohn an Fahrtagen.
 
 ### Später (eigene Planung)
 
@@ -196,16 +199,16 @@ Legende: **vorhanden** = gibt es schon, ggf. nur für VT freizuschalten;
 |---|---|---|---|
 | 1.1 | HSC-Anmeldung erfassen/kontrollieren | neu (klein) | Feld je Person+Saison "bei HSC angemeldet am" + Prüfliste "noch nicht angemeldet"; passt zu `employee_saison` |
 | 1.2 | Freibetrag-Beantragung | vorhanden | `/personal-lohnsteuer` (Verfahrensstand bis "Freibetrag erteilt") - zu prüfen, ob für Deutsche/Vertrieb passend |
-| 1.3 | Fahrer eindeutig kennzeichnen (anderer Lohn) | teilweise | Stundenlohn je Person, Führerschein, Feld `funktion` vorhanden. Offen: ganzer Lohn anders oder nur an Fahrtagen? |
-| 2.1 | Standorte statt Gruppen | im Plan | Arbeitsgruppen je Personalstamm, im VT als "Standort" bezeichnet |
-| 2.2 | Standorte mit Öffnungszeiten | neu (klein) | Öffnungszeiten je Standort (+ Saison-Zeitraum), Anzeige bei der Stundenkontrolle |
-| 2.3 | Einsatzplan im Programm | neu (groß) | Dienstplan Person × Tag × Standort; eigenes Modul, nach Stufe 4 |
-| 2.4 | Abfahrtszeiten vermerken | neu | Teil des Einsatzplans |
+| 1.3 | Fahrer eindeutig kennzeichnen (anderer Lohn) | zurückgestellt | anderer Lohn nur an Fahrtagen - Nutzer 2026-11-24: vorerst ignorieren |
+| 2.1 | Standorte statt Gruppen | zurückgestellt | Arbeitsgruppen werden je Personalstamm getrennt (Stufe 2); eigene Standorte später |
+| 2.2 | Standorte mit Öffnungszeiten | zurückgestellt | mit den Standorten |
+| 2.3 | Einsatzplan im Programm | zurückgestellt | erst wenn alles andere läuft (Nutzer 2026-11-24) |
+| 2.4 | Abfahrtszeiten vermerken | zurückgestellt | Teil des Einsatzplans |
 | 2.5 | Wochenstundenzettel je Person | neu (klein) | Druckansicht aus der vorhandenen KW-Wochenansicht |
 | 3.1 | Sonntags-/Feiertagszuschläge (Deutsche); Urlaub getrennt | neu (mittel) | App weist So-/Feiertagsstunden (Feiertagskalender Hessen) und Urlaub (`U`) getrennt aus; Zuschlag rechnet HSC |
-| 3.2 | Zulagen direkt in Euro | teilweise | `season_bonuses.fahrer_zulage` je Saison in €; monatliche Zulagen in € je Person = neu (Tabelle Zulagen) |
-| 3.3 | Monatliche Abrechnung deutscher Verkäufer per Überweisung | neu (groß) | Abrechnung ist heute **saisonbezogen** (`saison_abrechnen`); Monatsabrechnung + SEPA je Monat ist ein eigener Umbau im Lohnbereich |
-| 3.4 | "Mömmel-Leute" - Abrechnung über anderes Spargar? | klären | siehe Rückfragen |
+| 3.2 | Zulagen direkt in Euro | vorhanden | monatliche Zulage in € (Stundenkonto mit Monatszuordnung) + Saison-Zulagen in € |
+| 3.3 | Monatliche Abrechnung per Überweisung | neu (mittel) | **Monatsabschlag** = Vorschussliste (Nutzer 2026-11-24): je Monat Liste der Personen, Betrag = Netto aus HSC abzüglich bereits erhaltener Vorschüsse (App zeigt diese an), erzeugt Vorschüsse (Überweisung, Art "Monatsabschlag") + SEPA-Vorschussdatei über das vorhandene SEPA-Modul. Saisonabrechnung zieht sie wie jeden Vorschuss ab. Keine eigene Monatsabrechnung. |
+| 3.4 | Aushilfen aus der Landwirtschaft im Verkauf | vorhanden | werden in der Landwirtschaft abgerechnet (bleiben im Personalstamm LW) |
 | 3.5 | Stunden, Vorschüsse, Zulagen monatlich drucken | teilweise | Monatsdruck `/uebersicht` (Summen) vorhanden; Einzelnachweis je Person/Monat = neu (klein) |
 | 3.6 | Saisonprämie ohne Stunden | neu (klein) | `season_summary` entsteht heute nur aus Stundeneinträgen - Person ohne Stunden erscheint nicht |
 | 4.1 | Strafzettel | vorhanden | Vorschuss mit Pflicht-Beleg (Strafzettel/Rechnung) |
