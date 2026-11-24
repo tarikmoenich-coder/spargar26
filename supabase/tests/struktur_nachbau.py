@@ -92,7 +92,9 @@ def acl_grants(acl, obj, kind, col=None):
         if kind == 'func': ps = [p for p in ps if p == 'execute']
         if not ps: continue
         rr = 'public' if role == 'public' else f'"{role}"'
-        if col: w(f'grant {", ".join(ps)} ({col}) on {obj} to {rr};')
+        # Spaltenliste gilt in SQL nur für das direkt davor stehende Recht -
+        # deshalb je Recht einzeln: grant select (c), insert (c) ...
+        if col: w(f'grant {", ".join(p + " (" + col + ")" for p in ps)} on {obj} to {rr};')
         elif kind == 'func': w(f'grant execute on function {obj} to {rr};')
         elif kind == 'seq': w(f'grant {", ".join(ps)} on sequence {obj} to {rr};')
         else: w(f'grant {", ".join(ps)} on {obj} to {rr};')
