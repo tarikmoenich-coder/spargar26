@@ -501,6 +501,8 @@ function BelegInner() {
                 ? "Steuerklasse 1 (Netto aus Lohnprogramm)"
                 : row.abrechnungsart === "minijob"
                   ? "Minijob (Netto aus Lohnprogramm)"
+                  : row.abrechnungsart === "kurzfristig"
+                    ? "kurzfristig (Netto aus Lohnprogramm)"
                   : "sozialversicherungspflichtig (Netto aus Lohnprogramm)"}
           </p>
         </div>

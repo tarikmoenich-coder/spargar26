@@ -12,6 +12,7 @@ import {
   type ImportZeile,
 } from "@/lib/personalImport";
 import PersonalTabs from "@/components/PersonalTabs";
+import Link from "next/link";
 import { useProfile } from "@/lib/useProfile";
 import { personalNrFuerBereich, useBereiche } from "@/lib/useBereiche";
 import PageHeader from "@/components/PageHeader";
@@ -296,6 +297,12 @@ export default function PersonalImportPage() {
       <PersonalTabs />
       <div>
         <PageHeader icon={Upload} titel="Personal importieren" />
+        <p className="mb-1 text-sm">
+          Vertriebs-Personal aus HSC-Exporten übernehmen:{" "}
+          <Link href="/personal-import-hsc" className="text-emerald-700 underline">
+            Import Vertrieb (HSC)
+          </Link>
+        </p>
         <p className="text-sm text-neutral-500">
           Excel- oder CSV-Datei mit einer Zeile pro Mitarbeiter hochladen.
           Personalnummer, Name und Vorname sind Pflicht; alle anderen Spalten

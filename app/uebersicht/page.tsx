@@ -1333,7 +1333,7 @@ export default function UebersichtPage() {
               title={`Firma der ausgewählten Personen für Saison ${jahr}`}
             >
               <option value="">Firma setzen …</option>
-              {firmen.map((f) => (
+              {firmen.filter((f) => f.aktiv !== false).map((f) => (
                 <option key={f.kuerzel} value={f.kuerzel}>
                   {firmaKurz(firmen, f.kuerzel)}
                 </option>

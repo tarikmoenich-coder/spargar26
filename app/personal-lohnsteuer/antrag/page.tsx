@@ -667,7 +667,7 @@ export default function LohnsteuerantragPage() {
           </button>
         ))}
         {canEdit &&
-          firmenListe.map((f) => (
+          firmenListe.filter((f) => f.aktiv !== false).map((f) => (
             <button
               key={f.kuerzel}
               type="button"

@@ -149,6 +149,8 @@ const ABRECHNUNGSART_ALIASE: Record<string, Abrechnungsart> = {
   geringfuegig: "minijob",
   geringfuegigbeschaeftigt: "minijob",
   mj: "minijob",
+  kurzfristig: "kurzfristig",
+  kurzfr: "kurzfristig",
 };
 
 export function parseAbrechnungsart(wert: string): {

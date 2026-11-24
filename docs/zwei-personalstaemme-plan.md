@@ -216,6 +216,18 @@ nicht gesondert.
 
 ### Stufe 4 - Vertrieb übernehmen
 
+Stand 2026-11-25: gebaut. Zwei HSC-Exporte (Anita Mönich = alte
+Vertriebsfirma, Mönich Direkt hat deren Stamm mit gleichen Personalnummern
+übernommen): 344 Personen, je Firma nur der letzte Beschäftigungszeitraum.
+Nutzer-Entscheidungen: Anita Mönich als historische Firma AM (Vertrieb,
+inaktiv für neue Zuordnungen); PGS 110 -> neue Abrechnungsart
+"kurzfristig" (keine App-Steuer, Netto aus HSC), 109 -> Minijob (RV-
+Befreiung übernommen), 101/900/119 -> SV-pflichtig (900/119 mit Hinweis);
+Herkunft leer. Seite /personal-import-hsc (Vorschau, dann Import;
+wiederholbar), Logik lib/hscImport.ts. Lokal mit den echten Dateien
+geprüft (Trockenlauf + vollständiger Import in der Testkopie, danach
+gelöscht).
+
 Nutzer 2026-11-24: aktuell **keine aktiven Verkäufer** - übernommen wird die
 komplette Historie. Basis ist daher der vorhandene **Historie-Import**
 (`/personal-import-historie`, `lib/personalImportHistorie.ts`: Zeile je

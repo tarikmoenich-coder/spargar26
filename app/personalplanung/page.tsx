@@ -1432,7 +1432,7 @@ export default function PersonalplanungPage() {
                 </option>
               ))}
             </select>
-            {firmen.filter((f) => f.bereich === bereiche.standard).length > 1 && (
+            {firmen.filter((f) => f.bereich === bereiche.standard && f.aktiv !== false).length > 1 && (
               <select
                 value={form.firma}
                 onChange={(e) => setForm({ ...form, firma: e.target.value })}
@@ -1442,7 +1442,7 @@ export default function PersonalplanungPage() {
                   Firma: Standard ({firmaKurz(firmen, standardFirma(firmen, bereiche.standard)?.kuerzel)})
                 </option>
                 {firmen
-                  .filter((f) => f.bereich === bereiche.standard)
+                  .filter((f) => f.bereich === bereiche.standard && f.aktiv !== false)
                   .map((f) => (
                     <option key={f.kuerzel} value={f.kuerzel}>
                       {firmaKurz(firmen, f.kuerzel)}
@@ -1578,7 +1578,7 @@ export default function PersonalplanungPage() {
             <span className="flex items-center gap-1">
               <select value={sammelFirma} onChange={(e) => setSammelFirma(e.target.value)}>
                 <option value="">Firma: Standard</option>
-                {firmen.map((f) => (
+                {firmen.filter((f) => f.aktiv !== false).map((f) => (
                   <option key={f.kuerzel} value={f.kuerzel}>
                     {firmaKurz(firmen, f.kuerzel)}
                   </option>

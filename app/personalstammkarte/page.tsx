@@ -52,6 +52,7 @@ const ABRECHNUNGSART_VOLLTEXT: Record<Employee["abrechnungsart"], string> = {
   lohnsteuerklasse_1: "Lohnsteuerklasse 1",
   sozialversicherungspflichtig: "Sozialversicherungspflichtig",
   minijob: "Minijob (geringfügige Beschäftigung)",
+  kurzfristig: "Kurzfristig beschäftigt (Netto aus Lohnprogramm)",
 };
 
 // Gleiches Signier-Muster wie app/erntewirtschaft/ausweise/page.tsx -

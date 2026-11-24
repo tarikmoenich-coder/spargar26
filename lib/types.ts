@@ -26,7 +26,11 @@ export type Abrechnungsart =
   | 'lohnsteuerklasse_1'
   | 'sozialversicherungspflichtig'
   // Stufe 3c (2026-11-25): keine App-Lohnsteuer, Netto aus HSC (netto_extern)
-  | 'minijob';
+  | 'minijob'
+  // Stufe 4 (2026-11-25): kurzfristig Beschäftigte im Vertrieb - wie Minijob
+  // keine App-Lohnsteuer (die 5,275 % von 'pauschal' gelten nur für
+  // Aushilfen in der Landwirtschaft), Netto aus HSC
+  | 'kurzfristig';
 
 // Kurzform wie im Altsystem (Nutzer-Vorgabe 2026-08-06) - wirkt sich
 // automatisch überall aus, wo diese Labels genutzt werden (Auswahl-Listen,
@@ -37,6 +41,7 @@ export const ABRECHNUNGSART_LABELS: Record<Abrechnungsart, string> = {
   lohnsteuerklasse_1: 'StKl 1',
   sozialversicherungspflichtig: 'SV-Pfl.',
   minijob: 'Minijob',
+  kurzfristig: 'Kurzfr.',
 };
 
 export interface Profile {
@@ -945,6 +950,9 @@ export interface Firma {
   ort: string | null;
   lohn_kassenbuch_id: number | null;
   reihenfolge: number;
+  // false = historische Firma (z.B. Anita Mönich) - nicht für neue
+  // Zuordnungen anbieten (Stufe 4)
+  aktiv?: boolean;
 }
 
 // Firma einer Person in einer Saison (ohne Eintrag: Standard-Firma des
