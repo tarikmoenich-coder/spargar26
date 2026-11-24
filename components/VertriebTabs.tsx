@@ -5,12 +5,12 @@ import { usePathname } from "next/navigation";
 import { useEffect, useRef } from "react";
 
 // Vertriebsplanung (docs/vertriebsplanung-plan.md). Gleiches Reiter-Muster
-// wie FahrzeugeTabs. Weitere Reiter (Verfügbarkeiten, Grundplan, Wochenplan)
-// kommen mit V2-V4.
+// wie FahrzeugeTabs.
 const tabs = [
   { href: "/vertrieb", label: "Stände", exakt: true },
   { href: "/vertrieb/touren", label: "Touren" },
   { href: "/vertrieb/verfuegbarkeit", label: "Verfügbarkeit" },
+  { href: "/vertrieb/grundplan", label: "Grundplan" },
 ];
 
 export default function VertriebTabs() {

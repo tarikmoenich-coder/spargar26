@@ -2648,3 +2648,13 @@ export interface VtAbwesenheit {
   halbtag: VtHalbtag | null; // null = ganzer Tag
   grund: string | null;
 }
+
+// Vertriebsplanung V3 (migration_2026-11-25e_vertrieb_grundplan.sql)
+export interface VtGrundplan {
+  id: number;
+  saison_jahr: number;
+  stand_id: number;
+  wochentag: number;
+  halbtag: VtHalbtag;
+  employee_id: string;
+}
