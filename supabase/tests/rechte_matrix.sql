@@ -30,6 +30,19 @@ begin
       on conflict (id) do update set role = excluded.role, aktiv = true;
     insert into public._subjekt values (r, 'authenticated', ('00000000-0000-0000-0000-0000000001' || lpad(i::text, 2, '0'))::uuid);
   end loop;
+  -- Mehrfachrollen (ab Stufe 1, Spalte profiles.rollen): Rechte müssen die
+  -- Vereinigung der Einzelrollen sein.
+  if exists (select 1 from information_schema.columns
+             where table_schema = 'public' and table_name = 'profiles' and column_name = 'rollen') then
+    insert into auth.users(id, email) values ('00000000-0000-0000-0000-00000000fe01', 'hr+kasse@test'),
+      ('00000000-0000-0000-0000-00000000fe02', 'hausmeister+waage@test') on conflict do nothing;
+    execute $x$insert into public.profiles(id, full_name, role, rollen, aktiv) values
+      ('00000000-0000-0000-0000-00000000fe01', 'Test hr+kasse', 'hr', '{hr,kasse}', true),
+      ('00000000-0000-0000-0000-00000000fe02', 'Test hausmeister+waage', 'hausmeister', '{hausmeister,waage}', true)
+      on conflict (id) do update set role = excluded.role, rollen = excluded.rollen, aktiv = true$x$;
+    insert into public._subjekt values ('hr+kasse', 'authenticated', '00000000-0000-0000-0000-00000000fe01'),
+      ('hausmeister+waage', 'authenticated', '00000000-0000-0000-0000-00000000fe02');
+  end if;
 end $$;
 
 create table if not exists public._matrix (subjekt text, relation text, art text, ergebnis text);
