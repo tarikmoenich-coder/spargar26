@@ -159,6 +159,19 @@ Jede Migration vorher in der lokalen Postgres-Kopie getestet.
 
 ### Stufe 4 - Vertrieb übernehmen
 
+Nutzer 2026-11-24: aktuell **keine aktiven Verkäufer** - übernommen wird die
+komplette Historie. Basis ist daher der vorhandene **Historie-Import**
+(`/personal-import-historie`, `lib/personalImportHistorie.ts`: Zeile je
+Person+Jahr → inaktive Person + `employee_saison_praesenz`), erweitert um:
+Personalstamm VT fest, Präfix `V-`, Firma Mönich Direkt je Jahr
+(`employee_saison`), neue Spalten (GEBDATUM, STRASSE, HAUSNUMMER, PLZ,
+Minijob), Abgleich mit LW (gleiche Person in beiden Stämmen = verknüpfen,
+keine Dublette). Pflichtspalten: PERSONALNR, NAME, VORNAME, GEBDATUM, JAHR.
+Der erste Buchhaltungs-Export (nur PERSONALNR..LAND, ohne ORT/JAHR) reicht
+nicht - Nutzer holt einen vollständigen Export nach.
+
+(ursprüngliche Punkte:)
+
 - Personal-Import erweitert: fester Personalstamm VT, automatisches `V-`,
   Firma Mönich Direkt für die Saison, Unterkunft/Verpflegung/
   Beschäftigungsart je Zeile. Benötigt: Spaltenköpfe der Vertriebs-Excel
