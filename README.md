@@ -1481,6 +1481,18 @@ je Lohnkasse einen Beleg. Belegnummern je Kasse mit eigenem Präfix
 je Kassenbuch. Kasse-Seite mit Auswahl der Lohnkasse (`/kasse?id=`).
 Kassenbücher nur im eigenen Bereich sichtbar (Kasse Vertrieb: MD).
 
+**Lohnberechnung je Bereich + Minijob (seit 2026-11-25, Stufe 3c):**
+Vertrieb hat eigene Sätze für Verpflegung/Unterkunft/Kleidung je Saison
+(`bereich_saetze`, Einstellungen → "Sätze Vertrieb"; ohne Eintrag gelten
+die allgemeinen Sätze). Je Person Zeiträume "ohne Verpflegung" / "ohne
+Unterkunft" (`employee_abzug_ausnahme`, Stammkarte → 03a); an diesen
+Anwesenheitstagen entfällt der jeweilige Abzug in `season_summary` /
+`season_summary_monat`. Abrechnungsart `minijob`: keine App-Lohnsteuer,
+Netto aus HSC; `employees.minijob_rv_befreit` (Dokumentation);
+`verpflegungssaetze.minijob_grenze` -> Warnung in der Monats-
+Lohnübersicht. Umstellung per Migration mit Vorher/Nachher-Nachweis aller
+Lohnzeilen in einem DO-Block.
+
 | Rolle | Sichtbare Menüpunkte | Kernrechte |
 |---|---|---|
 | `admin` | Alle | Voller Zugriff auf alles, inkl. Einstellungen, Kassenprüfungen freigeben, Änderungsprotokoll (Seite "Protokoll") |

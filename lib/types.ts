@@ -24,7 +24,9 @@ export type UserRole =
 export type Abrechnungsart =
   | 'pauschal'
   | 'lohnsteuerklasse_1'
-  | 'sozialversicherungspflichtig';
+  | 'sozialversicherungspflichtig'
+  // Stufe 3c (2026-11-25): keine App-Lohnsteuer, Netto aus HSC (netto_extern)
+  | 'minijob';
 
 // Kurzform wie im Altsystem (Nutzer-Vorgabe 2026-08-06) - wirkt sich
 // automatisch überall aus, wo diese Labels genutzt werden (Auswahl-Listen,
@@ -34,6 +36,7 @@ export const ABRECHNUNGSART_LABELS: Record<Abrechnungsart, string> = {
   pauschal: 'PA',
   lohnsteuerklasse_1: 'StKl 1',
   sozialversicherungspflichtig: 'SV-Pfl.',
+  minijob: 'Minijob',
 };
 
 export interface Profile {
@@ -109,6 +112,9 @@ export interface Employee {
   // Geschäftsbereich = Rechte-Grenze (Stufe 2, 2026-11-24): 'LW'
   // Landwirtschaft, 'VT' Vertrieb (Personalnummer beginnt mit "V-").
   bereich: string;
+  // Minijob (Stufe 3c): von der Rentenversicherungspflicht befreit - nur
+  // Dokumentation, das Netto rechnet HSC.
+  minijob_rv_befreit?: boolean;
   gruppe_nr: string | null;
   herkunft: string | null;
   nationalitaet: string | null;
@@ -914,6 +920,8 @@ export interface VerpflegungsSatz {
   kleidung_hose: number | null;
   kleidung_jacke: number | null;
   kleidung_stiefel: number | null;
+  // Minijob-Grenze €/Monat (Stufe 3c) - Warnung in der Lohnübersicht
+  minijob_grenze?: number | null;
 }
 
 // Auftraggeber-Konto für den SEPA-Überweisungs-Export bei Vorschüssen
@@ -995,6 +1003,29 @@ export interface Geschaeftsbereich {
   bezeichnung: string;
   personalnummer_praefix: string;
   reihenfolge: number;
+}
+
+// Sätze je Bereich (Stufe 3c) - nur für Bereiche außer Landwirtschaft;
+// ohne Eintrag gelten die Sätze aus verpflegungssaetze.
+export interface BereichSatz {
+  saison_jahr: number;
+  bereich: string;
+  verpflegung: number | null;
+  wohnen: number | null;
+  kleidung_hose: number | null;
+  kleidung_jacke: number | null;
+  kleidung_stiefel: number | null;
+}
+
+// Zeitraum OHNE Verpflegung bzw. OHNE Unterkunft (Stufe 3c) - an diesen
+// Anwesenheitstagen wird der jeweilige Abzug nicht berechnet.
+export interface AbzugAusnahme {
+  id: number;
+  employee_id: string;
+  art: 'verpflegung' | 'unterkunft';
+  von: string;
+  bis: string | null;
+  notiz: string | null;
 }
 
 export interface Herkunft {

@@ -499,7 +499,9 @@ function BelegInner() {
               ? "pauschal (Lohnsteuer 5,275 %)"
               : row.abrechnungsart === "lohnsteuerklasse_1"
                 ? "Steuerklasse 1 (Netto aus Lohnprogramm)"
-                : "sozialversicherungspflichtig (Netto aus Lohnprogramm)"}
+                : row.abrechnungsart === "minijob"
+                  ? "Minijob (Netto aus Lohnprogramm)"
+                  : "sozialversicherungspflichtig (Netto aus Lohnprogramm)"}
           </p>
         </div>
         <div className="text-right">

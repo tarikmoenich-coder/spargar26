@@ -254,6 +254,29 @@ export default function UebersichtPage() {
     setAusgewaehlt(new Set());
   }, [gruppeFilter, firmaFilter]);
 
+  // Minijob (Stufe 3c): Abrechnungsart je Person + Minijob-Grenze des Jahres
+  // für die Warnung in der Monatsansicht (Netto rechnet HSC).
+  const [abrechnungsartNachId, setAbrechnungsartNachId] = useState<Map<string, string>>(new Map());
+  const [minijobGrenze, setMinijobGrenze] = useState<number | null>(null);
+  useEffect(() => {
+    (async () => {
+      const supabase = getSupabaseClient();
+      const [arten, { data: satz }] = await Promise.all([
+        ladeAlleSeiten<{ id: string; abrechnungsart: string }>((von, bis) =>
+          supabase.from("employees").select("id, abrechnungsart").eq("abrechnungsart", "minijob").order("id").range(von, bis)
+        ),
+        supabase.from("verpflegungssaetze").select("minijob_grenze").eq("saison_jahr", jahr).maybeSingle(),
+      ]);
+      setAbrechnungsartNachId(new Map(arten.map((a) => [a.id, a.abrechnungsart])));
+      const g = (satz as { minijob_grenze: number | null } | null)?.minijob_grenze;
+      setMinijobGrenze(g == null ? null : Number(g));
+    })();
+  }, [jahr]);
+  const minijobUeberGrenze = (r: { employee_id: string; basis_brutto: number | null; stundenkonto_betrag?: number | null }) =>
+    minijobGrenze != null &&
+    abrechnungsartNachId.get(r.employee_id) === "minijob" &&
+    Number(r.basis_brutto || 0) + Number(r.stundenkonto_betrag || 0) > minijobGrenze;
+
   async function ladeFirmen() {
     const supabase = getSupabaseClient();
     const [{ data: f }, saison, personen] = await Promise.all([
@@ -2019,6 +2042,14 @@ export default function UebersichtPage() {
                         <td>{r.personal_nr}</td>
                         <td>
                           {r.name}, {r.vorname}
+                          {minijobUeberGrenze(r) && (
+                            <span
+                              className="badge-warn ml-1 text-[10px]"
+                              title={`Minijob: Monatsbrutto über der Minijob-Grenze von ${fmt(minijobGrenze ?? 0)} €`}
+                            >
+                              ⚠ über Minijob-Grenze
+                            </span>
+                          )}
                         </td>
                         <td className="text-sm text-neutral-500">
                           {r.gruppe_nr

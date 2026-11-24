@@ -67,6 +67,7 @@ const emptyForm = {
   email_privat: "",
   stundenlohn: "",
   abrechnungsart: "sozialversicherungspflichtig" as Abrechnungsart,
+  minijob_rv_befreit: false,
   sozialversicherungsnummer: "",
   steuer_id: "",
   iban: "",
@@ -448,6 +449,7 @@ export default function MitarbeiterPage() {
       email_privat: emp.email_privat ?? "",
       stundenlohn: emp.stundenlohn?.toString() ?? "",
       abrechnungsart: emp.abrechnungsart ?? "sozialversicherungspflichtig",
+      minijob_rv_befreit: emp.minijob_rv_befreit ?? false,
       sozialversicherungsnummer: emp.sozialversicherungsnummer ?? "",
       steuer_id: emp.steuer_id ?? "",
       iban: emp.iban ?? "",
@@ -485,6 +487,7 @@ export default function MitarbeiterPage() {
       email_privat: form.email_privat || null,
       stundenlohn: form.stundenlohn ? Number(form.stundenlohn) : null,
       abrechnungsart: form.abrechnungsart,
+      minijob_rv_befreit: form.abrechnungsart === "minijob" ? form.minijob_rv_befreit : false,
       sozialversicherungsnummer: form.sozialversicherungsnummer || null,
       steuer_id: form.steuer_id || null,
       iban: form.iban || null,
@@ -1159,6 +1162,19 @@ export default function MitarbeiterPage() {
               ))}
             </select>
           </label>
+          {form.abrechnungsart === "minijob" && (
+            <label
+              className="flex items-center gap-2 text-xs text-neutral-600"
+              title="Nur zur Dokumentation - das Netto rechnet das Lohnprogramm (HSC)"
+            >
+              <input
+                type="checkbox"
+                checked={form.minijob_rv_befreit}
+                onChange={(e) => setForm({ ...form, minijob_rv_befreit: e.target.checked })}
+              />
+              von der Rentenversicherungspflicht befreit
+            </label>
+          )}
         </Abschnitt>
 
         <Abschnitt titel="Zahlung">

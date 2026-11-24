@@ -144,6 +144,11 @@ const ABRECHNUNGSART_ALIASE: Record<string, Abrechnungsart> = {
   sozialversicherungspflichtig: "sozialversicherungspflichtig",
   svpflichtig: "sozialversicherungspflichtig",
   svpfl: "sozialversicherungspflichtig",
+  // Stufe 3c: Minijob (geringfügig entlohnte Beschäftigung)
+  minijob: "minijob",
+  geringfuegig: "minijob",
+  geringfuegigbeschaeftigt: "minijob",
+  mj: "minijob",
 };
 
 export function parseAbrechnungsart(wert: string): {

@@ -177,7 +177,11 @@ immer Mömmel, Firmennamen "... GmbH & Co. KG", gemischte SEPA-Belege ->
 Datei je Firma); **3b** Kassenbuch je Buchung + Kassenstand/-prüfung je
 Buch (gebaut, Migration 2026-11-24j mit eingebauter Kassenstand-Selbstprüfung;
 Nutzer: ML und MD werden Lohnkassen, MÖ bleibt allgemein, getrennte
-Nummernkreise mit Präfix); **3c** Lohnberechnung (Sätze je Bereich, Abzugs-Zeiträume, Minijob).
+Nummernkreise mit Präfix); **3c** Lohnberechnung (Sätze je Bereich, Abzugs-Zeiträume, Minijob) -
+gebaut (Migration 2026-11-25; Ausnahmen als "ohne"-Zeiträume, Default =
+wie bisher jeder Anwesenheitstag; Nachweis + Umstellung atomar in einem
+DO-Block). Offen/Hinweis: SV-Prüfung (90-Tage-Grenze) kennt Minijob noch
+nicht gesondert.
 
 - Tabelle `firmen` (Name, Kurzname, IBAN/BIC, Steuernummer, Anschrift,
   Personalstamm) ersetzt `firmen_bankdaten`; Bestandswerte übernommen als

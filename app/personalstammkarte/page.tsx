@@ -8,6 +8,7 @@
 // Bankverbindung, 04 Saisonhistorie) statt der bisherigen durchgehenden
 // 3-Spalten-Liste. Druck-Feinschliff (Seitenränder, Schriftgrößen,
 // Seitenumbruch-Regeln) in app/globals.css unter ".stammkarte".
+import AbzugAusnahmen from "@/components/AbzugAusnahmen";
 import { Suspense, useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { getSupabaseClient } from "@/lib/supabase/client";
@@ -44,9 +45,13 @@ const FOTO_BUCKET = "mitarbeiter-fotos";
 // der App-weiten Kurzform (ABRECHNUNGSART_LABELS aus lib/types.ts, die
 // bewusst kurz bleiben soll - siehe Kommentar dort - für Listen/Tabellen).
 const ABRECHNUNGSART_VOLLTEXT: Record<Employee["abrechnungsart"], string> = {
-  pauschal: "Pauschal (geringfügige Beschäftigung)",
+  // "pauschal" = pauschale Lohnsteuer 5,275 % (Aushilfskräfte Land-
+  // wirtschaft) - seit Stufe 3c (2026-11-25) gibt es den Minijob als eigene
+  // Abrechnungsart, deshalb hier nicht mehr "geringfügige Beschäftigung".
+  pauschal: "Pauschal versteuert (5,275 %)",
   lohnsteuerklasse_1: "Lohnsteuerklasse 1",
   sozialversicherungspflichtig: "Sozialversicherungspflichtig",
+  minijob: "Minijob (geringfügige Beschäftigung)",
 };
 
 // Gleiches Signier-Muster wie app/erntewirtschaft/ausweise/page.tsx -
@@ -471,13 +476,26 @@ function StammkarteInner() {
       <Abschnitt nr="03" titel="Abrechnung und Bankverbindung">
         <Feld
           label="Abrechnungsart"
-          wert={ABRECHNUNGSART_VOLLTEXT[emp.abrechnungsart]}
+          wert={
+            ABRECHNUNGSART_VOLLTEXT[emp.abrechnungsart] +
+            (emp.abrechnungsart === "minijob"
+              ? emp.minijob_rv_befreit
+                ? " - RV-befreit"
+                : " - rentenversicherungspflichtig"
+              : "")
+          }
         />
         <Feld label="SV-Nummer" wert={svNr} mono />
         <Feld label="Steuer-ID" wert={steuerId} mono />
         <Feld label="IBAN" wert={iban} volleBreite mono />
         <Feld label="BIC" wert={emp.bic} mono />
         <Feld label="Zahlungsempfänger" wert={emp.zahlungsempfaenger} />
+      </Abschnitt>
+
+      <Abschnitt nr="03a" titel="Unterkunft und Verpflegung (Ausnahmen)">
+        <div className="col-span-full">
+          <AbzugAusnahmen employeeId={emp.id} canEdit={canView} />
+        </div>
       </Abschnitt>
 
       {emp.notiz && (

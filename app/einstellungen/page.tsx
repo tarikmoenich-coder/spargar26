@@ -13,7 +13,7 @@ import { formatMenge } from "@/lib/format";
 import { getSupabaseClient } from "@/lib/supabase/client";
 import { useProfile } from "@/lib/useProfile";
 import EinstellungenTabs from "@/components/EinstellungenTabs";
-import type { Firma, VerpflegungsSatz } from "@/lib/types";
+import type { BereichSatz, Firma, VerpflegungsSatz } from "@/lib/types";
 
 import { hatRolle } from "@/lib/rollen";
 const CURRENT_YEAR = new Date().getFullYear();
@@ -32,8 +32,22 @@ export default function EinstellungenAllgemeinPage() {
     kleidung_hose: "",
     kleidung_jacke: "",
     kleidung_stiefel: "",
+    minijob_grenze: "",
   });
   const [saving, setSaving] = useState(false);
+  // Sätze Vertrieb (Stufe 3c): eigene Verpflegung/Unterkunft/Kleidung je
+  // Saison; ohne Eintrag gelten die Sätze oben.
+  const [vtSaetze, setVtSaetze] = useState<BereichSatz[]>([]);
+  const leerVt = {
+    saison_jahr: CURRENT_YEAR.toString(),
+    verpflegung: "",
+    wohnen: "",
+    kleidung_hose: "",
+    kleidung_jacke: "",
+    kleidung_stiefel: "",
+  };
+  const [vtForm, setVtForm] = useState(leerVt);
+  const [vtFehler, setVtFehler] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   // Firmen (Stufe 3a): Bankdaten/Anschrift je Firma statt einer Einzeile.
@@ -64,6 +78,12 @@ export default function EinstellungenAllgemeinPage() {
         .order("saison_jahr", { ascending: false }),
       supabase.from("firma").select("*").order("reihenfolge"),
     ]);
+    const { data: vt } = await supabase
+      .from("bereich_saetze")
+      .select("*")
+      .eq("bereich", "VT")
+      .order("saison_jahr", { ascending: false });
+    setVtSaetze((vt as BereichSatz[]) ?? []);
     if (!error) setSaetze((data as VerpflegungsSatz[]) ?? []);
     const liste = (bankdatenData as Firma[]) ?? [];
     setFirmen(liste);
@@ -127,7 +147,35 @@ export default function EinstellungenAllgemeinPage() {
       kleidung_hose: satz.kleidung_hose?.toString() ?? "",
       kleidung_jacke: satz.kleidung_jacke?.toString() ?? "",
       kleidung_stiefel: satz.kleidung_stiefel?.toString() ?? "",
+      minijob_grenze: satz.minijob_grenze?.toString() ?? "",
     });
+  }
+
+  const zahlOderNull = (v: string) => (v.trim() === "" ? null : Number(v));
+
+  async function vtSpeichern(e: React.FormEvent) {
+    e.preventDefault();
+    setVtFehler(null);
+    const { error } = await getSupabaseClient()
+      .from("bereich_saetze")
+      .upsert(
+        {
+          saison_jahr: Number(vtForm.saison_jahr),
+          bereich: "VT",
+          verpflegung: zahlOderNull(vtForm.verpflegung),
+          wohnen: zahlOderNull(vtForm.wohnen),
+          kleidung_hose: zahlOderNull(vtForm.kleidung_hose),
+          kleidung_jacke: zahlOderNull(vtForm.kleidung_jacke),
+          kleidung_stiefel: zahlOderNull(vtForm.kleidung_stiefel),
+        },
+        { onConflict: "saison_jahr,bereich" }
+      );
+    if (error) {
+      setVtFehler(error.message);
+      return;
+    }
+    setVtForm(leerVt);
+    load();
   }
 
   async function handleSubmit(e: React.FormEvent) {
@@ -148,6 +196,7 @@ export default function EinstellungenAllgemeinPage() {
         kleidung_stiefel: form.kleidung_stiefel
           ? Number(form.kleidung_stiefel)
           : null,
+        minijob_grenze: form.minijob_grenze ? Number(form.minijob_grenze) : null,
       });
     setSaving(false);
     if (error) {
@@ -358,6 +407,14 @@ export default function EinstellungenAllgemeinPage() {
               setForm({ ...form, kleidung_stiefel: e.target.value })
             }
           />
+          <input
+            type="number"
+            step="0.01"
+            placeholder="Minijob-Grenze €/Monat"
+            title="Monatliche Verdienstgrenze für Minijobs - die Lohnübersicht warnt bei Überschreitung"
+            value={form.minijob_grenze}
+            onChange={(e) => setForm({ ...form, minijob_grenze: e.target.value })}
+          />
           <div className="col-span-full flex items-center gap-2">
             <button type="submit" className="btn" disabled={saving}>
               Speichern
@@ -385,6 +442,7 @@ export default function EinstellungenAllgemeinPage() {
                 <th>Hose €/Stück</th>
                 <th>Jacke €/Stück</th>
                 <th>Stiefel €/Stück</th>
+                <th>Minijob-Grenze €/Monat</th>
                 {isAdmin && <th></th>}
               </tr>
             </thead>
@@ -414,11 +472,100 @@ export default function EinstellungenAllgemeinPage() {
                       ? formatMenge(Number(s.kleidung_stiefel), 2)
                       : "—"}
                   </td>
+                  <td>
+                    {s.minijob_grenze != null
+                      ? formatMenge(Number(s.minijob_grenze), 2)
+                      : "—"}
+                  </td>
                   {isAdmin && (
                     <td>
                       <button
                         className="btn-secondary"
                         onClick={() => editRow(s)}
+                      >
+                        Bearbeiten
+                      </button>
+                    </td>
+                  )}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      <div>
+        <h2 className="text-lg font-semibold text-emerald-800">Sätze Vertrieb</h2>
+        <p className="text-sm text-neutral-500">
+          Eigene Sätze für Verkäufer (Bereich Vertrieb) je Saisonjahr. Leere
+          Felder bzw. Jahre ohne Eintrag nutzen die Sätze oben. Ob jemand
+          überhaupt bei uns wohnt/isst, steht je Person auf der Stammkarte
+          (Zeiträume ohne Unterkunft/Verpflegung).
+        </p>
+      </div>
+      {isAdmin && (
+        <form
+          onSubmit={vtSpeichern}
+          className="grid grid-cols-2 gap-3 rounded border border-linie bg-white p-4 sm:grid-cols-6"
+        >
+          <input
+            type="number"
+            placeholder="Saison-Jahr"
+            required
+            value={vtForm.saison_jahr}
+            onChange={(e) => setVtForm({ ...vtForm, saison_jahr: e.target.value })}
+          />
+          <input type="number" step="0.01" placeholder="Verpflegung €/Tag" value={vtForm.verpflegung}
+            onChange={(e) => setVtForm({ ...vtForm, verpflegung: e.target.value })} />
+          <input type="number" step="0.01" placeholder="Unterkunft €/Tag" value={vtForm.wohnen}
+            onChange={(e) => setVtForm({ ...vtForm, wohnen: e.target.value })} />
+          <input type="number" step="0.01" placeholder="Hose €/Stück" value={vtForm.kleidung_hose}
+            onChange={(e) => setVtForm({ ...vtForm, kleidung_hose: e.target.value })} />
+          <input type="number" step="0.01" placeholder="Jacke €/Stück" value={vtForm.kleidung_jacke}
+            onChange={(e) => setVtForm({ ...vtForm, kleidung_jacke: e.target.value })} />
+          <input type="number" step="0.01" placeholder="Stiefel €/Stück" value={vtForm.kleidung_stiefel}
+            onChange={(e) => setVtForm({ ...vtForm, kleidung_stiefel: e.target.value })} />
+          <div className="col-span-full flex items-center gap-2">
+            <button type="submit" className="btn">Speichern</button>
+            {vtFehler && <span className="text-sm text-beere-600">{vtFehler}</span>}
+          </div>
+        </form>
+      )}
+      {vtSaetze.length > 0 && (
+        <div className="overflow-x-auto">
+          <table>
+            <thead>
+              <tr>
+                <th>Saison-Jahr</th>
+                <th>Verpflegung €/Tag</th>
+                <th>Unterkunft €/Tag</th>
+                <th>Hose €/Stück</th>
+                <th>Jacke €/Stück</th>
+                <th>Stiefel €/Stück</th>
+                {isAdmin && <th></th>}
+              </tr>
+            </thead>
+            <tbody>
+              {vtSaetze.map((s) => (
+                <tr key={s.saison_jahr}>
+                  <td>{s.saison_jahr}</td>
+                  {[s.verpflegung, s.wohnen, s.kleidung_hose, s.kleidung_jacke, s.kleidung_stiefel].map((w, i) => (
+                    <td key={i}>{w != null ? formatMenge(Number(w), 2) : "— (wie oben)"}</td>
+                  ))}
+                  {isAdmin && (
+                    <td>
+                      <button
+                        className="btn-secondary"
+                        onClick={() =>
+                          setVtForm({
+                            saison_jahr: s.saison_jahr.toString(),
+                            verpflegung: s.verpflegung?.toString() ?? "",
+                            wohnen: s.wohnen?.toString() ?? "",
+                            kleidung_hose: s.kleidung_hose?.toString() ?? "",
+                            kleidung_jacke: s.kleidung_jacke?.toString() ?? "",
+                            kleidung_stiefel: s.kleidung_stiefel?.toString() ?? "",
+                          })
+                        }
                       >
                         Bearbeiten
                       </button>
