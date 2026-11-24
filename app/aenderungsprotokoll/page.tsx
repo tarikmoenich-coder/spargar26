@@ -1,15 +1,16 @@
 "use client";
 
-// "Änderungsprotokoll" (Nutzer-Vorgabe 2026-08-11, nur admin): macht das
+// "Änderungsprotokoll" (Nutzer-Vorgabe 2026-08-11; seit 2026-11-24 auch
+// pruefer, Nutzer-Entscheidung Stufe 0 - passend zur Rollenbeschreibung und
+// zur bestehenden DB-Policy audit_log_select): macht das
 // seit Beginn mitlaufende Audit-Log sichtbar - wer hat wann was geändert.
 // Die Daten selbst gab es schon (Trigger write_audit_log auf employees,
 // work_entries, advances, Prämien, Kassenbuch, Dokumenten, Monatsabschluss
 // und Kandidaten), es fehlte nur die Anzeige.
 //
-// Bewusst admin-only: die Einträge enthalten ganze Datensätze und damit
-// auch sensible Felder (IBAN, SV-Nr.). Die Datenbank-Policy erlaubt
-// zusätzlich der Rolle pruefer den Lesezugriff (bestehende Regelung für
-// die Kassenprüfung) - diese Detailansicht hier bleibt trotzdem admin.
+// Die Einträge enthalten ganze Datensätze und damit auch sensible Felder
+// (IBAN, SV-Nr.) - deshalb nur admin und pruefer (der Prüfer sieht diese
+// Felder bewusst mit, Nutzer-Entscheidung 2026-11-24).
 
 import PageHeader from "@/components/PageHeader";
 import { History } from "lucide-react";
@@ -36,7 +37,7 @@ function formatZeitpunktDE(iso: string): string {
 
 export default function AenderungsprotokollPage() {
   const { profile } = useProfile();
-  const istAdmin = profile?.role === "admin";
+  const darfSehen = profile?.role === "admin" || profile?.role === "pruefer";
 
   const [eintraege, setEintraege] = useState<AuditLogEintrag[]>([]);
   const [loading, setLoading] = useState(true);
@@ -71,8 +72,8 @@ export default function AenderungsprotokollPage() {
       });
       setPersonen(map);
     }
-    if (istAdmin) ladePersonen();
-  }, [istAdmin]);
+    if (darfSehen) ladePersonen();
+  }, [darfSehen]);
 
   async function load() {
     setLoading(true);
@@ -93,17 +94,17 @@ export default function AenderungsprotokollPage() {
   }
 
   useEffect(() => {
-    if (istAdmin) load();
+    if (darfSehen) load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [istAdmin, bereich, vonDatum, bisDatum]);
+  }, [darfSehen, bereich, vonDatum, bisDatum]);
 
-  if (!istAdmin) {
+  if (!darfSehen) {
     return (
       <div className="flex flex-col gap-4">
         <PageHeader icon={History} titel="Änderungsprotokoll" />
         <p className="text-neutral-500">
           Das Änderungsprotokoll enthält vollständige Datensätze inklusive
-          sensibler Felder und ist deshalb nur für die Rolle admin sichtbar.
+          sensibler Felder und ist deshalb nur für die Rollen Administrator und Prüfer sichtbar.
         </p>
       </div>
     );

@@ -78,7 +78,10 @@ export default function StrichlistePage() {
     const [{ data: emp }, { data: praemien }, { data: annahme }] = await Promise.all([
       supabase
         .from("employees")
-        .select("*")
+        // Nur die benötigten Spalten - kein select("*"): die Seite ist auch
+        // für zeiterfassung/lohnabrechnung/management/erntewirtschaft
+        // erreichbar und darf keine IBAN/SV-Nr. laden (Stufe 0, 2026-11-24).
+        .select("id, personal_nr, name, vorname, gruppe_nr, aktiv")
         .eq("aktiv", true)
         .eq("praemien_zuckermais", true)
         .order("name")

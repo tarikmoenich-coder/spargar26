@@ -91,6 +91,30 @@ Jede Migration vorher in der lokalen Postgres-Kopie getestet.
 4. Seiten der eingeschränkten Rollen (zeiterfassung, erntewirtschaft, waage,
    hausmeister) einmal durchklicken bzw. Abfragen prüfen.
 
+#### Stand Stufe 0 (2026-11-24)
+
+- Live eingespielt: `migration_2026-11-24_anon_zugriff_sperren.sql` (kein
+  Zugriff ohne Anmeldung), `migration_2026-11-24b_nur_aktive_rollen.sql`
+  (nur aktive Profile mit Rolle; 36 Policies + Storage). Selbst-
+  Registrierung in Supabase vom Nutzer abgeschaltet.
+- Werkzeug: `supabase/tests/rechte_test.sh` (exakte Kopie der Live-Struktur
+  über nur-Katalog-Zugang `claude_struktur`, Testdaten, Matrix 13 Zugänge x
+  134 Tabellen/Views, Vorher/Nachher mit Migrationen).
+- Stufe 0b (`migration_2026-11-24c_rollenrechte_lesen.sql` + Strichliste
+  ohne `select("*")` + Prüfer sieht Änderungsprotokoll), Nutzer-
+  Entscheidung 2026-11-24:
+  - Tagesstunden: alle außer hausmeister/waage; Stundenkonto zusätzlich
+    ohne erntewirtschaft; Saisonabrechnungen/Auszahlungsbelege/Auslagen/
+    Vorschüsse (auch in der Suche): nur Lohn-Rollen; Unterkunft: alle außer
+    waage.
+  - Monatsabschluss-Fehler (Audit-Trigger erwartete Spalte `id` in
+    `periods`) behoben.
+- Stufe 0c (offen): heikle Personenfelder in eigene Tabelle. Freigegeben:
+  Grunddaten alle; Stundenlohn admin/hr/lohnabrechnung/management;
+  IBAN/BIC/Zahlungsempfänger admin/hr/kasse/lohnabrechnung (NICHT
+  management/pruefer); SV-Nr./Steuer-ID/Anschrift/Geburtsdaten/
+  Familienstand/Kontakt/Schwarze Liste nur admin/hr.
+
 ### Stufe 1 - Mehrere Rollen je Nutzer
 
 - `profiles.rollen user_role[]` (Pflicht, nicht leer), befüllt aus `role`.
