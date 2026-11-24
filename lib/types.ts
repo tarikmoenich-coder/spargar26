@@ -2571,3 +2571,52 @@ export interface ErnteKetteLuecke {
   art: "befuellt_nie_gewogen" | "gewogen_ohne_befuellung" | "implausibles_gewicht" | null;
   ist_faellig: boolean;
 }
+
+// ---------------------------------------------------------------------------
+// Vertriebsplanung V1 (migration_2026-11-25c_vertrieb_staende_touren.sql,
+// docs/vertriebsplanung-plan.md): Stände, Öffnungszeiten, Touren.
+// ---------------------------------------------------------------------------
+export type VtHalbtag = "VM" | "NM";
+export type VtTagesart = "MO_SA" | "SO";
+
+export interface VtStand {
+  id: number;
+  nummer: number;
+  name: string;
+  adresse: string | null;
+  lat: number | null;
+  lng: number | null;
+  radius_m: number;
+  aktiv: boolean;
+  notiz: string | null;
+}
+
+// Zeile vorhanden = an diesem Halbtag geöffnet. wochentag ISO 1=Mo..7=So.
+export interface VtStandZeit {
+  id: number;
+  stand_id: number;
+  wochentag: number;
+  halbtag: VtHalbtag;
+  von: string;
+  bis: string;
+}
+
+export interface VtTour {
+  id: number;
+  tagesart: VtTagesart;
+  nummer: number;
+  name: string | null;
+  fahrzeug_id: number | null;
+  abfahrt: string | null;
+  aktiv: boolean;
+  notiz: string | null;
+}
+
+export interface VtTourStand {
+  id: number;
+  tour_id: number;
+  tagesart: VtTagesart;
+  stand_id: number;
+  reihenfolge: number;
+  nur_ware: boolean;
+}
