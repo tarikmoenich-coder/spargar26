@@ -62,3 +62,8 @@ export function fahrerStandId(staende: Pick<VtTourStand, "stand_id" | "reihenfol
   const mit = [...staende].filter((s) => !s.nur_ware).sort((a, b) => a.reihenfolge - b.reihenfolge);
   return mit.length ? mit[mit.length - 1].stand_id : null;
 }
+
+// Saison, die gerade geplant wird: ab September die kommende.
+export function planungsSaison(heute = new Date()): number {
+  return heute.getMonth() >= 8 ? heute.getFullYear() + 1 : heute.getFullYear();
+}

@@ -10,6 +10,7 @@ import { useEffect, useRef } from "react";
 const tabs = [
   { href: "/vertrieb", label: "Stände", exakt: true },
   { href: "/vertrieb/touren", label: "Touren" },
+  { href: "/vertrieb/verfuegbarkeit", label: "Verfügbarkeit" },
 ];
 
 export default function VertriebTabs() {
