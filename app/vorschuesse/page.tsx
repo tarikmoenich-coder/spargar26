@@ -178,6 +178,7 @@ export default function VorschuessePage() {
       { data: hk },
       { data: bankdaten },
       { data: sepaEx },
+      { data: empBank },
     ] = await Promise.all([
       supabase
         .from("advances")
@@ -186,9 +187,7 @@ export default function VorschuessePage() {
         .limit(100),
       supabase
         .from("employees")
-        .select(
-          "id, personal_nr, name, vorname, aktiv, gruppe_nr, herkunft, zahlungsempfaenger, iban, bic"
-        )
+        .select("id, personal_nr, name, vorname, aktiv, gruppe_nr, herkunft")
         .eq("aktiv", true)
         .order("name"),
       supabase.from("arbeitsgruppen").select("*").order("reihenfolge"),
@@ -198,9 +197,28 @@ export default function VorschuessePage() {
       // das selbst ab.
       supabase.from("firmen_bankdaten").select("*").eq("id", 1).maybeSingle(),
       supabase.from("sepa_export").select("*").eq("art", "vorschuss"),
+      // Bankverbindung nur über employee_bankdaten (Stufe 0c, 2026-11-24):
+      // liefert nur für admin/hr/kasse/lohnabrechnung Zeilen - management
+      // und pruefer bekommen keine Bankdaten (Nutzer-Entscheidung).
+      supabase.from("employee_bankdaten").select("id, zahlungsempfaenger, iban, bic"),
     ]);
     setAdvances((adv as Advance[]) ?? []);
-    setEmployees((emp as Employee[]) ?? []);
+    const bankNachId = new Map(
+      (
+        (empBank as Pick<Employee, "id" | "zahlungsempfaenger" | "iban" | "bic">[]) ?? []
+      ).map((b) => [b.id, b])
+    );
+    setEmployees(
+      ((emp as Employee[]) ?? []).map((e) => {
+        const b = bankNachId.get(e.id);
+        return {
+          ...e,
+          zahlungsempfaenger: b?.zahlungsempfaenger ?? null,
+          iban: b?.iban ?? null,
+          bic: b?.bic ?? null,
+        };
+      })
+    );
     setGruppen((gr as Arbeitsgruppe[]) ?? []);
     setHerkuenfte((hk as Herkunft[]) ?? []);
     setFirmenBankdaten((bankdaten as FirmenBankdaten) ?? null);

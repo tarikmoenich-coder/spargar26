@@ -229,7 +229,7 @@ export default function StatistikZuckermaisPage() {
     if (!kannPersonenauswertungSehen) return;
     setPersonenLoading(true);
     const supabase = getSupabaseClient();
-    const [{ data: praemie, error }, { data: mitarbeiter }] = await Promise.all([
+    const [{ data: praemie, error }, { data: mitarbeiter }, { data: lohn }] = await Promise.all([
       supabase
         .from("zuckermais_praemie_tag")
         .select("*")
@@ -240,15 +240,20 @@ export default function StatistikZuckermaisPage() {
       // Zeitraum weiterhin korrekt ausgewertet werden können.
       supabase
         .from("employees")
-        .select("id, personal_nr, name, vorname, stundenlohn, herkunft"),
+        .select("id, personal_nr, name, vorname, herkunft"),
+      // Stundenlohn nur über employee_lohndaten (Stufe 0c, 2026-11-24).
+      supabase.from("employee_lohndaten").select("id, stundenlohn"),
     ]);
     if (!error) setPraemieZeilen((praemie as ZuckermaisPraemieTag[]) ?? []);
+    const lohnNachId = new Map(
+      ((lohn as { id: string; stundenlohn: number | null }[]) ?? []).map((l) => [l.id, l.stundenlohn])
+    );
     const map: Record<
       string,
       Pick<Employee, "personal_nr" | "name" | "vorname" | "stundenlohn" | "herkunft">
     > = {};
     ((mitarbeiter as Employee[]) ?? []).forEach((m) => {
-      map[m.id] = m;
+      map[m.id] = { ...m, stundenlohn: lohnNachId.get(m.id) ?? null };
     });
     setMitarbeiterMap(map);
     setPersonenLoading(false);

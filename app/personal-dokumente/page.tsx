@@ -78,7 +78,7 @@ function PersonalDokumenteInner() {
     const [emp, docs] = await Promise.all([
       ladeAlleSeiten<Row>((von, bis) =>
         supabase
-          .from("employees")
+          .from("employee_personaldaten")
           .select("id, personal_nr, herkunft, name, vorname, ort, aktiv")
           .order("name")
           .order("id")

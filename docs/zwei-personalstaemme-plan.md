@@ -109,7 +109,11 @@ Jede Migration vorher in der lokalen Postgres-Kopie getestet.
     waage.
   - Monatsabschluss-Fehler (Audit-Trigger erwartete Spalte `id` in
     `periods`) behoben.
-- Stufe 0c (offen): heikle Personenfelder in eigene Tabelle. Freigegeben:
+- Stufe 0c (gebaut, Branch): Daten bleiben in `employees`, heikle Spalten
+  per Spaltenrecht für authenticated gesperrt; Zugriff über Views
+  `employee_personaldaten` (admin/hr, les-/schreibbar), `employee_bankdaten`,
+  `employee_lohndaten`. Ausrollen ohne Ausfall: Migration 2026-11-24d
+  (nur Views) → Code → Migration 2026-11-24e (Rechte entziehen). Freigegeben:
   Grunddaten alle; Stundenlohn admin/hr/lohnabrechnung/management;
   IBAN/BIC/Zahlungsempfänger admin/hr/kasse/lohnabrechnung (NICHT
   management/pruefer); SV-Nr./Steuer-ID/Anschrift/Geburtsdaten/

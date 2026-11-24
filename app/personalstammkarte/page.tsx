@@ -175,7 +175,7 @@ function StammkarteInner() {
     (async () => {
       const supabase = getSupabaseClient();
       const [empRes, grpRes, jahreRes, fsRes, abschnitteRes] = await Promise.all([
-        supabase.from("employees").select("*").eq("id", id).maybeSingle(),
+        supabase.from("employee_personaldaten").select("*").eq("id", id).maybeSingle(),
         supabase.from("arbeitsgruppen").select("gruppe_nr, bezeichnung"),
         supabase
           .from("employee_saison_jahre")
@@ -226,7 +226,7 @@ function StammkarteInner() {
       // Daten sind schon vorhanden, wurden bisher nur nicht abgefragt.
       if (geladen.vorgaenger_employee_id) {
         const { data: vData } = await supabase
-          .from("employees")
+          .from("employee_personaldaten")
           .select("personal_nr, name, vorname")
           .eq("id", geladen.vorgaenger_employee_id)
           .maybeSingle();

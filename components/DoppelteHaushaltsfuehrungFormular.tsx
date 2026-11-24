@@ -122,7 +122,7 @@ export default function DoppelteHaushaltsfuehrungFormular({
     // Vorbelegung geändert haben (z.B. Person heiratet erst in dieser Saison).
     if (entwurf.familienstand !== (employeeFamilienstand ?? null)) {
       const { error: stammkarteFehler } = await supabase
-        .from("employees")
+        .from("employee_personaldaten")
         .update({ familienstand: entwurf.familienstand })
         .eq("id", employeeId);
       if (stammkarteFehler) {

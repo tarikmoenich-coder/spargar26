@@ -205,7 +205,7 @@ export default function LohnsteuerantragPage() {
         supabase.from("firmen_bankdaten").select("*").eq("id", 1).maybeSingle(),
         ladeAlleSeiten<Employee>((von, bis) =>
           supabase
-            .from("employees")
+            .from("employee_personaldaten")
             .select("*")
             .eq("aktiv", true)
             .order("name")

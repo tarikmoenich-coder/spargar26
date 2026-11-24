@@ -88,7 +88,7 @@ export default function AnreiselistePage() {
         .order("name"),
       ladeAlleSeiten<Employee>((von, bis) =>
         supabase
-          .from("employees")
+          .from("employee_personaldaten")
           .select("*")
           .order("personal_nr")
           .order("id")
@@ -291,7 +291,7 @@ export default function AnreiselistePage() {
   ) {
     const supabase = getSupabaseClient();
     await supabase
-      .from("employees")
+      .from("employee_personaldaten")
       .update({
         familienstand,
         hochzeitsdatum: familienstand === "verheiratet" ? hochzeitsdatum : null,
@@ -328,7 +328,7 @@ export default function AnreiselistePage() {
     const supabase = getSupabaseClient();
     if (k.aktivierter_employee_id) {
       await supabase
-        .from("employees")
+        .from("employee_personaldaten")
         .update({ aktiv: false })
         .eq("id", k.aktivierter_employee_id);
     }

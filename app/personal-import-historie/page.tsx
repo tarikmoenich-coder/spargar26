@@ -108,7 +108,7 @@ export default function PersonalImportHistoriePage() {
       { data: herkunftData },
     ] = await Promise.all([
       supabase
-        .from("employees")
+        .from("employee_personaldaten")
         .select("id, personal_nr, name, vorname, geburtsdatum"),
       supabase.from("arbeitsgruppen").select("gruppe_nr"),
       supabase.from("herkuenfte").select("wert"),
@@ -248,7 +248,7 @@ export default function PersonalImportHistoriePage() {
         aktiv: alsAktiv,
       }));
       const { data, error } = await supabase
-        .from("employees")
+        .from("employee_personaldaten")
         .insert(payload)
         .select("id, personal_nr");
       if (error) {
@@ -271,7 +271,7 @@ export default function PersonalImportHistoriePage() {
       .filter((nr) => !idNachNr.has(nr.trim().toLowerCase()));
     for (const block of bloecke(fehlendeNrn)) {
       const { data } = await supabase
-        .from("employees")
+        .from("employee_personaldaten")
         .select("id, personal_nr")
         .in("personal_nr", block);
       (data as { id: string; personal_nr: string }[] | null)?.forEach((r) => {

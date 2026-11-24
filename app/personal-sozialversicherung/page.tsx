@@ -89,7 +89,7 @@ export default function SozialversicherungPage() {
     // Historie-Import tausende inaktive employees).
     const emps = await ladeAlleSeiten<Employee>((von, bis) => {
       const basis = supabase
-        .from("employees")
+        .from("employee_personaldaten")
         .select("*")
         .order("personal_nr")
         .order("id");

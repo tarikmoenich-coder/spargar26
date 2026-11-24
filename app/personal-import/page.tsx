@@ -85,7 +85,7 @@ export default function PersonalImportPage() {
     const supabase = getSupabaseClient();
     const [{ data: bestehende }, { data: gruppenData }, { data: herkunftData }] =
       await Promise.all([
-        supabase.from("employees").select("personal_nr, name, vorname"),
+        supabase.from("employee_personaldaten").select("personal_nr, name, vorname"),
         supabase.from("arbeitsgruppen").select("gruppe_nr"),
         supabase.from("herkuenfte").select("wert"),
       ]);
@@ -218,7 +218,7 @@ export default function PersonalImportPage() {
     const basisErgebnisse = await Promise.allSettled(
       basisZeilen.map((z) =>
         supabase
-          .from("employees")
+          .from("employee_personaldaten")
           .insert(insertPayload(z, null))
           .select("id, personal_nr")
           .single()
@@ -231,7 +231,7 @@ export default function PersonalImportPage() {
     // Phase 1 neu angelegten.
     const idNachPersonalNr = new Map<string, string>();
     const { data: bestehendeIds } = await supabase
-      .from("employees")
+      .from("employee_personaldaten")
       .select("id, personal_nr");
     (
       (bestehendeIds as { id: string; personal_nr: string }[] | null) ?? []
@@ -262,7 +262,7 @@ export default function PersonalImportPage() {
           ? idNachPersonalNr.get(z.vorgaenger_personal_nr.toLowerCase()) ??
             null
           : null;
-        return supabase.from("employees").insert(insertPayload(z, vorgaengerId));
+        return supabase.from("employee_personaldaten").insert(insertPayload(z, vorgaengerId));
       })
     );
     aErgebnisse.forEach((r, i) => {

@@ -158,7 +158,7 @@ export default function PersonalplanungPage() {
       // der Personalnummern wäre falsch.
       ladeAlleSeiten<Employee>((von, bis) =>
         supabase
-          .from("employees")
+          .from("employee_personaldaten")
           .select("*")
           .order("name")
           .order("vorname")
@@ -647,7 +647,7 @@ export default function PersonalplanungPage() {
           : k.stundenlohn;
       if (k.verknuepfter_employee_id) {
         const { error } = await supabase
-          .from("employees")
+          .from("employee_personaldaten")
           .update({
             aktiv: true,
             name: k.name,
@@ -665,7 +665,7 @@ export default function PersonalplanungPage() {
         employeeId = k.verknuepfter_employee_id;
       } else {
         const { data, error } = await supabase
-          .from("employees")
+          .from("employee_personaldaten")
           .insert({
             personal_nr: k.personal_nr,
             name: k.name,

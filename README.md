@@ -1444,6 +1444,19 @@ Breite des Login Feldes. So sieht das nicht gut aus").
 | `erntewirtschaft` | Start, Suche, Erntewirtschaft (Prämien/Anbau/Statistik/Qualität), Unterkunft | Eigener Arbeitsbereich (Vorgabe 2026-08-09, seither erweitert): erfasst Prämien (wie zeiterfassung) und Schichtkontrollen (Qualität), sieht Statistik, pflegt die Anbauplanung, sieht Unterkunft (lesend), eigenes Tages-Dashboard; kein Zugriff auf Personal, Lohnübersicht, Kassenbuch, Controlling, Einstellungen |
 | `hausmeister` | Nur Unterkunft (Reparaturen) | Pflegt in der Unterkunft die laufende Arbeit (Vorgabe 2026-09-15); kein anderer Menüpunkt, auch keine Suche |
 
+**Heikle Personenfelder (seit 2026-11-24, Stufe 0c):** SV-Nr., Steuer-ID,
+Anschrift, Geburtsdaten, Familienstand, Kontakt, Schwarze Liste, IBAN/BIC/
+Zahlungsempfänger und Stundenlohn liegen weiter in `employees`, sind dort
+über die API aber für **keine** Rolle direkt lesbar/schreibbar
+(Spaltenrechte). Zugriff nur über Views mit Rollenfilter:
+`employee_personaldaten` (alle Spalten, lesen/anlegen/ändern, admin/hr -
+alle Personal-Seiten nutzen diese View statt `employees`),
+`employee_bankdaten` (admin/hr/kasse/lohnabrechnung),
+`employee_lohndaten` (admin/hr/lohnabrechnung/management). Andere Seiten
+lesen aus `employees` nur Grunddaten - nie `select("*")`. Neue Spalte in
+`employees` → View `employee_personaldaten` neu anlegen und Spalten-Grant
+für `authenticated` ergänzen. Rechte-Test: `supabase/tests/rechte_test.sh`.
+
 Neuen Benutzer anlegen: Supabase-Dashboard → Authentication → Users →
 "Add user" (E-Mail + Passwort) → User UID kopieren → in der App unter
 **Einstellungen → Nutzer & Rollen** "Nutzer hinzufügen" (UID + Name +

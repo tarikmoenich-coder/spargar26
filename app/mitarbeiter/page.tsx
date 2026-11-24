@@ -315,7 +315,7 @@ export default function MitarbeiterPage() {
     // Liste als auch die Nummern-Belegung (nächste freie Nummer) wären falsch.
     const empListe = await ladeAlleSeiten<Employee>((von, bis) => {
       const basis = supabase
-        .from("employees")
+        .from("employee_personaldaten")
         .select("*")
         .order("name")
         .order("vorname")
@@ -329,7 +329,7 @@ export default function MitarbeiterPage() {
       vorname: string;
     }>((von, bis) =>
       supabase
-        .from("employees")
+        .from("employee_personaldaten")
         .select("id, personal_nr, name, vorname")
         .order("personal_nr")
         .range(von, bis)
@@ -493,8 +493,8 @@ export default function MitarbeiterPage() {
     };
 
     const { error } = editingId
-      ? await supabase.from("employees").update(payload).eq("id", editingId)
-      : await supabase.from("employees").insert(payload);
+      ? await supabase.from("employee_personaldaten").update(payload).eq("id", editingId)
+      : await supabase.from("employee_personaldaten").insert(payload);
 
     setSaving(false);
     if (error) {
@@ -520,7 +520,7 @@ export default function MitarbeiterPage() {
     if (datum === null) return; // abgebrochen
     const supabase = getSupabaseClient();
     await supabase
-      .from("employees")
+      .from("employee_personaldaten")
       .update({ aktiv: !emp.aktiv })
       .eq("id", emp.id);
     const { error: abschnittFehler } = emp.aktiv
@@ -577,7 +577,7 @@ export default function MitarbeiterPage() {
     if (datum === null) return;
     setBulkLaufend(true);
     const supabase = getSupabaseClient();
-    await supabase.from("employees").update({ aktiv }).in("id", bulkAusgewaehlt);
+    await supabase.from("employee_personaldaten").update({ aktiv }).in("id", bulkAusgewaehlt);
     const fehlerListe: string[] = [];
     for (const id of bulkAusgewaehlt) {
       const { error } = aktiv
@@ -605,7 +605,7 @@ export default function MitarbeiterPage() {
     setBulkLaufend(true);
     const supabase = getSupabaseClient();
     await supabase
-      .from("employees")
+      .from("employee_personaldaten")
       .update({ gruppe_nr: bulkZielGruppe || null })
       .in("id", bulkAusgewaehlt);
     setBulkLaufend(false);
@@ -782,7 +782,7 @@ export default function MitarbeiterPage() {
     }
 
     const { data: neu, error: insertError } = await supabase
-      .from("employees")
+      .from("employee_personaldaten")
       .insert({
         personal_nr: neuePersonalNr,
         gruppe_nr: alt.gruppe_nr,
@@ -887,7 +887,7 @@ export default function MitarbeiterPage() {
       .update({ fahrer_employee_id: neu.id })
       .eq("fahrer_employee_id", alt.id);
 
-    await supabase.from("employees").update({ aktiv: false }).eq("id", alt.id);
+    await supabase.from("employee_personaldaten").update({ aktiv: false }).eq("id", alt.id);
 
     // Beschäftigungsabschnitte nachziehen (Nutzer-Vorgabe 2026-11-04/05):
     // ohne das würde der ALTE employee_id-Abschnitt nie schließen und für

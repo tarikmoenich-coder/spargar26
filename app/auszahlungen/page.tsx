@@ -431,14 +431,33 @@ export default function AuszahlungenPage() {
       );
       return;
     }
-    const { data, error } = await getSupabaseClient()
+    const supabase = getSupabaseClient();
+    const { data, error } = await supabase
       .from("auszahlungsbeleg_zeilen")
-      .select("employee_id, name, vorname, zeile, employees(iban, bic, zahlungsempfaenger)")
+      .select("employee_id, name, vorname, zeile")
       .eq("auszahlungsbeleg_id", beleg.id);
     if (error || !data) {
       setSepaFehler(error?.message ?? "Zeilen konnten nicht geladen werden.");
       return;
     }
+    // Bankverbindung nur über employee_bankdaten (Stufe 0c, 2026-11-24) -
+    // die Spalten in employees sind über die API nicht mehr lesbar.
+    const ids = Array.from(new Set((data as { employee_id: string }[]).map((r) => r.employee_id)));
+    const { data: bank, error: bankFehler } = ids.length
+      ? await supabase
+          .from("employee_bankdaten")
+          .select("id, iban, bic, zahlungsempfaenger")
+          .in("id", ids)
+      : { data: [], error: null };
+    if (bankFehler) {
+      setSepaFehler(bankFehler.message);
+      return;
+    }
+    const bankNachId = new Map(
+      ((bank as { id: string; iban: string | null; bic: string | null; zahlungsempfaenger: string | null }[]) ?? []).map(
+        (b) => [b.id, b]
+      )
+    );
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const rows = (data as any[]).map((r) => ({
       employee_id: r.employee_id as string,
@@ -447,10 +466,9 @@ export default function AuszahlungenPage() {
       betrag: Number(
         (r.zeile as Record<string, unknown>)?.["auszahlungsbetrag"] ?? 0
       ),
-      iban: (r.employees?.iban as string | null) ?? "",
-      bic: (r.employees?.bic as string | null) ?? "",
-      zahlungsempfaenger:
-        (r.employees?.zahlungsempfaenger as string | null) ?? "",
+      iban: bankNachId.get(r.employee_id)?.iban ?? "",
+      bic: bankNachId.get(r.employee_id)?.bic ?? "",
+      zahlungsempfaenger: bankNachId.get(r.employee_id)?.zahlungsempfaenger ?? "",
     }));
     const zuZahlen = rows.filter((r) => r.betrag > 0);
     if (zuZahlen.length === 0) {
