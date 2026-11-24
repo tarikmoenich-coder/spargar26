@@ -127,15 +127,37 @@ export default function PersonalImportHscPage() {
   const zaehle = <T extends string>(werte: T[]) =>
     werte.reduce<Record<string, number>>((a, k) => ((a[k] = (a[k] ?? 0) + 1), a), {});
 
+  // Nutzer-Vorfall 2026-11-25: die Dateien wurden einzeln nacheinander
+  // importiert - die MöDi-Datei allein schrieb die alten Anita-Jahre Mönich
+  // Direkt zu, beim zweiten Lauf wurden vorhandene Personen ganz übersprungen.
+  // Deshalb jetzt:
+  //   * neue Personen werden angelegt (wie bisher),
+  //   * bei VORHANDENEN Personen werden Saisonjahre und fehlende
+  //     Beschäftigungszeiträume ergänzt,
+  //   * die Firma je Saison wird nur dann überschrieben, wenn ALLE Dateien
+  //     gemeinsam geladen sind (mind. 2) - eine einzelne Datei ergänzt nur.
+  const ueberschreibeFirma = dateien.length >= 2;
+  const zuErgaenzen = (personen ?? []).filter(
+    (p) => p.fehler.length === 0 && vorhandeneNummern.has(p.personal_nr)
+  );
+
   async function importieren() {
-    if (!personen || zuImportieren.length === 0) return;
-    if (!window.confirm(`${zuImportieren.length} Personen in den Bereich Vertrieb importieren?`)) return;
+    if (!personen) return;
+    if (
+      !window.confirm(
+        `${zuImportieren.length} Personen neu anlegen und bei ${zuErgaenzen.length} vorhandenen Personen Saisonjahre/Zeiträume ergänzen` +
+          (ueberschreibeFirma ? " und die Firma je Saison aus allen Dateien neu setzen" : "") +
+          "?"
+      )
+    )
+      return;
     setLaeuft(true);
     setFehler([]);
     const supabase = getSupabaseClient();
     const meldungen: string[] = [];
-    const idNachNr = new Map<string, string>();
-    // 1) Personen
+    const idNachNr = new Map<string, string>(vorhanden.map((e) => [e.personal_nr, e.id]));
+    let neuAngelegt = 0;
+    // 1) neue Personen
     for (let i = 0; i < zuImportieren.length; i += 50) {
       const block = zuImportieren.slice(i, i + 50);
       setFortschritt(`Personen ${i + 1}–${i + block.length} von ${zuImportieren.length}…`);
@@ -147,39 +169,68 @@ export default function PersonalImportHscPage() {
         meldungen.push(`Personen ${i + 1}–${i + block.length}: ${error.message}`);
         continue;
       }
-      ((data as { id: string; personal_nr: string }[]) ?? []).forEach((r) => idNachNr.set(r.personal_nr, r.id));
+      ((data as { id: string; personal_nr: string }[]) ?? []).forEach((r) => {
+        idNachNr.set(r.personal_nr, r.id);
+        neuAngelegt++;
+      });
     }
-    // 2) Saisonjahre, Firma je Saison, Beschäftigungsabschnitte
+    // 2) Saisonjahre, Firma je Saison, Beschäftigungszeiträume - für neue UND
+    //    vorhandene Personen
+    const alle = [...zuImportieren, ...zuErgaenzen];
+    const ids = alle.map((p) => idNachNr.get(p.personal_nr)).filter((x): x is string => !!x);
+    // vorhandene Import-Zeiträume laden (nicht doppelt anlegen)
+    const vorhandeneZr = new Set<string>();
+    for (let i = 0; i < ids.length; i += 150) {
+      const { data } = await supabase
+        .from("employee_beschaeftigungsabschnitte")
+        .select("employee_id, anmeldedatum, abmeldedatum")
+        .in("employee_id", ids.slice(i, i + 150));
+      ((data as { employee_id: string; anmeldedatum: string; abmeldedatum: string | null }[]) ?? []).forEach(
+        (z) => vorhandeneZr.add(`${z.employee_id}|${z.anmeldedatum}|${z.abmeldedatum ?? ""}`)
+      );
+    }
     const praesenz: { employee_id: string; saison_jahr: number; quelle: string }[] = [];
     const saison: { employee_id: string; saison_jahr: number; firma: string }[] = [];
     const abschnitte: { employee_id: string; anmeldedatum: string; abmeldedatum: string | null; quelle: string }[] = [];
-    zuImportieren.forEach((p) => {
+    alle.forEach((p) => {
       const id = idNachNr.get(p.personal_nr);
       if (!id) return;
       Object.entries(p.saisonFirma).forEach(([jahr, firma]) => {
         praesenz.push({ employee_id: id, saison_jahr: Number(jahr), quelle: "import" });
         saison.push({ employee_id: id, saison_jahr: Number(jahr), firma });
       });
-      p.zeitraeume.forEach((t) =>
-        abschnitte.push({ employee_id: id, anmeldedatum: t.von, abmeldedatum: t.bis, quelle: "import" })
-      );
+      p.zeitraeume.forEach((t) => {
+        if (!vorhandeneZr.has(`${id}|${t.von}|${t.bis ?? ""}`)) {
+          abschnitte.push({ employee_id: id, anmeldedatum: t.von, abmeldedatum: t.bis, quelle: "import" });
+        }
+      });
     });
-    const schreiben = async (tabelle: string, zeilen: object[], konflikt?: string) => {
+    const schreiben = async (
+      tabelle: string,
+      zeilen: object[],
+      art: "insert" | "ergaenzen" | "ueberschreiben"
+    ) => {
       for (let i = 0; i < zeilen.length; i += 200) {
         setFortschritt(`${tabelle}: ${i + 1}–${Math.min(i + 200, zeilen.length)} von ${zeilen.length}…`);
+        const teil = zeilen.slice(i, i + 200);
         const q = supabase.from(tabelle);
-        const { error } = konflikt
-          ? await q.upsert(zeilen.slice(i, i + 200), { onConflict: konflikt })
-          : await q.insert(zeilen.slice(i, i + 200));
+        const { error } =
+          art === "insert"
+            ? await q.insert(teil)
+            : await q.upsert(teil, {
+                onConflict: "employee_id,saison_jahr",
+                ignoreDuplicates: art === "ergaenzen",
+              });
         if (error) meldungen.push(`${tabelle}: ${error.message}`);
       }
     };
-    await schreiben("employee_saison_praesenz", praesenz, "employee_id,saison_jahr");
-    await schreiben("employee_saison", saison, "employee_id,saison_jahr");
-    await schreiben("employee_beschaeftigungsabschnitte", abschnitte);
+    await schreiben("employee_saison_praesenz", praesenz, "ergaenzen");
+    await schreiben("employee_saison", saison, ueberschreibeFirma ? "ueberschreiben" : "ergaenzen");
+    await schreiben("employee_beschaeftigungsabschnitte", abschnitte, "insert");
     setFehler(meldungen);
     setErgebnis(
-      `${idNachNr.size} Personen importiert, ${praesenz.length} Saisonjahre, ${abschnitte.length} Beschäftigungszeiträume.` +
+      `${neuAngelegt} Personen neu angelegt, ${zuErgaenzen.length} vorhandene ergänzt · ${saison.length} Saisonjahre ` +
+        `(Firma ${ueberschreibeFirma ? "neu gesetzt" : "nur ergänzt"}) · ${abschnitte.length} Beschäftigungszeiträume neu.` +
         (meldungen.length ? " Es gab Fehler - siehe unten." : "")
     );
     setFortschritt("");
@@ -236,6 +287,13 @@ export default function PersonalImportHscPage() {
             </select>
           </div>
         ))}
+        {dateien.length === 1 && (
+          <p className="text-xs text-amber-800">
+            Nur eine Datei gewählt: Saisonjahre/Zeiträume werden nur ergänzt, die Firma je Saison
+            wird nicht überschrieben. Für eine vollständige, richtige Zuordnung (alte Jahre bei
+            Anita Mönich) beide Dateien gemeinsam wählen.
+          </p>
+        )}
         {dateien.length > 0 && (
           <div className="flex gap-2">
             <button type="button" className="btn-secondary" disabled={laeuft} onClick={pruefen}>
@@ -245,10 +303,13 @@ export default function PersonalImportHscPage() {
               <button
                 type="button"
                 className="btn"
-                disabled={laeuft || zuImportieren.length === 0}
+                disabled={laeuft || zuImportieren.length + zuErgaenzen.length === 0}
                 onClick={importieren}
               >
-                {zuImportieren.length} Personen importieren
+                {zuImportieren.length > 0
+                  ? `${zuImportieren.length} Personen importieren`
+                  : "Importieren / ergänzen"}
+                {zuErgaenzen.length > 0 ? ` · ${zuErgaenzen.length} vorhandene ergänzen` : ""}
               </button>
             )}
           </div>
