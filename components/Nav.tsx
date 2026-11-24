@@ -15,6 +15,7 @@ import {
   Search,
   Settings,
   Sprout,
+  Store,
   Truck,
   Users,
   Wallet,
@@ -34,6 +35,9 @@ interface NavItem {
   // Weitere Pfade, die diesen Menüpunkt ebenfalls als aktiv markieren sollen
   // (z.B. Unterseiten wie Personalnummern/Import unter "Personal").
   auchAktivBei?: string[];
+  // Nur sichtbar, wenn der Nutzer diesen Geschäftsbereich sieht (die
+  // Datenbank filtert ohnehin - so bleibt das Menü bei LW-Nutzern leer).
+  bereich?: string;
 }
 
 const items: NavItem[] = [
@@ -95,6 +99,13 @@ const items: NavItem[] = [
     label: "Erntewirtschaft",
     icon: Sprout,
     auchAktivBei: ["/praemien", "/anbau", "/statistik", "/qualitaet"],
+  },
+  {
+    // Vertriebsplanung (docs/vertriebsplanung-plan.md): Stände, Touren.
+    href: "/vertrieb",
+    label: "Vertrieb",
+    icon: Store,
+    bereich: "VT",
   },
   {
     href: "/kasse",
@@ -222,7 +233,10 @@ export default function Nav() {
 
   const sichtbareItems = items.filter(
     (item) =>
-      darfMenue(profile, item.href)
+      darfMenue(profile, item.href) &&
+      (!item.bereich ||
+        (bereiche.erlaubt.includes(item.bereich) &&
+          (!bereiche.ansicht || bereiche.ansicht === item.bereich)))
   );
   const istAktiv = (item: NavItem) =>
     !!(

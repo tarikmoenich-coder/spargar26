@@ -1496,14 +1496,17 @@ Lohnzeilen in einem DO-Block.
 | Rolle | Sichtbare Menüpunkte | Kernrechte |
 |---|---|---|
 | `admin` | Alle | Voller Zugriff auf alles, inkl. Einstellungen, Kassenprüfungen freigeben, Änderungsprotokoll (Seite "Protokoll") |
-| `hr` | Personal, Stundenerfassung, Suche, Lohn, Erntewirtschaft, Controlling | Personalstamm + Dokumente voll pflegen (inkl. SV-Nr./IBAN/Ausweiskopien), Sozialversicherung + Lohnsteuer erfassen, Personalplanung + Anreiseliste (Kandidaten, Schwarze Liste, Buskosten) verwalten, Stunden erfassen, Lohnübersicht/Vorschüsse nur ansehen (nicht bearbeiten), Prämien erfassen, Monatsabschluss sperren/öffnen |
+| `hr` | Personal, Stundenerfassung, Suche, Lohn, Erntewirtschaft, Controlling, Vertrieb* | Personalstamm + Dokumente voll pflegen (inkl. SV-Nr./IBAN/Ausweiskopien), Sozialversicherung + Lohnsteuer erfassen, Personalplanung + Anreiseliste (Kandidaten, Schwarze Liste, Buskosten) verwalten, Stunden erfassen, Lohnübersicht/Vorschüsse nur ansehen (nicht bearbeiten), Prämien erfassen, Monatsabschluss sperren/öffnen; Vertrieb*: Stände + Touren pflegen |
 | `zeiterfassung` | Stundenerfassung, Suche, Erntewirtschaft (Prämien + Qualität) | Nur Stunden eintragen/ändern; sieht Personal nur mit eingeschränkten Feldern (keine SV-Nr./IBAN etc.); erfasst zusätzlich die Ausgabe von Arbeitskleidung (Stundenerfassung → Arbeitskleidung), Prämien (Kisten/Stunden je Tag) und die Schichtkontrollen (Erntewirtschaft → Qualität) |
 | `kasse` | Suche, Lohn, Kassenbuch | Vorschüsse erfassen/stornieren/korrigieren, Kassenbuch führen, Kassenprüfung durchführen |
-| `lohnabrechnung` | Suche, Lohn, Erntewirtschaft (Prämien lesen, Statistik) | Lohnübersicht ansehen **und bearbeiten** (Netto, Buskosten, Kautionen, "Jetzt Abrechnen"), **Vorschüsse erstellen/korrigieren**, Prämien ansehen |
-| `pruefer` | Suche, Lohn, Kassenbuch, Protokoll | Nur lesen, außer: Kassenprüfungen freigeben; einzige Nicht-Admin-Rolle mit Einsicht ins Änderungsprotokoll (Seite "Protokoll", seit 2026-11-24) |
-| `management` | Start, Suche, Lohn, Kassenbuch, Erntewirtschaft, Controlling, Fahrzeuge | Überwiegend lesende/aggregierte Sicht; darf zusätzlich Stundenkonto-Guthaben "In Auszahlung umwandeln" (Vorgabe 2026-08-21) |
+| `lohnabrechnung` | Suche, Lohn, Erntewirtschaft (Prämien lesen, Statistik), Vertrieb* (lesen) | Lohnübersicht ansehen **und bearbeiten** (Netto, Buskosten, Kautionen, "Jetzt Abrechnen"), **Vorschüsse erstellen/korrigieren**, Prämien ansehen |
+| `pruefer` | Suche, Lohn, Kassenbuch, Protokoll, Vertrieb (lesen) | Nur lesen, außer: Kassenprüfungen freigeben; einzige Nicht-Admin-Rolle mit Einsicht ins Änderungsprotokoll (Seite "Protokoll", seit 2026-11-24) |
+| `management` | Start, Suche, Lohn, Kassenbuch, Erntewirtschaft, Controlling, Fahrzeuge, Vertrieb (lesen) | Überwiegend lesende/aggregierte Sicht; darf zusätzlich Stundenkonto-Guthaben "In Auszahlung umwandeln" (Vorgabe 2026-08-21) |
 | `erntewirtschaft` | Start, Suche, Erntewirtschaft (Prämien/Anbau/Statistik/Qualität), Unterkunft | Eigener Arbeitsbereich (Vorgabe 2026-08-09, seither erweitert): erfasst Prämien (wie zeiterfassung) und Schichtkontrollen (Qualität), sieht Statistik, pflegt die Anbauplanung, sieht Unterkunft (lesend), eigenes Tages-Dashboard; kein Zugriff auf Personal, Lohnübersicht, Kassenbuch, Controlling, Einstellungen |
 | `hausmeister` | Nur Unterkunft (Reparaturen) | Pflegt in der Unterkunft die laufende Arbeit (Vorgabe 2026-09-15); kein anderer Menüpunkt, auch keine Suche |
+
+\* Menüpunkt **Vertrieb** (Vertriebsplanung, `docs/vertriebsplanung-plan.md`)
+nur mit Bereich Vertrieb (`vt_darf()`, migration_2026-11-25c).
 
 **Heikle Personenfelder (seit 2026-11-24, Stufe 0c):** SV-Nr., Steuer-ID,
 Anschrift, Geburtsdaten, Familienstand, Kontakt, Schwarze Liste, IBAN/BIC/

@@ -38,7 +38,7 @@ export const ROLLEN: RolleInfo[] = [
   {
     wert: "hr",
     label: "Personal (HR)",
-    kurz: "Personalstamm + Dokumente, SV/Lohnsteuer, Personalplanung, Stunden erfassen, Monatsabschluss. Lohnübersicht nur lesen.",
+    kurz: "Personalstamm + Dokumente, SV/Lohnsteuer, Personalplanung, Stunden erfassen, Monatsabschluss. Lohnübersicht nur lesen. Mit Bereich Vertrieb: Stände + Touren pflegen.",
   },
   {
     wert: "zeiterfassung",
@@ -235,6 +235,10 @@ export const MENUE_RECHTE: Record<string, UserRole[]> = {
   // Seite selbst blendet Waagen-/Konfig-Bearbeitung nach der jeweils
   // engeren Rolle aus (ernte_waage_write: admin/hr, ernte_konfig_write: admin).
   "/erntewirtschaft/stammdaten": ["admin", "hr", "erntewirtschaft", "zeiterfassung"],
+  // Vertriebsplanung: 1:1 wie vt_darf() (migration_2026-11-25c) - lesen
+  // admin/hr/lohnabrechnung/management/pruefer, pflegen admin/hr; dazu
+  // muss der Nutzer den Bereich Vertrieb sehen (Nav prüft item.bereich).
+  "/vertrieb": ["admin", "hr", "lohnabrechnung", "management", "pruefer"],
   "/kasse": ["admin", "kasse", "pruefer", "management"],
   "/management": ["admin", "hr", "management"],
   "/aenderungsprotokoll": ["admin", "pruefer"],
