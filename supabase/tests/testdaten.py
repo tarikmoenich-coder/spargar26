@@ -18,6 +18,9 @@ enums = {e["n"]: e["v"] for e in d["enums"] or []}
 # Schlüssel: "tabelle.spalte" oder "*.spalte".
 FEST = {
     "ernte_ausweis.suffix": "'ABCDEF12'",
+    # Stammdaten, die live per Migration befüllt sind (Kopie hat keine Daten)
+    "geschaeftsbereich.kuerzel": "'LW'",
+    "geschaeftsbereich.bezeichnung": "'Landwirtschaft'",
     "work_entries.stunden": "8",
     "personal_kandidaten.status": "'anreiseliste'",
     "personal_kandidaten.aktivierter_employee_id": "(select id from public.employees limit 1)",

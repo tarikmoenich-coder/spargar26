@@ -11,6 +11,8 @@ set check_function_bodies = off;
 
 -- 1) Vertriebs-Daten -----------------------------------------------------------
 set session_replication_role = replica;
+insert into public.geschaeftsbereich (kuerzel, bezeichnung, personalnummer_praefix, reihenfolge)
+  values ('VT', 'Vertrieb', 'V-', 20) on conflict do nothing;
 insert into public.arbeitsgruppen (gruppe_nr, bezeichnung, bereich)
   select 'VT-1', 'Stand Test', 'VT' where not exists (select 1 from public.arbeitsgruppen where gruppe_nr = 'VT-1');
 insert into public.employees (personal_nr, name, vorname, bereich, gruppe_nr)
