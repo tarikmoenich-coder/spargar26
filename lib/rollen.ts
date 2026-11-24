@@ -191,7 +191,7 @@ export const MENUE_RECHTE: Record<string, UserRole[]> = {
   "/erntewirtschaft/stammdaten": ["admin", "hr", "erntewirtschaft", "zeiterfassung"],
   "/kasse": ["admin", "kasse", "pruefer", "management"],
   "/management": ["admin", "hr", "management"],
-  "/aenderungsprotokoll": ["admin"],
+  "/aenderungsprotokoll": ["admin", "pruefer"],
   // zeiterfassung: nur Unterseite Arbeitsgruppen (EinstellungenTabs leitet um)
   "/einstellungen": ["admin", "zeiterfassung"],
 };
