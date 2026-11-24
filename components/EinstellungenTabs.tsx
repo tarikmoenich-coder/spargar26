@@ -10,6 +10,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { useProfile } from "@/lib/useProfile";
 import { useEffect, useRef } from "react";
 
+import { hatRolle } from "@/lib/rollen";
 const tabs = [
   { href: "/einstellungen", label: "Allgemein" },
   { href: "/einstellungen/arbeitsgruppen", label: "Arbeitsgruppen" },
@@ -25,7 +26,7 @@ export default function EinstellungenTabs() {
   // Rolle "zeiterfassung" darf in den Einstellungen NUR die Arbeitsgruppen
   // pflegen (Nutzer-Vorgabe 2026-09-21): andere Reiter ausblenden und
   // direkte Aufrufe auf die Arbeitsgruppen umleiten.
-  const nurGruppen = profile?.role === "zeiterfassung";
+  const nurGruppen = hatRolle(profile, "zeiterfassung") && !hatRolle(profile, "admin");
   useEffect(() => {
     if (nurGruppen && pathname !== "/einstellungen/arbeitsgruppen") {
       router.replace("/einstellungen/arbeitsgruppen");

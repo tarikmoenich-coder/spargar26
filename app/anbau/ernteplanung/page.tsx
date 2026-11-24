@@ -25,6 +25,7 @@ import { VERFRUEHUNG_LABELS } from "@/lib/types";
 import { berechneStandjahr, JUNGANLAGE_MAX_STANDJAHR } from "@/lib/anbau";
 import { formatMenge, formatZahlDE } from "@/lib/format";
 
+import { hatRolle } from "@/lib/rollen";
 const CURRENT_YEAR = new Date().getFullYear();
 const KAPAZITAET_SCHLUESSEL = "kapazitaet_lfm_je_maschine";
 
@@ -37,8 +38,8 @@ interface FeldZeile extends FeldAnbauUebersicht {
 
 export default function AnbauErnteplanungPage() {
   const { profile } = useProfile();
-  const canEdit = profile?.role === "admin" || profile?.role === "erntewirtschaft";
-  const canEditKapazitaet = profile?.role === "admin";
+  const canEdit = hatRolle(profile, "admin", "erntewirtschaft");
+  const canEditKapazitaet = hatRolle(profile, "admin");
 
   const [jahr, setJahr] = useState(CURRENT_YEAR);
   const [loading, setLoading] = useState(true);

@@ -26,10 +26,11 @@ import type {
   UnterkunftWohneinheitUebersicht,
 } from "@/lib/types";
 
+import { hatRolle, nurHausmeisterSicht } from "@/lib/rollen";
 export default function UnterkunftPlanungPage() {
   const { profile } = useProfile();
-  const canEdit = profile?.role === "admin" || profile?.role === "hr";
-  const nurLesen = profile?.role === "hausmeister";
+  const canEdit = hatRolle(profile, "admin", "hr");
+  const nurLesen = nurHausmeisterSicht(profile);
 
   const [saison, setSaison] = useState(new Date().getFullYear());
   const [herkuenfte, setHerkuenfte] = useState<Herkunft[]>([]);

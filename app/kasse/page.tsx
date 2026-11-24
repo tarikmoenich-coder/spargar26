@@ -40,6 +40,7 @@ import { Wallet } from "lucide-react";
 import KassenSaldoKarte from "@/components/KassenSaldoKarte";
 import UmbuchungForm from "@/components/UmbuchungForm";
 
+import { hatRolle } from "@/lib/rollen";
 function monatsSchluessel(d: Date) {
   const mm = String(d.getMonth() + 1).padStart(2, "0");
   return `EZ-${mm}-${d.getFullYear()}`;
@@ -123,7 +124,7 @@ export default function KassenbuchJournalPage() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const canWrite = profile?.role === "admin" || profile?.role === "kasse";
+  const canWrite = hatRolle(profile, "admin", "kasse");
 
   async function load() {
     setLoading(true);

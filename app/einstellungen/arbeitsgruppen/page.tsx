@@ -13,12 +13,13 @@ import { useProfile } from "@/lib/useProfile";
 import EinstellungenTabs from "@/components/EinstellungenTabs";
 import { KULTUREN, KULTUR_LABELS, type Arbeitsgruppe } from "@/lib/types";
 
+import { hatRolle } from "@/lib/rollen";
 const leer = { gruppe_nr: "", bezeichnung: "", reihenfolge: "0", kultur: "" };
 
 export default function ArbeitsgruppenPage() {
   const { profile } = useProfile();
   // admin und zeiterfassung dürfen Arbeitsgruppen pflegen (RLS: arbeitsgruppen_write)
-  const isAdmin = profile?.role === "admin" || profile?.role === "zeiterfassung";
+  const isAdmin = hatRolle(profile, "admin", "zeiterfassung");
 
   const [gruppen, setGruppen] = useState<Arbeitsgruppe[]>([]);
   const [loading, setLoading] = useState(true);

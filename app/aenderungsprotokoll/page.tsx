@@ -26,6 +26,7 @@ import {
   feldAenderungen,
 } from "@/lib/auditLog";
 
+import { hatRolle } from "@/lib/rollen";
 const SEITENGROESSE = 100;
 
 function formatZeitpunktDE(iso: string): string {
@@ -37,7 +38,7 @@ function formatZeitpunktDE(iso: string): string {
 
 export default function AenderungsprotokollPage() {
   const { profile } = useProfile();
-  const darfSehen = profile?.role === "admin" || profile?.role === "pruefer";
+  const darfSehen = hatRolle(profile, "admin", "pruefer");
 
   const [eintraege, setEintraege] = useState<AuditLogEintrag[]>([]);
   const [loading, setLoading] = useState(true);

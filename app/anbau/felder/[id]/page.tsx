@@ -17,12 +17,13 @@ import FeldKarte from "@/components/FeldKarte";
 import { FELD_KULTUR_LABELS, type FeldGeojson } from "@/lib/types";
 import { formatMenge } from "@/lib/format";
 
+import { hatRolle } from "@/lib/rollen";
 export default function FeldDetailPage() {
   const params = useParams<{ id: string }>();
   const router = useRouter();
   const feldId = Number(params.id);
   const { profile } = useProfile();
-  const canEdit = profile?.role === "admin" || profile?.role === "erntewirtschaft";
+  const canEdit = hatRolle(profile, "admin", "erntewirtschaft");
 
   const [feld, setFeld] = useState<FeldGeojson | null>(null);
   const [loading, setLoading] = useState(true);

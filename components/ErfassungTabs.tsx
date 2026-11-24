@@ -6,6 +6,7 @@ import { useEffect, useRef } from "react";
 import { useProfile } from "@/lib/useProfile";
 import type { UserRole } from "@/lib/types";
 
+import { hatRolle } from "@/lib/rollen";
 interface Tab {
   href: string;
   label: string;
@@ -33,7 +34,7 @@ export default function ErfassungTabs() {
   const pathname = usePathname();
   const { profile } = useProfile();
   const sichtbareTabs = tabs.filter(
-    (tab) => !tab.roles || (profile && tab.roles.includes(profile.role))
+    (tab) => !tab.roles || hatRolle(profile, ...tab.roles)
   );
   const ref = useRef<HTMLDivElement>(null);
 

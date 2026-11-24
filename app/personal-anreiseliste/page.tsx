@@ -30,6 +30,7 @@ import PageHeader from "@/components/PageHeader";
 import { Camera, Plane } from "lucide-react";
 import SvFragebogenFormular from "@/components/SvFragebogenFormular";
 
+import { hatRolle } from "@/lib/rollen";
 // Saison-Jahr für den SV-Fragebogen eines Kandidaten: aus dem geplanten
 // Ankunftsdatum abgeleitet (personal_kandidaten hat kein eigenes
 // Saison-Jahr-Feld) - per String-Slice statt new Date(...).getFullYear(),
@@ -47,7 +48,7 @@ interface Vertragsfeld {
 
 export default function AnreiselistePage() {
   const { profile } = useProfile();
-  const canEdit = profile?.role === "admin" || profile?.role === "hr";
+  const canEdit = hatRolle(profile, "admin", "hr");
 
   const [kandidaten, setKandidaten] = useState<PersonalKandidat[]>([]);
   const [employees, setEmployees] = useState<Employee[]>([]);

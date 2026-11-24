@@ -15,6 +15,7 @@ import { getSupabaseClient } from "@/lib/supabase/client";
 import { useProfile } from "@/lib/useProfile";
 import { formatMenge } from "@/lib/format";
 
+import { hatRolle } from "@/lib/rollen";
 type EmpOpt = {
   id: string;
   personal_nr: string;
@@ -227,7 +228,7 @@ function csvExport(zeilen: KisteZyklusZeile[]) {
 
 export default function ErntewirtschaftErntePage() {
   const { profile } = useProfile();
-  const canEdit = profile?.role === "admin" || profile?.role === "hr";
+  const canEdit = hatRolle(profile, "admin", "hr");
 
   const [datumAb, setDatumAb] = useState(vorTagenIso(7));
   const [nurLuecken, setNurLuecken] = useState(false);

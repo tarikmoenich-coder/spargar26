@@ -33,6 +33,7 @@ import type {
   VerpflegungsSatz,
 } from "@/lib/types";
 
+import { hatRolle } from "@/lib/rollen";
 const CURRENT_YEAR = new Date().getFullYear();
 
 interface Entwurf {
@@ -49,10 +50,8 @@ export default function ArbeitskleidungPage() {
   const { profile } = useProfile();
   const t = uebersetzung(profile?.sprache);
   const canEdit =
-    profile?.role === "admin" ||
-    profile?.role === "hr" ||
-    profile?.role === "zeiterfassung";
-  const canSeeLagerLink = profile?.role === "admin" || profile?.role === "hr";
+    hatRolle(profile, "admin", "hr", "zeiterfassung");
+  const canSeeLagerLink = hatRolle(profile, "admin", "hr");
 
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [gruppen, setGruppen] = useState<Arbeitsgruppe[]>([]);

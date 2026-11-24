@@ -18,6 +18,7 @@ import PageHeader from "@/components/PageHeader";
 import { HandCoins } from "lucide-react";
 import { erzeugeSepaXml, sepaDateiHerunterladen } from "@/lib/sepa";
 
+import { hatRolle } from "@/lib/rollen";
 function heuteIsoDatum() {
   return new Date().toISOString().slice(0, 10);
 }
@@ -156,17 +157,11 @@ export default function VorschuessePage() {
   const [korrekturLaeuft, setKorrekturLaeuft] = useState<string | null>(null);
 
   const canWrite =
-    profile?.role === "admin" ||
-    profile?.role === "kasse" ||
-    profile?.role === "lohnabrechnung";
+    hatRolle(profile, "admin", "kasse", "lohnabrechnung");
   // Deckt sich mit der RLS-Policy "advance_recipients_rw" - management sieht
   // zwar die Vorschuss-Liste, aber keine Empfänger-Details.
   const canSeeDetails =
-    profile?.role === "admin" ||
-    profile?.role === "hr" ||
-    profile?.role === "kasse" ||
-    profile?.role === "lohnabrechnung" ||
-    profile?.role === "pruefer";
+    hatRolle(profile, "admin", "hr", "kasse", "lohnabrechnung", "pruefer");
 
   async function load() {
     setLoading(true);

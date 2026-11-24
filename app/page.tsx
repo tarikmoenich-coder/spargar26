@@ -21,6 +21,8 @@ export default function Home() {
     // eigenes Dashboard) landen auf ihrem rollenabhängigen Dashboard, siehe
     // app/dashboard/page.tsx.
     const start =
+      // Startseite nach der HAUPTROLLE (profiles.role) - bei mehreren
+      // Rollen wählt der Admin sie in der Nutzerverwaltung (Stufe 1).
       profile?.role === "zeiterfassung"
         ? "/erfassung"
         : profile?.role === "hausmeister"

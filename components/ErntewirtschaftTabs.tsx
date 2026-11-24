@@ -10,8 +10,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useRef } from "react";
 import { useProfile } from "@/lib/useProfile";
-import { MENUE_RECHTE } from "@/lib/rollen";
-import type { UserRole } from "@/lib/types";
+import { darfMenue } from "@/lib/rollen";
 
 type BereichKey =
   | "ueberblick"
@@ -149,10 +148,7 @@ export default function ErntewirtschaftTabs() {
     return () => observer.disconnect();
   }, []);
 
-  const rolle = profile?.role as UserRole | undefined;
-  const sichtbar = BEREICHE.filter(
-    (b) => !!rolle && (MENUE_RECHTE[b.rechteKey] ?? []).includes(rolle)
-  );
+  const sichtbar = BEREICHE.filter((b) => darfMenue(profile, b.rechteKey));
   const aktiv = sichtbar.find((b) => pathname?.startsWith(b.prefix));
 
   const linkCls = (an: boolean) =>

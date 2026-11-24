@@ -36,6 +36,7 @@ import type {
   ProfilName,
 } from "@/lib/types";
 
+import { hatRolle } from "@/lib/rollen";
 const CURRENT_YEAR = new Date().getFullYear();
 
 // Nur die für die Summenbildung nötigen Felder - kein "select *".
@@ -48,7 +49,7 @@ interface AusgabeSumme {
 
 export default function LagerPage() {
   const { profile } = useProfile();
-  const canView = profile?.role === "admin" || profile?.role === "hr";
+  const canView = hatRolle(profile, "admin", "hr");
 
   const [lagerbestand, setLagerbestand] = useState<KleidungLagerbestand[]>([]);
   const [ausgaben, setAusgaben] = useState<AusgabeSumme[]>([]);

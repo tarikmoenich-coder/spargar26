@@ -24,7 +24,7 @@ import {
 import { getSupabaseClient } from "@/lib/supabase/client";
 import { useProfile } from "@/lib/useProfile";
 import { SPRACHEN, type Sprache } from "@/lib/i18n";
-import { MENUE_RECHTE } from "@/lib/rollen";
+import { darfMenue, rollenVon, rolleLabel } from "@/lib/rollen";
 
 interface NavItem {
   href: string;
@@ -191,7 +191,7 @@ export default function Nav() {
 
   const sichtbareItems = items.filter(
     (item) =>
-      !!profile && (MENUE_RECHTE[item.href] ?? []).includes(profile.role)
+      darfMenue(profile, item.href)
   );
   const istAktiv = (item: NavItem) =>
     !!(
@@ -249,7 +249,7 @@ export default function Nav() {
               <>
                 <span>
                   {profile.full_name} ·{" "}
-                  <span className="italic">{profile.role}</span>
+                  <span className="italic">{rollenVon(profile).map(rolleLabel).join(", ")}</span>
                 </span>
                 {sprachWahl}
               </>
@@ -329,7 +329,7 @@ export default function Nav() {
               <div className="mt-4 border-t border-linie pt-4 text-sm text-neutral-600">
                 <div className="mb-3">
                   {profile.full_name} ·{" "}
-                  <span className="italic">{profile.role}</span>
+                  <span className="italic">{rollenVon(profile).map(rolleLabel).join(", ")}</span>
                 </div>
                 <label className="mb-3 flex items-center gap-2">
                   Sprache

@@ -8,6 +8,7 @@ import { ladeAlleSeiten } from "@/lib/ladeAlle";
 import { formatDatumDE, formatMenge } from "@/lib/format";
 import type { SeasonSummaryRow } from "@/lib/types";
 
+import { hatRolle } from "@/lib/rollen";
 // Einzelbeleg der Abrechnung EINER Person mit der kompletten Rechenkette
 // (Stunden → Brutto → Netto → Abzüge → Auszahlung), Nutzer-Wunsch 2026-09-25.
 // Reine Anzeige/Druck: alle Zahlen stammen aus season_summary (bei bereits
@@ -95,12 +96,7 @@ function BelegInner() {
   const jahrParam = params.get("jahr");
   const { profile, loading: profilLaedt } = useProfile();
   const canView =
-    profile?.role === "admin" ||
-    profile?.role === "hr" ||
-    profile?.role === "kasse" ||
-    profile?.role === "lohnabrechnung" ||
-    profile?.role === "pruefer" ||
-    profile?.role === "management";
+    hatRolle(profile, "admin", "hr", "kasse", "lohnabrechnung", "pruefer", "management");
 
   const [row, setRow] = useState<SeasonSummaryRow | null>(null);
   const [bonus, setBonus] = useState<BonusDetail | null>(null);

@@ -29,6 +29,7 @@ import {
   type UnterkunftZimmerUebersicht,
 } from "@/lib/types";
 
+import {  nurHausmeisterSicht } from "@/lib/rollen";
 // Dringlichkeit für Sortierung/Rollup: nie kontrolliert und überfällig zuerst.
 const AMPEL_RANG: Record<KontrollAmpel, number> = {
   rot: 0,
@@ -46,8 +47,8 @@ export default function UnterkunftKontrollplanPage() {
   const { profile } = useProfile();
   const router = useRouter();
   useEffect(() => {
-    if (profile?.role === "hausmeister") router.replace("/unterkunft/reparaturen");
-  }, [profile?.role, router]);
+    if (nurHausmeisterSicht(profile)) router.replace("/unterkunft/reparaturen");
+  }, [profile, router]);
   const [zimmer, setZimmer] = useState<UnterkunftZimmerUebersicht[]>([]);
   const [intervalle, setIntervalle] = useState<Record<string, KontrollSchwellen>>(
     {}

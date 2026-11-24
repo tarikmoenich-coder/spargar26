@@ -27,6 +27,7 @@ import type {
   UnterkunftZuordnungOffen,
 } from "@/lib/types";
 
+import { hatRolle } from "@/lib/rollen";
 interface EmployeeMini {
   id: string;
   personal_nr: string;
@@ -37,7 +38,7 @@ interface EmployeeMini {
 
 export default function UnterkunftBelegungPage() {
   const { profile } = useProfile();
-  const canEdit = profile?.role === "admin" || profile?.role === "hr";
+  const canEdit = hatRolle(profile, "admin", "hr");
 
   const [gebaeude, setGebaeude] = useState<UnterkunftGebaeude[]>([]);
   const [einheiten, setEinheiten] = useState<UnterkunftWohneinheitUebersicht[]>([]);

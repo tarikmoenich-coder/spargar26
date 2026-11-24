@@ -78,13 +78,23 @@ export function useProfile() {
         const { data, error } = await mitTimeout(
           supabase
             .from("profiles")
-            .select("id, full_name, role, aktiv, sprache")
+            // "*" statt Spaltenliste: funktioniert vor und nach der Migration
+            // 2026-11-24f (Spalte rollen) - profiles hat keine Spaltenrechte.
+            .select("*")
             .eq("id", uid)
             .single(),
           LADE_TIMEOUT_MS
         );
         if (abgehaengt) return;
-        if (!error) setProfile(data as Profile);
+        if (!error && data) {
+          const p = data as Profile;
+          setProfile({
+            ...p,
+            rollen: Array.isArray(p.rollen) && p.rollen.length > 0 ? p.rollen : [p.role],
+          });
+        } else if (!error) {
+          setProfile(null);
+        }
         setLoading(false);
       } catch {
         if (!abgehaengt) seiteNeuLadenGedrosselt();
