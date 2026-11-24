@@ -26,6 +26,14 @@
 -- auch nur einen Cent ab, bricht die Migration ab und ändert NICHTS.
 --
 -- In der Supabase SQL-Konsole in einem Zug ausführen.
+--
+-- NACHTRAG 2026-11-24 (live eingespielt): Die SQL-Konsole hat die Anweisungen
+-- EINZELN ausgeführt (kein gemeinsamer Ablauf, "begin/commit" ohne Wirkung) -
+-- die temporäre Vorher-Tabelle war sofort weg ("relation _stichtage does not
+-- exist"), alle übrigen Änderungen sind trotzdem live angekommen. Die
+-- Selbstprüfung wurde mit supabase/pruefung_2026-11-24j_kassenstaende.sql
+-- (nur lesen) nachgeholt. Für spätere Läufe nutzt diese Datei jetzt eine
+-- normale Hilfstabelle statt einer temporären.
 -- ============================================================================
 
 begin;
@@ -34,12 +42,8 @@ begin;
 --    Lohnkassen-Anteil ausdrücklich aus den Tabellen gerechnet (gleiche
 --    Formel wie kassenbestand_bis(), aber ohne die Rollenprüfung der View
 --    auszahlungsbeleg_summary, die in der SQL-Konsole nichts liefern würde).
-create temp table _stichtage on commit drop as
-  select now() as stichtag
-  union all
-  select date_trunc('month', now()) - make_interval(months => n) from generate_series(0, 24) n;
-
-create temp table _kassen_vorher on commit drop as
+drop table if exists public._kassen_vorher_24j;
+create table public._kassen_vorher_24j as
   select kb.id, kb.kuerzel, s.stichtag,
     kb.eroeffnungssaldo
     + coalesce((select sum(case when b.richtung = 'eingang' then b.betrag else -b.betrag end)
@@ -53,7 +57,12 @@ create temp table _kassen_vorher on commit drop as
                     where ab.zahlungsart = 'BAR' and ab.erstellt_am < s.stichtag), 0)
         - coalesce((select sum(betrag_summe) from kautionsuebergaben where not storniert and erstellt_am < s.stichtag), 0)
       else 0 end as saldo
-  from kassenbuch kb cross join _stichtage s;
+  from kassenbuch kb cross join (
+    select now() as stichtag
+    union all
+    select date_trunc('month', now()) - make_interval(months => n) from generate_series(0, 24) n
+  ) s;
+alter table public._kassen_vorher_24j enable row level security;  -- kein API-Zugriff
 
 -- 1) Kassenbücher ---------------------------------------------------------------------
 alter table public.kassenbuch
@@ -417,12 +426,13 @@ begin
   select string_agg(format('%s am %s: vorher %s, nachher %s', v.kuerzel, to_char(v.stichtag, 'DD.MM.YYYY'),
                            v.saldo, kassenbuch_saldo_bis(v.id, v.stichtag)), '; ')
     into v_abw
-  from _kassen_vorher v
+  from public._kassen_vorher_24j v
   where v.saldo is distinct from kassenbuch_saldo_bis(v.id, v.stichtag);
   if v_abw is not null then
     raise exception 'Kassenstand weicht ab - Migration wird zurückgerollt, bitte Claude melden: %', v_abw;
   end if;
-  raise notice 'Selbstprüfung ok: % Kassenstände (Kassenbücher x Stichtage) unverändert.', (select count(*) from _kassen_vorher);
+  raise notice 'Selbstprüfung ok: % Kassenstände (Kassenbücher x Stichtage) unverändert.', (select count(*) from public._kassen_vorher_24j);
 end $$;
+drop table if exists public._kassen_vorher_24j;
 
 commit;
