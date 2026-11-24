@@ -145,9 +145,25 @@ export default function KassenbuchJournalPage() {
       .select("*")
       .order("reihenfolge");
     const buchListe = (buchDaten as Kassenbuch[]) ?? [];
-    const lkId = buchListe.find((b) => b.typ === "lohnkasse")?.id ?? null;
+    // Stufe 3b (2026-11-24): mehrere Lohnkassen (MLK, ML, MD) - gewählt über
+    // ?id= bzw. die Auswahl oben, sonst die erste sichtbare Lohnkasse.
+    const lohnkassen = buchListe.filter((b) => b.typ === "lohnkasse");
+    const gewuenscht =
+      lohnkasseId ??
+      Number(
+        typeof window !== "undefined"
+          ? new URLSearchParams(window.location.search).get("id")
+          : NaN
+      );
+    const lkId =
+      lohnkassen.find((b) => b.id === gewuenscht)?.id ?? lohnkassen[0]?.id ?? null;
     setBuecher(buchListe);
     setLohnkasseId(lkId);
+    // Auszahlungsbelege dieser Kasse (die Summen-View hat kein Kassenbuch)
+    const { data: belegIdsDaten } = lkId
+      ? await supabase.from("auszahlungsbelege").select("id").eq("kassenbuch_id", lkId)
+      : { data: [] };
+    const belegIds = ((belegIdsDaten as { id: number }[]) ?? []).map((b) => b.id);
 
     const [
       { data: eroeffnung },
@@ -169,6 +185,7 @@ export default function KassenbuchJournalPage() {
       supabase
         .from("cash_deposits")
         .select("*")
+        .eq("kassenbuch_id", lkId ?? 0)
         .gte("datum_kassenbuch", jahresAnfangDatum)
         .lt("datum_kassenbuch", jahresEndeDatum)
         .order("datum_kassenbuch", { ascending: true }),
@@ -176,6 +193,7 @@ export default function KassenbuchJournalPage() {
         .from("advances")
         .select("*")
         .eq("zahlungsart", "BAR")
+        .eq("kassenbuch_id", lkId ?? 0)
         .gte("datum", jahresAnfang)
         .lt("datum", jahresEnde)
         .order("datum", { ascending: true }),
@@ -183,6 +201,7 @@ export default function KassenbuchJournalPage() {
         .from("auszahlungsbeleg_summary")
         .select("*")
         .eq("zahlungsart", "BAR")
+        .in("id", belegIds.length ? belegIds : [0])
         .gte("erstellt_am", jahresAnfang)
         .lt("erstellt_am", jahresEnde)
         .order("erstellt_am", { ascending: true }),
@@ -190,6 +209,7 @@ export default function KassenbuchJournalPage() {
         .from("kautionsuebergaben")
         .select("*")
         .eq("storniert", false)
+        .eq("kassenbuch_id", lkId ?? 0)
         .gte("erstellt_am", jahresAnfang)
         .lt("erstellt_am", jahresEnde)
         .order("erstellt_am", { ascending: true }),
@@ -226,7 +246,18 @@ export default function KassenbuchJournalPage() {
     setBarVorschuesse((adv as Advance[]) ?? []);
     setAuszahlungenBar((az as AuszahlungsbelegSummary[]) ?? []);
     setKautionsuebergaben((kaution as Kautionsuebergabe[]) ?? []);
-    setKorrekturen((bew as Kassenbewegung[]) ?? []);
+    // Korrektur-Log hat kein Kassenbuch: Zuordnung über das Belegnummer-
+    // Präfix der Kasse (MLK = ohne fremdes Präfix).
+    const praefix = buchListe.find((b) => b.id === lkId)?.belegnummer_praefix ?? "";
+    const fremdePraefixe = lohnkassen
+      .map((b) => b.belegnummer_praefix ?? "")
+      .filter((x) => x && x !== praefix);
+    setKorrekturen(
+      ((bew as Kassenbewegung[]) ?? []).filter((k) => {
+        const nr = k.belegnummer ?? "";
+        return praefix ? nr.startsWith(praefix) : !fremdePraefixe.some((x) => nr.startsWith(x));
+      })
+    );
     setPruefungen((chk as CashCheckZeile[]) ?? []);
     const namenMap: Record<string, string> = {};
     ((namen as ProfilName[]) ?? []).forEach((p) => {
@@ -239,7 +270,10 @@ export default function KassenbuchJournalPage() {
   useEffect(() => {
     load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [jahr]);
+  }, [jahr, lohnkasseId]);
+
+  const aktuelleKasse = buecher.find((b) => b.id === lohnkasseId) ?? null;
+  const lohnkassenSichtbar = buecher.filter((b) => b.typ === "lohnkasse");
 
   async function addDeposit(e: React.FormEvent) {
     e.preventDefault();
@@ -248,7 +282,7 @@ export default function KassenbuchJournalPage() {
     const supabase = getSupabaseClient();
     const { data: belegnummer, error: belegError } = await supabase.rpc(
       "naechste_belegnummer",
-      { prefix_monat: monatsSchluessel(new Date()) }
+      { prefix_monat: (aktuelleKasse?.belegnummer_praefix ?? "") + monatsSchluessel(new Date()) }
     );
     if (belegError) {
       setError(belegError.message);
@@ -256,6 +290,7 @@ export default function KassenbuchJournalPage() {
       return;
     }
     const { error: insertError } = await supabase.from("cash_deposits").insert({
+      kassenbuch_id: lohnkasseId,
       belegnummer,
       betrag: Number(betrag),
       verwendungszweck: zweck,
@@ -448,7 +483,27 @@ export default function KassenbuchJournalPage() {
     <div className="flex flex-col gap-6">
       <KassenbuchTabs />
       <div>
-        <PageHeader icon={Wallet} titel="Mömmel Lohnkasse – Journal" />
+        <PageHeader
+          icon={Wallet}
+          titel={`${aktuelleKasse?.bezeichnung ?? "Lohnkasse"} – Journal`}
+        />
+        {lohnkassenSichtbar.length > 1 && (
+          <div className="mb-2 flex flex-wrap gap-2">
+            {lohnkassenSichtbar.map((b) => (
+              <button
+                key={b.id}
+                type="button"
+                className={b.id === lohnkasseId ? "btn" : "btn-secondary"}
+                onClick={() => {
+                  setLohnkasseId(b.id);
+                  window.history.replaceState(null, "", `/kasse?id=${b.id}`);
+                }}
+              >
+                {b.bezeichnung}
+              </button>
+            ))}
+          </div>
+        )}
         <p className="text-sm text-neutral-500">
           Alle Bargeldbewegungen chronologisch mit laufendem Saldo, wie ein
           klassisches Kassenbuch mit Jahres-Eröffnungssaldo. Umbuchungen von/zu
@@ -461,7 +516,9 @@ export default function KassenbuchJournalPage() {
         </p>
       </div>
 
-      <KassenSaldoKarte />
+      {lohnkasseId != null && (
+        <KassenSaldoKarte key={lohnkasseId} kassenbuchId={lohnkasseId} />
+      )}
 
       {canWrite && (
         <form

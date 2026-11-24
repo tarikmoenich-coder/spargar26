@@ -1468,6 +1468,19 @@ Firma (`employee_saison`; ohne Eintrag die Standard-Firma ihres Bereichs,
 setzen"). Lohnübersicht/Monatsdruck filterbar nach Firma; SEPA-Dateien je
 Firma (gemischte Belege -> eine Datei je Firma); Lohnsteuer-Antrag je Firma.
 
+**Lohnkassen je Firma (seit 2026-11-24, Stufe 3b):** MLK (Mömmel), ML
+(Mönich Landwirtschaft) und MD (Mönich Direkt) sind Lohnkassen (`kassenbuch.
+typ = 'lohnkasse'`), MÖ bleibt allgemeines Kassenbuch. Einzahlungen,
+Vorschüsse, Auszahlungsbelege und Kautionsübergaben tragen ein
+`kassenbuch_id` (Bestand/Standard MLK). Vorbelegung aus der Firma der
+Person in der Saison (`firma.lohn_kassenbuch_id`); Bar-Vorschuss an
+Personen verschiedener Firmen wird abgewiesen; "Jetzt abrechnen" erzeugt
+je Lohnkasse einen Beleg. Belegnummern je Kasse mit eigenem Präfix
+(`kassenbuch.belegnummer_praefix`: MLK ohne, `ML-`, `MD-`). Kassenstand
+(`kassenbestand_bis(bis, kassenbuch)`), Bewegungen und Sperre "Monat geprüft"
+je Kassenbuch. Kasse-Seite mit Auswahl der Lohnkasse (`/kasse?id=`).
+Kassenbücher nur im eigenen Bereich sichtbar (Kasse Vertrieb: MD).
+
 | Rolle | Sichtbare Menüpunkte | Kernrechte |
 |---|---|---|
 | `admin` | Alle | Voller Zugriff auf alles, inkl. Einstellungen, Kassenprüfungen freigeben, Änderungsprotokoll (Seite "Protokoll") |

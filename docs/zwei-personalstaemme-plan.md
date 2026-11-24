@@ -175,7 +175,9 @@ Aufgeteilt (2026-11-24): **3a** Firmen + Firma je Person/Saison + Filter/
 SEPA/Lohnsteuer je Firma (gebaut, Migration 2026-11-24i; Nutzer: Standard
 immer Mömmel, Firmennamen "... GmbH & Co. KG", gemischte SEPA-Belege ->
 Datei je Firma); **3b** Kassenbuch je Buchung + Kassenstand/-prüfung je
-Buch; **3c** Lohnberechnung (Sätze je Bereich, Abzugs-Zeiträume, Minijob).
+Buch (gebaut, Migration 2026-11-24j mit eingebauter Kassenstand-Selbstprüfung;
+Nutzer: ML und MD werden Lohnkassen, MÖ bleibt allgemein, getrennte
+Nummernkreise mit Präfix); **3c** Lohnberechnung (Sätze je Bereich, Abzugs-Zeiträume, Minijob).
 
 - Tabelle `firmen` (Name, Kurzname, IBAN/BIC, Steuernummer, Anschrift,
   Personalstamm) ersetzt `firmen_bankdaten`; Bestandswerte übernommen als

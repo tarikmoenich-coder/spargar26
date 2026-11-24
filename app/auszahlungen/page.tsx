@@ -612,9 +612,21 @@ export default function AuszahlungenPage() {
     const supabase = getSupabaseClient();
     const summe = kandidaten.reduce((s, p) => s + p.betrag, 0);
 
+    // Kautionen gehen aus derselben Lohnkasse wie der Auszahlungsbeleg
+    // (Stufe 3b, 2026-11-24) - Kasse und Nummernkreis von dort.
+    const { data: belegKasse } = await supabase
+      .from("auszahlungsbelege")
+      .select("kassenbuch_id, kassenbuch(belegnummer_praefix)")
+      .eq("id", beleg.id)
+      .maybeSingle();
+    const kasseId = (belegKasse as { kassenbuch_id: number } | null)?.kassenbuch_id ?? null;
+    const kassePraefix =
+      (belegKasse as { kassenbuch: { belegnummer_praefix: string } | null } | null)?.kassenbuch
+        ?.belegnummer_praefix ?? "";
+
     const { data: belegnummer, error: belegError } = await supabase.rpc(
       "naechste_belegnummer",
-      { prefix_monat: monatsSchluessel(new Date()) }
+      { prefix_monat: kassePraefix + monatsSchluessel(new Date()) }
     );
     if (belegError) {
       setKautionFehler(belegError.message);
@@ -629,6 +641,7 @@ export default function AuszahlungenPage() {
         auszahlungsbeleg_id: beleg.id,
         uebergeben_an: uebergebenAn.trim(),
         betrag_summe: summe,
+        ...(kasseId != null ? { kassenbuch_id: kasseId } : {}),
       })
       .select()
       .single();

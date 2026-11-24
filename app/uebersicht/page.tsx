@@ -2,7 +2,7 @@
 
 import { Fragment, useEffect, useState } from "react";
 import { getSupabaseClient } from "@/lib/supabase/client";
-import { firmaFuer, firmaKurz, firmaName } from "@/lib/firmen";
+import { firmaFuer, firmaKurz, firmaName, lohnkassenFuer } from "@/lib/firmen";
 import { ladeAlleSeiten } from "@/lib/ladeAlle";
 import { useProfile } from "@/lib/useProfile";
 import {
@@ -749,17 +749,40 @@ export default function UebersichtPage() {
     setAbrechnenFehler(null);
     const supabase = getSupabaseClient();
     const ids = Array.from(ausgewaehlt);
-    // Eine Belegnummer für die ganze Aktion, egal wie viele Personen.
-    const { data: belegnummer, error: fehler } = await supabase.rpc(
-      "saison_abrechnen_batch",
-      {
-        p_employee_ids: ids,
+    // Eine Belegnummer je Lohnkasse (Stufe 3b, 2026-11-24): Personen
+    // verschiedener Firmen werden je Firma aus deren Lohnkasse abgerechnet
+    // (MLK / ML / MD, eigener Nummernkreis) - sonst wie bisher ein Beleg für
+    // die ganze Aktion.
+    const kassenGruppen = await lohnkassenFuer(supabase, ids, jahr);
+    const nachKasse = new Map<number | null, string[]>();
+    for (const g of kassenGruppen) {
+      const key = g.kasse?.id ?? null;
+      nachKasse.set(key, [...(nachKasse.get(key) ?? []), ...g.employeeIds]);
+    }
+    const belegnummern: string[] = [];
+    let fehler: { message: string } | null = null;
+    for (const [kassenbuchId, gruppenIds] of Array.from(nachKasse.entries())) {
+      const { data: nr, error } = await supabase.rpc("saison_abrechnen_batch", {
+        p_employee_ids: gruppenIds,
         p_saison_jahr: jahr,
         p_zahlungsart: abrechnenZahlungsart,
         p_austrittsdatum: abrechnenAustrittsdatum,
+        ...(kassenbuchId != null ? { p_kassenbuch_id: kassenbuchId } : {}),
+      });
+      if (error) {
+        fehler = error;
+        break;
       }
-    );
-    if (fehler) setAbrechnenFehler(fehler.message);
+      if (nr) belegnummern.push(nr as string);
+    }
+    const belegnummer = belegnummern.join(", ");
+    if (fehler) {
+      setAbrechnenFehler(
+        belegnummern.length > 0
+          ? `Teilweise abgerechnet (${belegnummer}), dann Fehler: ${fehler.message}`
+          : fehler.message
+      );
+    }
     // Bugfix/Aufräumen 2026-08-21 (Nutzer-Vorgabe: "dieser Beleg ist
     // eigentlich auch unnötig"): früher wurde hier zusätzlich sofort eine
     // eigene Auszahlungsliste OHNE Belegnummer gedruckt (sowohl automatisch
@@ -767,7 +790,7 @@ export default function UebersichtPage() {
     // tatsächlich genutzte Beleg MIT Belegnummer kommt ohnehin von der
     // "Auszahlungen"-Seite (siehe Hinweis unten), dieser zweite,
     // unvollständige Ausdruck war nur verwirrende Doppelung.
-    if (belegnummer && !fehler) {
+    if (belegnummer) {
       setLetzterBeleg(belegnummer);
     }
 

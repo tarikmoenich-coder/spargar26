@@ -4,7 +4,7 @@ import { Fragment, useEffect, useState } from "react";
 import { formatMenge } from "@/lib/format";
 import { getSupabaseClient } from "@/lib/supabase/client";
 import { useProfile } from "@/lib/useProfile";
-import { nachFirmaGruppieren } from "@/lib/firmen";
+import { lohnkassenFuer, nachFirmaGruppieren } from "@/lib/firmen";
 import type {
   Advance,
   AdvanceRecipientDetail,
@@ -408,9 +408,12 @@ export default function VorschuessePage() {
     setBelastungLaeuft(b.id);
     setError(null);
     const supabase = getSupabaseClient();
+    // Lohnkasse/Nummernkreis der Firma der Person (Stufe 3b)
+    const kasse =
+      (await lohnkassenFuer(supabase, [b.employee_id], new Date().getFullYear()))[0]?.kasse ?? null;
     const { data: belegnummer, error: belegError } = await supabase.rpc(
       "naechste_belegnummer",
-      { prefix_monat: monatsSchluessel(new Date()) }
+      { prefix_monat: (kasse?.belegnummer_praefix ?? "") + monatsSchluessel(new Date()) }
     );
     if (belegError) {
       setError(belegError.message);
@@ -431,6 +434,7 @@ export default function VorschuessePage() {
         )} (Nachweis: Unterkunft-Modul)`,
         zahlungsart: "N/A",
         art: "Strafe/Rechnung",
+        ...(kasse ? { kassenbuch_id: kasse.id } : {}),
       })
       .select()
       .single();
@@ -535,11 +539,32 @@ export default function VorschuessePage() {
     setError(null);
     const supabase = getSupabaseClient();
 
+    // Lohnkasse (Stufe 3b, 2026-11-24): aus der Firma der Empfänger in der
+    // laufenden Saison. Bargeld kommt aus EINER Kasse - ein Bar-Vorschuss an
+    // Personen verschiedener Firmen muss getrennt erfasst werden.
+    const kassenGruppen = await lohnkassenFuer(
+      supabase,
+      ausgewaehlt.map((p) => p.employee_id),
+      new Date().getFullYear()
+    );
+    const verschiedeneKassen = new Set(kassenGruppen.map((g) => g.kasse?.id ?? 0));
+    if (effektiveZahlungsart === "BAR" && verschiedeneKassen.size > 1) {
+      setError(
+        `Bar-Vorschuss an Personen verschiedener Firmen (${kassenGruppen
+          .map((g) => g.firma?.name ?? "?")
+          .join(" / ")}) - Bargeld kommt aus einer Kasse, bitte je Firma getrennt erfassen.`
+      );
+      setSaving(false);
+      return;
+    }
+    const kasse = kassenGruppen[0]?.kasse ?? null;
+
     // Belegnummer wird serverseitig atomar vergeben (ADR-010), damit
     // gleichzeitige Erfassung durch mehrere Nutzer keine Duplikate erzeugt.
+    // Eigener Nummernkreis je Lohnkasse (Präfix "ML-"/"MD-", MLK ohne).
     const { data: belegnummer, error: belegError } = await supabase.rpc(
       "naechste_belegnummer",
-      { prefix_monat: monatsSchluessel(new Date()) }
+      { prefix_monat: (kasse?.belegnummer_praefix ?? "") + monatsSchluessel(new Date()) }
     );
     if (belegError) {
       setError(belegError.message);
@@ -557,6 +582,7 @@ export default function VorschuessePage() {
         uebergeben_an: art === "Strafe/Rechnung" ? null : uebergebenAn || null,
         zahlungsart: effektiveZahlungsart,
         art,
+        ...(kasse ? { kassenbuch_id: kasse.id } : {}),
       })
       .select()
       .single();

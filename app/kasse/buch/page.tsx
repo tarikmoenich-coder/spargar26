@@ -239,7 +239,7 @@ function BuchJournalInner() {
       ) : buch.typ === "lohnkasse" ? (
         <p className="text-neutral-500">
           Die {buch.bezeichnung} hat ihr eigenes Journal –{" "}
-          <Link href="/kasse" className="text-emerald-700 underline">
+          <Link href={`/kasse?id=${buch.id}`} className="text-emerald-700 underline">
             hier öffnen
           </Link>
           .

@@ -201,7 +201,7 @@ export default function KassenbuecherUebersichtPage() {
                 )}
 
                 <Link
-                  href={b.typ === "lohnkasse" ? "/kasse" : `/kasse/buch?id=${b.id}`}
+                  href={b.typ === "lohnkasse" ? `/kasse?id=${b.id}` : `/kasse/buch?id=${b.id}`}
                   className="mt-auto pt-1 text-sm text-emerald-700 underline"
                 >
                   Journal öffnen

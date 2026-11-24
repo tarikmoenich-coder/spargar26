@@ -1735,6 +1735,10 @@ export interface Kassenbuch {
   bezeichnung: string;
   kuerzel: string;
   typ: KassenbuchTyp;
+  // Stufe 3a/3b (2026-11-24): Firma des Buchs; Präfix der Belegnummern der
+  // Lohnkasse ('' = MLK wie bisher, 'ML-' / 'MD-').
+  firma?: string | null;
+  belegnummer_praefix?: string;
   eroeffnungssaldo: number;
   aktiv: boolean;
   reihenfolge: number;

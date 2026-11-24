@@ -101,6 +101,15 @@ export default function KassenpruefungPage() {
         ? aktivBuchId
         : (liste.find((b) => b.typ === "lohnkasse") ?? liste[0])?.id ?? null;
     setAktivBuchId(buchId);
+    const { data: belegIdsDaten } = buchId
+      ? await supabase.from("auszahlungsbelege").select("id").eq("kassenbuch_id", buchId)
+      : { data: [] };
+    const belegIds = ((belegIdsDaten as { id: number }[]) ?? []).map((b) => b.id);
+    const praefix = liste.find((b) => b.id === buchId)?.belegnummer_praefix ?? "";
+    const fremdePraefixe = liste
+      .filter((b) => b.typ === "lohnkasse")
+      .map((b) => b.belegnummer_praefix ?? "")
+      .filter((x) => x && x !== praefix);
 
     const [
       { data: dep },
@@ -114,11 +123,12 @@ export default function KassenpruefungPage() {
       { data: bch },
       ...saldoErgebnisse
     ] = await Promise.all([
-      supabase.from("cash_deposits").select("*").order("datum", { ascending: false }).limit(100),
-      supabase.from("advances").select("*").eq("zahlungsart", "BAR").order("datum", { ascending: false }).limit(200),
-      supabase.from("auszahlungsbeleg_summary").select("*").eq("zahlungsart", "BAR").order("erstellt_am", { ascending: false }).limit(200),
+      // Stufe 3b (2026-11-24): Lohnkassen-Bewegungen nur des gewählten Buchs
+      supabase.from("cash_deposits").select("*").eq("kassenbuch_id", buchId ?? 0).order("datum", { ascending: false }).limit(100),
+      supabase.from("advances").select("*").eq("zahlungsart", "BAR").eq("kassenbuch_id", buchId ?? 0).order("datum", { ascending: false }).limit(200),
+      supabase.from("auszahlungsbeleg_summary").select("*").eq("zahlungsart", "BAR").in("id", belegIds.length ? belegIds : [0]).order("erstellt_am", { ascending: false }).limit(200),
       supabase.from("kassenbewegungen").select("*").order("zeitstempel", { ascending: false }).limit(100),
-      supabase.from("kautionsuebergaben").select("*").eq("storniert", false).order("erstellt_am", { ascending: false }).limit(200),
+      supabase.from("kautionsuebergaben").select("*").eq("storniert", false).eq("kassenbuch_id", buchId ?? 0).order("erstellt_am", { ascending: false }).limit(200),
       supabase.from("cash_checks").select("*").order("check_zeit", { ascending: false }).limit(60),
       supabase.from("kassenpruefung_einstellungen").select("toleranz_euro").single(),
       supabase.from("profile_namen").select("*"),
@@ -135,7 +145,13 @@ export default function KassenpruefungPage() {
     setDeposits((dep as CashDeposit[]) ?? []);
     setBarVorschuesse((adv as Advance[]) ?? []);
     setAuszahlungenBar((az as AuszahlungsbelegSummary[]) ?? []);
-    setBewegungen((bew as Kassenbewegung[]) ?? []);
+    // Korrektur-Log hat kein Kassenbuch: Zuordnung über das Belegnummer-Präfix
+    setBewegungen(
+      ((bew as Kassenbewegung[]) ?? []).filter((k) => {
+        const nr = k.belegnummer ?? "";
+        return praefix ? nr.startsWith(praefix) : !fremdePraefixe.some((x) => nr.startsWith(x));
+      })
+    );
     setKautionsuebergaben((kaution as Kautionsuebergabe[]) ?? []);
     setChecks((chk as CashCheckRow[]) ?? []);
     setBuchungen((bch as KassenbuchBuchung[]) ?? []);

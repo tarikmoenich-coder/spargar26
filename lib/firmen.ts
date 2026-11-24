@@ -68,3 +68,39 @@ export async function nachFirmaGruppieren<T extends { employee_id: string }>(
     (a, b) => (a.firma?.reihenfolge ?? 999) - (b.firma?.reihenfolge ?? 999)
   );
 }
+
+// Lohnkasse(n) für einen Satz Personen in einer Saison (Stufe 3b,
+// 2026-11-24): je beteiligter Firma deren Lohn-Kassenbuch. Mehrere
+// Einträge = Personen verschiedener Firmen (Bargeld kommt aber nur aus
+// EINER Kasse - der Aufrufer entscheidet, ob das erlaubt ist).
+export interface Lohnkasse {
+  id: number;
+  bezeichnung: string;
+  belegnummer_praefix: string;
+}
+export async function lohnkassenFuer(
+  supabase: SupabaseClient,
+  employeeIds: string[],
+  saisonJahr: number
+): Promise<{ firma: Firma | null; kasse: Lohnkasse | null; employeeIds: string[] }[]> {
+  const gruppen = await nachFirmaGruppieren(
+    supabase,
+    employeeIds.map((employee_id) => ({ employee_id })),
+    saisonJahr
+  );
+  const kassenIds = Array.from(
+    new Set(gruppen.map((g) => g.firma?.lohn_kassenbuch_id).filter((x): x is number => x != null))
+  );
+  const { data } = kassenIds.length
+    ? await supabase
+        .from("kassenbuch")
+        .select("id, bezeichnung, belegnummer_praefix")
+        .in("id", kassenIds)
+    : { data: [] };
+  const kassen = new Map(((data as Lohnkasse[]) ?? []).map((k) => [k.id, k]));
+  return gruppen.map((g) => ({
+    firma: g.firma,
+    kasse: g.firma?.lohn_kassenbuch_id != null ? kassen.get(g.firma.lohn_kassenbuch_id) ?? null : null,
+    employeeIds: g.zeilen.map((z) => z.employee_id),
+  }));
+}

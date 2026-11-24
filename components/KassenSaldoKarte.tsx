@@ -46,6 +46,9 @@ export default function KassenSaldoKarte({
         .from("kassenbuch")
         .select("id")
         .eq("typ", "lohnkasse")
+        // seit Stufe 3b gibt es mehrere Lohnkassen - ohne ID die erste (MLK)
+        .order("reihenfolge")
+        .limit(1)
         .maybeSingle();
       buchId = (lk as { id: number } | null)?.id;
     }

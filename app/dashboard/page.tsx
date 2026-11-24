@@ -156,34 +156,25 @@ export default function DashboardPage() {
     }
 
     async function ladeKasse(supabase: ReturnType<typeof getSupabaseClient>) {
-      const [{ data: dep }, { data: adv }, { data: az }, { data: chk }] =
-        await Promise.all([
-          supabase.from("cash_deposits").select("betrag, storniert"),
+      // Kassenstand = Summe der sichtbaren Lohnkassen (MLK/ML/MD, Stufe 3b),
+      // berechnet wie auf der Kasse-Seite (kassenbuch_saldo_bis, echtes SUM
+      // ohne Zeilenlimit, inkl. Kautionen/Umbuchungen) statt clientseitig.
+      const [{ data: lohnkassen }, { data: chk }] = await Promise.all([
+        supabase.from("kassenbuch").select("id").eq("typ", "lohnkasse"),
+        supabase
+          .from("cash_checks")
+          .select("check_zeit, status, freigegeben")
+          .order("check_zeit", { ascending: false })
+          .limit(1),
+      ]);
+      const salden = await Promise.all(
+        ((lohnkassen as { id: number }[]) ?? []).map((k) =>
           supabase
-            .from("advances")
-            .select("betrag, datum, storniert")
-            .eq("zahlungsart", "BAR"),
-          supabase
-            .from("auszahlungsbeleg_summary")
-            .select("summe_auszahlungsbetrag, erstellt_am")
-            .eq("zahlungsart", "BAR"),
-          supabase
-            .from("cash_checks")
-            .select("check_zeit, status, freigegeben")
-            .order("check_zeit", { ascending: false })
-            .limit(1),
-        ]);
-      const einzahlungenSumme = (dep ?? [])
-        .filter((d: any) => !d.storniert)
-        .reduce((s: number, d: any) => s + Number(d.betrag), 0);
-      const vorschuesseSumme = (adv ?? [])
-        .filter((a: any) => !a.storniert)
-        .reduce((s: number, a: any) => s + Number(a.betrag), 0);
-      const auszahlungenSumme = (az ?? []).reduce(
-        (s: number, a: any) => s + Number(a.summe_auszahlungsbetrag ?? 0),
-        0
+            .rpc("kassenbuch_saldo_bis", { p_kassenbuch_id: k.id })
+            .then(({ data }) => (data == null ? 0 : Number(data)))
+        )
       );
-      setKassenSaldo(einzahlungenSumme - vorschuesseSumme - auszahlungenSumme);
+      setKassenSaldo(salden.reduce((s, x) => s + x, 0));
 
       const letzter = (chk ?? [])[0] as LetzterCheck | undefined;
       setLetzterCheck(letzter ?? null);
