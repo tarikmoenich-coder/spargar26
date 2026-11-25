@@ -10,6 +10,8 @@
 // Ein Kontakt je Nummer, UID = Nummer (nur Ziffern) - dadurch überschreibt
 // ein erneuter Sync denselben Kontakt statt Duplikate anzulegen.
 
+import { apiNutzerPruefen } from "@/lib/apiAuth";
+
 const BASE_URL = process.env.NEXTCLOUD_CARDDAV_BASE_URL;
 const USER = process.env.NEXTCLOUD_CARDDAV_USER;
 const PASSWORD = process.env.NEXTCLOUD_CARDDAV_PASSWORD;
@@ -93,6 +95,10 @@ async function syncEintrag(eintrag: SyncEintrag): Promise<SyncErgebnis> {
 }
 
 export async function POST(request: Request) {
+  // Nur angemeldete Admin/Personal (wie die Schreibrechte auf firmenhandy)
+  const verweigert = await apiNutzerPruefen(request, ["admin", "hr"]);
+  if (verweigert) return verweigert;
+
   if (!BASE_URL || !USER || !PASSWORD) {
     return Response.json(
       {

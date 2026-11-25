@@ -103,7 +103,8 @@ def typwert(typ, spalte):
     if base.startswith("timestamp"):
         return "'2026-05-04 10:00+02'"
     if base.startswith("time"):
-        return "'10:00'"
+        # "bis"-Spalten später als "von" (Checks wie vt_stand_zeit bis > von)
+        return "'12:00'" if spalte.startswith("bis") else "'10:00'"
     if base == "uuid":
         return "gen_random_uuid()"
     if base in ("jsonb", "json"):

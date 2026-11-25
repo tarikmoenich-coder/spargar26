@@ -10,6 +10,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Smartphone } from "lucide-react";
 import { getSupabaseClient } from "@/lib/supabase/client";
+import { apiFetch } from "@/lib/apiFetch";
 import { useProfile } from "@/lib/useProfile";
 import PageHeader from "@/components/PageHeader";
 import PersonalTabs from "@/components/PersonalTabs";
@@ -288,7 +289,7 @@ export default function FirmenhandyPage() {
     setSyncHinweis(null);
     setFehler(null);
     try {
-      const res = await fetch("/api/firmenhandy-sync", {
+      const res = await apiFetch("/api/firmenhandy-sync", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({

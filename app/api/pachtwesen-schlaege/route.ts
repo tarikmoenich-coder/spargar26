@@ -13,11 +13,16 @@
 // keine Verpächter-/Bank-/Vertragsdaten.
 
 import { createClient } from "@supabase/supabase-js";
+import { apiNutzerPruefen } from "@/lib/apiAuth";
 
 const PACHTWESEN_URL = process.env.PACHTWESEN_SUPABASE_URL;
 const PACHTWESEN_ANON_KEY = process.env.PACHTWESEN_SUPABASE_ANON_KEY;
 
 export async function GET(request: Request) {
+  // Nur angemeldete Nutzer mit Schreibrecht auf "feld" (Import-Knopf)
+  const verweigert = await apiNutzerPruefen(request, ["admin", "hr", "erntewirtschaft"]);
+  if (verweigert) return verweigert;
+
   if (!PACHTWESEN_URL || !PACHTWESEN_ANON_KEY) {
     return Response.json(
       {
