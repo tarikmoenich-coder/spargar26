@@ -44,9 +44,9 @@ const KLAERUNG_LABEL: Record<LwKlaerungArt, string> = {
 };
 const KLAERUNG_TEXT: Record<LwKlaerungArt, string> = {
   vermischt:
-    "Die Person trug eine Nummer, die laut HSC jemand anderem gehört. Beim alten Excel-Import können dadurch Saisonjahre der anderen Person an diesem Datensatz hängen. Wird nach dem Abgleich mit dem Zusammenführen-/Aufteilen-Werkzeug geklärt.",
+    "Die Person trug eine Nummer, die laut HSC jemand anderem gehört. Beim alten Excel-Import können dadurch Saisonjahre der anderen Person an diesem Datensatz hängen. Klären unter Personal → Zusammenführen → „Saisonjahre verschieben“.",
   dublette:
-    "Dieselbe Person steht mehrfach im Stamm (nicht als Statuswechsel). Wird mit dem Zusammenführen-Werkzeug geklärt - bis dahin bleiben beide Datensätze, der zweite ggf. mit „-alt“.",
+    "Dieselbe Person steht mehrfach im Stamm (nicht als Statuswechsel). Klären unter Personal → Zusammenführen - bis dahin bleiben beide Datensätze, der zweite ggf. mit „-alt“.",
   nr_kollision: "Wer jünger eingetreten ist, bekommt die Nummer, der andere die Nummer mit Firmenzusatz.",
   datum: "Bitte in HSC korrigieren - in der App wird nur das Eintrittsjahr gezählt.",
   unsicher:
