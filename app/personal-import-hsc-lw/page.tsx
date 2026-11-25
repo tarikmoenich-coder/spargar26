@@ -193,9 +193,10 @@ export default function PersonalImportHscLwPage() {
     };
   }
 
-  async function pruefen() {
+  // nachImport: automatische zweite Prüfung - Ergebnis-Meldung bleibt stehen
+  async function pruefen(nachImport = false) {
     setFehler([]);
-    setErgebnis(null);
+    if (!nachImport) setErgebnis(null);
     if (dateien.some((d) => !d.firma)) {
       setFehler(["Bitte zu jeder Datei die Firma wählen."]);
       return;
@@ -395,7 +396,7 @@ export default function PersonalImportHscLwPage() {
     setFehler(meldungen);
     setFortschritt("");
     setLaeuft(false);
-    if (!meldungen.length) await pruefen();
+    if (!meldungen.length) await pruefen(true);
   }
 
   function klaerungCsv() {
@@ -472,7 +473,7 @@ export default function PersonalImportHscLwPage() {
         )}
         {dateien.length > 0 && (
           <div className="flex flex-wrap gap-2">
-            <button type="button" className="btn-secondary" disabled={laeuft} onClick={pruefen}>
+            <button type="button" className="btn-secondary" disabled={laeuft} onClick={() => pruefen()}>
               Prüfen (nichts wird gespeichert)
             </button>
             {plan && (
