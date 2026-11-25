@@ -83,7 +83,7 @@ export function hscDatum(d: string | undefined): string | null {
 // DEÜV-Staatsangehörigkeitsschlüssel - nur die sicher bekannten, mit den
 // Wohnländern im Export plausibilisierten Schlüssel; unbekannte bleiben leer
 // (Hinweis in der Vorschau).
-const STAATSANGEHOERIGKEIT: Record<string, string> = {
+export const STAATSANGEHOERIGKEIT: Record<string, string> = {
   "000": "Deutschland",
   "122": "Bosnien und Herzegowina",
   "125": "Bulgarien",
@@ -98,7 +98,7 @@ const STAATSANGEHOERIGKEIT: Record<string, string> = {
   "170": "Serbien",
 };
 
-const FAMILIENSTAND: Record<string, string | null> = {
+export const FAMILIENSTAND: Record<string, string | null> = {
   verheiratet: "verheiratet",
   ledig: "ledig",
   geschieden: "geschieden_getrennt",
@@ -123,7 +123,7 @@ export function abrechnungsartAusPgs(pgs: string): { art: Abrechnungsart; hinwei
   }
 }
 
-function normName(s: string): string {
+export function normName(s: string): string {
   return (s || "")
     .toLowerCase()
     .replace(/ß/g, "ss")
