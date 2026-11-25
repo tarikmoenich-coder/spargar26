@@ -305,18 +305,26 @@ export default function PersonalImportPage() {
       <div>
         <PageHeader icon={Upload} titel="Personal importieren" />
         <p className="mb-1 text-sm">
-          Vertriebs-Personal aus HSC-Exporten übernehmen:{" "}
+          HSC-Exporte übernehmen:{" "}
           <Link href="/personal-import-hsc" className="text-emerald-700 underline">
             Import Vertrieb (HSC)
+          </Link>
+          {" · "}
+          <Link href="/personal-import-hsc-lw" className="text-emerald-700 underline">
+            Abgleich Landwirtschaft (HSC)
           </Link>
         </p>
         {istHscExport && (
           <p className="mb-2 rounded border border-beere-300 bg-beere-50 p-2 text-sm text-beere-800">
-            Diese Datei ist ein HSC-Export des Vertriebs. Hier würde sie falsch
-            (Landwirtschaft, ohne „V-“, ohne Firma/Saisons) importiert - der
-            Import ist deshalb gesperrt. Bitte{" "}
+            Diese Datei ist ein HSC-Export. Hier würde sie ohne Abgleich und
+            ohne Firma/Saisons importiert - der Import ist deshalb gesperrt.
+            Bitte{" "}
             <Link href="/personal-import-hsc" className="underline">
               Import Vertrieb (HSC)
+            </Link>{" "}
+            bzw.{" "}
+            <Link href="/personal-import-hsc-lw" className="underline">
+              Abgleich Landwirtschaft (HSC)
             </Link>{" "}
             verwenden.
           </p>
