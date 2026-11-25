@@ -2620,3 +2620,41 @@ export interface VtTourStand {
   reihenfolge: number;
   nur_ware: boolean;
 }
+
+// Vertriebsplanung V2 (migration_2026-11-25d_vertrieb_verfuegbarkeit.sql)
+export interface VtVerkaeuferSaison {
+  id: number;
+  employee_id: string;
+  saison_jahr: number;
+  max_halbtage_woche: number | null;
+  notiz: string | null;
+}
+
+// Keine Zeile = unbekannt; kann=true "kann", false "kann nicht".
+export interface VtVerfuegbarkeit {
+  id: number;
+  employee_id: string;
+  saison_jahr: number;
+  wochentag: number;
+  halbtag: VtHalbtag;
+  kann: boolean;
+}
+
+export interface VtAbwesenheit {
+  id: number;
+  employee_id: string;
+  von: string;
+  bis: string;
+  halbtag: VtHalbtag | null; // null = ganzer Tag
+  grund: string | null;
+}
+
+// Vertriebsplanung V3 (migration_2026-11-25e_vertrieb_grundplan.sql)
+export interface VtGrundplan {
+  id: number;
+  saison_jahr: number;
+  stand_id: number;
+  wochentag: number;
+  halbtag: VtHalbtag;
+  employee_id: string;
+}
