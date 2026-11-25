@@ -56,6 +56,7 @@ const items: NavItem[] = [
       "/personal-import-historie",
       "/personal-import-hsc",
       "/personal-import-hsc-lw",
+      "/personal-zusammenfuehren",
       "/personal-dokumente",
       "/personalplanung",
       "/personal-anreiseliste",

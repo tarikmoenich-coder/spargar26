@@ -116,6 +116,10 @@ export default function PersonalplanungPage() {
     herkunft: string;
     notiz: string;
     fuehrerschein: string[];
+    // änderbar nur, solange der Kandidat nicht mit dem Personalstamm
+    // verknüpft/aktiviert ist (2026-11-25, nach dem HSC-Abgleich: reservierte
+    // Nummern, die in HSC schon jemand anderem gehören)
+    personal_nr: string;
   } | null>(null);
   // Nutzer-Vorgabe 2026-11-21: Saisonjahr, Ansichten (Namensliste / Soll /
   // Zeitstrahl), Platzhalter, Reserve, Einsatzbereich, Sammelaktionen.
@@ -903,17 +907,51 @@ export default function PersonalplanungPage() {
       herkunft: k.herkunft ?? "",
       notiz: k.notiz ?? "",
       fuehrerschein: k.fuehrerschein_kategorien ?? [],
+      personal_nr: k.personal_nr ?? "",
     });
+  }
+
+  // Personalnummer schon vergeben? (Personalstamm + nicht stornierte
+  // Kandidaten, außer dem Kandidaten selbst)
+  function nrVergebenAn(nr: string, ausserKandidat: string | null): string | null {
+    const t = nr.trim().toLowerCase();
+    if (!t) return null;
+    const e = employees.find((x) => x.personal_nr.trim().toLowerCase() === t);
+    if (e) return `${e.name}, ${e.vorname} (Personal)`;
+    const k = kandidaten.find(
+      (x) => x.id !== ausserKandidat && x.status !== "storniert" && (x.personal_nr ?? "").trim().toLowerCase() === t
+    );
+    return k ? `${k.name}, ${k.vorname} (bereits geplant)` : null;
+  }
+  function naechsteFreieFuer(nr: string): string | null {
+    const n = parsePersonalNrNummer(nr);
+    const kreis = n === null || n < 1000 ? 1 : Math.floor(n / 1000) + 1;
+    const frei = naechsteFreieNummer(belegteNummern, Math.min(kreis, ANZAHL_PERSONALNUMMERN_KREISE));
+    return frei === null ? null : String(frei);
   }
 
   async function bearbeitenSpeichern() {
     if (!bearbeitenId || !bearbeitenForm) return;
     const f = bearbeitenForm;
+    const k = kandidaten.find((x) => x.id === bearbeitenId);
+    const nrAenderbar = !!k && !k.aktivierter_employee_id && !k.verknuepfter_employee_id;
+    const neueNr =
+      nrAenderbar && f.personal_nr.trim() && f.personal_nr.trim() !== (k!.personal_nr ?? "")
+        ? personalNrFuerBereich(f.personal_nr.trim(), bereiche.praefix(k!.bereich))
+        : null;
+    if (neueNr) {
+      const vergeben = nrVergebenAn(neueNr, k!.id);
+      if (vergeben) {
+        setError(`Personalnummer ${neueNr} ist schon vergeben an ${vergeben}.`);
+        return;
+      }
+    }
     setSaving(true);
     setError(null);
     const { error } = await getSupabaseClient()
       .from("personal_kandidaten")
       .update({
+        ...(neueNr ? { personal_nr: neueNr } : {}),
         name: f.name,
         vorname: f.vorname,
         geburtsdatum: f.geburtsdatum || null,
@@ -2231,11 +2269,45 @@ export default function PersonalplanungPage() {
                                 />
                               </label>
                             </div>
+                            {!k.aktivierter_employee_id && !k.verknuepfter_employee_id && (
+                              <div className="flex flex-wrap items-end gap-2">
+                                <label className="flex flex-col gap-0.5 text-xs text-neutral-500">
+                                  Personalnummer
+                                  <input
+                                    value={bearbeitenForm.personal_nr}
+                                    onChange={(e) =>
+                                      setBearbeitenForm({
+                                        ...bearbeitenForm,
+                                        personal_nr: e.target.value,
+                                      })
+                                    }
+                                  />
+                                </label>
+                                <button
+                                  type="button"
+                                  className="btn-secondary text-xs"
+                                  onClick={() => {
+                                    const frei = naechsteFreieFuer(bearbeitenForm.personal_nr);
+                                    if (frei) setBearbeitenForm({ ...bearbeitenForm, personal_nr: frei });
+                                  }}
+                                >
+                                  nächste freie im Kreis
+                                </button>
+                                {bearbeitenForm.personal_nr.trim() !== (k.personal_nr ?? "") &&
+                                  nrVergebenAn(bearbeitenForm.personal_nr, k.id) && (
+                                    <span className="text-xs text-beere-600">
+                                      schon vergeben an {nrVergebenAn(bearbeitenForm.personal_nr, k.id)}
+                                    </span>
+                                  )}
+                              </div>
+                            )}
                             <p className="text-xs text-neutral-500">
                               Geplante Anreise und Stundenlohn lassen sich
-                              direkt in der Zeile ändern, die Personalnummer
-                              bleibt fest. Arbeitsbeginn/-ende werden in der
-                              Anreiseliste erfasst.
+                              direkt in der Zeile ändern. Die Personalnummer
+                              lässt sich nur ändern, solange der Kandidat noch
+                              nicht mit dem Personalstamm verknüpft ist.
+                              Arbeitsbeginn/-ende werden in der Anreiseliste
+                              erfasst.
                             </p>
                             <div className="flex items-center gap-2">
                               <button

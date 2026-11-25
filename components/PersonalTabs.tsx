@@ -13,6 +13,7 @@ const tabs = [
   { href: "/personal-dokumente", label: "Dokumente" },
   { href: "/personalnummern", label: "Personalnummern" },
   { href: "/personal-import", label: "Import" },
+  { href: "/personal-zusammenfuehren", label: "Zusammenführen" },
   { href: "/personal-firmenhandys", label: "Firmenhandys" },
 ];
 
