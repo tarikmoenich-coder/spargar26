@@ -483,13 +483,15 @@ export default function VertriebStaendePage() {
                         </td>
                       ))}
                       <td>
-                        {s.lat != null ? (
-                          <span className="badge-ok">✓</span>
-                        ) : (
-                          <span className="badge-warn" title="Koordinaten fehlen - nötig für die GPS-Auswertung">
-                            fehlt
-                          </span>
-                        )}
+                        <Link href={`/vertrieb/karte?stand=${s.id}`} title="Auf der Karte zeigen und Position setzen">
+                          {s.lat != null ? (
+                            <span className="badge-ok">✓ Karte</span>
+                          ) : (
+                            <span className="badge-warn" title="Koordinaten fehlen - nötig für die GPS-Auswertung">
+                              fehlt
+                            </span>
+                          )}
+                        </Link>
                       </td>
                       {darfPflegen && (
                         <td>

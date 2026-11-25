@@ -8,6 +8,7 @@ import { useEffect, useRef } from "react";
 // wie FahrzeugeTabs.
 const tabs = [
   { href: "/vertrieb", label: "Stände", exakt: true },
+  { href: "/vertrieb/karte", label: "Karte" },
   { href: "/vertrieb/touren", label: "Touren" },
   { href: "/vertrieb/verfuegbarkeit", label: "Verfügbarkeit" },
   { href: "/vertrieb/grundplan", label: "Grundplan" },

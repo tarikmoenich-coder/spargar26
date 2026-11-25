@@ -53,6 +53,13 @@ Voraussetzung (erledigt): Vertriebs-Personal in spargar26
   + „(Duplikat)“), Nummern alphabetisch nach Ort, Halbtag-Grenze 13:00,
   Koordinaten über OpenStreetMap/Nominatim (nur straßengenaue Treffer;
   Probelauf 68 von 72). Wiederholbar: gleicher Name = aktualisieren.
+  Mehrere Exporte (je Google-Konto: Mömmel 72, Reitz 25) werden gemeinsam
+  eingelesen und durchnummeriert; gleiche Namen bekommen die Straße
+  angehängt. Der Google-Export enthält KEINE Koordinaten.
+- Karte [gebaut 2026-11-25]: `/vertrieb/karte` (`components/StandKarte.tsx`)
+  zeigt alle Stände mit Radius-Kreis auf Satellit/Luftbild Hessen/OSM.
+  Position von Hand setzen (Punkt ziehen oder in die Karte klicken), Radius
+  per Regler; das ist die verbindliche Standposition (Nutzer 2026-11-25).
 - [offen] Jeder Stand wird automatisch als Geofence im GPS-System angelegt
   (Grundlage für V6). Noch nicht gebaut - Koordinaten und Radius werden
   aber schon erfasst (Spalte "GPS" in der Ständeliste).
