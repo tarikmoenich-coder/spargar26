@@ -17,6 +17,8 @@ import { useProfile } from "@/lib/useProfile";
 import { personalNrFuerBereich, useBereiche } from "@/lib/useBereiche";
 import PageHeader from "@/components/PageHeader";
 import { Upload } from "lucide-react";
+import { ladeAlleSeiten } from "@/lib/ladeAlle";
+import { hatRolle } from "@/lib/rollen";
 
 const TEMPLATE_SPALTEN: Record<ImportFeld, string> = {
   personal_nr: "Personalnummer",
@@ -68,6 +70,7 @@ export default function PersonalImportPage() {
   // (Umschalter oben bzw. einziger erlaubter Bereich).
   const { profile } = useProfile();
   const bereiche = useBereiche(profile);
+  const darf = hatRolle(profile, "admin", "hr");
   const [dateiname, setDateiname] = useState<string | null>(null);
   const [erkannteSpalten, setErkannteSpalten] = useState<string[]>([]);
   const [unbekannteSpalten, setUnbekannteSpalten] = useState<string[]>([]);
@@ -94,14 +97,22 @@ export default function PersonalImportPage() {
     setDateiname(file.name);
 
     const supabase = getSupabaseClient();
-    const [{ data: bestehende }, { data: gruppenData }, { data: herkunftData }] =
+    const [bestehende, { data: gruppenData }, { data: herkunftData }] =
       await Promise.all([
-        supabase.from("employee_personaldaten").select("personal_nr, name, vorname"),
+        // Seitenweise - der Stamm hat über 1000 Personen, sonst gälten
+        // vergebene Nummern fälschlich als frei.
+        ladeAlleSeiten<{ personal_nr: string; name: string; vorname: string }>((von, bis) =>
+          supabase
+            .from("employee_personaldaten")
+            .select("personal_nr, name, vorname")
+            .order("id")
+            .range(von, bis)
+        ),
         supabase.from("arbeitsgruppen").select("gruppe_nr"),
         supabase.from("herkuenfte").select("wert"),
       ]);
     const bestehendeNummern = new Map<string, string>();
-    (bestehende ?? []).forEach((r: { personal_nr: string; name: string; vorname: string }) => {
+    bestehende.forEach((r) => {
       bestehendeNummern.set(r.personal_nr.trim().toLowerCase(), `${r.name}, ${r.vorname}`);
     });
     const bekannteGruppen = new Set(
@@ -156,6 +167,10 @@ export default function PersonalImportPage() {
       zaehler.set(key, (zaehler.get(key) ?? 0) + 1);
     });
 
+    // Vergleich mit Bereichs-Präfix ("123" wird im Vertrieb als "V-123"
+    // gespeichert, siehe insertPayload).
+    const mitPraefix = (nr: string) =>
+      personalNrFuerBereich(nr, bereiche.praefix(bereiche.standard)).toLowerCase();
     const geprueft = gebaut.map((z) => {
       if (!z.personal_nr) return z;
       const key = z.personal_nr.toLowerCase();
@@ -164,7 +179,7 @@ export default function PersonalImportPage() {
       if ((zaehler.get(key) ?? 0) > 1) {
         fehler.push("Personalnummer kommt mehrfach in dieser Datei vor");
       }
-      const bestehenderName = bestehendeNummern.get(key);
+      const bestehenderName = bestehendeNummern.get(mitPraefix(z.personal_nr));
       if (bestehenderName) {
         fehler.push(`Personalnummer bereits vergeben an ${bestehenderName}`);
       }
@@ -173,7 +188,7 @@ export default function PersonalImportPage() {
       // ganz normal importiert, nur ohne Verknüpfung.
       if (z.vorgaenger_personal_nr) {
         const vKey = z.vorgaenger_personal_nr.toLowerCase();
-        if (bestehendeNummern.has(vKey) || zaehler.has(vKey)) {
+        if (bestehendeNummern.has(mitPraefix(z.vorgaenger_personal_nr)) || zaehler.has(vKey)) {
           warnungen.push(
             `wird mit Vorgänger-Person "${z.vorgaenger_personal_nr}" verknüpft`
           );
@@ -245,12 +260,15 @@ export default function PersonalImportPage() {
     // (aus einem früheren Import/manuell angelegt) plus die gerade in
     // Phase 1 neu angelegten.
     const idNachPersonalNr = new Map<string, string>();
-    const { data: bestehendeIds } = await supabase
-      .from("employee_personaldaten")
-      .select("id, personal_nr");
-    (
-      (bestehendeIds as { id: string; personal_nr: string }[] | null) ?? []
-    ).forEach((r) => {
+    const bestehendeIds = await ladeAlleSeiten<{ id: string; personal_nr: string }>(
+      (von, bis) =>
+        supabase
+          .from("employee_personaldaten")
+          .select("id, personal_nr")
+          .order("id")
+          .range(von, bis)
+    );
+    bestehendeIds.forEach((r) => {
       idNachPersonalNr.set(r.personal_nr.trim().toLowerCase(), r.id);
     });
 
@@ -274,8 +292,12 @@ export default function PersonalImportPage() {
     const aErgebnisse = await Promise.allSettled(
       aZeilen.map((z) => {
         const vorgaengerId = z.vorgaenger_personal_nr
-          ? idNachPersonalNr.get(z.vorgaenger_personal_nr.toLowerCase()) ??
-            null
+          ? idNachPersonalNr.get(
+              personalNrFuerBereich(
+                z.vorgaenger_personal_nr,
+                bereiche.praefix(bereiche.standard)
+              ).toLowerCase()
+            ) ?? null
           : null;
         return supabase.from("employee_personaldaten").insert(insertPayload(z, vorgaengerId));
       })
@@ -299,6 +321,16 @@ export default function PersonalImportPage() {
 
   const importierbareAnzahl = zeilen.filter((z) => z.fehler.length === 0).length;
 
+  if (profile && !darf) {
+    return (
+      <div className="flex flex-col gap-6">
+        <PersonalTabs />
+        <PageHeader icon={Upload} titel="Personal importieren" />
+        <p className="text-sm text-neutral-500">Nur Administrator und Personal (HR).</p>
+      </div>
+    );
+  }
+
   return (
     <div className="flex flex-col gap-6">
       <PersonalTabs />
@@ -312,6 +344,10 @@ export default function PersonalImportPage() {
           {" · "}
           <Link href="/personal-import-hsc-lw" className="text-emerald-700 underline">
             Abgleich Landwirtschaft (HSC)
+          </Link>
+          {" · "}
+          <Link href="/personal-import-historie" className="text-emerald-700 underline">
+            Historie-Import (Vorjahres-Datei)
           </Link>
         </p>
         {istHscExport && (

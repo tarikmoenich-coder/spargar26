@@ -287,7 +287,7 @@ export default function UnterkunftGrundrissPage() {
     zimmer_id: "",
     datum: heuteIso(),
   });
-  // Direkt belegen (nur admin), ohne Übergabe
+  // Direkt belegen (admin/hr/hausmeister, canMove), ohne Übergabe
   const [direkt, setDirekt] = useState<{ suche: string } | null>(null);
   // Zimmer-Panel: Einzug (Person hinzufügen) aufgeklappt / Auszug-Personenwahl.
   const [einzugOffen, setEinzugOffen] = useState(false);
@@ -346,6 +346,9 @@ export default function UnterkunftGrundrissPage() {
         .order("gemeldet_am", { ascending: false }),
       supabase.from("unterkunft_kontroll_intervall").select("*"),
     ]);
+    const ladeFehler =
+      g.error ?? e.error ?? z.error ?? b.error ?? zu.error ?? po.error ?? m.error ?? ki.error;
+    if (ladeFehler) setFehler(`Laden fehlgeschlagen: ${ladeFehler.message}`);
     setGebaeude((g.data as UnterkunftGebaeude[]) ?? []);
     setEinheiten((e.data as UnterkunftWohneinheitUebersicht[]) ?? []);
     setZimmer((z.data as UnterkunftZimmerUebersicht[]) ?? []);
@@ -802,7 +805,7 @@ export default function UnterkunftGrundrissPage() {
     await laden();
   }
 
-  // Direkt belegen (nur admin), ohne Übergabe. Optional eine geplante
+  // Direkt belegen (admin/hr/hausmeister, canMove), ohne Übergabe. Optional eine geplante
   // Zuordnung mitschließen.
   async function belegungDirekt(
     employeeId: string,
@@ -821,7 +824,7 @@ export default function UnterkunftGrundrissPage() {
       return;
     }
     if (zuordnungId != null) {
-      await sb
+      const { error: zErr } = await sb
         .from("unterkunft_zuordnung")
         .update({
           status: "erledigt",
@@ -829,6 +832,10 @@ export default function UnterkunftGrundrissPage() {
           updated_by: profile?.id ?? null,
         })
         .eq("id", zuordnungId);
+      if (zErr)
+        setFehler(
+          `Belegt, aber die geplante Zuordnung wurde nicht geschlossen: ${zErr.message}`
+        );
     }
     setDirekt(null);
     await laden();
@@ -886,8 +893,8 @@ export default function UnterkunftGrundrissPage() {
     }
     for (const r of (data as { id: number; employee_id: string }[]) ?? []) {
       const zid = zuordnungVon.get(r.employee_id);
-      if (zid != null)
-        await sb
+      if (zid != null) {
+        const { error: zErr } = await sb
           .from("unterkunft_zuordnung")
           .update({
             status: "erledigt",
@@ -895,6 +902,11 @@ export default function UnterkunftGrundrissPage() {
             updated_by: profile?.id ?? null,
           })
           .eq("id", zid);
+        if (zErr)
+          setFehler(
+            `Belegt, aber eine geplante Zuordnung wurde nicht geschlossen: ${zErr.message}`
+          );
+      }
     }
     setHinweis(
       `${ids.length} Person(en) → Zimmer ${z.nummer}${
@@ -1406,11 +1418,18 @@ export default function UnterkunftGrundrissPage() {
 
       {einheitenDesGebaeudes.length === 0 ? (
         <p className="text-sm text-neutral-500">
-          Für dieses Gebäude sind noch keine Wohneinheiten angelegt – unter{" "}
-          <Link href="/unterkunft/stammdaten" className="text-emerald-700 underline">
-            Stammdaten
-          </Link>{" "}
-          beginnen.
+          Für dieses Gebäude sind noch keine Wohneinheiten angelegt
+          {istHausmeister ? (
+            "."
+          ) : (
+            <>
+              {" "}– unter{" "}
+              <Link href="/unterkunft/stammdaten" className="text-emerald-700 underline">
+                Stammdaten
+              </Link>{" "}
+              beginnen.
+            </>
+          )}
         </p>
       ) : (
         <>
@@ -1858,14 +1877,21 @@ export default function UnterkunftGrundrissPage() {
 
           {zimmerDerEinheit.length === 0 ? (
             <p className="text-sm text-neutral-500">
-              Noch keine Zimmer in dieser Wohneinheit – unter{" "}
-              <Link
-                href="/unterkunft/stammdaten"
-                className="text-emerald-700 underline"
-              >
-                Stammdaten
-              </Link>{" "}
-              anlegen.
+              Noch keine Zimmer in dieser Wohneinheit
+              {istHausmeister ? (
+                "."
+              ) : (
+                <>
+                  {" "}– unter{" "}
+                  <Link
+                    href="/unterkunft/stammdaten"
+                    className="text-emerald-700 underline"
+                  >
+                    Stammdaten
+                  </Link>{" "}
+                  anlegen.
+                </>
+              )}
             </p>
           ) : (
             <>
@@ -2807,7 +2833,9 @@ export default function UnterkunftGrundrissPage() {
                           </button>
                         </>
                       )}
-                      {sel.art !== "flur" && (
+                      {/* Zwischenkontrollen macht der Hausmeister nicht (die
+                          Seite leitet ihn zu den Reparaturen um). */}
+                      {sel.art !== "flur" && !istHausmeister && (
                         <Link
                           className="btn-secondary"
                           href={`/unterkunft/kontrolle?zimmer=${sel.zimmer_id}`}

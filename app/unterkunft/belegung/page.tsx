@@ -28,6 +28,7 @@ import type {
 } from "@/lib/types";
 
 import { hatRolle } from "@/lib/rollen";
+import { ladeAlleSeiten } from "@/lib/ladeAlle";
 interface EmployeeMini {
   id: string;
   personal_nr: string;
@@ -75,6 +76,8 @@ export default function UnterkunftBelegungPage() {
   const laden = useCallback(async () => {
     setLoading(true);
     const supabase = getSupabaseClient();
+    // Belegungen (wachsen jede Saison) und employees (~4.000) seitenweise
+    // laden - PostgREST liefert je Abfrage höchstens 1000 Zeilen.
     const [g, w, z, bl, e, po, zu] = await Promise.all([
       supabase.from("unterkunft_gebaeude").select("*").eq("aktiv", true).order("name"),
       supabase
@@ -82,19 +85,32 @@ export default function UnterkunftBelegungPage() {
         .select("*")
         .order("reihenfolge"),
       supabase.from("unterkunft_zimmer").select("*").eq("aktiv", true).order("nummer"),
-      supabase.from("unterkunft_belegung").select("*").order("von", { ascending: false }),
-      supabase
-        .from("employees")
-        .select("id, personal_nr, name, vorname, aktiv")
-        .order("name"),
+      ladeAlleSeiten<UnterkunftBelegung>((von, bis) =>
+        supabase
+          .from("unterkunft_belegung")
+          .select("*")
+          .order("von", { ascending: false })
+          .order("id")
+          .range(von, bis)
+      ),
+      ladeAlleSeiten<EmployeeMini>((von, bis) =>
+        supabase
+          .from("employees")
+          .select("id, personal_nr, name, vorname, aktiv")
+          .order("name")
+          .order("id")
+          .range(von, bis)
+      ),
       supabase.from("unterkunft_person_offen").select("*").order("name"),
       supabase.from("unterkunft_zuordnung_offen").select("*").order("geplant_ab"),
     ]);
+    const ladeFehler = g.error ?? w.error ?? z.error ?? po.error ?? zu.error;
+    if (ladeFehler) setFehler(`Laden fehlgeschlagen: ${ladeFehler.message}`);
     setGebaeude((g.data as UnterkunftGebaeude[]) ?? []);
     setEinheiten((w.data as UnterkunftWohneinheitUebersicht[]) ?? []);
     setZimmer((z.data as UnterkunftZimmer[]) ?? []);
-    setBelegungen((bl.data as UnterkunftBelegung[]) ?? []);
-    setEmployees((e.data as EmployeeMini[]) ?? []);
+    setBelegungen(bl);
+    setEmployees(e);
     setPersonenOffen((po.data as UnterkunftPersonOffen[]) ?? []);
     setZuordnungen((zu.data as UnterkunftZuordnungOffen[]) ?? []);
     setLoading(false);

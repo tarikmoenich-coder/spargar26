@@ -20,20 +20,16 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { getSupabaseClient } from "@/lib/supabase/client";
 import { useProfile } from "@/lib/useProfile";
 import ErntewirtschaftTabs from "@/components/ErntewirtschaftTabs";
-import { formatDatumDE } from "@/lib/format";
+import { formatDatumDE, formatMenge } from "@/lib/format";
+import { lokalIsoPlusTage } from "@/lib/datum";
 import { hatRolle, darfMenue } from "@/lib/rollen";
 import type { Employee } from "@/lib/types";
 
-function heuteIso() {
-  return new Date().toISOString().slice(0, 10);
-}
-// Standardvorschlag für die Strichliste (Nutzer-Vorgabe 2026-09-16): wird
+// Ortszeit statt UTC. Standardvorschlag für die Strichliste (Nutzer-Vorgabe 2026-09-16): wird
 // meist am Folgetag für den Vortag nachgetragen, "gestern" spart das
 // Umstellen.
 function gesternIso() {
-  const d = new Date();
-  d.setDate(d.getDate() - 1);
-  return d.toISOString().slice(0, 10);
+  return lokalIsoPlusTage(-1);
 }
 function quote(nacharbeit: number, gesamt: number): number | null {
   return gesamt > 0 ? Math.round((nacharbeit / gesamt) * 1000) / 10 : null;
@@ -72,7 +68,8 @@ export default function StrichlistePage() {
     setLaden(true);
     setFehler(null);
     const supabase = getSupabaseClient();
-    const [{ data: emp }, { data: praemien }, { data: annahme }] = await Promise.all([
+    const [{ data: emp, error: empErr }, { data: praemien, error: prErr }, { data: annahme, error: anErr }] =
+      await Promise.all([
       supabase
         .from("employees")
         // Nur die benötigten Spalten - kein select("*"): die Seite ist auch
@@ -92,6 +89,8 @@ export default function StrichlistePage() {
         .select("*")
         .eq("datum", datum),
     ]);
+    const ladeFehler = empErr ?? prErr ?? anErr;
+    if (ladeFehler) setFehler(`Konnte nicht laden: ${ladeFehler.message}`);
     const liste = (emp as Employee[]) ?? [];
     setPersonen(liste);
 
@@ -239,7 +238,7 @@ export default function StrichlistePage() {
           Nacharbeit{" "}
           {summe.gesamt > 0 && (
             <span className={quoteKlasse(quote(summe.na, summe.gesamt))}>
-              Ø {quote(summe.na, summe.gesamt) ?? "—"} %
+              Ø {formatMenge(quote(summe.na, summe.gesamt), 1)} %
             </span>
           )}
         </div>

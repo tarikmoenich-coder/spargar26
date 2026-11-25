@@ -1,6 +1,8 @@
 # Spargar-App (Mömmel Agrar)
 
-Web-Anwendung als Ersatz für "Spargar 2026 - Mömmel Agrar.xlsm". Mehrere
+Web-Anwendung als Ersatz für "Spargar 2026 - Mömmel Agrar.xlsm". Seit
+2026-11-24 für mehrere Firmen (Mömmel Agrar, Mönich Landwirtschaft, Mönich
+Direkt) und die Geschäftsbereiche Landwirtschaft und Vertrieb. Mehrere
 Nutzer können gleichzeitig arbeiten, Änderungen werden live synchronisiert
 (Supabase Realtime).
 
@@ -19,17 +21,17 @@ Enthalten:
   folgen bei Bedarf.
   Leichtgewichtige eigene Lösung ohne Framework (`lib/i18n.ts`, flaches
   Wörterbuch je Sprache) - kein Aufwand für ungenutzte Sprachen/Seiten
-- Rollenabhängiges Dashboard ("Start", auch neue Startseite nach dem
-  Login): kompakte, klickbare Kacheln mit dem, was gerade Aufmerksamkeit
-  braucht - hr sieht offene Anreiseliste-Punkte und die
-  15-Wochen-Kontrolle, kasse den aktuellen Kassensaldo, Stand der letzten
-  Kassenprüfung und Bewegungen seit der letzten Prüfung, lohnabrechnung
-  Abweichungen bei Auszahlungen und die Anzahl aktiver Personen, pruefer
-  offene Kassenprüfungs-Freigaben und die letzten Audit-Log-Einträge,
-  management eine kompakte Fassung der Controlling-Seite. admin sieht alle
-  Kacheln kombiniert. zeiterfassung hat kein eigenes Dashboard und landet
-  weiterhin direkt auf der Stundenerfassung, da das schon ihr einziger
-  Arbeitsbereich ist
+- Rollenabhängiges Dashboard ("Start", `app/dashboard`): kompakte,
+  klickbare Kacheln mit dem, was gerade Aufmerksamkeit braucht - hr:
+  Anreiseliste und 15-Wochen-Grenze; kasse: je Kassenbuch (MLK/ML/MD/MÖ)
+  Saldo, letzte Prüfung und Bewegungen seitdem; lohnabrechnung:
+  Abweichungen bei Auszahlungen und aktive Personen; pruefer: offene
+  Kassenprüfungs-Freigaben und die letzten Einträge im Änderungsprotokoll;
+  management: Kurzfassung des Controllings; erntewirtschaft: Prämien des
+  Tages. admin sieht alle Kacheln. Nicht ladbare Kennzahlen zeigen "—"
+  statt 0. Die Startseite nach dem Login richtet sich nach der Hauptrolle
+  (`profiles.role`): zeiterfassung → Stundenerfassung, hausmeister →
+  Unterkunft/Reparaturen, waage → Waagen-Kiosk, alle anderen → Dashboard
 - Personalstamm (anlegen/bearbeiten/deaktivieren, keine Löschung), inkl.
   Abrechnungsart (pauschal/Lohnsteuerklasse 1/sozialversicherungspflichtig)
   und automatisch berechnetem "Aktiv seit" (erster Arbeitstag mit Stunden > 0)
@@ -477,7 +479,7 @@ Enthalten:
   keine Mehrfachauswahl wie bei normalen Vorschüssen). Zahlungsart/
   "Übergeben an" entfallen (kein Geld fließt) - intern `zahlungsart = 'N/A'`,
   wodurch diese Belege automatisch aus dem physischen Kassenbestand
-  herausfallen (Kasse/Dashboard filtern explizit auf `zahlungsart = 'BAR'`),
+  herausfallen (der Kassenbestand zählt nur `zahlungsart = 'BAR'`),
   aber wie ein normaler Vorschuss den Auszahlungsbetrag mindern. Der Beleg
   liegt in einem eigenen, privaten Storage-Bucket (`vorschuss-belege`,
   getrennt von `mitarbeiter-dokumente`, da kasse hier zusätzlich lesen/
@@ -1358,13 +1360,19 @@ Enthalten:
   `migration_2026-08-12_security_definer_views.sql`
 
 **Nicht enthalten** (siehe "Nächste Schritte"):
-- Finalisierte Auszahlungsliste/Lohnabrechnungs-Export
+- ~~Finalisierte Auszahlungsliste/Lohnabrechnungs-Export~~ - inzwischen
+  vorhanden (Auszahlungsbelege, SEPA-Dateien je Firma, Monatsdruck)
 - Rechtsverbindliche Prüfung der SV-Befreiung im Einzelfall - der
   SV-Fragebogen (siehe oben, OI-004) bildet unser Verständnis der
   allgemeinen Regel ab, ist aber keine steuerberaterlich geprüfte
   Rechtsauskunft
-- Druckvorlagen (Stundenzettel A5/A6 als PDF)
-- Migrations-Import aus der bestehenden Excel-Datei
+- Druckvorlagen (Stundenzettel A5/A6 als PDF) - Gruppenstundenzettel als
+  Druckansicht gibt es (bitte bestätigen, ob A5/A6-PDF noch gewünscht ist)
+- ~~Migrations-Import aus der bestehenden Excel-Datei~~ - inzwischen
+  vorhanden: `/personal-import`, HSC-Importe (`/personal-import-hsc`
+  Vertrieb, `/personal-import-hsc-lw` Landwirtschaft), Historie-Import
+  (`/personal-import-historie`), Dubletten zusammenführen
+  (`/personal-zusammenfuehren`)
 
 Diese Web-App weicht bewusst von ADR-002 aus dem beigelegten Fachkonzept
 ("nativer Windows-Client") ab - auf deinen Wunsch hin als Browser-Anwendung,
@@ -1382,13 +1390,17 @@ atomare Belegnummern).
 
 1. Auf supabase.com ein neues Projekt anlegen (Region z.B. Frankfurt).
 2. Im Supabase-Dashboard: SQL Editor → Inhalt von `supabase/schema.sql`
-   einfügen und ausführen.
+   einfügen und ausführen. **Achtung:** `schema.sql` ist NICHT auf dem
+   aktuellen Stand - danach alle `supabase/migration_*.sql` in
+   Dateinamen-Reihenfolge ausführen (bzw. einen aktuellen Dump der
+   Live-Datenbank verwenden).
 3. Unter Authentication → Users manuell die ersten Benutzer anlegen
    (E-Mail + Passwort). Für jeden Nutzer anschließend im Table Editor in
    der Tabelle `profiles` eine Zeile mit derselben `id` (siehe Auth →
-   Users → User UID), `full_name` und `role` anlegen
-   (`admin`, `hr`, `zeiterfassung`, `kasse`, `lohnabrechnung`, `pruefer`,
-   `management`, `erntewirtschaft` oder `hausmeister`). Danach laufen alle
+   Users → User UID), `full_name`, `role` (Hauptrolle) und `rollen`
+   anlegen (`admin`, `hr`, `zeiterfassung`, `kasse`, `lohnabrechnung`,
+   `pruefer`, `management`, `erntewirtschaft`, `hausmeister` oder `waage`;
+   `bereiche` Standard `{LW}`). Danach laufen alle
    weiteren Nutzer über die App: **Einstellungen → Nutzer & Rollen**
    (`/einstellungen/nutzer`, nur admin).
 4. Unter Project Settings → API: `Project URL` und `anon public key`
@@ -1496,14 +1508,15 @@ Lohnzeilen in einem DO-Block.
 | Rolle | Sichtbare Menüpunkte | Kernrechte |
 |---|---|---|
 | `admin` | Alle | Voller Zugriff auf alles, inkl. Einstellungen, Kassenprüfungen freigeben, Änderungsprotokoll (Seite "Protokoll") |
-| `hr` | Personal, Stundenerfassung, Suche, Lohn, Erntewirtschaft, Controlling, Vertrieb* | Personalstamm + Dokumente voll pflegen (inkl. SV-Nr./IBAN/Ausweiskopien), Sozialversicherung + Lohnsteuer erfassen, Personalplanung + Anreiseliste (Kandidaten, Schwarze Liste, Buskosten) verwalten, Stunden erfassen, Lohnübersicht/Vorschüsse nur ansehen (nicht bearbeiten), Prämien erfassen, Monatsabschluss sperren/öffnen; Vertrieb*: Stände + Touren pflegen |
-| `zeiterfassung` | Stundenerfassung, Suche, Erntewirtschaft (Prämien + Qualität) | Nur Stunden eintragen/ändern; sieht Personal nur mit eingeschränkten Feldern (keine SV-Nr./IBAN etc.); erfasst zusätzlich die Ausgabe von Arbeitskleidung (Stundenerfassung → Arbeitskleidung), Prämien (Kisten/Stunden je Tag) und die Schichtkontrollen (Erntewirtschaft → Qualität) |
-| `kasse` | Suche, Lohn, Kassenbuch | Vorschüsse erfassen/stornieren/korrigieren, Kassenbuch führen, Kassenprüfung durchführen |
-| `lohnabrechnung` | Suche, Lohn, Erntewirtschaft (Prämien lesen, Statistik), Vertrieb* (lesen) | Lohnübersicht ansehen **und bearbeiten** (Netto, Buskosten, Kautionen, "Jetzt Abrechnen"), **Vorschüsse erstellen/korrigieren**, Prämien ansehen |
-| `pruefer` | Suche, Lohn, Kassenbuch, Protokoll, Vertrieb (lesen) | Nur lesen, außer: Kassenprüfungen freigeben; einzige Nicht-Admin-Rolle mit Einsicht ins Änderungsprotokoll (Seite "Protokoll", seit 2026-11-24) |
+| `hr` | Start, Personal, Unterkunft, Fahrzeuge, Stundenerfassung, Suche, Lohn, Erntewirtschaft, Controlling, Vertrieb* | Personalstamm + Dokumente voll pflegen (inkl. SV-Nr./IBAN/Ausweiskopien), Sozialversicherung + Lohnsteuer erfassen, Personalplanung + Anreiseliste (Kandidaten, Schwarze Liste, Buskosten) verwalten, Stunden erfassen, Lohnübersicht/Vorschüsse nur ansehen (nicht bearbeiten), Prämien erfassen, Monatsabschluss sperren/öffnen; Vertrieb*: Stände + Touren pflegen |
+| `zeiterfassung` | Stundenerfassung, Suche, Erntewirtschaft (Prämien + Qualität), Einstellungen (nur Arbeitsgruppen) | Nur Stunden eintragen/ändern; sieht Personal nur mit eingeschränkten Feldern (keine SV-Nr./IBAN etc.); erfasst zusätzlich die Ausgabe von Arbeitskleidung (Stundenerfassung → Arbeitskleidung), Prämien (Kisten/Stunden je Tag) und die Schichtkontrollen (Erntewirtschaft → Qualität) |
+| `kasse` | Start, Suche, Lohn, Kassenbuch | Vorschüsse erfassen/stornieren/korrigieren, Kassenbuch führen, Kassenprüfung durchführen |
+| `lohnabrechnung` | Start, Suche, Lohn, Erntewirtschaft (Prämien lesen, Statistik), Vertrieb* (lesen) | Lohnübersicht ansehen **und bearbeiten** (Netto, Buskosten, Kautionen, "Jetzt Abrechnen"), **Vorschüsse erstellen/korrigieren**, Prämien ansehen |
+| `pruefer` | Start, Suche, Lohn, Kassenbuch, Protokoll, Vertrieb (lesen) | Nur lesen, außer: Kassenprüfungen freigeben; einzige Nicht-Admin-Rolle mit Einsicht ins Änderungsprotokoll (Seite "Protokoll", seit 2026-11-24) |
 | `management` | Start, Suche, Lohn, Kassenbuch, Erntewirtschaft, Controlling, Fahrzeuge, Vertrieb (lesen) | Überwiegend lesende/aggregierte Sicht; darf zusätzlich Stundenkonto-Guthaben "In Auszahlung umwandeln" (Vorgabe 2026-08-21) |
 | `erntewirtschaft` | Start, Suche, Erntewirtschaft (Prämien/Anbau/Statistik/Qualität), Unterkunft | Eigener Arbeitsbereich (Vorgabe 2026-08-09, seither erweitert): erfasst Prämien (wie zeiterfassung) und Schichtkontrollen (Qualität), sieht Statistik, pflegt die Anbauplanung, sieht Unterkunft (lesend), eigenes Tages-Dashboard; kein Zugriff auf Personal, Lohnübersicht, Kassenbuch, Controlling, Einstellungen |
 | `hausmeister` | Nur Unterkunft (Reparaturen) | Pflegt in der Unterkunft die laufende Arbeit (Vorgabe 2026-09-15); kein anderer Menüpunkt, auch keine Suche |
+| `waage` | Keiner (Startseite = Waagen-Kiosk) | Ausschließlich der Kiosk-Bildschirm an der Hofwaage (`/erntewirtschaft/waage/kiosk`) |
 
 \* Menüpunkt **Vertrieb** (Vertriebsplanung, `docs/vertriebsplanung-plan.md`)
 nur mit Bereich Vertrieb (`vt_darf()`, migration_2026-11-25c).
@@ -1524,7 +1537,8 @@ für `authenticated` ergänzen. Rechte-Test: `supabase/tests/rechte_test.sh`.
 Neuen Benutzer anlegen: Supabase-Dashboard → Authentication → Users →
 "Add user" (E-Mail + Passwort) → User UID kopieren → in der App unter
 **Einstellungen → Nutzer & Rollen** "Nutzer hinzufügen" (UID + Name +
-Rolle). Rolle/Name/Aktiv-Status später ebenfalls dort.
+Rollen + Bereiche). Rollen, Hauptrolle, Bereiche, Name und Aktiv-Status
+später ebenfalls dort.
 
 ## 2. Lokale Konfiguration
 
@@ -1589,16 +1603,18 @@ nicht ohne dich bzw. eine Steuerberatung klären:
   Supabase Table Editor pflegbar. Bugfix: eine eingetragene "0" bei den
   Stunden zählt jetzt korrekt als Anwesenheitstag (Verpflegung/Unterkunft
   werden abgezogen), kein Eintrag zählt weiterhin nicht.
-- Migration bestehender Personal-/Saisondaten aus der `.xlsm`-Datei in
-  dieses Schema (aktuell nicht automatisiert).
+- ~~Migration bestehender Personal-/Saisondaten aus der `.xlsm`-Datei~~ -
+  erledigt über die Import-Seiten (siehe "Nicht enthalten" oben).
 - Druckvorlagen für Stundenzettel (A5/A6) als PDF-Erzeugung.
 - OI-010 (Datenschutz/Hosting): Alle personenbezogenen Daten (inkl.
   Mitarbeiter-Dokumente wie Hochzeitsurkunde/Ausweiskopie) liegen
   ausschließlich bei Supabase (Datenbank + privater Storage-Bucket).
   GitHub enthält nur Code, keine Personendaten. Vercel liefert nur die
-  App aus - es gibt keine serverseitigen API-Routen, der Browser spricht
-  bei jeder Aktion direkt mit Supabase, sensible Inhalte laufen also
-  nicht über Vercel. Offen/zu prüfen: (1) Region des Supabase-Projekts
+  App aus - der Browser spricht bei jeder Aktion direkt mit Supabase.
+  Ausnahmen sind zwei Server-Routen: `app/api/firmenhandy-sync` (schreibt
+  Handynummer + Name in das eigene Nextcloud-Adressbuch) und
+  `app/api/pachtwesen-schlaege` (liest Schlagdaten aus Pachtwesen2026,
+  keine Personendaten). Offen/zu prüfen: (1) Region des Supabase-Projekts
   im Dashboard kontrollieren (Project Settings → General → Region) - für
   DSGVO-Konformität sollte das eine EU-Region sein; (2) Auftrags-
   verarbeitungsverträge (AVV) mit Supabase und Vercel abschließen.
@@ -1618,6 +1634,9 @@ nicht ohne dich bzw. eine Steuerberatung klären:
 
 - Frontend: Next.js (App Router) + Tailwind, React-Client-Komponenten
 - Backend/Datenbank: Supabase (Postgres + Auth + Realtime)
-- Autorisierung: Row Level Security in Postgres, siehe `supabase/schema.sql`
+- Autorisierung: Row Level Security in Postgres - maßgeblich sind die
+  Migrationen (insbesondere `migration_2026-11-24f_mehrfachrollen.sql` und
+  `migration_2026-11-24h_geschaeftsbereich.sql`); `supabase/schema.sql` ist
+  nicht aktuell
 - Live-Sync: Supabase Realtime Channels (`postgres_changes`) in
   `app/erfassung/page.tsx`

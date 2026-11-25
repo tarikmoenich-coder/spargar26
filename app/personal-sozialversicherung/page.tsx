@@ -102,7 +102,7 @@ export default function SozialversicherungPage() {
       { data: pr },
       { data: abschnitte },
       { data: herkunftData },
-      { data: chain },
+      chain,
     ] = await Promise.all([
       supabase
         .from("sv_fragebogen_auswertung")
@@ -118,13 +118,21 @@ export default function SozialversicherungPage() {
         .select("*")
         .eq("saison_jahr", jahr),
       supabase.from("herkuenfte").select("*").order("reihenfolge"),
-      supabase.from("employee_status_chain").select("*"),
+      // Eine Zeile je Person (über 4000) - seitenweise, sonst fehlt die
+      // Status-Kette bei allen außer zufälligen 1000.
+      ladeAlleSeiten<EmployeeStatusChain>((von, bis) =>
+        supabase
+          .from("employee_status_chain")
+          .select("*")
+          .order("employee_id")
+          .range(von, bis)
+      ),
     ]);
     setSvAbschnitte((abschnitte as SvAbschnitt[]) ?? []);
     setEmployees(emps);
     setHerkuenfte((herkunftData as Herkunft[]) ?? []);
     const mapChain: Record<string, EmployeeStatusChain> = {};
-    ((chain as EmployeeStatusChain[]) ?? []).forEach((c) => {
+    chain.forEach((c) => {
       mapChain[c.employee_id] = c;
     });
     setStatusChain(mapChain);
@@ -175,6 +183,8 @@ export default function SozialversicherungPage() {
           Auswertung ist eine Einschätzung nach der allgemeinen
           Berufsmäßigkeits-Regel, keine steuerberaterlich geprüfte
           Rechtsauskunft - als Warnung gedacht, keine automatische Sperre.
+          Gilt für die Saisonkräfte der Landwirtschaft; Minijob und
+          Kurzfristig (Vertrieb) werden hier noch nicht gesondert geprüft.
         </p>
       </div>
 

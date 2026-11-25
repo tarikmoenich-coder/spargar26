@@ -126,7 +126,7 @@ export default function AnbauErdbeerenPage() {
   async function load() {
     setLoading(true);
     const supabase = getSupabaseClient();
-    const [{ data: fData }, { data: uData }] = await Promise.all([
+    const [{ data: fData, error: fError }, { data: uData, error: uError }] = await Promise.all([
       supabase
         .from("feld")
         .select("*")
@@ -140,6 +140,7 @@ export default function AnbauErdbeerenPage() {
         .eq("kultur", "erdbeeren")
         .order("feld_bezeichnung"),
     ]);
+    if (fError || uError) setFehler(`Konnte nicht laden: ${(fError ?? uError)!.message}`);
     setFelder((fData as Feld[]) ?? []);
     const ueb = (uData as FeldAnbauUebersicht[]) ?? [];
     setUebersicht(ueb);
@@ -404,7 +405,8 @@ export default function AnbauErdbeerenPage() {
   async function zeileLoeschen(id: number) {
     if (!window.confirm("Diese Bepflanzung wirklich entfernen?")) return;
     const supabase = getSupabaseClient();
-    await supabase.from("feld_anbau_abschnitt").delete().eq("id", id);
+    const { error } = await supabase.from("feld_anbau_abschnitt").delete().eq("id", id);
+    if (error) setFehler(error.message);
     load();
   }
 

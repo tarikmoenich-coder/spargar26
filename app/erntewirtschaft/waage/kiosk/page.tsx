@@ -14,12 +14,10 @@
 // Tabelle/Abfrage nötig.
 //
 // Mitarbeiter/Feld sind NUR bekannt, wenn vorher an der Erntemaschine die
-// Kiste gescannt wurde (Badge -> Feld per GPS) - das Scan-Modul ist am
-// Pilotgerät bereits produktiv im Einsatz (Praxistest bestanden, siehe
-// docs/erntewirtschaft-plan.md "Praxistest bestanden 2026-10-22"), die
-// Scanner für den restlichen Rollout sind bereits bestellt. Fehlt die
-// Zuordnung trotzdem (z.B. Testscans direkt an der Waage ohne vorherigen
-// Maschinen-Scan, oder eine Kiste außerhalb des Pilotbetriebs), legt der
+// Kiste gescannt wurde (Badge -> Feld per GPS) - End-to-End am Prototyp
+// getestet (docs/erntewirtschaft-plan.md, Stand 2026-11-05: Prototyp beim
+// Leiterplattenhersteller für den Serientyp). Fehlt die Zuordnung (z.B.
+// Scans direkt an der Waage ohne vorherigen Maschinen-Scan), legt der
 // Processor einen "ungeklaert"-Datensatz an statt zu blockieren, siehe
 // migration_2026-10-20_erntewirtschaft_kisten_zyklus.sql - diese Seite
 // zeigt dann nur Gewicht+Tara.
@@ -321,7 +319,6 @@ export default function WaagenKioskPage() {
         "postgres_changes",
         { event: "INSERT", schema: "public", table: "ernte_kiste_zyklus" },
         (payload) => {
-          console.log("Realtime-Ereignis INSERT:", payload); // temporäre Diagnose
           void ladeZeile((payload.new as { id: number }).id);
           void ladeZaehler();
         },
@@ -330,17 +327,16 @@ export default function WaagenKioskPage() {
         "postgres_changes",
         { event: "UPDATE", schema: "public", table: "ernte_kiste_zyklus" },
         (payload) => {
-          console.log("Realtime-Ereignis UPDATE:", payload); // temporäre Diagnose
           void ladeZeile((payload.new as { id: number }).id);
           void ladeZaehler();
         },
       )
       .subscribe((status, err) => {
-        // Temporäre Diagnose (Nutzer-Meldung 2026-11-05: "keine Kiste nach
-        // SQL-Insert, kein WebSocket im Netzwerk-Tab sichtbar") - zeigt den
-        // tatsächlichen Verbindungsstatus/-fehler des Realtime-Abos in der
-        // Konsole. Kann nach Behebung wieder entfernt werden.
-        console.log("Realtime-Status (ernte-kiosk-wiegung):", status, err);
+        // Nur echte Verbindungsfehler melden (früher temporäre Diagnose-
+        // Ausgaben für jedes Ereignis, 2026-11-05).
+        if (status === "CHANNEL_ERROR" || status === "TIMED_OUT") {
+          console.warn("Realtime-Abo ernte-kiosk-wiegung:", status, err);
+        }
       });
 
     return () => {

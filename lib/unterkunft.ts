@@ -4,6 +4,7 @@
 // gemeinsames Portal heben lässt - siehe docs/unterkunft-plan.md.
 
 import type { UnterkunftZimmerArt } from "./types";
+import { datumPlusTageIso, heuteLokalIso, lokalIsoPlusTage } from "./datum";
 
 // Anzeigename eines Raums: Schlafzimmer über ihre Nummer, Gemeinschaftsräume
 // nur über den Typ (Küche, Bad/WC, …) - die interne Durchnummerierung
@@ -108,9 +109,10 @@ export function fotoStoragePfad(zimmerId: number, vorgangId: string): string {
   return `${zimmerId}/${vorgangId}/${zufall}.jpg`;
 }
 
-// "YYYY-MM-DD" von heute - für <input type="date"> und Belegungs-Vergleiche.
+// "YYYY-MM-DD" von heute (Ortszeit) - für <input type="date"> und
+// Belegungs-Vergleiche.
 export function heuteIso(): string {
-  return new Date().toISOString().slice(0, 10);
+  return heuteLokalIso();
 }
 
 // "YYYY-MM-DD" von gestern - Standardvorschlag für das Auszugsdatum
@@ -120,9 +122,7 @@ export function heuteIso(): string {
 // zeigen. Gestern als Vorschlag macht das Zimmer sofort (ab heute) frei -
 // bewusst zulasten der exakten Uhrzeit, dafür ohne Zeitstempel-Umbau.
 export function gesternIso(): string {
-  const d = new Date();
-  d.setDate(d.getDate() - 1);
-  return d.toISOString().slice(0, 10);
+  return lokalIsoPlusTage(-1);
 }
 
 // Läuft die Belegung an diesem Stichtag (Standard: heute)?
@@ -202,10 +202,10 @@ function nurDatum(iso: string): string {
   return iso.slice(0, 10);
 }
 
+// Reines Kalenderdatum + n Tage (früher lokale Mitternacht + toISOString -
+// lieferte in Deutschland den Vortag, Fristen lagen einen Tag zu früh).
 function datumPlusTage(isoDatum: string, n: number): string {
-  const d = new Date(`${nurDatum(isoDatum)}T00:00:00`);
-  d.setDate(d.getDate() + n);
-  return d.toISOString().slice(0, 10);
+  return datumPlusTageIso(nurDatum(isoDatum), n);
 }
 
 // Nächster spätester Kontrolltermin + Ampel eines Raums. Berücksichtigt den
@@ -224,7 +224,7 @@ export function naechsteKontrolle(
   },
   jetzt: Date = new Date()
 ): { frist: string | null; ampel: KontrollAmpel } {
-  const heute = jetzt.toISOString().slice(0, 10);
+  const heute = lokalIsoPlusTage(0, jetzt);
   const letzte = input.letzteKontrolleAm
     ? nurDatum(input.letzteKontrolleAm)
     : null;

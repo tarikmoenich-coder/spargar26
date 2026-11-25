@@ -119,6 +119,8 @@ export default function ErntewirtschaftStammdatenPage() {
       supabase.from("ernte_waage").select("*").order("name"),
       supabase.from("ernte_konfig").select("*").order("schluessel"),
     ]);
+    const ladeFehler = m.error ?? w.error ?? k.error;
+    if (ladeFehler) setFehler(`Konnte nicht laden: ${ladeFehler.message}`);
     setMaschinen((m.data as ErnteMaschine[]) ?? []);
     setWaagen((w.data as ErnteWaage[]) ?? []);
     setKonfig((k.data as ErnteKonfig[]) ?? []);
@@ -583,6 +585,12 @@ export default function ErntewirtschaftStammdatenPage() {
                       setMaschineForm({ ...maschineForm, max_personen: e.target.value })
                     }
                   />
+                  {Number(maschineForm.max_personen) > 1 && (
+                    <span className="mt-1 block text-xs text-amber-700">
+                      Gruppenmaschinen (mehr als 1 Person) werden vom Processor noch nicht
+                      unterstützt - Kisten gehen an die zuletzt angemeldete Person.
+                    </span>
+                  )}
                 </label>
                 <label className="text-sm sm:col-span-2">
                   Notiz

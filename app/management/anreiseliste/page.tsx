@@ -15,15 +15,17 @@ export default function ControllingAnreiselistePage() {
     AnreiselisteOffenArbeitend[]
   >([]);
   const [loadingOffen, setLoadingOffen] = useState(true);
+  const [fehler, setFehler] = useState<string | null>(null);
 
   useEffect(() => {
     async function ladeOffenArbeitend() {
       setLoadingOffen(true);
       const supabase = getSupabaseClient();
-      const { data } = await supabase
+      const { data, error } = await supabase
         .from("anreiseliste_offen_arbeitend")
         .select("*")
         .order("tage_seit_arbeitsbeginn", { ascending: false });
+      setFehler(error?.message ?? null);
       // Nur Personen mit mindestens einem offenen Punkt - die Sicht liefert
       // bewusst alle Anreiselisten-Personen mit Stunden.
       setOffenArbeitend(
@@ -51,6 +53,10 @@ export default function ControllingAnreiselistePage() {
           {loadingOffen ? "…" : offenArbeitend.length}
         </span>
       </p>
+
+      {fehler && (
+        <p className="text-sm text-beere-600">⚠ Konnte nicht geladen werden: {fehler}</p>
+      )}
 
       {loadingOffen ? (
         <p className="text-neutral-500">Lädt…</p>

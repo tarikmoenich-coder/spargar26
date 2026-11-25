@@ -1,14 +1,94 @@
 # Unterkunft / Zimmerverwaltung — Umsetzungsplan
 
-Stand: 2026-08-29. Arbeitsdokument, damit der Planungsstand einen Konsolen-Neustart
-übersteht. Kann gelöscht werden, sobald das Modul steht (oder als ADR-Notiz bleiben).
+Stand: 2026-11-25. Das Modul ist gebaut und auf `main` im Einsatz. Der
+Abschnitt „Aktueller Stand“ gibt den heutigen Stand wieder; alles danach ist
+die historische Planung von Ende August/Anfang September 2026 (überholte
+Stellen sind mit „→ ersetzt/erledigt“ markiert).
+
+## Aktueller Stand (2026-11-25)
+
+Seiten (Reiter `components/UnterkunftTabs.tsx`):
+
+| Reiter | Route | Inhalt |
+|---|---|---|
+| Kontrollplan | `/unterkunft/kontrollplan` | Baum Gebäude → Wohneinheit → Raum, letzte Kontrolle, offene Mängel, späteste nächste Kontrolle, „Heute zu erledigen“ |
+| Immobilien | `/unterkunft` | Gebäude → Wohneinheit-Karten → Zimmer (Grundriss oder Liste), Einzug/Auszug/Umzug, Gruppen-Einzug, Mangel melden, Sperren |
+| Belegungsplan | `/unterkunft/belegungsplan` | je Zimmer Bewohner heute, freie Plätze (nur lesend) |
+| Herkunfts-Planung | `/unterkunft/planung` | Soll je Herkunft (= Soll der Personalplanung) + reservierte Wohneinheiten |
+| Belegung | `/unterkunft/belegung` | Personen ohne Bleibe einer Wohneinheit „geplant“ zuordnen, fest belegt, Direkt belegen |
+| Übergabe / Abnahme | `/unterkunft/uebergabe` | Einzug/Auszug mit Checkliste je Raumtyp, Fotos, Schlüssel, Mängel-Übernahme |
+| Auszüge | `/unterkunft/auszuege` | nur sichtbar, wenn offen: laufende Belegung + ausgezahlt oder inaktiv (View `unterkunft_auszug_offen`) |
+| Zwischenkontrolle | `/unterkunft/kontrolle` | Zimmer oder ganze Wohneinheit kontrollieren |
+| Mängel | `/unterkunft/maengel` | Mängelliste (Status, Schwere, Kategorie, Fotos) |
+| Reparaturen | `/unterkunft/reparaturen` | Board für Mängel mit `kategorie='reparatur'`, Verursacher, Kosten, Belastung (`unterkunft_belastung`, Bestätigung unter /vorschuesse) |
+| Stammdaten | `/unterkunft/stammdaten` | Gebäude, Wohneinheiten, Räume, Checkliste je Raumtyp, Kontrollzeitraum je Raumtyp |
+
+Datenmodell heute (Live-Stand, `supabase/schema.sql` ist nicht aktuell):
+`unterkunft_gebaeude`, `unterkunft_wohneinheit` (statt `unterkunft_etage`),
+`unterkunft_zimmer` (mit `art` = Raumtyp zimmer/kueche/bad/wc/flur/
+gemeinschaft, `bettenzahl` als Kapazität, `gesperrt`/`sperr_grund`,
+`plan_x/y/w/h`), `unterkunft_belegung` (zimmergenau, KEINE Betten mehr seit
+Migration 2026-09-04), `unterkunft_zuordnung` (Status `geplant`/`erledigt`/
+`storniert`, seit 2026-09-17), `unterkunft_vorgang` (+ `schluessel_ausgegeben`/
+`schluessel_zurueck`), `unterkunft_vorgang_position`, `unterkunft_foto`,
+`unterkunft_mangel` (+ `kategorie`, `verursachung`, `kosten_geschaetzt`,
+`faellig_am`, `verursacher_employee_ids`), `unterkunft_belastung`,
+`unterkunft_checkliste_vorlage` (+ `art`), `unterkunft_kontroll_intervall`,
+`unterkunft_herkunft_plan`, `unterkunft_herkunft_kontingent`. Views:
+`unterkunft_zimmer_uebersicht`, `unterkunft_wohneinheit_uebersicht`,
+`unterkunft_belegung_aktuell`, `unterkunft_belegung_person`,
+`unterkunft_zuordnung_offen`, `unterkunft_person_offen`,
+`unterkunft_auszug_offen`, `unterkunft_herkunft_abgleich`.
+
+Migrationen (alle im Live-Schema vorhanden): 08-29 Grundmodul, 08-30
+Hausmeister-Rolle + Grundriss, 08-31 Wohneinheit/Zuordnung, 09-01
+Gemeinschaftsraum, 09-02 Raumtypen, 09-03 Grundriss sperren, 09-04 Zimmer
+statt Bett, 09-05 Mangel-Fotos, 09-06 Belegung-Person-Name, 09-07 Auszug
+schließt Belegung, 09-08 Kontrollintervall je Raumtyp, 09-09 Schlüssel, 09-10
+Raumtyp WC, 09-11 Checkliste je Raumtyp, 09-12 Reparaturen, 09-14 Belastung,
+09-16 offene Auszüge, 09-17 Zuordnung „geplant“, 09-18 Herkunfts-Planung.
+
+Rollen (seit 2026-11-24 mehrere je Nutzer, `profiles.rollen`, Prüfung über
+`hat_rolle()` / `hatRolle()`; Menü über `lib/rollen.ts` MENUE_RECHTE):
+- admin/hr: alles; Grundriss platzieren nur admin.
+- erntewirtschaft: nur lesen.
+- hausmeister (Vorgabe 2026-09-15, `nurHausmeisterSicht()`): Reiter
+  Immobilien, Belegungsplan, Herkunfts-Planung (nur lesend), Auszüge,
+  Reparaturen; darf Ein-/Auszüge (Übergabe), Umzüge und Mängel/Reparaturen.
+  KEINE Zwischenkontrollen/Kontrollplan (Weiterleitung zu Reparaturen),
+  keine Stammdaten.
+
+Kontrolllogik (`lib/unterkunft.ts` `naechsteKontrolle`): Zyklus je Raumtyp
+aus `unterkunft_kontroll_intervall` (Fallback 75/90 Tage), offener Mangel →
+Kontrolle binnen 3 Tagen, bei Kontrolle nicht behoben → binnen 1 Tag,
+2× in Folge „alles in Ordnung“ → 14-Tage-Takt; Flure nicht kontrollpflichtig;
+unbelegte Zimmer nicht fällig.
+
+Bereiche (seit 2026-11-24): Bewohner sollen bereichsübergreifend sichtbar
+sein (gemeinsame Häuser). Achtung (bitte prüfen): die Views mit Namen
+(`unterkunft_belegung_aktuell` u.a.) verbinden per inner join mit
+`employees` und unterliegen damit der Policy `bereich_grenze` - Nutzer mit
+nur einem Bereich sehen Bewohner des anderen Bereichs nicht, die Zählung
+belegt/frei zählt sie aber mit. Lösung braucht eine Migration.
+
+Offen:
+- [ ] Dashboard-Kachel (offene Mängel / fällige Kontrollen) - nicht gebaut.
+- [ ] Freitext-Spalte `unterkunft_zimmer.etage` per Migration entfernen
+      (live noch vorhanden).
+- [ ] Bewohnernamen bereichsübergreifend (siehe oben).
+- [ ] optional: Übergabe als Bottom-Sheet im Wohneinheit-Detail.
+- [ ] Hausmeister-Benutzer: Rolle `hausmeister` in der Nutzerverwaltung
+      (`profiles.rollen`) vergeben (bitte bestätigen, ob schon geschehen).
+
+---
+
+# Historische Planung (2026-08-29 bis 2026-09-01)
 
 ## Fortschritt (2026-08-29)
 
 - [x] Migration `supabase/migration_2026-08-29_unterkunft.sql` geschrieben
       (9 Tabellen, GIST-EXCLUDE gegen Doppelbelegung, Schutz-/Audit-/updated_at-
       Trigger, 2 Sichten, RLS admin+hr, Bucket `unterkunft-fotos`, Checklisten-Seed).
-      **Noch nicht in der Supabase-Konsole ausgeführt.**
 - [x] `lib/types.ts` um Unterkunft-Interfaces + Label-Maps erweitert
 - [x] `lib/auditLog.ts` BEREICH_LABELS ergänzt
 - [x] `lib/unterkunft.ts` angelegt (Bucket-Konstante, `bildVerkleinern`,
@@ -33,17 +113,12 @@ Stand: 2026-08-29. Arbeitsdokument, damit der Planungsstand einen Konsolen-Neust
       Worker wegen README-bfcache-Bug) — `public/manifest.webmanifest`,
       `public/icon-{192,512}.png`, `public/apple-touch-icon.png`,
       `scripts/gen-pwa-icons.mjs`, `app/layout.tsx` (metadata + viewport)
-- [ ] Smoke-Test vom Handy über die **Vercel-Preview-URL** des Branch
-      `unterkunft-modul` (alles ist auf Vercel deployed): Login als admin/hr →
-      Unterkunft → Stammdaten → Belegung → Übergabe mit Foto; „Zum
-      Startbildschirm hinzufügen" testen
-- [ ] optional Dashboard-Kachel (offene Mängel / fällige Kontrollen)
+- [x] Smoke-Test / Praxiseinsatz → erledigt, Modul läuft auf `main`
+- [ ] optional Dashboard-Kachel (offene Mängel / fällige Kontrollen) → weiter offen
 - [ ] optional: README.md-Abschnitt im Nutzer-Stil
-- [ ] PR `unterkunft-modul` → `main` mergen (danach Prod-URL installierbar)
+- [x] PR `unterkunft-modul` → `main` gemerged
 
-### Status: DB-Migration durch, Modul einsatzbereit
-Code auf Branch `unterkunft-modul` (Commit b74c19e), Migration in Supabase
-ausgeführt. Nächster Schritt: `npm run dev` und Smoke-Test.
+### Status (historisch): → erledigt, Modul ist auf `main`.
 
 ## Erweiterung (2026-08-30): Grundriss + Rolle „hausmeister"
 
@@ -60,10 +135,10 @@ Entscheidungen (2026-08-30):
 | `erntewirtschaft` | nur Lesezugriff (kein RLS-Change nötig, Menüpunkt sichtbar) |
 | `hausmeister` abgrenzen | Nav-Ausblendung reicht (kein URL-Guard) |
 | `hausmeister` + Suche | ja, inkl. neuem Unterkunfts-Block in der Suche |
-| `hausmeister` + Stammdaten | nein – nur Belegung/Übergabe/Kontrolle/Mängel/Fotos |
+| `hausmeister` + Stammdaten | nein – nur Belegung/Übergabe/Kontrolle/Mängel/Fotos (→ ersetzt durch Vorgabe 2026-09-15: keine Kontrollen mehr, siehe „Aktueller Stand“) |
 | Grundriss-Variante | Vektor-Editor auf Raster (SVG), kein Hintergrundbild |
 | Etage | eigenes Stammdatum `unterkunft_etage` (Bestandsdaten umgezogen) |
-| Kontroll-Ampel | ja; Schwellen 75/90 Tage als Konstante, Kontrollmuster noch offen |
+| Kontroll-Ampel | ja; Schwellen 75/90 Tage als Konstante (→ ersetzt: je Raumtyp in `unterkunft_kontroll_intervall`, Migration 09-08) |
 | Grundriss = Einstieg | ja; alte Tabelle → `/unterkunft/belegungsplan` |
 | Zimmer platzieren | nur `admin` (UI-seitig) |
 
@@ -82,6 +157,7 @@ Umgesetzt:
       `etage_id`/`plan_*` erweitert
 - [x] `lib/unterkunft.ts`: `GRUNDRISS_ZELLE`, `kontrollAmpel()` + Ampel-Labels/Farben
 - [x] `components/Nav.tsx`: Unterkunft-Rollen = admin/hr/erntewirtschaft/hausmeister
+      (→ heute in `lib/rollen.ts` MENUE_RECHTE)
 - [x] `components/UnterkunftTabs.tsx`: Tabs „Grundriss" + „Belegungsplan"
 - [x] `app/unterkunft/page.tsx`: neuer Grundriss (SVG-Canvas, Zimmer-Panel,
       Bearbeiten-Modus mit Ziehen/Pfeiltasten/Größe – nur admin)
@@ -89,7 +165,8 @@ Umgesetzt:
 - [x] `app/unterkunft/stammdaten/page.tsx`: Etagen-Verwaltung je Gebäude,
       Zimmer-Anlage mit Etagen-Auswahl statt Freitext
 - [x] `app/unterkunft/{belegung,uebergabe,kontrolle,maengel}/page.tsx`:
-      `canEdit` um `hausmeister` erweitert
+      `canEdit` um `hausmeister` erweitert (→ Kontrolle seit 2026-09-15 wieder
+      nur admin/hr)
 - [x] `app/page.tsx` + `app/dashboard/page.tsx`: `hausmeister` → `/unterkunft`
 - [x] `app/suche/page.tsx`: Block „Unterkunft" (alle Belegungszeiträume der Person)
 - [x] `npx tsc --noEmit` sauber · `npx next build` grün
@@ -97,8 +174,10 @@ Umgesetzt:
 Offen (Stand 2026-08-30, teils überholt durch die Erweiterung 2026-08-31):
 - [x] Migrationen 2026-08-30 in Supabase ausgeführt, auf `main` gemerged
 - [x] `?zimmer=`-Deep-Link aus dem Grundriss (jetzt in Übergabe + Kontrolle)
-- [ ] `hausmeister`-Benutzer in Supabase anlegen (profiles.role = 'hausmeister')
-- [ ] Kontrollmuster festlegen → Schwellen in `lib/unterkunft.ts` anpassen
+- [ ] `hausmeister`-Benutzer anlegen → heute Rolle in `profiles.rollen` über
+      die Nutzerverwaltung (bitte bestätigen, ob erledigt)
+- [x] Kontrollmuster festlegen → erledigt (Migration 09-08 + Fristen in
+      `lib/unterkunft.ts` `naechsteKontrolle`)
 - [ ] später: Freitext-Spalte `unterkunft_zimmer.etage` per Migration entfernen
 
 ## Erweiterung (2026-08-31): Wohneinheit-Ebene + schwebende Belegung
@@ -111,17 +190,17 @@ Entscheidungen (2026-08-31):
 | Frage | Entscheidung |
 |---|---|
 | `unterkunft_etage` | durch `unterkunft_wohneinheit` **ersetzt** (Etage = Text-Label) |
-| Belegungs-Zustände | zwei Tabellen: `unterkunft_zuordnung` (schwebend) + `unterkunft_belegung` (fest) |
+| Belegungs-Zustände | zwei Tabellen: `unterkunft_zuordnung` (schwebend → seit 09-17 Status `geplant`) + `unterkunft_belegung` (fest) |
 | Wohneinheit-Übersicht | Karten/Liste, kein gezeichneter Gebäude-Grundriss |
 | „Belegung planen" (schwebend) | nur admin/hr; hausmeister nur Übergabe-Abschluss |
-| Schwebende Zuordnung | nur zimmergenau (Bett erst bei der Übergabe) |
+| Schwebende Zuordnung | nur zimmergenau (Bett erst bei der Übergabe) → ersetzt: Betten abgeschafft (09-04), Belegung ist zimmergenau |
 
 Umgesetzt:
 - [x] Migration `migration_2026-08-31_unterkunft_wohneinheit_zuordnung.sql`:
       Tabelle `unterkunft_wohneinheit` (+ `etage_label`, `reihenfolge`),
       `unterkunft_zimmer.wohneinheit_id` (Daten aus `unterkunft_etage` gezogen,
       dann `etage_id` + `unterkunft_etage` gedroppt); Tabelle
-      `unterkunft_zuordnung` (schwebend/erledigt/storniert, nur zimmergenau,
+      `unterkunft_zuordnung` (schwebend/erledigt/storniert → heute geplant/erledigt/storniert, nur zimmergenau,
       Unique-Index „eine offene je Person", Audit-Trigger); RLS (Zuordnung
       anlegen admin/hr, hausmeister nur Update auf erledigt/storniert).
       Sichten neu: `unterkunft_zimmer_uebersicht` (+ wohneinheit, + schwebend),
@@ -147,7 +226,7 @@ Umgesetzt:
       Tabelle; „Direkt belegen" als `<details>`-Notnagel. Nur admin/hr.
 - [x] `/unterkunft/uebergabe`: `?zimmer=` Vorwahl; für **Einzug** Personen-
       Auswahl (aus schwebenden Zuordnungen des Zimmers vorbelegt, + Namens-
-      suche), je Person Bett-Wahl; „Abschließen" legt je Person die
+      suche), je Person Bett-Wahl (→ entfällt seit 09-04); „Abschließen" legt je Person die
       `unterkunft_belegung` an und setzt die Zuordnung auf `erledigt`.
 - [x] `/unterkunft/kontrolle`: `?zimmer=` Vorwahl.
 - [x] Stammdaten: „Etagen"-Block → „Wohneinheiten" (Name + Etage-Label +
@@ -165,17 +244,14 @@ Umgesetzt:
   Stammdaten-Zimmerliste herausgefiltert (`art = 'zimmer'`).
 
 Offen:
-- [ ] **Migrationen ausführen**: `migration_2026-08-31_unterkunft_wohneinheit_zuordnung.sql`
-      **und** `migration_2026-09-01_unterkunft_gemeinschaftsraum.sql`
-      (beide je ein Zug, kein ALTER TYPE).
-- [ ] Smoke-Test: Wohneinheit + Zimmer anlegen → „Belegung planen"
-      (Anreiseliste → Wohneinheit schwebend) → Grundriss-Karte → Zimmer →
-      „Übergabe starten" → Person + Bett → Abschließen → wird „fest".
-- [ ] Zimmerkontrollen-Workflow: weiter offen, separat besprechen.
+- [x] **Migrationen ausführen** (08-31, 09-01) → erledigt (im Live-Schema).
+- [x] Smoke-Test Planung → Übergabe → fest → erledigt (Praxiseinsatz).
+- [x] Zimmerkontrollen-Workflow → gebaut (Kontrollplan, Kontrolle je Zimmer
+      oder ganzer Wohneinheit, Kontrollzeitraum je Raumtyp).
 - [ ] optional: Übergabe direkt als Bottom-Sheet im Wohneinheit-Detail.
 
-### Wiedereinstieg nach Konsolen-Neustart
-`claude --continue` in `~/projekte/spargar26`. Diese Datei ist die Quelle der Wahrheit.
+### Wiedereinstieg
+Maßgeblich ist der Abschnitt „Aktueller Stand“ oben.
 
 ## 1. Kontext & getroffene Entscheidungen
 
@@ -208,6 +284,11 @@ Entscheidungen aus der Abstimmung (2026-08-29):
 - Tabellenname ist `employees` (Typ `Employee`), nicht `mitarbeiter`.
 
 ## 3. Datenmodell (neue Migration, Prefix `unterkunft_`)
+
+> Historisch. → Ersetzt durch den Abschnitt „Aktueller Stand“: keine
+> `unterkunft_bett`/`bett_id` mehr (09-04), Views heißen
+> `unterkunft_zimmer_uebersicht` usw., RLS prüft heute über `hat_rolle()`
+> statt `current_role_name()`.
 
 - `unterkunft_gebaeude` — id, name, adresse, notiz, aktiv, erfasst_*, updated_*
 - `unterkunft_zimmer` — id, gebaeude_id FK, nummer, etage, bettenzahl, notiz, aktiv;
@@ -247,6 +328,8 @@ RLS:
 
 ## 4. Frontend
 
+> Historisch. → Aktuelle Seiten und Reiter siehe „Aktueller Stand“.
+
 Nav: neuer Punkt „Unterkunft" → `/unterkunft` (roles: admin, hr, + neue Rolle).
 Tabs-Komponente `components/UnterkunftTabs.tsx`:
 
@@ -281,6 +364,9 @@ Button „Erneut senden". `beforeunload`-Warnung bei offenen, nicht gespeicherte
   Vorschuss abgezogen; Rückzahlung nach Kontrolle läuft bar außerhalb der App).
   v1: Auszug-Vorgang dokumentiert Ergebnis + Mängel; **kein** automatischer Kautionsabzug.
   Optional nur ein Doku-Feld „Kaution: einbehalten/erstattet" im Auszug.
+  → Ergänzt: Reparaturen mit Verursacher können als `unterkunft_belastung`
+  einer Person belastet werden (Migration 09-14, Bestätigung unter
+  /vorschuesse); die Auszüge-Liste zeigt, ob eine Kaution zurückzuzahlen ist.
 - Personenbezug über `employees` / `Employee`.
 
 ## 6. Reihenfolge der Umsetzung
@@ -299,8 +385,10 @@ Button „Erneut senden". `beforeunload`-Warnung bei offenen, nicht gespeicherte
 
 1. **Rolle:** v1 nur `admin` + `hr`. Kein neuer `user_role`-Wert. Eigene Rolle
    (`hausmeister`) später nachziehbar (dann getrennte enum-Migration).
+   → erledigt: Rolle `hausmeister` seit 08-30.
 2. **Belegung:** bettgenau — `unterkunft_bett` + Belegung je Bett + GIST-EXCLUDE
-   gegen Doppelbelegung (`btree_gist`).
+   gegen Doppelbelegung (`btree_gist`). → ersetzt: seit 09-04 zimmergenau,
+   `bettenzahl` ist die Kapazität (Überbuchung nur mit Hinweis).
 3. **Unterschrift:** v1 „Name + bestätigt" — Feld `unterschrift_name` + Haken
    „Zustand bestätigt" + Zeitstempel/Bearbeiter. Kein Canvas-Pad, kein
    `unterschrift_path` in v1.

@@ -23,6 +23,7 @@ import FahrzeugeTabs from "@/components/FahrzeugeTabs";
 import PageHeader from "@/components/PageHeader";
 
 import { hatRolle } from "@/lib/rollen";
+import { ladeAlleSeiten } from "@/lib/ladeAlle";
 // Foto client-seitig auf eine kleine Kante herunterrechnen und als JPEG-data-URL
 // zurückgeben. Reicht, um auf der Karte das Auto zum Kennzeichen zu erkennen.
 function fotoVerkleinern(
@@ -62,6 +63,7 @@ type EmpOpt = {
   personal_nr: string;
   name: string;
   vorname: string;
+  aktiv: boolean;
 };
 
 interface FahrzeugForm {
@@ -141,19 +143,21 @@ function FahrerZelle({
   const [offen, setOffen] = useState(false);
   const [suche, setSuche] = useState("");
   const [speichert, setSpeichert] = useState(false);
+  const [fehler, setFehler] = useState<string | null>(null);
 
   const aktuell = mitarbeiter.find((m) => m.id === fahrzeug.fahrer_employee_id);
 
   const treffer = useMemo(() => {
     const q = suche.trim().toLowerCase();
+    const aktive = mitarbeiter.filter((m) => m.aktiv);
     const liste = q
-      ? mitarbeiter.filter(
+      ? aktive.filter(
           (m) =>
             `${m.name} ${m.vorname}`.toLowerCase().includes(q) ||
             `${m.vorname} ${m.name}`.toLowerCase().includes(q) ||
             (m.personal_nr ?? "").toLowerCase().includes(q)
         )
-      : mitarbeiter;
+      : aktive;
     return liste.slice(0, 8);
   }, [suche, mitarbeiter]);
 
@@ -164,11 +168,14 @@ function FahrerZelle({
       .update({ fahrer_employee_id: id })
       .eq("id", fahrzeug.id);
     setSpeichert(false);
-    if (!error) {
-      setOffen(false);
-      setSuche("");
-      onGesetzt();
+    if (error) {
+      setFehler(error.message);
+      return;
     }
+    setFehler(null);
+    setOffen(false);
+    setSuche("");
+    onGesetzt();
   }
 
   if (!canEdit) {
@@ -217,6 +224,7 @@ function FahrerZelle({
           <p className="px-2 py-1 text-sm text-neutral-400">nichts gefunden</p>
         )}
       </div>
+      {fehler && <p className="text-xs text-beere-600">{fehler}</p>}
       <div className="flex gap-3 text-xs">
         {fahrzeug.fahrer_employee_id && (
           <button
@@ -277,16 +285,43 @@ export default function FahrzeugeStammdatenPage() {
         .select("*")
         .order("zuletzt_gesehen", { ascending: false, nullsFirst: false }),
       supabase.from("fahrzeug_hof_status").select("*"),
-      supabase
-        .from("employees")
-        .select("id, personal_nr, name, vorname")
-        .eq("aktiv", true)
-        .order("name"),
+      // Aktive Personen beider Bereiche - in der Saison > 1000, daher
+      // seitenweise (PostgREST-Grenze je Abfrage).
+      ladeAlleSeiten<EmpOpt>((von, bis) =>
+        supabase
+          .from("employees")
+          .select("id, personal_nr, name, vorname, aktiv")
+          .eq("aktiv", true)
+          .order("name")
+          .order("id")
+          .range(von, bis)
+      ),
     ]);
-    setFahrzeuge((f.data as Fahrzeug[]) ?? []);
+    const fz = (f.data as Fahrzeug[]) ?? [];
+    // Eingetragene Fahrer, die inzwischen inaktiv sind, zusätzlich laden -
+    // sonst sähe die Liste aus, als wäre kein Fahrer gesetzt.
+    const bekannt = new Set(m.map((x) => x.id));
+    const fehlend = [
+      ...new Set(
+        fz
+          .map((x) => x.fahrer_employee_id)
+          .filter((id): id is string => !!id && !bekannt.has(id))
+      ),
+    ];
+    let inaktiveFahrer: EmpOpt[] = [];
+    if (fehlend.length) {
+      const { data } = await supabase
+        .from("employees")
+        .select("id, personal_nr, name, vorname, aktiv")
+        .in("id", fehlend);
+      inaktiveFahrer = (data as EmpOpt[]) ?? [];
+    }
+    const ladeFehler = f.error ?? t.error ?? h.error;
+    if (ladeFehler) setFehler(`Laden fehlgeschlagen: ${ladeFehler.message}`);
+    setFahrzeuge(fz);
     setTracker((t.data as FahrzeugTracker[]) ?? []);
     setHofStatus((h.data as FahrzeugHofStatus[]) ?? []);
-    setMitarbeiter((m.data as EmpOpt[]) ?? []);
+    setMitarbeiter([...m, ...inaktiveFahrer]);
     setLoading(false);
   }, []);
 
@@ -699,11 +734,14 @@ export default function FahrzeugeStammdatenPage() {
                     }
                   >
                     <option value="">—</option>
-                    {mitarbeiter.map((m) => (
-                      <option key={m.id} value={m.id}>
-                        {m.name}, {m.vorname} ({m.personal_nr})
-                      </option>
-                    ))}
+                    {mitarbeiter
+                      .filter((m) => m.aktiv || m.id === form.fahrer_employee_id)
+                      .map((m) => (
+                        <option key={m.id} value={m.id}>
+                          {m.name}, {m.vorname} ({m.personal_nr})
+                          {m.aktiv ? "" : " – inaktiv"}
+                        </option>
+                      ))}
                   </select>
                 </label>
                 <label className="text-sm">

@@ -234,7 +234,7 @@ export default function PersonalplanungZeitstrahl({
       ? herkunftFarbe(herkunftListe, h === OHNE ? null : h)
       : bereichFarbe(einsatzbereiche, h === OHNE ? null : h);
   const label = (h: string) =>
-    h === OHNE ? (farbModus === "herkunft" ? "ohne Herkunft" : "ohne Bereich") : h;
+    h === OHNE ? (farbModus === "herkunft" ? "ohne Herkunft" : "ohne Einsatzbereich") : h;
   // x-Position eines Datums (Tage seit dem ersten Montag, je Woche eine Spalte)
   const xVon = (iso: string) => {
     if (wochen.length === 0) return links;

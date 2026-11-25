@@ -27,6 +27,7 @@ import {
 } from "@/lib/types";
 
 import { hatRolle } from "@/lib/rollen";
+import { ladeAlleSeiten } from "@/lib/ladeAlle";
 export default function UnterkunftMaengelPage() {
   const { profile } = useProfile();
   const canEdit =
@@ -78,20 +79,31 @@ export default function UnterkunftMaengelPage() {
       supabase.from("unterkunft_gebaeude").select("*").order("name"),
       supabase.from("unterkunft_wohneinheit").select("id, name").order("name"),
       supabase.from("unterkunft_zimmer").select("*").order("nummer"),
-      supabase
-        .from("unterkunft_mangel")
-        .select("*")
-        .order("gemeldet_am", { ascending: false }),
-      supabase
-        .from("unterkunft_belegung_person")
-        .select("*")
-        .order("von", { ascending: false }),
+      // Wachsende Listen seitenweise (PostgREST-Grenze 1000 je Abfrage).
+      ladeAlleSeiten<UnterkunftMangel>((von, bis) =>
+        supabase
+          .from("unterkunft_mangel")
+          .select("*")
+          .order("gemeldet_am", { ascending: false })
+          .order("id")
+          .range(von, bis)
+      ),
+      ladeAlleSeiten<UnterkunftBelegungPerson>((von, bis) =>
+        supabase
+          .from("unterkunft_belegung_person")
+          .select("*")
+          .order("von", { ascending: false })
+          .order("id")
+          .range(von, bis)
+      ),
     ]);
+    const ladeFehler = g.error ?? w.error ?? z.error;
+    if (ladeFehler) setFehler(`Laden fehlgeschlagen: ${ladeFehler.message}`);
     setGebaeude((g.data as UnterkunftGebaeude[]) ?? []);
     setWohneinheiten((w.data as { id: number; name: string }[]) ?? []);
     setZimmer((z.data as UnterkunftZimmer[]) ?? []);
-    setMaengel((m.data as UnterkunftMangel[]) ?? []);
-    setBelegungen((bp.data as UnterkunftBelegungPerson[]) ?? []);
+    setMaengel(m);
+    setBelegungen(bp);
     setLoading(false);
   }, []);
 

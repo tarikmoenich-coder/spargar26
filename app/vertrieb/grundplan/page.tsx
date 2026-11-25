@@ -36,6 +36,7 @@ import {
   type PlanHinweis,
   type TourMitStaenden,
 } from "@/lib/vertrieb";
+import { ladeAlleSeiten } from "@/lib/ladeAlle";
 
 type Person = { id: string; personal_nr: string; name: string; vorname: string; fuehrerschein_b: boolean | null };
 type Feld = { stand_id: number; wochentag: number; halbtag: VtHalbtag };
@@ -67,8 +68,18 @@ export default function VertriebGrundplanPage() {
   const load = useCallback(async () => {
     const sb = getSupabaseClient();
     const [p, fs, pl, v, s, z, t, ts, g] = await Promise.all([
-      sb.from("employees").select("id, personal_nr, name, vorname, fuehrerschein_b").eq("bereich", "VT"),
-      sb.from("employee_fuehrerschein_kategorien").select("*"),
+      // seitenweise - PostgREST liefert je Abfrage höchstens 1000 Zeilen
+      ladeAlleSeiten<Person>((von, bis) =>
+        sb
+          .from("employees")
+          .select("id, personal_nr, name, vorname, fuehrerschein_b")
+          .eq("bereich", "VT")
+          .order("id")
+          .range(von, bis)
+      ),
+      ladeAlleSeiten<FuehrerscheinEintrag>((von, bis) =>
+        sb.from("employee_fuehrerschein_kategorien").select("*").order("employee_id").range(von, bis)
+      ),
       sb.from("vt_verkaeufer_saison").select("*").eq("saison_jahr", saison),
       sb.from("vt_verfuegbarkeit").select("*").eq("saison_jahr", saison),
       sb.from("vt_stand").select("*").order("nummer"),
@@ -77,10 +88,10 @@ export default function VertriebGrundplanPage() {
       sb.from("vt_tour_stand").select("*"),
       sb.from("vt_grundplan").select("*").eq("saison_jahr", saison),
     ]);
-    const err = p.error ?? pl.error ?? v.error ?? s.error ?? z.error ?? t.error ?? ts.error ?? g.error;
+    const err = pl.error ?? v.error ?? s.error ?? z.error ?? t.error ?? ts.error ?? g.error;
     setFehler(err ? err.message : null);
-    setPersonen((p.data as Person[]) ?? []);
-    setFsDoku((fs.data as FuehrerscheinEintrag[]) ?? []);
+    setPersonen(p);
+    setFsDoku(fs);
     setPlanung((pl.data as VtVerkaeuferSaison[]) ?? []);
     setVerf((v.data as VtVerfuegbarkeit[]) ?? []);
     setStaende((s.data as VtStand[]) ?? []);
@@ -171,8 +182,12 @@ export default function VertriebGrundplanPage() {
     return m;
   }, [tourenMit]);
   const tourVonStandTag = (standId: number, tag: number): TourMitStaenden | null => {
-    if (tag === 7) return sonntagsTour.get(standId) ?? null;
-    return tourenMit.find((t) => t.tagesart === "MO_SA" && t.staende.some((s) => s.stand_id === standId)) ?? null;
+    // Inaktive Touren zählen nicht (wie in planPruefen).
+    if (tag === 7) {
+      const t = sonntagsTour.get(standId);
+      return t && t.aktiv ? t : null;
+    }
+    return tourenMit.find((t) => t.aktiv && t.tagesart === "MO_SA" && t.staende.some((s) => s.stand_id === standId)) ?? null;
   };
 
   const hinweise: PlanHinweis[] = useMemo(
@@ -292,7 +307,9 @@ export default function VertriebGrundplanPage() {
       <PageHeader
         icon={CalendarRange}
         titel={`Grundplan ${saison}`}
-        beschreibung="Wer steht wann an welchem Stand - gilt die ganze Saison. Klick auf ein Feld, um eine Person einzuplanen."
+        beschreibung={`Wer steht wann an welchem Stand - gilt die ganze Saison.${
+          darfPflegen ? " Klick auf ein Feld, um eine Person einzuplanen." : ""
+        }`}
         aktionen={
           <>
             <select value={saison} onChange={(e) => setSaison(Number(e.target.value))} className="print:hidden">
@@ -489,7 +506,11 @@ export default function VertriebGrundplanPage() {
                                   {kurzName(eintrag.employee_id)}
                                 </>
                               ) : istOffen ? (
-                                nurWare ? "Ware" : "–"
+                                nurWare ? (
+                                  <span title="Stand bekommt nur Ware - Verkäufer kommt selbst, ist aber trotzdem einzuplanen">– (nur Ware)</span>
+                                ) : (
+                                  "–"
+                                )
                               ) : (
                                 ""
                               )}

@@ -20,6 +20,7 @@ export default function UnterkunftBelegungsplanPage() {
   const [zimmer, setZimmer] = useState<UnterkunftZimmerUebersicht[]>([]);
   const [belegungen, setBelegungen] = useState<UnterkunftBelegungAktuell[]>([]);
   const [loading, setLoading] = useState(true);
+  const [fehler, setFehler] = useState<string | null>(null);
   const [gebaeudeFilter, setGebaeudeFilter] = useState("");
   const [nurMitLuecke, setNurMitLuecke] = useState(false);
   const [zeigeInaktive, setZeigeInaktive] = useState(false);
@@ -35,6 +36,8 @@ export default function UnterkunftBelegungsplanPage() {
         .order("nummer"),
       supabase.from("unterkunft_belegung_aktuell").select("*"),
     ]);
+    const ladeFehler = z.error ?? b.error;
+    setFehler(ladeFehler ? `Laden fehlgeschlagen: ${ladeFehler.message}` : null);
     setZimmer((z.data as UnterkunftZimmerUebersicht[]) ?? []);
     setBelegungen((b.data as UnterkunftBelegungAktuell[]) ?? []);
     setLoading(false);
@@ -86,6 +89,11 @@ export default function UnterkunftBelegungsplanPage() {
           <p className="text-sm text-neutral-500">
             Stand heute · {summe.belegt} belegt · {summe.frei} frei
           </p>
+          {fehler && (
+            <p className="mt-1 rounded border border-beere-200 bg-beere-50 px-3 py-2 text-sm text-beere-700">
+              {fehler}
+            </p>
+          )}
         </div>
         <div className="flex flex-wrap items-center gap-3 text-sm">
           <label>

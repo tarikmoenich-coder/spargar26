@@ -19,6 +19,8 @@ import { getSupabaseClient } from "@/lib/supabase/client";
 import { useProfile } from "@/lib/useProfile";
 import type { AuditLogEintrag, Employee } from "@/lib/types";
 import { formatDatumDE } from "@/lib/format";
+import { ladeAlleSeiten } from "@/lib/ladeAlle";
+import { tagesgrenzenLokal } from "@/lib/datum";
 import {
   BEREICH_LABELS,
   aktionLabel,
@@ -42,6 +44,7 @@ export default function AenderungsprotokollPage() {
 
   const [eintraege, setEintraege] = useState<AuditLogEintrag[]>([]);
   const [loading, setLoading] = useState(true);
+  const [fehler, setFehler] = useState<string | null>(null);
   const [offenId, setOffenId] = useState<number | null>(null);
 
   const [bereich, setBereich] = useState("");
@@ -57,14 +60,20 @@ export default function AenderungsprotokollPage() {
   useEffect(() => {
     async function ladePersonen() {
       const supabase = getSupabaseClient();
-      const { data } = await supabase
-        .from("employees")
-        .select("id, personal_nr, name, vorname");
+      // Seitenweise - rund 4.000 Personen, PostgREST liefert je Abfrage
+      // höchstens 1000 Zeilen.
+      const data = await ladeAlleSeiten<Employee>((von, bis) =>
+        supabase
+          .from("employees")
+          .select("id, personal_nr, name, vorname")
+          .order("id")
+          .range(von, bis)
+      );
       const map: Record<
         string,
         { personal_nr: string; name: string; vorname: string }
       > = {};
-      ((data as Employee[]) ?? []).forEach((e) => {
+      data.forEach((e) => {
         map[e.id] = {
           personal_nr: e.personal_nr,
           name: e.name,
@@ -85,11 +94,12 @@ export default function AenderungsprotokollPage() {
       .order("occurred_at", { ascending: false })
       .limit(SEITENGROESSE);
     if (bereich) query = query.eq("entity", bereich);
-    if (vonDatum) query = query.gte("occurred_at", vonDatum);
-    // bis einschließlich: auf den Folgetag begrenzen, sonst fehlt der
-    // gewählte Tag selbst (occurred_at hat eine Uhrzeit).
-    if (bisDatum) query = query.lt("occurred_at", `${bisDatum}T23:59:59`);
-    const { data } = await query;
+    // Tagesgrenzen in Ortszeit (ein reines Datum würde die Datenbank als
+    // UTC lesen); bis einschließlich = vor Beginn des Folgetags.
+    if (vonDatum) query = query.gte("occurred_at", tagesgrenzenLokal(vonDatum).von);
+    if (bisDatum) query = query.lt("occurred_at", tagesgrenzenLokal(bisDatum).bis);
+    const { data, error } = await query;
+    setFehler(error?.message ?? null);
     setEintraege((data as AuditLogEintrag[]) ?? []);
     setLoading(false);
   }
@@ -135,9 +145,12 @@ export default function AenderungsprotokollPage() {
         <p className="text-sm text-neutral-500">
           Wer hat wann was geändert - lückenlos mitgeschrieben seit Beginn
           (Personalstamm, Stunden, Vorschüsse, Prämien, Kassenbuch,
-          Dokumente, Monatsabschluss, Personalplanung). Aufklappen zeigt die
-          einzelnen Feldänderungen. Die Liste zeigt die neuesten{" "}
-          {SEITENGROESSE} Einträge des gewählten Filters.
+          Dokumente, Monatsabschluss, Personalplanung, Unterkunft,
+          Arbeitskleidung, Qualität, Nutzer &amp; Rollen, Firmen,
+          Vertrieb-Grundplan). Aufklappen zeigt die einzelnen
+          Feldänderungen. Die Liste zeigt die neuesten {SEITENGROESSE}{" "}
+          Einträge des gewählten Bereichs/Zeitraums; der Personenfilter wirkt
+          auf diese angezeigten Einträge.
         </p>
       </div>
 
@@ -190,6 +203,10 @@ export default function AenderungsprotokollPage() {
           </button>
         )}
       </div>
+
+      {fehler && (
+        <p className="text-sm text-beere-600">⚠ Konnte nicht geladen werden: {fehler}</p>
+      )}
 
       {loading ? (
         <p className="text-neutral-500">Lädt…</p>

@@ -31,7 +31,7 @@ function LoginFormular() {
       return;
     }
     // Auf die Startseite - die verteilt rollenabhängig weiter (zeiterfassung
-    // → /erfassung, hausmeister → /unterkunft, waage → /erntewirtschaft/
+    // → /erfassung, hausmeister → /unterkunft/reparaturen, waage → /erntewirtschaft/
     // waage/kiosk, sonst → /dashboard), siehe app/page.tsx. Früher stand
     // hier fix /erfassung, dadurch landete jede Rolle in der
     // Stundenerfassung.
@@ -93,8 +93,8 @@ function LoginFormular() {
           </button>
         </form>
         <p className="mt-4 text-xs text-neutral-500">
-          Nutzerkonten werden vom Administrator in Supabase angelegt (Auth →
-          Users) und über die Tabelle „profiles“ einer Rolle zugeordnet.
+          Nutzerkonten legt der Administrator an; Rollen und Bereiche vergibt
+          er unter Einstellungen → Nutzer &amp; Rollen.
         </p>
       </div>
     </div>

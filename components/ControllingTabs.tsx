@@ -12,7 +12,7 @@ import {
 // eigene Seite (Nutzer-Vorgabe 2026-09-02: "jede ausklappbare Liste braucht
 // einen eigenen Untermenüpunkt"). Zähler-Badge je Reiter = Handlungsbedarf
 // im laufenden Jahr.
-type ZaehlerKey = keyof Omit<ControllingCounts, "loading">;
+type ZaehlerKey = keyof Omit<ControllingCounts, "loading" | "fehler">;
 
 interface ControllingTab {
   href: string;

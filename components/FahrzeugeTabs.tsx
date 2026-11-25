@@ -10,7 +10,7 @@ import { useEffect, useRef } from "react";
 const tabs = [
   { href: "/fahrzeuge", label: "Übersicht", exakt: true },
   { href: "/fahrzeuge/verlauf", label: "Streckenverlauf" },
-  { href: "/fahrzeuge/ereignisse", label: "Hofzeiten" },
+  { href: "/fahrzeuge/ereignisse", label: "Hofzeiten & Alarme" },
   { href: "/fahrzeuge/stammdaten", label: "Stammdaten" },
   { href: "/fahrzeuge/einstellungen", label: "Einstellungen" },
 ];

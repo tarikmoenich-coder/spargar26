@@ -20,7 +20,9 @@
 // bleibt, WANN und WARUM sich ein Betrag nachträglich geändert hat - ohne
 // ihn doppelt zu zählen.
 
-import { useEffect, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { heuteLokalIso } from "@/lib/datum";
 import { formatDatumDE, formatMenge } from "@/lib/format";
 import { getSupabaseClient } from "@/lib/supabase/client";
 import { useProfile } from "@/lib/useProfile";
@@ -47,7 +49,7 @@ function monatsSchluessel(d: Date) {
 }
 
 function heute() {
-  return new Date().toISOString().slice(0, 10);
+  return heuteLokalIso();
 }
 
 // Nur die im Journal benötigten Felder aus cash_checks - Nutzer-Vorgabe
@@ -99,7 +101,21 @@ interface JournalZeile {
 }
 
 export default function KassenbuchJournalPage() {
+  return (
+    <Suspense fallback={<p className="text-neutral-500">Lädt…</p>}>
+      <KassenbuchJournalInner />
+    </Suspense>
+  );
+}
+
+function KassenbuchJournalInner() {
   const { profile } = useProfile();
+  const router = useRouter();
+  // Gewählte Lohnkasse kommt aus ?id= (Reiter MLK/ML/MD und Knöpfe oben) -
+  // über useSearchParams, damit auch ein Wechsel innerhalb von /kasse
+  // (gleiche Seite, kein Neu-Mount) das Buch wechselt.
+  const searchParams = useSearchParams();
+  const idParam = Number(searchParams.get("id")) || null;
   const [jahr, setJahr] = useState(CURRENT_YEAR);
   const [eroeffnungssaldo, setEroeffnungssaldo] = useState<number | null>(null);
   const [deposits, setDeposits] = useState<CashDeposit[]>([]);
@@ -148,13 +164,7 @@ export default function KassenbuchJournalPage() {
     // Stufe 3b (2026-11-24): mehrere Lohnkassen (MLK, ML, MD) - gewählt über
     // ?id= bzw. die Auswahl oben, sonst die erste sichtbare Lohnkasse.
     const lohnkassen = buchListe.filter((b) => b.typ === "lohnkasse");
-    const gewuenscht =
-      lohnkasseId ??
-      Number(
-        typeof window !== "undefined"
-          ? new URLSearchParams(window.location.search).get("id")
-          : NaN
-      );
+    const gewuenscht = lohnkasseId ?? idParam;
     const lkId =
       lohnkassen.find((b) => b.id === gewuenscht)?.id ?? lohnkassen[0]?.id ?? null;
     setBuecher(buchListe);
@@ -267,6 +277,12 @@ export default function KassenbuchJournalPage() {
     setLoading(false);
   }
 
+  // URL-Wechsel (?id=) übernehmen
+  useEffect(() => {
+    if (idParam != null && idParam !== lohnkasseId) setLohnkasseId(idParam);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [idParam]);
+
   useEffect(() => {
     load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -296,7 +312,11 @@ export default function KassenbuchJournalPage() {
       verwendungszweck: zweck,
       datum_kassenbuch: datum,
     });
-    if (insertError) setError(insertError.message);
+    if (insertError) {
+      setError(insertError.message);
+      setSaving(false);
+      return;
+    }
     setBetrag("");
     setZweck("");
     setDatum(heute());
@@ -319,7 +339,7 @@ export default function KassenbuchJournalPage() {
       `Einzahlung ${z.belegnummer} stornieren – Grund:`
     );
     if (grund == null || grund.trim() === "") return;
-    const { error: updateError } = await getSupabaseClient()
+    const { data: geaendert, error: updateError } = await getSupabaseClient()
       .from("cash_deposits")
       .update({
         storniert: true,
@@ -327,9 +347,18 @@ export default function KassenbuchJournalPage() {
         storniert_von: profile?.id ?? null,
         storno_grund: grund.trim(),
       })
-      .eq("id", z.einzahlungId);
+      .eq("id", z.einzahlungId)
+      .select("id");
     if (updateError) {
       setError(updateError.message);
+      return;
+    }
+    if (!geaendert || geaendert.length === 0) {
+      // RLS lässt die Zeile still unverändert, wenn der Tag durch eine
+      // freigegebene Kassenprüfung gesperrt ist.
+      setError(
+        "Diese Einzahlung gehört zu einer bereits freigegebenen Kassenprüfung und kann nicht mehr storniert werden. Bitte zunächst die Kassenprüfung wiedereröffnen."
+      );
       return;
     }
     load();
@@ -481,7 +510,7 @@ export default function KassenbuchJournalPage() {
 
   return (
     <div className="flex flex-col gap-6">
-      <KassenbuchTabs />
+      <KassenbuchTabs aktivBuchId={lohnkasseId ?? undefined} />
       <div>
         <PageHeader
           icon={Wallet}
@@ -496,7 +525,7 @@ export default function KassenbuchJournalPage() {
                 className={b.id === lohnkasseId ? "btn" : "btn-secondary"}
                 onClick={() => {
                   setLohnkasseId(b.id);
-                  window.history.replaceState(null, "", `/kasse?id=${b.id}`);
+                  router.replace(`/kasse?id=${b.id}`);
                 }}
               >
                 {b.bezeichnung}

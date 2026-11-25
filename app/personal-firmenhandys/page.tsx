@@ -23,10 +23,11 @@ type EmpOpt = {
   name: string;
   vorname: string;
   funktion: string | null;
+  aktiv?: boolean;
 };
 
 function anzeigeName(m: EmpOpt | undefined): string | null {
-  return m ? `${m.name}, ${m.vorname}` : null;
+  return m ? `${m.name}, ${m.vorname}${m.aktiv === false ? " (inaktiv)" : ""}` : null;
 }
 
 // Effektiver Inhaber-Name: aus dem Spargar-Personalstamm (employee_id) oder,
@@ -46,19 +47,23 @@ function inhaberAnzeige(
 function InhaberZelle({
   firmenhandy,
   mitarbeiter,
+  mitarbeiterMap,
   canEdit,
   onGesetzt,
 }: {
   firmenhandy: Firmenhandy;
   mitarbeiter: EmpOpt[];
+  mitarbeiterMap: Map<string, EmpOpt>;
   canEdit: boolean;
   onGesetzt: () => void;
 }) {
   const [offen, setOffen] = useState(false);
+  const [fehler, setFehler] = useState<string | null>(null);
   const [suche, setSuche] = useState("");
   const [speichert, setSpeichert] = useState(false);
 
-  const aktuell = mitarbeiter.find((m) => m.id === firmenhandy.employee_id);
+  // Inaktive Inhaber stehen nicht in der Auswahlliste, aber in der Map
+  const aktuell = mitarbeiterMap.get(firmenhandy.employee_id ?? "");
 
   const treffer = useMemo(() => {
     const q = suche.trim().toLowerCase();
@@ -80,11 +85,14 @@ function InhaberZelle({
       .update({ ...patch, sync_status: "ausstehend" })
       .eq("id", firmenhandy.id);
     setSpeichert(false);
-    if (!error) {
-      setOffen(false);
-      setSuche("");
-      onGesetzt();
+    if (error) {
+      setFehler(error.message);
+      return;
     }
+    setFehler(null);
+    setOffen(false);
+    setSuche("");
+    onGesetzt();
   }
 
   function uebernehmenAlsText() {
@@ -183,6 +191,7 @@ function InhaberZelle({
           Abbrechen
         </button>
       </div>
+      {fehler && <p className="text-xs text-beere-600">⚠ {fehler}</p>}
     </div>
   );
 }
@@ -199,6 +208,9 @@ export default function FirmenhandyPage() {
 
   const [firmenhandys, setFirmenhandys] = useState<Firmenhandy[]>([]);
   const [mitarbeiter, setMitarbeiter] = useState<EmpOpt[]>([]);
+  // Inhaber, die inzwischen inaktiv sind (Saisonende) - nur zur Anzeige und
+  // für den Sync, damit der Kontaktname nicht gelöscht wird.
+  const [inaktiveInhaber, setInaktiveInhaber] = useState<EmpOpt[]>([]);
   const [loading, setLoading] = useState(true);
   const [fehler, setFehler] = useState<string | null>(null);
   const [suche, setSuche] = useState("");
@@ -221,8 +233,30 @@ export default function FirmenhandyPage() {
         .eq("aktiv", true)
         .order("name"),
     ]);
-    setFirmenhandys((f.data as Firmenhandy[]) ?? []);
-    setMitarbeiter((m.data as EmpOpt[]) ?? []);
+    if (f.error || m.error) {
+      setFehler(`Laden fehlgeschlagen: ${(f.error ?? m.error)!.message}`);
+    }
+    const handys = (f.data as Firmenhandy[]) ?? [];
+    const aktive = (m.data as EmpOpt[]) ?? [];
+    setFirmenhandys(handys);
+    setMitarbeiter(aktive);
+    const aktivIds = new Set(aktive.map((x) => x.id));
+    const fehlend = Array.from(
+      new Set(
+        handys
+          .map((h) => h.employee_id)
+          .filter((id): id is string => !!id && !aktivIds.has(id))
+      )
+    );
+    if (fehlend.length > 0) {
+      const { data: inaktiv } = await supabase
+        .from("employees")
+        .select("id, personal_nr, name, vorname, funktion, aktiv")
+        .in("id", fehlend);
+      setInaktiveInhaber((inaktiv as EmpOpt[]) ?? []);
+    } else {
+      setInaktiveInhaber([]);
+    }
     setLoading(false);
   }, []);
 
@@ -231,8 +265,8 @@ export default function FirmenhandyPage() {
   }, [laden]);
 
   const mitarbeiterMap = useMemo(
-    () => new Map(mitarbeiter.map((m) => [m.id, m])),
-    [mitarbeiter]
+    () => new Map([...inaktiveInhaber, ...mitarbeiter].map((m) => [m.id, m])),
+    [mitarbeiter, inaktiveInhaber]
   );
 
   const gefiltert = useMemo(() => {
@@ -295,7 +329,13 @@ export default function FirmenhandyPage() {
         body: JSON.stringify({
           eintraege: ziel.map((f) => ({
             nummer: f.nummer,
-            name: inhaberAnzeige(f, mitarbeiterMap),
+            // ohne "(inaktiv)"-Zusatz - der Kontaktname bleibt der Name
+            name: f.employee_id
+              ? (() => {
+                  const m = mitarbeiterMap.get(f.employee_id);
+                  return m ? `${m.name}, ${m.vorname}` : null;
+                })()
+              : f.inhaber_name,
             funktion: f.employee_id
               ? mitarbeiterMap.get(f.employee_id)?.funktion ?? null
               : null,
@@ -537,6 +577,7 @@ export default function FirmenhandyPage() {
                     <InhaberZelle
                       firmenhandy={f}
                       mitarbeiter={mitarbeiter}
+                      mitarbeiterMap={mitarbeiterMap}
                       canEdit={canEdit}
                       onGesetzt={laden}
                     />

@@ -34,11 +34,12 @@ export default function AnbauBestellungPage() {
   async function load() {
     setLoading(true);
     const supabase = getSupabaseClient();
-    const { data } = await supabase
+    const { data, error } = await supabase
       .from("erdbeeren_bestellung_uebersicht")
       .select("*")
       .eq("saison_jahr", jahr)
       .order("sorte");
+    if (error) setFehler(`Konnte nicht laden: ${error.message}`);
     setZeilen((data as ErdbeerenBestellungUebersicht[]) ?? []);
     setLoading(false);
   }

@@ -20,6 +20,7 @@
 import { Fragment, useEffect, useMemo, useState } from "react";
 import { Palmtree } from "lucide-react";
 import { getSupabaseClient } from "@/lib/supabase/client";
+import { ladeAlleSeiten } from "@/lib/ladeAlle";
 import { useProfile } from "@/lib/useProfile";
 import { formatDatumDE } from "@/lib/format";
 import { urlaubGesamtstatus, type UrlaubGesamtstatus } from "@/lib/controlling";
@@ -64,6 +65,7 @@ export default function ControllingUrlaubPage() {
   const [jahr, setJahr] = useState(CURRENT_YEAR);
   const [zeilen, setZeilen] = useState<EmployeeUrlaubstage[]>([]);
   const [loading, setLoading] = useState(true);
+  const [ladeFehler, setLadeFehler] = useState<string | null>(null);
 
   // Aufgeklapptes Wochenraster (immer nur eines gleichzeitig) - der Rest
   // (Sperre/Entwurf/Speichern) steckt in components/TageRaster.tsx.
@@ -73,12 +75,23 @@ export default function ControllingUrlaubPage() {
   async function laden() {
     setLoading(true);
     const supabase = getSupabaseClient();
-    const { data, error } = await supabase
-      .from("employee_urlaubstage")
-      .select("*")
-      .eq("saison_jahr", jahr)
-      .order("name");
-    if (!error) setZeilen((data as EmployeeUrlaubstage[]) ?? []);
+    // Seitenweise (1000-Zeilen-Grenze), Fehler mitschneiden.
+    let error: string | null = null;
+    const data = await ladeAlleSeiten<EmployeeUrlaubstage>((von, bis) =>
+      supabase
+        .from("employee_urlaubstage")
+        .select("*")
+        .eq("saison_jahr", jahr)
+        .order("name")
+        .order("employee_id")
+        .range(von, bis)
+        .then((r) => {
+          if (r.error) error = r.error.message;
+          return r;
+        })
+    );
+    setLadeFehler(error);
+    if (!error) setZeilen(data);
     setLoading(false);
   }
 
@@ -191,6 +204,10 @@ export default function ControllingUrlaubPage() {
           className="w-24"
         />
       </label>
+
+      {ladeFehler && (
+        <p className="text-sm text-beere-600">⚠ Konnte nicht geladen werden: {ladeFehler}</p>
+      )}
 
       {loading ? (
         <p className="text-neutral-500">Lädt…</p>

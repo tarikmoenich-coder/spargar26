@@ -31,11 +31,12 @@ export default function AbzugAusnahmen({
   const [fehler, setFehler] = useState<string | null>(null);
 
   async function laden() {
-    const { data } = await getSupabaseClient()
+    const { data, error } = await getSupabaseClient()
       .from("employee_abzug_ausnahme")
       .select("*")
       .eq("employee_id", employeeId)
       .order("von");
+    if (error) setFehler(`Ausnahmen konnten nicht geladen werden: ${error.message}`);
     setListe((data as AbzugAusnahme[]) ?? []);
   }
 
@@ -100,6 +101,7 @@ export default function AbzugAusnahmen({
           ))}
         </ul>
       )}
+      {fehler && !canEdit && <span className="text-beere-600">{fehler}</span>}
       {canEdit && (
         <form onSubmit={hinzufuegen} className="flex flex-wrap items-end gap-2 text-xs print:hidden">
           <select value={art} onChange={(e) => setArt(e.target.value as AbzugAusnahme["art"])}>

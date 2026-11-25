@@ -15,10 +15,12 @@ import { getSupabaseClient } from "@/lib/supabase/client";
 import { useProfile } from "@/lib/useProfile";
 import { formatDatumDE, formatMenge } from "@/lib/format";
 import { saisonsKompakt } from "@/lib/saisonHistorie";
+import { firmaFuer, firmaKurz } from "@/lib/firmen";
 import {
   type Employee,
   type EmployeeBeschaeftigungsabschnitt,
   type EmployeeSaisonJahr,
+  type Firma,
 } from "@/lib/types";
 
 import { hatRolle } from "@/lib/rollen";
@@ -37,10 +39,10 @@ const FOTO_BUCKET = "mitarbeiter-fotos";
 
 // Volle, eindeutige Beschriftung nur für diese Druckansicht (Nutzer-Vorgabe
 // 2026-11-04: prüfen, ob "Abrechnungsart" evtl. "Steuerklasse" heißen
-// sollte). Bewusst NICHT umbenannt, da der Wert nur bei EINER der drei
-// Ausprägungen überhaupt eine Steuerklasse ist ("pauschal" = Minijob,
-// "sozialversicherungspflichtig" = SV-Pflicht, keine Steuerklasse) - eine
-// Umbenennung des Feldnamens wäre für die anderen beiden irreführend.
+// sollte). Bewusst NICHT umbenannt, da der Wert nur bei EINER der
+// Ausprägungen überhaupt eine Steuerklasse ist ("pauschal" = pauschale
+// Lohnsteuer, "sozialversicherungspflichtig", "minijob", "kurzfristig" haben
+// keine) - eine Umbenennung des Feldnamens wäre für die anderen irreführend.
 // Stattdessen bleibt der Feldname, nur der Wert wird ausgeschrieben statt
 // der App-weiten Kurzform (ABRECHNUNGSART_LABELS aus lib/types.ts, die
 // bewusst kurz bleiben soll - siehe Kommentar dort - für Listen/Tabellen).
@@ -173,6 +175,9 @@ function StammkarteInner() {
   const [fehler, setFehler] = useState<string | null>(null);
   const [historieFehler, setHistorieFehler] = useState<string | null>(null);
   const [maskiert, setMaskiert] = useState(false);
+  // Firma je Saison (Stufe 3a): Eintrag in employee_saison, sonst Standard
+  const [firmen, setFirmen] = useState<Firma[]>([]);
+  const [saisonFirma, setSaisonFirma] = useState<Map<number, string>>(new Map());
 
   useEffect(() => {
     if (!id || !canView) {
@@ -181,7 +186,7 @@ function StammkarteInner() {
     }
     (async () => {
       const supabase = getSupabaseClient();
-      const [empRes, grpRes, jahreRes, fsRes, abschnitteRes] = await Promise.all([
+      const [empRes, grpRes, jahreRes, fsRes, abschnitteRes, firmaRes, saisonRes] = await Promise.all([
         supabase.from("employee_personaldaten").select("*").eq("id", id).maybeSingle(),
         supabase.from("arbeitsgruppen").select("gruppe_nr, bezeichnung"),
         supabase
@@ -198,6 +203,11 @@ function StammkarteInner() {
           .select("*")
           .eq("employee_id", id)
           .order("anmeldedatum", { ascending: true }),
+        supabase.from("firma").select("*").order("reihenfolge"),
+        supabase
+          .from("employee_saison")
+          .select("saison_jahr, firma")
+          .eq("employee_id", id),
       ]);
       if (empRes.error || !empRes.data) {
         setFehler("Mitarbeiter nicht gefunden.");
@@ -207,6 +217,14 @@ function StammkarteInner() {
       const geladen = empRes.data as Employee;
       setEmp(geladen);
       setGruppen((grpRes.data as Arbeitsgruppe[]) ?? []);
+      setFirmen((firmaRes.data as Firma[]) ?? []);
+      setSaisonFirma(
+        new Map(
+          ((saisonRes.data as { saison_jahr: number; firma: string }[] | null) ?? []).map(
+            (z) => [z.saison_jahr, z.firma]
+          )
+        )
+      );
       // Fehler NICHT stillschweigend verschlucken (2026-11-04 gefunden: die
       // Sicht employee_saison_jahre fehlte in Supabase, "Aktuelle Saison"
       // zeigte deshalb bei JEDEM Mitarbeiter fälschlich "—" statt eines
@@ -437,6 +455,10 @@ function StammkarteInner() {
           }
         />
         <Feld label="Beschäftigungsstatus" wert={emp.aktiv ? "Aktiv" : "Inaktiv"} />
+        <Feld
+          label="Bereich"
+          wert={emp.bereich === "VT" ? "Vertrieb" : emp.bereich === "LW" ? "Landwirtschaft" : emp.bereich}
+        />
         {ersteintritt && (
           <Feld label="Ersteintritt" wert={formatDatumDE(ersteintritt)} />
         )}
@@ -539,6 +561,7 @@ function StammkarteInner() {
                   <th>Anwesend</th>
                   <th>Erfasste Stunden</th>
                   <th>Erfasste Tage</th>
+                  <th>Firma</th>
                   <th>Quelle</th>
                 </tr>
               </thead>
@@ -554,6 +577,20 @@ function StammkarteInner() {
                     </td>
                     <td className="tabular-nums">{j.tage_erfasst ?? "—"}</td>
                     <td>
+                      {firmaKurz(
+                        firmen,
+                        firmaFuer(
+                          firmen,
+                          { id: emp.id, bereich: emp.bereich },
+                          new Map(
+                            saisonFirma.has(j.saison_jahr)
+                              ? [[emp.id, saisonFirma.get(j.saison_jahr)!]]
+                              : []
+                          )
+                        )?.kuerzel
+                      )}
+                    </td>
+                    <td>
                       {j.aus_kartei && j.aus_erfassung
                         ? "Kartei + App"
                         : j.aus_erfassung
@@ -565,8 +602,9 @@ function StammkarteInner() {
               </tbody>
             </table>
             <p className="mt-1 text-[8.5pt] text-neutral-500">
-              „Kartei" = aus der importierten Papier-Personalkartei (nur
-              Anwesenheit). „App" = in Spargar erfasste Saison.
+              „Kartei" = aus einem Import (Personalkartei bzw. HSC-Export,
+              nur Anwesenheit). „App" = in Spargar erfasste Saison. Firma ohne
+              eigenen Eintrag = Standard-Firma des Bereichs.
             </p>
           </>
         )}

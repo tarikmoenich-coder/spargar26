@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { ShieldAlert } from "lucide-react";
 import { getSupabaseClient } from "@/lib/supabase/client";
+import { ladeAlleSeiten } from "@/lib/ladeAlle";
 import { ABRECHNUNGSART_LABELS, type SvAbschnitt, type SvPruefung } from "@/lib/types";
 import { formatDatumDE } from "@/lib/format";
 import {
@@ -27,24 +28,42 @@ export default function ControllingSozialversicherungPage() {
     []
   );
   const [loading, setLoading] = useState(true);
+  const [ladeFehler, setLadeFehler] = useState<string | null>(null);
 
   useEffect(() => {
     async function load() {
       setLoading(true);
       const supabase = getSupabaseClient();
-      const [{ data, error }, { data: abschnitteData }] = await Promise.all([
-        supabase
-          .from("employee_sv_pruefung")
-          .select("*")
-          .eq("saison_jahr", jahr)
-          .order("beschaeftigungstage", { ascending: false }),
-        supabase
-          .from("employee_sv_abschnitte")
-          .select("*")
-          .eq("saison_jahr", jahr),
+      // Seitenweise (1000-Zeilen-Grenze), Fehler mitschneiden.
+      let error: string | null = null;
+      const merke = <R extends { error: { message: string } | null }>(r: R) => {
+        if (r.error) error = r.error.message;
+        return r;
+      };
+      const [alle, abschnitteData] = await Promise.all([
+        ladeAlleSeiten<SvPruefung>((von, bis) =>
+          supabase
+            .from("employee_sv_pruefung")
+            .select("*")
+            .eq("saison_jahr", jahr)
+            .order("beschaeftigungstage", { ascending: false })
+            .order("employee_id")
+            .range(von, bis)
+            .then(merke)
+        ),
+        ladeAlleSeiten<SvAbschnitt>((von, bis) =>
+          supabase
+            .from("employee_sv_abschnitte")
+            .select("*")
+            .eq("saison_jahr", jahr)
+            .order("employee_id")
+            .order("abschnitt_nr")
+            .range(von, bis)
+            .then(merke)
+        ),
       ]);
-      setSvAbschnitte((abschnitteData as SvAbschnitt[]) ?? []);
-      const alle = (data as SvPruefung[]) ?? [];
+      setSvAbschnitte(abschnitteData);
+      setLadeFehler(error);
       if (!error) {
         setFaelle(alle.filter((f) => f.kritisch));
         setBaldEndend(
@@ -93,6 +112,10 @@ export default function ControllingSozialversicherungPage() {
           </>
         )}
       </p>
+
+      {ladeFehler && (
+        <p className="text-sm text-beere-600">⚠ Konnte nicht geladen werden: {ladeFehler}</p>
+      )}
 
       <label className="sticky top-[calc(3.5rem+var(--subtabs-h,2.5rem))] z-30 block bg-sand py-2 text-sm">
         Saison-Jahr{" "}

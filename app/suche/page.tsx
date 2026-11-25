@@ -19,6 +19,8 @@ import type {
   ZuckermaisPraemieTag,
 } from "@/lib/types";
 import { formatDatumDE, formatMenge } from "@/lib/format";
+import { hatRolle } from "@/lib/rollen";
+import { heuteLokalIso } from "@/lib/datum";
 
 const VORSCHUSS_BUCKET = "vorschuss-belege";
 
@@ -40,8 +42,9 @@ interface VorschussAnzeigeZeile {
   belegDateiname: string | null;
 }
 
-// Für die Suche reichen wenige, nicht sensible Felder - alle angemeldeten
-// Rollen dürfen employees lesen (Policy employees_read_for_logged_in).
+// Für die Suche reichen wenige, nicht sensible Grunddaten (für alle Rollen
+// mit Menüzugriff lesbar; die Datenbank begrenzt zusätzlich auf den
+// Geschäftsbereich).
 type SucheEmployee = Pick<
   Employee,
   "id" | "personal_nr" | "name" | "vorname" | "aktiv"
@@ -132,6 +135,11 @@ interface Wochenzeile {
 export default function SuchePage() {
   const { profile } = useProfile();
   const t = uebersetzung(profile?.sprache);
+  // Was die Rolle laut RLS sehen darf (migration_2026-11-24c, Stufe 0b) -
+  // ohne Recht liefert die Datenbank leere Listen; dann den Abschnitt ganz
+  // ausblenden statt "Keine Vorschüsse erfasst" anzuzeigen/zu drucken.
+  const darfVorschuesse = hatRolle(profile, "admin", "hr", "kasse", "lohnabrechnung", "pruefer", "management");
+  const darfStundenkonto = hatRolle(profile, "admin", "hr", "zeiterfassung", "kasse", "lohnabrechnung", "pruefer", "management");
   const [alle, setAlle] = useState<SucheEmployee[]>([]);
   const [suchtext, setSuchtext] = useState("");
   const [ausgewaehlt, setAusgewaehlt] = useState<SucheEmployee | null>(null);
@@ -148,11 +156,12 @@ export default function SuchePage() {
   const [zuckermais, setZuckermais] = useState<ZuckermaisPraemieTag[]>([]);
   const [erdbeeren, setErdbeeren] = useState<ErdbeerenPraemieTag[]>([]);
   // Unterkunft: alle Belegungszeiträume der Person (Nutzer-Vorgabe
-  // 2026-08-30 - auch der hausmeister sucht hier nach). Nicht saison-
+  // 2026-08-30). Nicht saison-
   // gefiltert, jede Zeile trägt ihren eigenen Zeitraum.
   const [unterkunft, setUnterkunft] = useState<UnterkunftBelegungPerson[]>([]);
   const [ladenListe, setLadenListe] = useState(true);
   const [ladenDetail, setLadenDetail] = useState(false);
+  const [detailFehler, setDetailFehler] = useState<string | null>(null);
 
   useEffect(() => {
     async function ladeMitarbeiter() {
@@ -194,16 +203,7 @@ export default function SuchePage() {
     setAusgewaehlt(m);
     setLadenDetail(true);
     const supabase = getSupabaseClient();
-    const [
-      { data: we },
-      { data: vh },
-      { data: al },
-      { data: sk },
-      { data: skb },
-      { data: zm },
-      { data: eb },
-      { data: ub },
-    ] = await Promise.all([
+    const ergebnisse = await Promise.all([
       supabase
         .from("work_entries")
         .select("*")
@@ -254,6 +254,18 @@ export default function SuchePage() {
         .eq("employee_id", m.id)
         .order("von", { ascending: false }),
     ]);
+    const [
+      { data: we },
+      { data: vh },
+      { data: al },
+      { data: sk },
+      { data: skb },
+      { data: zm },
+      { data: eb },
+      { data: ub },
+    ] = ergebnisse;
+    const ersterFehler = ergebnisse.find((r) => r.error)?.error;
+    setDetailFehler(ersterFehler ? ersterFehler.message : null);
     setStunden((we as WorkEntry[]) ?? []);
     setVorschuesse((vh as VorschussHistorieEintrag[]) ?? []);
     setAuslagen((al as EmployeeAuslagenHistorie[]) ?? []);
@@ -433,6 +445,11 @@ export default function SuchePage() {
       <div className="print:hidden">
         <PageHeader icon={Search} titel={t("suche.title")} />
         <p className="text-sm text-neutral-500">{t("suche.untertitel")}</p>
+        {detailFehler && (
+          <p className="mt-1 text-sm font-medium text-beere-600">
+            ⚠ Daten konnten nicht vollständig geladen werden: {detailFehler}
+          </p>
+        )}
       </div>
 
       <div className="rounded border border-linie bg-white p-4 print:hidden">
@@ -587,6 +604,7 @@ export default function SuchePage() {
                 )}
               </div>
 
+              {darfVorschuesse && (
               <div className="rounded border border-linie bg-white p-4">
                 <div className="mb-2 flex items-baseline justify-between">
                   <h2 className="text-base font-semibold text-emerald-800">
@@ -646,7 +664,9 @@ export default function SuchePage() {
                   </div>
                 )}
               </div>
+              )}
 
+              {darfStundenkonto && (
               <div className="rounded border border-linie bg-white p-4">
                 <div className="mb-2 flex items-baseline justify-between">
                   <h2 className="text-base font-semibold text-emerald-800">
@@ -696,6 +716,7 @@ export default function SuchePage() {
                   </div>
                 )}
               </div>
+              )}
 
               <div className="rounded border border-linie bg-white p-4">
                 <h2 className="mb-2 text-base font-semibold text-emerald-800">
@@ -718,7 +739,7 @@ export default function SuchePage() {
                       </thead>
                       <tbody>
                         {unterkunft.map((u) => {
-                          const heute = new Date().toISOString().slice(0, 10);
+                          const heute = heuteLokalIso();
                           const laeuft = u.von <= heute && (!u.bis || u.bis >= heute);
                           return (
                             <tr key={u.id}>
@@ -905,7 +926,7 @@ export default function SuchePage() {
           </h2>
           <p className="mt-1 text-base">
             Personalnummer: {ausgewaehlt.personal_nr} · Saison-Jahr:{" "}
-            {saisonJahr} · Gedruckt am: {formatDatumDE(new Date().toISOString())}
+            {saisonJahr} · Gedruckt am: {formatDatumDE(heuteLokalIso())}
           </p>
 
           <h3 className="mt-4 text-base font-semibold">
@@ -961,6 +982,8 @@ export default function SuchePage() {
             </table>
           )}
 
+          {darfVorschuesse && (
+          <>
           <h3 className="mt-6 text-base font-semibold">
             Vorschüsse ({formatMenge(vorschussGesamt, 2)} € aktiv)
           </h3>
@@ -993,7 +1016,11 @@ export default function SuchePage() {
               </tbody>
             </table>
           )}
+          </>
+          )}
 
+          {darfStundenkonto && (
+          <>
           <h3 className="mt-6 text-base font-semibold">
             Stundenkonto {saisonJahr} (Saldo: {formatMenge(stundenkontoSaldo, 2)}{" "}
             Std.)
@@ -1024,6 +1051,8 @@ export default function SuchePage() {
                 ))}
               </tbody>
             </table>
+          )}
+          </>
           )}
 
           {zuckermaisDruck.length > 0 && (

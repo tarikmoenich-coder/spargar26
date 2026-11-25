@@ -689,7 +689,8 @@ export default function PersonalImportHscLwPage() {
               <h2 className="font-semibold text-emerald-800">Firma je Saison weicht ab ({firmaHinweise.length})</h2>
               <p className="text-neutral-600">
                 Bei diesen Saisons steht in der App schon eine Firma oder es wurde bereits abgerechnet - sie werden nicht
-                geändert. Falls HSC recht hat, in der Stammkarte unter „Firma je Saison“ anpassen.
+                geändert. Falls HSC recht hat: unter Lohn → Lohnübersicht (Saison wählen) die Personen markieren und
+                „Firma setzen“.
               </p>
               <div className="max-h-64 overflow-auto">
                 {firmaHinweise.map((h) => (

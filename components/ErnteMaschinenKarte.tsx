@@ -174,10 +174,20 @@ async function ladeAngemeldetePersonen(maschineId: number): Promise<AngemeldeteP
   );
 }
 
+// Freitext (Namen, Maschinen-Bezeichnung) landet per innerHTML im Popup -
+// darum escapen.
+function esc(text: string | null | undefined): string {
+  return (text ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+}
+
 function popupHtmlGeruest(m: MaschineLive): string {
   return `
     <div style="font:400 12px/1.45 system-ui">
-      <div style="font-weight:600">${m.bezeichnung || m.nummer}</div>
+      <div style="font-weight:600">${esc(m.bezeichnung || m.nummer)}</div>
       <div>kg heute: ${formatMenge(m.kg_heute, 1)}</div>
       <div>${m.aktive_personen}/${m.max_personen} angemeldet</div>
       <div style="color:#6b7280">zuletzt: ${vorText(minutenHer(m.position_zeitpunkt))}</div>
@@ -196,7 +206,7 @@ function personenHtml(personen: AngemeldetePerson[]): string {
               ? `<img src="${p.fotoUrl}" alt="" style="width:40px;height:40px;border-radius:9999px;object-fit:cover;border:1px solid #e6e1d5" />`
               : `<div style="width:40px;height:40px;border-radius:9999px;background:#f1efe8;border:1px solid #e6e1d5"></div>`
           }
-          <div style="font-size:10px;text-align:center;line-height:1.2;margin-top:2px">${p.vorname} ${p.name}</div>
+          <div style="font-size:10px;text-align:center;line-height:1.2;margin-top:2px">${esc(p.vorname)} ${esc(p.name)}</div>
         </div>`
     )
     .join("")}</div>`;
@@ -480,9 +490,9 @@ export default function ErnteMaschinenKarte({
 
       el.innerHTML = `
         <div style="width:16px;height:16px;border-radius:9999px;background:${farbe};border:2px solid #fff;box-shadow:0 0 0 1px rgba(0,0,0,.3)"></div>
-        <div style="position:absolute;left:22px;top:50%;transform:translateY(-50%);background:#fff;border:1px solid #e6e1d5;border-radius:6px;padding:1px 5px;font:600 11px/1.3 system-ui;box-shadow:0 1px 2px rgba(0,0,0,.15);white-space:nowrap">${
+        <div style="position:absolute;left:22px;top:50%;transform:translateY(-50%);background:#fff;border:1px solid #e6e1d5;border-radius:6px;padding:1px 5px;font:600 11px/1.3 system-ui;box-shadow:0 1px 2px rgba(0,0,0,.15);white-space:nowrap">${esc(
           m.bezeichnung || m.nummer
-        }${m.max_personen > 1 ? ` · ${m.aktive_personen}/${m.max_personen}` : ""}</div>`;
+        )}${m.max_personen > 1 ? ` · ${m.aktive_personen}/${m.max_personen}` : ""}</div>`;
 
       // Waehrend ein Popup offen ist, dessen Inhalt nicht per Refresh
       // ueberschreiben - sonst faellt die schon nachgeladene Personen-Liste

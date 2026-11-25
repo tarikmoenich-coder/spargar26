@@ -11,7 +11,7 @@
 // Zwei Wege, den Anfangsbestand zu pflegen:
 // - "Anfangsbestände speichern": direkte Eingabe (z.B. zu Saisonbeginn),
 //   Datumsstempel + Bearbeiter werden serverseitig gesetzt (Trigger
-//   kleidung_lagerbestand_touch in schema.sql).
+//   kleidung_lagerbestand_touch).
 // - "Inventur durchführen": man trägt den tatsächlich GEZÄHLTEN aktuellen
 //   Bestand ein (vorausgefüllt mit dem live berechneten Wert), die App
 //   rechnet daraus rückwärts den Anfangsbestand aus (gezählt + bereits
@@ -37,6 +37,7 @@ import type {
 } from "@/lib/types";
 
 import { hatRolle } from "@/lib/rollen";
+import { ladeAlleSeiten } from "@/lib/ladeAlle";
 const CURRENT_YEAR = new Date().getFullYear();
 
 // Nur die für die Summenbildung nötigen Felder - kein "select *".
@@ -65,20 +66,27 @@ export default function LagerPage() {
   async function load() {
     setLoading(true);
     const supabase = getSupabaseClient();
-    const [{ data: lager }, { data: ausg }, { data: namen }] =
+    const [{ data: lager, error: lagerFehler }, ausg, { data: namen }] =
       await Promise.all([
         supabase
           .from("kleidung_lagerbestand")
           .select("*")
           .eq("saison_jahr", CURRENT_YEAR),
-        supabase
-          .from("kleidung_ausgaben")
-          .select("typ, groesse, anzahl, storniert")
-          .eq("saison_jahr", CURRENT_YEAR),
+        // Eine Saison hat weit über 1000 Ausgaben - seitenweise laden
+        // (PostgREST-Grenze je Abfrage), sonst stimmen die Summen nicht.
+        ladeAlleSeiten<AusgabeSumme>((von, bis) =>
+          supabase
+            .from("kleidung_ausgaben")
+            .select("typ, groesse, anzahl, storniert")
+            .eq("saison_jahr", CURRENT_YEAR)
+            .order("id")
+            .range(von, bis)
+        ),
         supabase.from("profile_namen").select("*"),
       ]);
+    if (lagerFehler) setFehler(`Laden fehlgeschlagen: ${lagerFehler.message}`);
     setLagerbestand((lager as KleidungLagerbestand[]) ?? []);
-    setAusgaben((ausg as AusgabeSumme[]) ?? []);
+    setAusgaben(ausg);
     const namenMap: Record<string, string> = {};
     ((namen as ProfilName[]) ?? []).forEach((p) => {
       namenMap[p.id] = p.full_name;

@@ -1,10 +1,10 @@
 "use client";
 
 // Einstellungen → Allgemein: Firmen (SEPA-Auftraggeber, Lohnsteuer-Antrag;
-// seit Stufe 3a je Firma) und die je
-// Saisonjahr versionierten Sätze für Verpflegung/Unterkunft/Mindestlohn/
-// Arbeitskleidung. Arbeitsgruppen, Herkünfte und Nutzer & Rollen sind eigene
-// Unterseiten (components/EinstellungenTabs.tsx).
+// seit Stufe 3a je Firma), die je Saisonjahr versionierten Sätze für
+// Verpflegung/Unterkunft/Mindestlohn/Arbeitskleidung/Minijob-Grenze und die
+// Sätze Vertrieb. Arbeitsgruppen, Herkünfte, Einsatzbereiche und Nutzer &
+// Rollen sind eigene Unterseiten (components/EinstellungenTabs.tsx).
 
 import PageHeader from "@/components/PageHeader";
 import { Settings } from "lucide-react";
@@ -49,6 +49,7 @@ export default function EinstellungenAllgemeinPage() {
   const [vtForm, setVtForm] = useState(leerVt);
   const [vtFehler, setVtFehler] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [ladeFehler, setLadeFehler] = useState<string | null>(null);
 
   // Firmen (Stufe 3a): Bankdaten/Anschrift je Firma statt einer Einzeile.
   const [firmen, setFirmen] = useState<Firma[]>([]);
@@ -71,18 +72,20 @@ export default function EinstellungenAllgemeinPage() {
   async function load() {
     setLoading(true);
     const supabase = getSupabaseClient();
-    const [{ data, error }, { data: bankdatenData }] = await Promise.all([
+    const [{ data, error }, { data: bankdatenData, error: firmaErr }] = await Promise.all([
       supabase
         .from("verpflegungssaetze")
         .select("*")
         .order("saison_jahr", { ascending: false }),
       supabase.from("firma").select("*").order("reihenfolge"),
     ]);
-    const { data: vt } = await supabase
+    const { data: vt, error: vtErr } = await supabase
       .from("bereich_saetze")
       .select("*")
       .eq("bereich", "VT")
       .order("saison_jahr", { ascending: false });
+    const fehlerLaden = error ?? firmaErr ?? vtErr;
+    setLadeFehler(fehlerLaden ? fehlerLaden.message : null);
     setVtSaetze((vt as BereichSatz[]) ?? []);
     if (!error) setSaetze((data as VerpflegungsSatz[]) ?? []);
     const liste = (bankdatenData as Firma[]) ?? [];
@@ -211,10 +214,17 @@ export default function EinstellungenAllgemeinPage() {
       <EinstellungenTabs />
       <div>
         <PageHeader icon={Settings} titel="Einstellungen – Allgemein" />
+        {ladeFehler && (
+          <p className="mt-1 text-sm text-beere-600">
+            ⚠ Konnte nicht vollständig geladen werden: {ladeFehler}
+          </p>
+        )}
         <p className="mt-1 text-sm text-neutral-500">
           Firmen (Bankdaten/Anschrift für SEPA und Lohnsteuer-Antrag) sowie die je Saisonjahr
           versionierten Sätze (ADR-007) für Verpflegung, Unterkunft,
-          Mindestlohn und Arbeitskleidung. Änderungen wirken nur auf das
+          Mindestlohn, Arbeitskleidung und Minijob-Grenze (Standard, gilt für
+          die Landwirtschaft und für den Vertrieb, soweit unter „Sätze
+          Vertrieb“ nichts Eigenes eingetragen ist). Änderungen wirken nur auf das
           jeweilige Saisonjahr; bereits berechnete Jahre bleiben unverändert.
           Der Mindestlohn wird beim Neuanlegen einer Person als Stundenlohn
           vorbelegt, bleibt dort aber änderbar.
@@ -246,6 +256,7 @@ export default function EinstellungenAllgemeinPage() {
               }}
             >
               {f.name}
+              {f.aktiv === false && " (historisch)"}
             </button>
           ))}
         </div>
@@ -341,7 +352,7 @@ export default function EinstellungenAllgemeinPage() {
 
       <div>
         <h2 className="text-lg font-semibold text-emerald-800">
-          Verpflegung / Unterkunft / Mindestlohn / Arbeitskleidung
+          Sätze Landwirtschaft (Standard): Verpflegung / Unterkunft / Mindestlohn / Arbeitskleidung / Minijob-Grenze
         </h2>
       </div>
 

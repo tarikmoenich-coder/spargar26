@@ -38,7 +38,7 @@ export const ROLLEN: RolleInfo[] = [
   {
     wert: "hr",
     label: "Personal (HR)",
-    kurz: "Personalstamm + Dokumente, SV/Lohnsteuer, Personalplanung, Stunden erfassen, Monatsabschluss. Lohnübersicht nur lesen. Mit Bereich Vertrieb: Stände + Touren pflegen.",
+    kurz: "Personalstamm + Dokumente, SV/Lohnsteuer, Personalplanung, Importe/Zusammenführen, Unterkunft, Fahrzeuge, Stunden erfassen, Controlling, Monatsabschluss. Lohnübersicht lesen + Firma je Saison zuordnen. Mit Bereich Vertrieb: Stände, Touren, Verfügbarkeit und Grundplan pflegen.",
   },
   {
     wert: "zeiterfassung",
@@ -53,17 +53,17 @@ export const ROLLEN: RolleInfo[] = [
   {
     wert: "lohnabrechnung",
     label: "Lohnabrechnung",
-    kurz: "Lohnübersicht bearbeiten (Netto, Buskosten, Kautionen, 'Jetzt Abrechnen'), Vorschüsse erstellen/korrigieren, Prämien und Statistik ansehen.",
+    kurz: "Lohnübersicht bearbeiten (Netto, Buskosten, Kautionen, 'Jetzt Abrechnen'), Vorschüsse erstellen/korrigieren, Prämien und Statistik ansehen. Mit Bereich Vertrieb: Vertriebsplanung lesen.",
   },
   {
     wert: "pruefer",
     label: "Prüfer",
-    kurz: "Nur lesen; Kassenprüfungen freigeben; einzige Nicht-Admin-Rolle mit Einsicht ins Änderungsprotokoll.",
+    kurz: "Nur lesen; Kassenprüfungen freigeben; einzige Nicht-Admin-Rolle mit Einsicht ins Änderungsprotokoll. Mit Bereich Vertrieb: Vertriebsplanung lesen.",
   },
   {
     wert: "management",
     label: "Management",
-    kurz: "Überwiegend lesende/aggregierte Sicht (Lohn, Kasse, Prämien, Statistik, Controlling, Fahrzeuge); darf zusätzlich Stundenkonto-Auszahlungen anstoßen.",
+    kurz: "Überwiegend lesende/aggregierte Sicht (Lohn, Kasse, Prämien, Statistik, Controlling, Fahrzeuge). Mit Bereich Vertrieb: Vertriebsplanung lesen.",
   },
   {
     wert: "erntewirtschaft",
@@ -73,7 +73,7 @@ export const ROLLEN: RolleInfo[] = [
   {
     wert: "hausmeister",
     label: "Hausmeister",
-    kurz: "Ausschließlich Unterkunft (Reparaturen).",
+    kurz: "Ausschließlich Unterkunft: Immobilien/Belegungsplan, Ein-/Auszüge (Übergabe), Mängel melden, Reparaturen; Herkunfts-Planung nur lesend. Keine Kontrollen/Stammdaten.",
   },
   {
     wert: "waage",
@@ -115,8 +115,9 @@ export function hatNurRollen(
   return eigene.length > 0 && eigene.every((r) => rollen.includes(r));
 }
 
-// Eingeschränkte Hausmeister-Sicht der Unterkunft (nur Reparaturen,
-// Übergaben, Planung lesend) - nur wenn keine Rolle mit vollem Unterkunft-
+// Eingeschränkte Hausmeister-Sicht der Unterkunft (Immobilien/Belegungsplan,
+// Ein-/Auszüge, Mängel, Reparaturen, Planung lesend; keine Kontrollen/
+// Stammdaten) - nur wenn keine Rolle mit vollem Unterkunft-
 // Zugriff dazukommt.
 export function nurHausmeisterSicht(profile: Parameters<typeof rollenVon>[0]): boolean {
   return hatRolle(profile, "hausmeister") && !hatRolle(profile, "admin", "hr", "erntewirtschaft");

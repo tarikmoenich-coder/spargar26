@@ -190,6 +190,9 @@ export default function AnbauErnteplanungPage() {
           <input
             type="number"
             step="50"
+            // key: nach dem Laden den echten Konfig-Wert zeigen (defaultValue
+            // wird sonst nur beim ersten Rendern übernommen)
+            key={kapazitaet}
             defaultValue={kapazitaet}
             disabled={!canEditKapazitaet}
             className="w-24"

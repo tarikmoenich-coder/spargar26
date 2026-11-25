@@ -4,9 +4,9 @@
 // 2026-10-04, Phase 2) wird jedes Buch einzeln geprüft: oben eine Übersicht
 // aller Bücher (aktueller Soll + letzte Prüfung), darunter das Prüf-Panel für
 // das gewählte Buch (Soll/Ist-Abgleich, Freigabe, Wiedereröffnung). Für die
-// Mömmel Lohnkasse ist die "Bewegungen seit letzter Prüfung"-Liste wie bisher
-// (Vorschüsse/Korrekturen/Auszahlungen/Kautionen); für die übrigen Bücher sind
-// es die kassenbuch_buchung-Zeilen des Buchs.
+// Lohnkassen (MLK/ML/MD) umfasst die "Bewegungen seit letzter Prüfung"-Liste
+// Einzahlungen, Vorschüsse, Korrekturen, Auszahlungen, Kautionen und
+// Umbuchungen; für die übrigen Bücher die kassenbuch_buchung-Zeilen des Buchs.
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { formatMenge } from "@/lib/format";
@@ -180,6 +180,14 @@ export default function KassenpruefungPage() {
     if (!aktivBuch) return [];
     if (istLohnkasse) {
       return [
+        // Einzahlungen und Umbuchungen gehören ebenfalls zum Kassenbestand
+        // der Lohnkasse (Rundum-Check 2026-11-25: fehlten in der Liste).
+        ...deposits
+          .filter((d) => !d.storniert && (!letzterCheckZeit || d.datum > letzterCheckZeit))
+          .map((d) => ({ key: `e-${d.id}`, datum: d.datum, art: "Einzahlung", belegnummer: d.belegnummer, betrag: Number(d.betrag), bearbeiter_id: d.bearbeiter_id })),
+        ...buchungen
+          .filter((b) => !b.storniert && (!letzterCheckZeit || b.datum > letzterCheckZeit))
+          .map((b) => ({ key: `u-${b.id}`, datum: b.datum, art: b.umbuchung_id ? "Umbuchung" : b.richtung === "eingang" ? "Einnahme" : "Ausgabe", belegnummer: b.belegnummer, betrag: b.richtung === "eingang" ? Number(b.betrag) : -Number(b.betrag), bearbeiter_id: b.bearbeiter_id })),
         ...barVorschuesse
           .filter((a) => !a.storniert && (!letzterCheckZeit || a.datum > letzterCheckZeit))
           .map((a) => ({ key: `v-${a.id}`, datum: a.datum, art: "Vorschuss", belegnummer: a.belegnummer, betrag: -Number(a.betrag), bearbeiter_id: a.bearbeiter_id })),
@@ -205,7 +213,7 @@ export default function KassenpruefungPage() {
         bearbeiter_id: b.bearbeiter_id,
       }))
       .sort((x, y) => (x.datum < y.datum ? 1 : -1));
-  }, [aktivBuch, istLohnkasse, letzterCheckZeit, barVorschuesse, bewegungen, auszahlungenBar, kautionsuebergaben, buchungen]);
+  }, [aktivBuch, istLohnkasse, letzterCheckZeit, deposits, barVorschuesse, bewegungen, auszahlungenBar, kautionsuebergaben, buchungen]);
 
   async function runCheck(e: React.FormEvent) {
     e.preventDefault();
@@ -275,7 +283,7 @@ export default function KassenpruefungPage() {
   return (
     <div className="flex flex-col gap-6">
       <KassenbuchTabs />
-      <PageHeader icon={ClipboardCheck} titel="Kassenbuch – Kassenprüfung" beschreibung={`Jedes Kassenbuch wird einzeln geprüft. Toleranz aktuell:${" "} ${formatMenge(toleranz, 2)} € (konfigurierbar, siehe README). Eine freigegebene Prüfung sperrt die Belege dieses Buchs im geprüften Zeitraum gegen nachträgliche Änderung.`} />
+      <PageHeader icon={ClipboardCheck} titel="Kassenbuch – Kassenprüfung" beschreibung={`Jedes Kassenbuch wird einzeln geprüft. Toleranz aktuell:${" "} ${formatMenge(toleranz, 2)} € (Einstellung nur durch den Administrator in der Datenbank). Eine freigegebene Prüfung sperrt die Belege dieses Buchs im geprüften Zeitraum gegen nachträgliche Änderung.`} />
 
       {loading ? (
         <p className="text-neutral-500">Lädt…</p>

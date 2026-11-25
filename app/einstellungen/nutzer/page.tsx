@@ -59,6 +59,7 @@ export default function NutzerVerwaltungPage() {
   const [neuId, setNeuId] = useState("");
   const [neuName, setNeuName] = useState("");
   const [neuRollen, setNeuRollen] = useState<UserRole[]>(["zeiterfassung"]);
+  const [neuBereiche, setNeuBereiche] = useState<string[]>(["LW"]);
   const [anlegen, setAnlegen] = useState(false);
 
   const laden = useCallback(async () => {
@@ -182,6 +183,10 @@ export default function NutzerVerwaltungPage() {
       setFehler("Bitte mindestens eine Rolle wählen.");
       return;
     }
+    if (neuBereiche.length === 0) {
+      setFehler("Bitte mindestens einen Bereich wählen.");
+      return;
+    }
     setAnlegen(true);
     const { error } = await getSupabaseClient()
       .from("profiles")
@@ -190,6 +195,7 @@ export default function NutzerVerwaltungPage() {
         full_name: neuName.trim(),
         role: sortiert(neuRollen)[0],
         rollen: sortiert(neuRollen),
+        bereiche: neuBereiche,
       });
     setAnlegen(false);
     if (error) {
@@ -203,6 +209,7 @@ export default function NutzerVerwaltungPage() {
     setNeuId("");
     setNeuName("");
     setNeuRollen(["zeiterfassung"]);
+    setNeuBereiche(["LW"]);
     laden();
   }
 
@@ -408,6 +415,30 @@ export default function NutzerVerwaltungPage() {
                         }
                       />
                       {r.label}
+                    </label>
+                  ))}
+                </div>
+              </fieldset>
+              <fieldset className="text-sm">
+                <legend>Bereiche</legend>
+                <div className="mt-1 flex flex-col gap-0.5">
+                  {bereiche.alle.map((b) => (
+                    <label
+                      key={b.kuerzel}
+                      className="inline-flex items-center gap-1 whitespace-nowrap text-xs"
+                    >
+                      <input
+                        type="checkbox"
+                        checked={neuBereiche.includes(b.kuerzel)}
+                        onChange={(e) =>
+                          setNeuBereiche((prev) =>
+                            e.target.checked
+                              ? [...prev, b.kuerzel]
+                              : prev.filter((x) => x !== b.kuerzel)
+                          )
+                        }
+                      />
+                      {b.bezeichnung}
                     </label>
                   ))}
                 </div>

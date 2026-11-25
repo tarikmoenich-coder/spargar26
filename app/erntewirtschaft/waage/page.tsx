@@ -1,17 +1,19 @@
 "use client";
 
 // Erntewirtschaft -> Waage: einfache Lese-Seite fuer tools/ernte-waage-agent/
-// (siehe docs/erntewirtschaft-plan.md Teil D). Zeigt die rohen ernte_scan-
-// Zeilen der Waage (quelle='waage', ereignis='gewicht') - noch keine
-// Kisten-Zyklen/Feld-/Fahrer-Zuordnung, die kommen erst mit der
-// SpidertrackBox-Seite. Aktualisiert sich automatisch alle 5s, damit man
-// beim Testen am Hof nicht selbst in Supabase nachschauen muss.
+// (siehe docs/erntewirtschaft-plan.md Teil D). Rohprotokoll der Waage
+// (ernte_scan, quelle='waage', ereignis='gewicht'); die Kisten-Zyklen mit
+// Fahrer/Feld stehen unter Erntewirtschaft -> Ernte. Aktualisiert sich
+// automatisch alle 5s.
 
 import { useCallback, useEffect, useState } from "react";
 import { Scale } from "lucide-react";
 import PageHeader from "@/components/PageHeader";
+import ErntewirtschaftTabs from "@/components/ErntewirtschaftTabs";
 import { getSupabaseClient } from "@/lib/supabase/client";
 import { formatMenge } from "@/lib/format";
+import { ladeAlleSeiten } from "@/lib/ladeAlle";
+import { heuteLokalIso, tagesgrenzenLokal } from "@/lib/datum";
 
 const SEITENGROESSE = 100;
 const AKTUALISIERUNG_MS = 5000;
@@ -55,10 +57,14 @@ export default function ErntewirtschaftWaagePage() {
   const [loading, setLoading] = useState(true);
   const [fehler, setFehler] = useState<string | null>(null);
   const [zuletztAktualisiert, setZuletztAktualisiert] = useState<Date | null>(null);
+  // Tageswerte aus einer eigenen Abfrage (lokale Tagesgrenzen, alle Zeilen
+  // des Tages) - die Tabelle unten zeigt nur die letzten SEITENGROESSE.
+  const [heuteWerte, setHeuteWerte] = useState({ anzahl: 0, summeKg: 0 });
 
   const laden = useCallback(async () => {
     const supabase = getSupabaseClient();
-    const [{ data: scanData, error: scanFehler }, { data: waageData }] = await Promise.all([
+    const { von, bis } = tagesgrenzenLokal(heuteLokalIso());
+    const [{ data: scanData, error: scanFehler }, { data: waageData, error: waageFehler }, heuteZeilen] = await Promise.all([
       supabase
         .from("ernte_scan")
         .select("id, empfangen_am, tag_uid, gewicht_kg, waage_id")
@@ -67,9 +73,24 @@ export default function ErntewirtschaftWaagePage() {
         .order("empfangen_am", { ascending: false })
         .limit(SEITENGROESSE),
       supabase.from("ernte_waage").select("id, name, live_gewicht_kg, live_aktualisiert_am"),
+      ladeAlleSeiten<{ gewicht_kg: number | null }>((a, b) =>
+        supabase
+          .from("ernte_scan")
+          .select("gewicht_kg")
+          .eq("quelle", "waage")
+          .eq("ereignis", "gewicht")
+          .gte("empfangen_am", von)
+          .lt("empfangen_am", bis)
+          .order("id")
+          .range(a, b)
+      ),
     ]);
 
-    setFehler(scanFehler?.message ?? null);
+    setFehler(scanFehler?.message ?? waageFehler?.message ?? null);
+    setHeuteWerte({
+      anzahl: heuteZeilen.length,
+      summeKg: heuteZeilen.reduce((s, z) => s + Number(z.gewicht_kg ?? 0), 0),
+    });
     setZeilen((scanData as ErnteScanZeile[]) ?? []);
     setWaagen((waageData as ErnteWaageZeile[]) ?? []);
     setLoading(false);
@@ -82,13 +103,11 @@ export default function ErntewirtschaftWaagePage() {
     return () => clearInterval(intervall);
   }, [laden]);
 
-  const heute = new Date().toISOString().slice(0, 10);
-  const zeilenHeute = zeilen.filter((z) => z.empfangen_am.slice(0, 10) === heute);
-  const summeHeuteKg = zeilenHeute.reduce((s, z) => s + (z.gewicht_kg ?? 0), 0);
   const letzte = zeilen[0];
 
   return (
     <div className="flex flex-col gap-4">
+      <ErntewirtschaftTabs />
       <PageHeader
         icon={Scale}
         titel="Waage"
@@ -131,11 +150,11 @@ export default function ErntewirtschaftWaagePage() {
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
         <div className="card">
           <p className="text-xs text-neutral-500">Wägungen heute</p>
-          <p className="text-2xl font-semibold text-emerald-900">{zeilenHeute.length}</p>
+          <p className="text-2xl font-semibold text-emerald-900">{heuteWerte.anzahl}</p>
         </div>
         <div className="card">
           <p className="text-xs text-neutral-500">Summe heute</p>
-          <p className="text-2xl font-semibold text-emerald-900">{formatMenge(summeHeuteKg)} kg</p>
+          <p className="text-2xl font-semibold text-emerald-900">{formatMenge(heuteWerte.summeKg)} kg</p>
         </div>
         <div className="card">
           <p className="text-xs text-neutral-500">Letzte Wägung</p>

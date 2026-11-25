@@ -1,6 +1,11 @@
 # Plan: Vertriebsplanung - Stände, Einsatz-/Wochenplanung, Touren
 
-Stand: 2026-11-25 - Entwurf zur Freigabe. Noch nichts davon gebaut.
+Stand: 2026-11-25 - V1 (Stände, Touren), V2 (Verfügbarkeit) und V3
+(Grundplan) gebaut: Seiten /vertrieb, /vertrieb/touren,
+/vertrieb/verfuegbarkeit, /vertrieb/grundplan; Migrationen
+migration_2026-11-25c (Stände/Touren, vt_darf()), -25d (Verfügbarkeit),
+-25e (Grundplan). V4-V6 offen, ebenso der Ständeliste-Import und die
+Geofences je Stand.
 Voraussetzung (erledigt): Vertriebs-Personal in spargar26
 (docs/zwei-personalstaemme-plan.md, Stufen 0-4).
 
@@ -27,14 +32,14 @@ Voraussetzung (erledigt): Vertriebs-Personal in spargar26
 
 ## Bausteine
 
-### V1 - Stammdaten Stände und Touren
+### V1 - Stammdaten Stände und Touren  [gebaut, außer Import + Geofence]
 
-- Tabelle `vt_stand`: Nummer, Name, Ort/Adresse, Kartenpunkt (+ Radius),
-  aktiv, Notiz.
+- Tabelle `vt_stand`: Nummer, Name, Adresse, Kartenpunkt (`lat`/`lng`) +
+  `radius_m`, aktiv, Notiz.
 - Tabelle `vt_stand_zeit`: je Stand x Wochentag x Halbtag (VM/NM) eine
   Zeile mit Uhrzeit von/bis - Zeile vorhanden = geöffnet. Uhrzeiten sind
   je Stand UND je Wochentag verschieden (Antwort 1); Eingabe mit
-  "auf alle Werktage übertragen".
+  "Montag auf Di–Sa übertragen" (Sonntag bleibt eigen).
 - Tabelle `vt_tour` mit Tagesart **Mo-Sa** oder **Sonntag** (Antwort 3:
   sonntags andere Touren, sonst selten Änderungen): Nummer/Name,
   Standard-Fahrzeug (Fahrzeug-Modul, GPS-Tracker), übliche Abfahrtszeit.
@@ -43,22 +48,30 @@ Voraussetzung (erledigt): Vertriebs-Personal in spargar26
   einer Tour; der letzte "fährt mit"-Stand stellt den Fahrer.
 - Ständeliste-Import kommt später (Antwort 5); V1 bringt eine Eingabe-
   Maske, der Import wird nachgereicht, sobald die Liste da ist.
-- Jeder Stand wird automatisch als Geofence im GPS-System angelegt
-  (Grundlage für V6).
-- Rechte: Bereich Vertrieb (wie das Personal), Pflege durch die Vertriebs-
-  Planer.
+- [offen] Jeder Stand wird automatisch als Geofence im GPS-System angelegt
+  (Grundlage für V6). Noch nicht gebaut - Koordinaten und Radius werden
+  aber schon erfasst (Spalte "GPS" in der Ständeliste).
+- Rechte: Bereich Vertrieb (wie das Personal) über `vt_darf()`: lesen
+  admin/hr/lohnabrechnung/management/pruefer, pflegen admin/hr. Die
+  Reihenfolge der Stände einer Tour setzt die RPC `vt_tour_staende_setzen`.
 
-### V2 - Verfügbarkeiten der Verkäufer
+### V2 - Verfügbarkeiten der Verkäufer  [gebaut]
 
-- Je Person ein Wochenraster Mo-So x VM/NM: "kann" / "kann nicht" (+
-  Notiz), gültig ab Datum - die Verkäufer melden das einmal zur Saison.
-- Ausnahmen mit Datum (Urlaub, Termin, krank).
+- Je Person und Saison ein Wochenraster Mo-So x VM/NM: "kann" / "kann
+  nicht" / offen (`vt_verfuegbarkeit`, je `saison_jahr` statt "gültig ab
+  Datum"). Wer in der Saison eingeplant wird, steht in
+  `vt_verkaeufer_saison` (mit "max. Halbtage/Woche" und Notiz).
+  Unter dem Raster: Angebot (wie viele können) gegen Bedarf (offene Stände)
+  je Halbtag.
+- Ausnahmen mit Datum (Urlaub, Termin, krank) in `vt_abwesenheit`, ganzer
+  Tag oder nur VM/NM. Wirken noch nicht auf den Grundplan (erst V4).
 - Führerschein je Person sichtbar (Pflicht für den Fahrer der Tour). Es
   gibt schon `employee_fuehrerschein_kategorien` (bereichsgefiltert) - wird
   wiederverwendet; für Verkäufer aus HSC ist sie noch leer und muss
-  gepflegt werden.
+  gepflegt werden. Zusätzlich lässt sich der Haken `employees.fuehrerschein_b`
+  direkt in der Verfügbarkeit setzen, solange kein Führerschein-Dokument da ist.
 
-### V3 - Grundplan (Saison)
+### V3 - Grundplan (Saison)  [gebaut, ohne Vorschlagsfunktion]
 
 Ein Grundplan je Saison (Antwort 4), Tabelle `vt_grundplan` (Saison,
 Stand, Wochentag, Halbtag, Person).
@@ -66,7 +79,9 @@ Stand, Wochentag, Halbtag, Person).
 - Planungsansicht Stand x (Mo VM, Mo NM, ... So NM): je Zelle eine Person.
 - Sofort sichtbar:
   - unbesetzte Schichten (Lücken), geschlossene Halbtage grau;
-  - Konflikte: Person doppelt zur selben Zeit, Person am selben Tag an
+  - Konflikte (Prüfung in `lib/vertrieb.ts` `planPruefen`): Person doppelt
+    zur selben Zeit (wird beim Einplanen verhindert - die Person wird vom
+    anderen Stand verschoben), Person am selben Tag an
     zwei Ständen (erlaubt, aber Hinweis - Antwort 2), Person laut Verfügbarkeit
     nicht da, Fahrer der Tour ohne Führerschein, Fahrer fehlt, obwohl
     Mitfahrer eingeplant sind;
@@ -75,9 +90,10 @@ Stand, Wochentag, Halbtag, Person).
 - Ansicht nach Tour gruppiert (Stände der Tour untereinander), damit
   sichtbar ist, wer zusammen im Auto sitzt.
 - Optional später: Vorschlagsfunktion, die Lücken aus den Verfügbarkeiten
-  füllt.
+  füllt. [offen] Gebaut ist nur der Helfer "Montag → Di–Sa" (leere Felder
+  mit der Montagsbesetzung füllen) und ein Ausdruck des Grundplans.
 
-### V4 - Wochenplan und Ausdrucke
+### V4 - Wochenplan und Ausdrucke  [offen]
 
 - Konkrete Kalenderwoche entsteht aus dem Grundplan; Änderungen nur für
   diese Woche (Krankheit, Tausch, Feiertag, Stand geschlossen).
@@ -89,7 +105,7 @@ Stand, Wochentag, Halbtag, Person).
     abgesetzt/abgeholt wird, "nur Ware"-Stände;
   - **Standbesetzung je Woche** (Aushang/Übersicht).
 
-### V5 - Anschluss Stunden und Lohn
+### V5 - Anschluss Stunden und Lohn  [offen]
 
 - Stundenerfassung wird aus dem Wochenplan **vorbelegt** (Soll-Stunden je
   Halbtag); erfasst wird nur noch die Abweichung.
@@ -98,7 +114,7 @@ Stand, Wochentag, Halbtag, Person).
 - Der Stand wird je Stunden-Eintrag mitgeführt (Auswertung "Stunden/
   Kosten je Stand").
 
-### V6 - GPS-Controlling
+### V6 - GPS-Controlling  [offen]
 
 - Ankunft/Abfahrt je Stand aus den Geofence-Ereignissen des Tour-Autos;
   Soll (Plan) gegen Ist.
@@ -126,6 +142,10 @@ Code nach "kann auf main".
 
 - Wenn an einem Stand Vormittag und Nachmittag verschiedene Personen
   stehen: wer fährt - die VM-Person bringt, die NM-Person holt ab?
+  Vorläufig im Code entschieden (bitte bestätigen): Fahrer ist die
+  VM-Person am letzten mitfahrenden Stand; wechselt dort die Person zwischen
+  VM und NM, meldet der Grundplan einen Konflikt ("der Fahrer muss den
+  ganzen Tag bleiben", `lib/vertrieb.ts` fahrerAmTag/planPruefen).
 
 ## Ursprüngliche Fragen
 

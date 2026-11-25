@@ -7,6 +7,15 @@
 // nicht dem erwarteten ISO-Format entspricht.
 export function formatDatumDE(iso: string | null | undefined): string {
   if (!iso) return "—";
+  // Zeitstempel mit Uhrzeit (z.B. "2026-05-03T23:30:00+00:00") in Ortszeit
+  // umrechnen - sonst wäre kurz nach Mitternacht noch der UTC-Vortag zu sehen
+  // (Rundum-Check 2026-11-25). Reine Kalenderdaten bleiben unverändert.
+  if (/^\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}/.test(iso)) {
+    const d = new Date(iso);
+    if (!Number.isNaN(d.getTime())) {
+      return `${String(d.getDate()).padStart(2, "0")}.${String(d.getMonth() + 1).padStart(2, "0")}.${d.getFullYear()}`;
+    }
+  }
   const match = iso.match(/^(\d{4})-(\d{2})-(\d{2})/);
   if (!match) return iso;
   const [, jahr, monat, tag] = match;

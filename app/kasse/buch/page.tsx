@@ -3,8 +3,9 @@
 // Journal eines einzelnen "allgemeinen" Kassenbuchs (Migration 2026-10-03,
 // Phase 1). Aufruf: /kasse/buch?id=<kassenbuch_id>. Reine Einnahme-/Ausgabe-
 // Buchungen plus Umbuchungen von/zu anderen Büchern, jeweils mit laufendem
-// Saldo ab dem Jahres-Eröffnungssaldo. Die "Mömmel Lohnkasse" hat ihr eigenes
-// Journal unter /kasse - hierher gerät man mit ihr nur über einen alten Link.
+// Saldo ab dem Jahres-Eröffnungssaldo. Die Lohnkassen (MLK, ML, MD) haben ihr
+// eigenes Journal unter /kasse?id=<id> - hierher gerät man mit ihnen nur über
+// einen alten Link.
 
 import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
 import { formatDatumDE, formatMenge } from "@/lib/format";
@@ -25,11 +26,12 @@ import UmbuchungForm from "@/components/UmbuchungForm";
 import KassenSaldoKarte from "@/components/KassenSaldoKarte";
 
 import { hatRolle } from "@/lib/rollen";
+import { heuteLokalIso } from "@/lib/datum";
 const CURRENT_YEAR = new Date().getFullYear();
 const JAHRE = [CURRENT_YEAR, CURRENT_YEAR - 1, CURRENT_YEAR - 2];
 
 function heute() {
-  return new Date().toISOString().slice(0, 10);
+  return heuteLokalIso();
 }
 
 // Nur die im Journal benötigten Felder aus cash_checks - analog zur

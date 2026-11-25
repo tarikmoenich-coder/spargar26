@@ -27,12 +27,15 @@ import type {
 } from "@/lib/types";
 
 import { hatRolle, nurHausmeisterSicht } from "@/lib/rollen";
+import { standardPlanungsJahr } from "@/lib/personalplanung";
 export default function UnterkunftPlanungPage() {
   const { profile } = useProfile();
   const canEdit = hatRolle(profile, "admin", "hr");
   const nurLesen = nurHausmeisterSicht(profile);
 
-  const [saison, setSaison] = useState(new Date().getFullYear());
+  // Gleiche Standard-Saison wie die Personalplanung (ab September die
+  // kommende) - die Planzahl ist dort dasselbe Soll.
+  const [saison, setSaison] = useState(standardPlanungsJahr());
   const [herkuenfte, setHerkuenfte] = useState<Herkunft[]>([]);
   const [gebaeude, setGebaeude] = useState<UnterkunftGebaeude[]>([]);
   const [wohneinheiten, setWohneinheiten] = useState<UnterkunftWohneinheit[]>([]);
@@ -69,6 +72,8 @@ export default function UnterkunftPlanungPage() {
         .select("*")
         .eq("saison_jahr", saison),
     ]);
+    const ladeFehler = h.error ?? g.error ?? w.error ?? u.error ?? p.error ?? k.error ?? a.error;
+    if (ladeFehler) setFehler(`Laden fehlgeschlagen: ${ladeFehler.message}`);
     setHerkuenfte((h.data as Herkunft[]) ?? []);
     setGebaeude((g.data as UnterkunftGebaeude[]) ?? []);
     setWohneinheiten((w.data as UnterkunftWohneinheit[]) ?? []);
@@ -342,13 +347,17 @@ export default function UnterkunftPlanungPage() {
                 </span>
                 <label className="text-sm">
                   Soll
-                  <input
-                    type="number"
-                    min={0}
-                    className="ml-2 w-20"
-                    defaultValue={soll}
-                    onBlur={(e) => sollSetzen(h, e.target.value)}
-                  />
+                  {canEdit ? (
+                    <input
+                      type="number"
+                      min={0}
+                      className="ml-2 w-20"
+                      defaultValue={soll}
+                      onBlur={(e) => sollSetzen(h, e.target.value)}
+                    />
+                  ) : (
+                    <span className="ml-2 font-medium">{soll}</span>
+                  )}
                 </label>
               </div>
 
@@ -387,6 +396,7 @@ export default function UnterkunftPlanungPage() {
                         auch andere Herkunft
                       </span>
                     )}
+                    {canEdit && (
                     <span className="ml-auto flex gap-1">
                       <button
                         className="btn-secondary"
@@ -409,6 +419,7 @@ export default function UnterkunftPlanungPage() {
                         ×
                       </button>
                     </span>
+                    )}
                   </li>
                 ))}
                 {ks.length === 0 && (

@@ -23,6 +23,14 @@ export const BEREICH_LABELS: Record<string, string> = {
   unterkunft_zuordnung: "Belegungsplanung",
   unterkunft_vorgang: "Zimmer-Vorgang",
   unterkunft_mangel: "Zimmer-Mangel",
+  profiles: "Nutzer & Rollen",
+  firma: "Firmen",
+  employee_saison: "Firma je Saison",
+  employee_abzug_ausnahme: "Abzugs-Ausnahmen",
+  vt_grundplan: "Vertrieb Grundplan",
+  kleidung_ausgaben: "Arbeitskleidung",
+  qs_kontrolle: "Qualitätskontrolle",
+  zuckermais_annahme: "Zuckermais-Annahme",
 };
 
 export const AKTION_LABELS: Record<string, string> = {

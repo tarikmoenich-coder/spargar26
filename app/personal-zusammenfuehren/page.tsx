@@ -141,7 +141,7 @@ export default function PersonalZusammenfuehrenPage() {
 
   const umfangLaden = useCallback(async (p: Person) => {
     const supabase = getSupabaseClient();
-    const { data: pr } = await supabase
+    const { data: pr, error: prFehler } = await supabase
       .from("employee_saison_praesenz")
       .select("saison_jahr")
       .eq("employee_id", p.id)
@@ -150,12 +150,14 @@ export default function PersonalZusammenfuehrenPage() {
       ZAEHLEN.map(async (z) => {
         const spalte = z.spalte ?? "employee_id";
         if (z.jahrAus) {
-          const { data } = await supabase.from(z.tabelle).select(z.jahrAus).eq(spalte, p.id).limit(1000);
+          const { data, error } = await supabase.from(z.tabelle).select(z.jahrAus).eq(spalte, p.id).limit(1000);
+          if (error) return { label: `${z.label} (Fehler: ${error.message})`, n: -1 };
           const zeilen = (data as Record<string, string | number>[] | null) ?? [];
           const jahre = Array.from(new Set(zeilen.map((r) => String(r[z.jahrAus!]).slice(0, 4)))).sort();
           return { label: z.label, n: zeilen.length, jahre: jahre.join(", ") };
         }
-        const { count } = await supabase.from(z.tabelle).select("*", { count: "exact", head: true }).eq(spalte, p.id);
+        const { count, error } = await supabase.from(z.tabelle).select("*", { count: "exact", head: true }).eq(spalte, p.id);
+        if (error) return { label: `${z.label} (Fehler: ${error.message})`, n: -1 };
         return { label: z.label, n: count ?? 0 };
       })
     );
@@ -163,6 +165,7 @@ export default function PersonalZusammenfuehrenPage() {
       ...alt,
       [p.id]: { jahre: ((pr as { saison_jahr: number }[] | null) ?? []).map((r) => r.saison_jahr), zahlen },
     }));
+    if (prFehler) setMeldung({ ok: false, text: `Saisonjahre von ${p.personal_nr} nicht geladen: ${prFehler.message}` });
   }, []);
   useEffect(() => {
     if (a) umfangLaden(a);
@@ -205,6 +208,14 @@ export default function PersonalZusammenfuehrenPage() {
       return;
     setLaeuft(true);
     setMeldung(null);
+    // Hatte der übertragene Datensatz einen Erntewirtschafts-Ausweis? Dessen
+    // QR-Code enthält die alte Personalnummer -> nach dem Zusammenführen neu
+    // drucken.
+    const { data: wegAusweis } = await getSupabaseClient()
+      .from("ernte_ausweis")
+      .select("employee_id")
+      .eq("employee_id", weg.id)
+      .maybeSingle();
     const { data, error } = await getSupabaseClient().rpc("employees_zusammenfuehren", {
       p_bleibt: ziel.id,
       p_weg: weg.id,
@@ -218,7 +229,11 @@ export default function PersonalZusammenfuehrenPage() {
         .map(([k, n]) => `${k}: ${n}`);
       setMeldung({
         ok: true,
-        text: `Zusammengeführt in ${ziel.personal_nr}, ${weg.personal_nr} gelöscht.${teile.length ? ` Umgehängt: ${teile.join(", ")}.` : ""}`,
+        text:
+          `Zusammengeführt in ${ziel.personal_nr}, ${weg.personal_nr} gelöscht.${teile.length ? ` Umgehängt: ${teile.join(", ")}.` : ""}` +
+          (wegAusweis
+            ? ` Hinweis: ${weg.personal_nr} hatte einen Erntewirtschafts-Ausweis - bitte für ${ziel.personal_nr} neu drucken (Erntewirtschaft → Ausweise), der QR-Code enthält die Personalnummer.`
+            : ""),
       });
       setA(ziel);
       setB(null);
@@ -314,10 +329,11 @@ export default function PersonalZusammenfuehrenPage() {
             </div>
             <ul className="text-neutral-600">
               {u.zahlen
-                .filter((z) => z.n > 0)
+                .filter((z) => z.n !== 0)
                 .map((z) => (
-                  <li key={z.label}>
-                    {z.label}: {z.n}
+                  <li key={z.label} className={z.n < 0 ? "text-beere-600" : undefined}>
+                    {z.label}
+                    {z.n >= 0 ? `: ${z.n}` : ""}
                     {z.jahre ? ` (${z.jahre})` : ""}
                   </li>
                 ))}

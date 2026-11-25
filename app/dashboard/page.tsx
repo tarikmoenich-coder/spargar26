@@ -5,15 +5,16 @@ import Link from "next/link";
 import type { LucideIcon } from "lucide-react";
 import { getSupabaseClient } from "@/lib/supabase/client";
 import { useProfile } from "@/lib/useProfile";
-import { formatMenge, formatZahlDE } from "@/lib/format";
+import { formatEuro, formatZahlDE } from "@/lib/format";
 import MaisStatistikKachel from "@/components/MaisStatistikKachel";
+import { ladeAlleSeiten } from "@/lib/ladeAlle";
+import { heuteLokalIso } from "@/lib/datum";
+import { MAX_STUNDEN_PRO_TAG, findeAbweichungen } from "@/lib/controlling";
+import { aktionLabel, bereichLabel } from "@/lib/auditLog";
+import type { Kassenbuch, SeasonSummaryRow } from "@/lib/types";
 
-import { hatRolle } from "@/lib/rollen";
+import { hatRolle, rollenVon } from "@/lib/rollen";
 const CURRENT_YEAR = new Date().getFullYear();
-// Muss zum Wert auf der Controlling-Seite passen (app/management/page.tsx -
-// Route/Rollenname "management" bewusst unverändert, nur die sichtbare
-// Bezeichnung heißt seit 2026-08-10 "Controlling").
-const MAX_STUNDEN_PRO_TAG = 12;
 
 interface LetzterCheck {
   check_zeit: string;
@@ -21,11 +22,44 @@ interface LetzterCheck {
   freigegeben: boolean;
 }
 
+// Kassen-Kachel je Kassenbuch (Rundum-Check 2026-11-25): Saldo, letzte
+// Prüfung und Bewegungen seitdem je Buch - wie app/kasse/uebersicht.
+interface KassenKachel {
+  buch: Kassenbuch;
+  saldo: number;
+  letzterCheck: LetzterCheck | null;
+  bewegungenSeit: number;
+}
+
 interface AuditZeile {
   occurred_at: string;
-  actor_id: string | null;
+  actor_name: string | null;
   entity: string;
   action: string;
+}
+
+// Fehlerschlüssel je Kachelgruppe - bei einem Ladefehler zeigt die Kachel
+// "—" statt einer (falschen) grünen 0.
+type FehlerKey =
+  | "anreise"
+  | "sv"
+  | "kasse"
+  | "abweichungen"
+  | "aktive"
+  | "pruefer"
+  | "stunden"
+  | "ernte";
+
+// Supabase-Fehler aus einer ladeAlleSeiten-Abfrage mitschneiden
+// (ladeAlleSeiten selbst bricht bei einem Fehler nur still ab).
+function mitFehler<T extends { data: unknown[] | null; error: { message: string } | null }>(
+  merke: (msg: string) => void,
+  hole: () => PromiseLike<T>
+): PromiseLike<T> {
+  return Promise.resolve(hole()).then((r) => {
+    if (r.error) merke(r.error.message);
+    return r;
+  });
 }
 
 function Kachel({
@@ -35,6 +69,7 @@ function Kachel({
   unterzeile,
   ton = "neutral",
   icon: Icon,
+  fehler,
 }: {
   href: string;
   titel: string;
@@ -42,7 +77,13 @@ function Kachel({
   unterzeile?: string;
   ton?: "neutral" | "warn" | "ok";
   icon?: LucideIcon;
+  fehler?: string;
 }) {
+  if (fehler) {
+    wert = "—";
+    unterzeile = "Konnte nicht geladen werden";
+    ton = "neutral";
+  }
   const farbe =
     ton === "warn"
       ? "text-beere-600"
@@ -79,17 +120,16 @@ function Kachel({
 }
 
 export default function DashboardPage() {
-  const { profile } = useProfile();
+  const { profile, loading: profilLaedt } = useProfile();
   const [loading, setLoading] = useState(true);
+  const [fehler, setFehler] = useState<Partial<Record<FehlerKey, string>>>({});
 
   // hr
   const [anreiselisteOffen, setAnreiselisteOffen] = useState(0);
   const [svKritisch, setSvKritisch] = useState(0);
 
   // kasse
-  const [kassenSaldo, setKassenSaldo] = useState(0);
-  const [letzterCheck, setLetzterCheck] = useState<LetzterCheck | null>(null);
-  const [bewegungenSeitPruefung, setBewegungenSeitPruefung] = useState(0);
+  const [kassen, setKassen] = useState<KassenKachel[]>([]);
 
   // lohnabrechnung
   const [abweichungen, setAbweichungen] = useState(0);
@@ -98,13 +138,13 @@ export default function DashboardPage() {
   // pruefer
   const [wartetAufFreigabe, setWartetAufFreigabe] = useState(0);
   const [auditEintraege, setAuditEintraege] = useState<AuditZeile[]>([]);
-  const [namenVon, setNamenVon] = useState<Record<string, string>>({});
 
   // management
   const [stundenmonitoring, setStundenmonitoring] = useState(0);
 
-  // erntewirtschaft (Nutzer-Vorgabe 2026-08-09) - Kurzüberblick über den
-  // heutigen Tag, da diese Rolle nur Prämien/Statistik sieht.
+  // erntewirtschaft (Nutzer-Vorgabe 2026-08-09) - Kurzüberblick über die
+  // Prämien des heutigen Tages (Flotte/Waage/Ernte: Menüpunkt
+  // Erntewirtschaft).
   const [zmHeuteAnzahl, setZmHeuteAnzahl] = useState(0);
   const [zmHeuteSumme, setZmHeuteSumme] = useState(0);
   const [zmSatzFehlt, setZmSatzFehlt] = useState(false);
@@ -136,152 +176,145 @@ export default function DashboardPage() {
       setLoading(false);
       return;
     }
+    const fehlerNeu: Partial<Record<FehlerKey, string>> = {};
+    const merke = (key: FehlerKey) => (msg: string) => {
+      fehlerNeu[key] = msg;
+    };
 
     async function ladeAnreiseliste(supabase: ReturnType<typeof getSupabaseClient>) {
-      const { count } = await supabase
+      const { count, error } = await supabase
         .from("personal_kandidaten")
         .select("id", { count: "exact", head: true })
         .eq("status", "anreiseliste")
         .eq("gedruckt", false);
+      if (error) merke("anreise")(error.message);
       setAnreiselisteOffen(count ?? 0);
     }
 
     async function ladeSvKritisch(supabase: ReturnType<typeof getSupabaseClient>) {
-      const { count } = await supabase
+      const { count, error } = await supabase
         .from("employee_sv_pruefung")
         .select("employee_id", { count: "exact", head: true })
         .eq("saison_jahr", CURRENT_YEAR)
         .eq("kritisch", true);
+      if (error) merke("sv")(error.message);
       setSvKritisch(count ?? 0);
     }
 
     async function ladeKasse(supabase: ReturnType<typeof getSupabaseClient>) {
-      // Kassenstand = Summe der sichtbaren Lohnkassen (MLK/ML/MD, Stufe 3b),
-      // berechnet wie auf der Kasse-Seite (kassenbuch_saldo_bis, echtes SUM
-      // ohne Zeilenlimit, inkl. Kautionen/Umbuchungen) statt clientseitig.
-      const [{ data: lohnkassen }, { data: chk }] = await Promise.all([
-        supabase.from("kassenbuch").select("id").eq("typ", "lohnkasse"),
-        supabase
-          .from("cash_checks")
-          .select("check_zeit, status, freigegeben")
-          .order("check_zeit", { ascending: false })
-          .limit(1),
-      ]);
-      const salden = await Promise.all(
-        ((lohnkassen as { id: number }[]) ?? []).map((k) =>
-          supabase
-            .rpc("kassenbuch_saldo_bis", { p_kassenbuch_id: k.id })
-            .then(({ data }) => (data == null ? 0 : Number(data)))
-        )
-      );
-      setKassenSaldo(salden.reduce((s, x) => s + x, 0));
-
-      const letzter = (chk ?? [])[0] as LetzterCheck | undefined;
-      setLetzterCheck(letzter ?? null);
-      const seit = letzter?.check_zeit ?? null;
-
-      const [{ count: advCount }, { count: bewCount }, { count: azCount }] =
+      // Je Kassenbuch (MLK/ML/MD/MÖ, seit 2026-11-24 mit Prüfung je Buch):
+      // Saldo über kassenbuch_saldo_bis, letzte Prüfung dieses Buchs und
+      // Bewegungen seitdem über kassenbuch_bewegungen_seit - dieselbe Logik
+      // wie app/kasse/uebersicht/page.tsx.
+      const [{ data: buecherRoh, error: buchErr }, { data: checksRoh, error: chkErr }] =
         await Promise.all([
-          seit
-            ? supabase
-                .from("advances")
-                .select("id", { count: "exact", head: true })
-                .eq("zahlungsart", "BAR")
-                .eq("storniert", false)
-                .gt("datum", seit)
-            : supabase
-                .from("advances")
-                .select("id", { count: "exact", head: true })
-                .eq("zahlungsart", "BAR")
-                .eq("storniert", false),
-          seit
-            ? supabase
-                .from("kassenbewegungen")
-                .select("id", { count: "exact", head: true })
-                .eq("zahlungsart", "BAR")
-                .gt("zeitstempel", seit)
-            : supabase
-                .from("kassenbewegungen")
-                .select("id", { count: "exact", head: true })
-                .eq("zahlungsart", "BAR"),
-          seit
-            ? supabase
-                .from("auszahlungsbeleg_summary")
-                .select("id", { count: "exact", head: true })
-                .eq("zahlungsart", "BAR")
-                .gt("erstellt_am", seit)
-            : supabase
-                .from("auszahlungsbeleg_summary")
-                .select("id", { count: "exact", head: true })
-                .eq("zahlungsart", "BAR"),
+          supabase.from("kassenbuch").select("*").eq("aktiv", true).order("reihenfolge"),
+          supabase
+            .from("cash_checks")
+            .select("kassenbuch_id, check_zeit, status, freigegeben")
+            .order("check_zeit", { ascending: false }),
         ]);
-      setBewegungenSeitPruefung(
-        (advCount ?? 0) + (bewCount ?? 0) + (azCount ?? 0)
+      if (buchErr || chkErr) {
+        merke("kasse")((buchErr ?? chkErr)!.message);
+        return;
+      }
+      const buecher = (buecherRoh as Kassenbuch[]) ?? [];
+      const letzte = new Map<number, LetzterCheck>();
+      for (const c of (checksRoh as (LetzterCheck & { kassenbuch_id: number })[]) ?? []) {
+        if (!letzte.has(c.kassenbuch_id)) letzte.set(c.kassenbuch_id, c);
+      }
+      const ergebnis = await Promise.all(
+        buecher.map(async (b): Promise<KassenKachel> => {
+          const lc = letzte.get(b.id) ?? null;
+          const [saldoRes, bewRes] = await Promise.all([
+            supabase.rpc("kassenbuch_saldo_bis", { p_kassenbuch_id: b.id }),
+            lc
+              ? supabase.rpc("kassenbuch_bewegungen_seit", {
+                  p_kassenbuch_id: b.id,
+                  p_seit: lc.check_zeit,
+                })
+              : Promise.resolve({ data: 0, error: null }),
+          ]);
+          if (saldoRes.error) merke("kasse")(saldoRes.error.message);
+          if (bewRes.error) merke("kasse")(bewRes.error.message);
+          return {
+            buch: b,
+            saldo: saldoRes.data == null ? 0 : Number(saldoRes.data),
+            letzterCheck: lc,
+            bewegungenSeit: bewRes.data == null ? 0 : Number(bewRes.data),
+          };
+        })
       );
+      setKassen(ergebnis);
     }
 
     async function ladeAbweichungen(supabase: ReturnType<typeof getSupabaseClient>) {
-      const { data: rows } = await supabase
-        .from("season_summary")
-        .select("employee_id, snapshot, auszahlungsbetrag")
-        .eq("saison_jahr", CURRENT_YEAR)
-        .not("snapshot", "is", null);
-      const anzahl = (rows ?? []).filter(
-        (r: any) =>
-          r.snapshot &&
-          "auszahlungsbetrag" in r.snapshot &&
-          Math.abs(
-            Number(r.snapshot.auszahlungsbetrag ?? 0) -
-              Number(r.auszahlungsbetrag ?? 0)
-          ) > 0.005
-      ).length;
-      setAbweichungen(anzahl);
+      // Gleiche Prüfung wie im Controlling (findeAbweichungen, alle Felder),
+      // seitenweise wegen der 1000-Zeilen-Grenze.
+      const rows = await ladeAlleSeiten<SeasonSummaryRow>((von, bis) =>
+        mitFehler(merke("abweichungen"), () =>
+          supabase
+            .from("season_summary")
+            .select("*")
+            .eq("saison_jahr", CURRENT_YEAR)
+            .not("snapshot", "is", null)
+            .order("employee_id")
+            .range(von, bis)
+        )
+      );
+      setAbweichungen(rows.filter((r) => findeAbweichungen(r).length > 0).length);
     }
 
     async function ladeAktivePersonen(supabase: ReturnType<typeof getSupabaseClient>) {
-      const { count } = await supabase
+      const { count, error } = await supabase
         .from("employees")
         .select("id", { count: "exact", head: true })
         .eq("aktiv", true);
+      if (error) merke("aktive")(error.message);
       setAktivePersonen(count ?? 0);
     }
 
     async function ladePruefer(supabase: ReturnType<typeof getSupabaseClient>) {
-      const [{ count }, { data: log }, { data: namen }] = await Promise.all([
+      const [{ count, error }, { data: log, error: logErr }] = await Promise.all([
         supabase
           .from("cash_checks")
           .select("id", { count: "exact", head: true })
           .eq("freigegeben", false),
         supabase
-          .from("audit_log")
-          .select("occurred_at, actor_id, entity, action")
+          .from("audit_log_ansicht")
+          .select("occurred_at, actor_name, entity, action")
           .order("occurred_at", { ascending: false })
           .limit(8),
-        supabase.from("profile_namen").select("*"),
       ]);
+      if (error || logErr) merke("pruefer")((error ?? logErr)!.message);
       setWartetAufFreigabe(count ?? 0);
       setAuditEintraege((log as AuditZeile[]) ?? []);
-      const map: Record<string, string> = {};
-      (namen ?? []).forEach((p: any) => {
-        map[p.id] = p.full_name;
-      });
-      setNamenVon((prev) => ({ ...prev, ...map }));
     }
 
     async function ladeStundenmonitoring(supabase: ReturnType<typeof getSupabaseClient>) {
-      const { data } = await supabase
-        .from("work_entries")
-        .select("employee_id, stunden, datum")
-        .gt("stunden", MAX_STUNDEN_PRO_TAG)
-        .gte("datum", `${CURRENT_YEAR}-01-01`)
-        .lte("datum", `${CURRENT_YEAR}-12-31`);
-      const distinct = new Set((data ?? []).map((r: any) => r.employee_id));
-      setStundenmonitoring(distinct.size);
+      const data = await ladeAlleSeiten<{ employee_id: string }>((von, bis) =>
+        mitFehler(merke("stunden"), () =>
+          supabase
+            .from("work_entries")
+            .select("id, employee_id")
+            .gt("stunden", MAX_STUNDEN_PRO_TAG)
+            .gte("datum", `${CURRENT_YEAR}-01-01`)
+            .lte("datum", `${CURRENT_YEAR}-12-31`)
+            .order("id")
+            .range(von, bis)
+        )
+      );
+      setStundenmonitoring(new Set(data.map((r) => r.employee_id)).size);
     }
 
     async function ladeErntewirtschaft(supabase: ReturnType<typeof getSupabaseClient>) {
-      const heute = new Date().toISOString().slice(0, 10);
-      const [{ data: zm }, { data: eb }, { data: satzHeute }, { data: zmSaison }] =
+      const heute = heuteLokalIso();
+      const [
+        { data: zm, error: e1 },
+        { data: eb, error: e2 },
+        { data: satzHeute, error: e3 },
+        { data: zmSaison, error: e4 },
+      ] =
         await Promise.all([
           supabase
             .from("zuckermais_praemie_tag")
@@ -307,6 +340,8 @@ export default function DashboardPage() {
             .gte("datum", `${CURRENT_YEAR}-01-01`)
             .lte("datum", `${CURRENT_YEAR}-12-31`),
         ]);
+      const ernteFehler = e1 ?? e2 ?? e3 ?? e4;
+      if (ernteFehler) merke("ernte")(ernteFehler.message);
       const zmRows = zm ?? [];
       const ebRows = eb ?? [];
       setZmHeuteAnzahl(new Set(zmRows.map((r: any) => r.employee_id)).size);
@@ -341,6 +376,7 @@ export default function DashboardPage() {
         zeigeManagement ? ladeStundenmonitoring(supabase) : null,
         zeigeErntewirtschaft ? ladeErntewirtschaft(supabase) : null,
       ]);
+      setFehler(fehlerNeu);
       setLoading(false);
     }
     load();
@@ -350,25 +386,41 @@ export default function DashboardPage() {
   }, [profile, keinDashboard]);
 
   if (!profile) {
-    return <p className="text-neutral-500">Lädt…</p>;
+    return (
+      <p className="text-neutral-500">
+        {profilLaedt
+          ? "Lädt…"
+          : "Für dein Konto ist kein Profil hinterlegt oder es konnte nicht geladen werden. Bitte wende dich an den Administrator."}
+      </p>
+    );
   }
 
   if (keinDashboard) {
     const ziel =
-      hatRolle(profile, "hausmeister")
-        ? { href: "/unterkunft/reparaturen", text: "Zu den Reparaturen" }
-        : { href: "/erfassung", text: "Zur Stundenerfassung" };
+      rollenVon(profile).length === 0
+        ? null
+        : hatRolle(profile, "hausmeister")
+          ? { href: "/unterkunft/reparaturen", text: "Zu den Reparaturen" }
+          : hatRolle(profile, "zeiterfassung")
+            ? { href: "/erfassung", text: "Zur Stundenerfassung" }
+            : hatRolle(profile, "waage")
+              ? { href: "/erntewirtschaft/waage/kiosk", text: "Zum Waagen-Kiosk" }
+              : null;
     return (
       <div className="flex flex-col gap-2">
         <h1 className="text-lg font-semibold text-emerald-800">
           Willkommen, {profile.full_name}
         </h1>
         <p className="text-sm text-neutral-500">
-          Für deine Rolle gibt es aktuell kein eigenes Dashboard.
+          {rollenVon(profile).length === 0
+            ? "Dein Konto ist deaktiviert oder hat keine aktive Rolle. Bitte wende dich an den Administrator."
+            : "Für deine Rolle gibt es aktuell kein eigenes Dashboard."}
         </p>
-        <Link href={ziel.href} className="btn w-fit">
-          {ziel.text}
-        </Link>
+        {ziel && (
+          <Link href={ziel.href} className="btn w-fit">
+            {ziel.text}
+          </Link>
+        )}
       </div>
     );
   }
@@ -383,6 +435,13 @@ export default function DashboardPage() {
           Kurzüberblick über das, was gerade Aufmerksamkeit braucht.
         </p>
       </div>
+
+      {!loading && Object.keys(fehler).length > 0 && (
+        <p className="text-sm text-beere-600">
+          ⚠ Einige Kennzahlen konnten nicht geladen werden (
+          {Object.values(fehler).join(" · ")}).
+        </p>
+      )}
 
       {loading ? (
         <p className="text-neutral-500">Lädt…</p>
@@ -399,13 +458,15 @@ export default function DashboardPage() {
                   titel="Anreiseliste - noch nicht gedruckt"
                   wert={String(anreiselisteOffen)}
                   ton={anreiselisteOffen > 0 ? "warn" : "ok"}
+                  fehler={fehler.anreise}
                 />
                 <Kachel
                   href="/management/sozialversicherung"
-                  titel={`90-Tage-/15-Wochen-Grenze (${CURRENT_YEAR})`}
+                  titel={`15-Wochen-Grenze (105 Tage, ${CURRENT_YEAR})`}
                   wert={String(svKritisch)}
                   unterzeile="Personen mit überschrittener Grenze"
                   ton={svKritisch > 0 ? "warn" : "ok"}
+                  fehler={fehler.sv}
                 />
               </div>
             </section>
@@ -414,44 +475,44 @@ export default function DashboardPage() {
           {zeigeKasse && (
             <section>
               <h2 className="mb-2 text-base font-semibold text-emerald-800">
-                Kassenbuch
+                Kassenbücher
               </h2>
-              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-                <Kachel
-                  href="/kasse"
-                  titel="Aktueller Kassensaldo"
-                  wert={`${formatMenge(kassenSaldo, 2)} €`}
-                />
-                <Kachel
-                  href="/kasse"
-                  titel="Letzte Kassenprüfung"
-                  wert={
-                    letzterCheck
-                      ? new Date(letzterCheck.check_zeit).toLocaleDateString(
-                          "de-DE"
-                        )
-                      : "—"
-                  }
-                  unterzeile={
-                    letzterCheck
-                      ? `${letzterCheck.status}${
-                          letzterCheck.freigegeben ? " · freigegeben" : ""
-                        }`
-                      : "Noch keine Prüfung erfasst"
-                  }
-                  ton={
-                    letzterCheck && letzterCheck.status === "Kassendifferenz"
-                      ? "warn"
-                      : "neutral"
-                  }
-                />
-                <Kachel
-                  href="/kasse"
-                  titel="Bewegungen seit letzter Prüfung"
-                  wert={String(bewegungenSeitPruefung)}
-                  ton={bewegungenSeitPruefung > 0 ? "warn" : "ok"}
-                />
-              </div>
+              {fehler.kasse ? (
+                <p className="text-sm text-beere-600">
+                  Kassenbücher konnten nicht geladen werden.
+                </p>
+              ) : kassen.length === 0 ? (
+                <p className="text-sm text-neutral-500">Keine Kassenbücher sichtbar.</p>
+              ) : (
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                  {kassen.map(({ buch, saldo, letzterCheck, bewegungenSeit }) => (
+                    <Kachel
+                      key={buch.id}
+                      href={
+                        buch.typ === "lohnkasse"
+                          ? `/kasse?id=${buch.id}`
+                          : `/kasse/buch?id=${buch.id}`
+                      }
+                      titel={`${buch.bezeichnung} (${buch.kuerzel})`}
+                      wert={`${formatEuro(saldo)} €`}
+                      unterzeile={
+                        letzterCheck
+                          ? `Letzte Prüfung ${new Date(
+                              letzterCheck.check_zeit
+                            ).toLocaleDateString("de-DE")}: ${letzterCheck.status}${
+                              letzterCheck.freigegeben ? " · freigegeben" : ""
+                            } · ${bewegungenSeit} Bewegung(en) seitdem`
+                          : "Noch keine Kassenprüfung erfasst"
+                      }
+                      ton={
+                        letzterCheck?.status === "Kassendifferenz"
+                          ? "warn"
+                          : "neutral"
+                      }
+                    />
+                  ))}
+                </div>
+              )}
             </section>
           )}
 
@@ -466,11 +527,13 @@ export default function DashboardPage() {
                   titel={`Abweichungen bei Auszahlungen (${CURRENT_YEAR})`}
                   wert={String(abweichungen)}
                   ton={abweichungen > 0 ? "warn" : "ok"}
+                  fehler={fehler.abweichungen}
                 />
                 <Kachel
-                  href="/mitarbeiter"
-                  titel="Aktive Personen"
+                  href="/uebersicht"
+                  titel="Aktive Personen (Lohnübersicht)"
                   wert={String(aktivePersonen)}
+                  fehler={fehler.aktive}
                 />
               </div>
             </section>
@@ -483,15 +546,22 @@ export default function DashboardPage() {
               </h2>
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
                 <Kachel
-                  href="/kasse"
+                  href="/kasse-pruefung"
                   titel="Kassenprüfungen ohne Freigabe"
                   wert={String(wartetAufFreigabe)}
                   ton={wartetAufFreigabe > 0 ? "warn" : "ok"}
+                  fehler={fehler.pruefer}
                 />
               </div>
               <div className="mt-3">
                 <h3 className="mb-1 text-sm font-semibold text-neutral-700">
-                  Letzte Audit-Log-Einträge
+                  Letzte Einträge im Änderungsprotokoll{" "}
+                  <Link
+                    href="/aenderungsprotokoll"
+                    className="ml-1 text-xs font-normal text-emerald-700 underline"
+                  >
+                    Alle Einträge →
+                  </Link>
                 </h3>
                 {auditEintraege.length === 0 ? (
                   <p className="text-sm text-neutral-500">Keine Einträge.</p>
@@ -511,13 +581,9 @@ export default function DashboardPage() {
                           <td>
                             {new Date(a.occurred_at).toLocaleString("de-DE")}
                           </td>
-                          <td>{a.entity}</td>
-                          <td>{a.action}</td>
-                          <td>
-                            {a.actor_id
-                              ? namenVon[a.actor_id] ?? "—"
-                              : "—"}
-                          </td>
+                          <td>{bereichLabel(a.entity)}</td>
+                          <td>{aktionLabel(a.action)}</td>
+                          <td>{a.actor_name ?? "System"}</td>
                         </tr>
                       ))}
                     </tbody>
@@ -535,22 +601,25 @@ export default function DashboardPage() {
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
                 <Kachel
                   href="/management/sozialversicherung"
-                  titel={`90-Tage-/15-Wochen-Grenze (${CURRENT_YEAR})`}
+                  titel={`15-Wochen-Grenze (105 Tage, ${CURRENT_YEAR})`}
                   wert={String(svKritisch)}
                   ton={svKritisch > 0 ? "warn" : "ok"}
+                  fehler={fehler.sv}
                 />
                 <Kachel
                   href="/management/stundenmonitoring"
                   titel={`Stundenmonitoring (${CURRENT_YEAR})`}
                   wert={String(stundenmonitoring)}
-                  unterzeile={`Personen mit Tag(en) über ${MAX_STUNDEN_PRO_TAG} Std.`}
+                  unterzeile={`Personen mit Tag(en) über ${MAX_STUNDEN_PRO_TAG} Std. (Controlling zählt die Tage)`}
                   ton={stundenmonitoring > 0 ? "warn" : "ok"}
+                  fehler={fehler.stunden}
                 />
                 <Kachel
                   href="/management/auszahlungs-abweichungen"
                   titel={`Abweichungen bei Auszahlungen (${CURRENT_YEAR})`}
                   wert={String(abweichungen)}
                   ton={abweichungen > 0 ? "warn" : "ok"}
+                  fehler={fehler.abweichungen}
                 />
               </div>
             </section>
@@ -566,7 +635,8 @@ export default function DashboardPage() {
                   href="/praemien/zuckermais"
                   titel="Zuckermais - erfasste Personen heute"
                   wert={String(zmHeuteAnzahl)}
-                  unterzeile={`${formatMenge(zmHeuteSumme, 2)} € Prämie heute`}
+                  unterzeile={`${formatEuro(zmHeuteSumme)} € Prämie heute`}
+                  fehler={fehler.ernte}
                 />
                 <Kachel
                   href="/praemien/zuckermais"
@@ -578,18 +648,21 @@ export default function DashboardPage() {
                       : undefined
                   }
                   ton={zmSatzFehlt ? "warn" : "ok"}
+                  fehler={fehler.ernte}
                 />
                 <Kachel
                   href="/praemien/erdbeeren"
                   titel="Erdbeeren - erfasste Personen heute"
                   wert={String(ebHeuteAnzahl)}
-                  unterzeile={`${formatMenge(ebHeuteSumme, 2)} € Prämie heute (alle Parzellen)`}
+                  unterzeile={`${formatEuro(ebHeuteSumme)} € Prämie heute (alle Parzellen)`}
+                  fehler={fehler.ernte}
                 />
                 <Kachel
                   href="/statistik/zuckermais"
                   titel="Anzahl Kolben bis heute"
                   wert={formatZahlDE(zmKolbenSaison)}
                   unterzeile="Zuckermais, Saison-Summe - Details in der Statistik"
+                  fehler={fehler.ernte}
                 />
                 {hatRolle(profile, "admin") && (
                   <Kachel

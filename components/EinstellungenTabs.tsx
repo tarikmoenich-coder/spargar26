@@ -1,9 +1,9 @@
 "use client";
 
 // Reiter für den Einstellungen-Bereich (Nutzer-Vorgabe: aufteilen, "da hängt
-// jetzt zuviel untereinander"). Allgemein = Firmen-Bankdaten +
-// Verpflegung/Unterkunft/Mindestlohn/Arbeitskleidung; dazu je ein eigener
-// Reiter für Arbeitsgruppen, Herkünfte und Nutzer & Rollen.
+// jetzt zuviel untereinander"). Allgemein = Firmen + Sätze (Landwirtschaft/
+// Standard und Vertrieb); dazu je ein eigener Reiter für Arbeitsgruppen,
+// Herkünfte, Einsatzbereiche und Nutzer & Rollen.
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";

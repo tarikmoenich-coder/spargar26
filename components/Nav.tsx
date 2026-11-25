@@ -62,14 +62,17 @@ const items: NavItem[] = [
       "/personal-anreiseliste",
       "/personal-sozialversicherung",
       "/personal-firmenhandys",
+      "/personal-lohnsteuer",
+      "/personalstammkarte",
     ],
   },
   {
     href: "/unterkunft",
     label: "Unterkunft",
     icon: Building2,
-    // hausmeister sieht ausschliesslich dieses Modul (nur Reparaturen, Vorgabe
-    // 2026-09-15). erntewirtschaft nur lesend (Durchsetzung via RLS).
+    // hausmeister sieht ausschliesslich dieses Modul (Immobilien, Auszüge,
+    // Mängel, Reparaturen - lib/rollen.ts nurHausmeisterSicht). erntewirtschaft
+    // nur lesend (Durchsetzung via RLS).
   },
   {
     href: "/fahrzeuge",
@@ -87,7 +90,7 @@ const items: NavItem[] = [
     href: "/suche",
     label: "Suche",
     icon: Search,
-    // Alle ausser hausmeister (der sieht nur Reparaturen, Vorgabe 2026-09-15).
+    // Alle ausser hausmeister und waage (MENUE_RECHTE).
   },
   {
     href: "/uebersicht",
@@ -104,7 +107,8 @@ const items: NavItem[] = [
     auchAktivBei: ["/praemien", "/anbau", "/statistik", "/qualitaet"],
   },
   {
-    // Vertriebsplanung (docs/vertriebsplanung-plan.md): Stände, Touren.
+    // Vertriebsplanung (docs/vertriebsplanung-plan.md): Stände, Touren,
+    // Verfügbarkeit, Grundplan.
     href: "/vertrieb",
     label: "Vertrieb",
     icon: Store,
@@ -114,7 +118,7 @@ const items: NavItem[] = [
     href: "/kasse",
     label: "Kassenbuch",
     icon: Notebook,
-    auchAktivBei: ["/kasse-pruefung", "/kasse/"],
+    auchAktivBei: ["/kasse-pruefung"],
   },
   {
     href: "/management",
@@ -198,10 +202,14 @@ export default function Nav() {
   // neue Sprache.
   async function spracheAendern(neueSprache: Sprache) {
     if (!profile) return;
-    await getSupabaseClient()
+    const { error } = await getSupabaseClient()
       .from("profiles")
       .update({ sprache: neueSprache })
       .eq("id", profile.id);
+    if (error) {
+      alert(`Konnte nicht gespeichert werden: ${error.message}`);
+      return;
+    }
     window.location.reload();
   }
 
@@ -210,10 +218,14 @@ export default function Nav() {
   // filtert dann jede Seite automatisch.
   async function bereichAendern(neu: string) {
     if (!profile) return;
-    await getSupabaseClient()
+    const { error } = await getSupabaseClient()
       .from("profiles")
       .update({ bereich_ansicht: neu || null })
       .eq("id", profile.id);
+    if (error) {
+      alert(`Konnte nicht gespeichert werden: ${error.message}`);
+      return;
+    }
     window.location.reload();
   }
   const bereichWahl = profile && bereiche.mehrere && (

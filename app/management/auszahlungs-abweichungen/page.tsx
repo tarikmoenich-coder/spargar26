@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { GitCompareArrows } from "lucide-react";
 import { getSupabaseClient } from "@/lib/supabase/client";
+import { ladeAlleSeiten } from "@/lib/ladeAlle";
 import { formatDatumDE } from "@/lib/format";
 import { findeAbweichungen, type Abweichung } from "@/lib/controlling";
 import type { SeasonSummaryRow } from "@/lib/types";
@@ -17,29 +18,46 @@ export default function ControllingAbweichungenPage() {
     { row: SeasonSummaryRow; belegnummer: string; diffs: Abweichung[] }[]
   >([]);
   const [loadingAbw, setLoadingAbw] = useState(true);
+  const [fehler, setFehler] = useState<string | null>(null);
 
   useEffect(() => {
     async function loadAbweichungen() {
       setLoadingAbw(true);
       const supabase = getSupabaseClient();
-      const [{ data: rows, error }, { data: belege }] = await Promise.all([
-        supabase
-          .from("season_summary")
-          .select("*")
-          .eq("saison_jahr", jahr)
-          .not("snapshot", "is", null)
-          .order("name"),
-        supabase
-          .from("auszahlungsbelege")
-          .select("id, belegnummer")
-          .eq("saison_jahr", jahr),
+      // Seitenweise (1000-Zeilen-Grenze), Fehler mitschneiden.
+      let error: string | null = null;
+      const merke = <R extends { error: { message: string } | null }>(r: R) => {
+        if (r.error) error = r.error.message;
+        return r;
+      };
+      const [rows, belege] = await Promise.all([
+        ladeAlleSeiten<SeasonSummaryRow>((von, bis) =>
+          supabase
+            .from("season_summary")
+            .select("*")
+            .eq("saison_jahr", jahr)
+            .not("snapshot", "is", null)
+            .order("name")
+            .order("employee_id")
+            .range(von, bis)
+            .then(merke)
+        ),
+        ladeAlleSeiten<{ id: number; belegnummer: string }>((von, bis) =>
+          supabase
+            .from("auszahlungsbelege")
+            .select("id, belegnummer")
+            .eq("saison_jahr", jahr)
+            .order("id")
+            .range(von, bis)
+            .then(merke)
+        ),
       ]);
-      if (!error && rows) {
+      setFehler(error);
+      if (!error) {
         const belegnummerVon = new Map(
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          (belege ?? []).map((b: any) => [b.id, b.belegnummer as string])
+          belege.map((b) => [b.id, b.belegnummer])
         );
-        const ergebnis = (rows as SeasonSummaryRow[])
+        const ergebnis = rows
           .map((r) => ({
             row: r,
             belegnummer: r.auszahlungsbeleg_id
@@ -80,6 +98,10 @@ export default function ControllingAbweichungenPage() {
           className="w-24"
         />
       </label>
+
+      {fehler && (
+        <p className="text-sm text-beere-600">⚠ Konnte nicht geladen werden: {fehler}</p>
+      )}
 
       {loadingAbw ? (
         <p className="text-neutral-500">Lädt…</p>

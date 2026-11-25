@@ -26,6 +26,7 @@ import type {
   VtVerkaeuferSaison,
 } from "@/lib/types";
 import { HALBTAGE, WOCHENTAGE, planungsSaison } from "@/lib/vertrieb";
+import { ladeAlleSeiten } from "@/lib/ladeAlle";
 
 type Person = {
   id: string;
@@ -58,23 +59,31 @@ export default function VertriebVerfuegbarkeitPage() {
 
   const load = useCallback(async () => {
     const sb = getSupabaseClient();
+    // employees (Vertrieb) und Führerschein-Einträge (alle Bereiche)
+    // seitenweise - PostgREST liefert je Abfrage höchstens 1000 Zeilen.
     const [p, fs, pl, r, a, s, z] = await Promise.all([
-      sb
-        .from("employees")
-        .select("id, personal_nr, name, vorname, aktiv, fuehrerschein_b")
-        .eq("bereich", "VT")
-        .order("name"),
-      sb.from("employee_fuehrerschein_kategorien").select("*"),
+      ladeAlleSeiten<Person>((von, bis) =>
+        sb
+          .from("employees")
+          .select("id, personal_nr, name, vorname, aktiv, fuehrerschein_b")
+          .eq("bereich", "VT")
+          .order("name")
+          .order("id")
+          .range(von, bis)
+      ),
+      ladeAlleSeiten<FuehrerscheinEintrag>((von, bis) =>
+        sb.from("employee_fuehrerschein_kategorien").select("*").order("employee_id").range(von, bis)
+      ),
       sb.from("vt_verkaeufer_saison").select("*").eq("saison_jahr", saison),
       sb.from("vt_verfuegbarkeit").select("*").eq("saison_jahr", saison),
       sb.from("vt_abwesenheit").select("*").gte("bis", `${saison}-01-01`).lte("von", `${saison}-12-31`).order("von"),
       sb.from("vt_stand").select("*").eq("aktiv", true),
       sb.from("vt_stand_zeit").select("*"),
     ]);
-    const err = p.error ?? pl.error ?? r.error ?? a.error ?? s.error ?? z.error;
+    const err = pl.error ?? r.error ?? a.error ?? s.error ?? z.error;
     setFehler(err ? err.message : null);
-    setPersonen((p.data as Person[]) ?? []);
-    setFsDoku((fs.data as FuehrerscheinEintrag[]) ?? []);
+    setPersonen(p);
+    setFsDoku(fs);
     setPlanung((pl.data as VtVerkaeuferSaison[]) ?? []);
     setRaster((r.data as VtVerfuegbarkeit[]) ?? []);
     setAbwesenheiten((a.data as VtAbwesenheit[]) ?? []);
@@ -230,7 +239,9 @@ export default function VertriebVerfuegbarkeitPage() {
       <PageHeader
         icon={CalendarCheck}
         titel="Verfügbarkeit"
-        beschreibung="Wann die Verkäufer können - je Wochentag Vormittag/Nachmittag. Klick auf ein Feld: ✓ kann → ✗ kann nicht → offen."
+        beschreibung={`Wann die Verkäufer können - je Wochentag Vormittag/Nachmittag.${
+          darfPflegen ? " Klick auf ein Feld: ✓ kann → ✗ kann nicht → offen." : ""
+        }`}
         aktionen={
           <select value={saison} onChange={(e) => setSaison(Number(e.target.value))}>
             {saisonen.map((s) => (
