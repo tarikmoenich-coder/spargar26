@@ -34,10 +34,12 @@ import BeschaeftigungsabschnitteHistorie from "@/components/Beschaeftigungsabsch
 import { Users } from "lucide-react";
 
 import { hatRolle } from "@/lib/rollen";
+import { datumPlusTageIso, heuteLokalIso } from "@/lib/datum";
 const CURRENT_YEAR = new Date().getFullYear();
 
+// Ortszeit statt UTC (toISOString lieferte zwischen 0 und 2 Uhr den Vortag)
 function todayIso() {
-  return new Date().toISOString().slice(0, 10);
+  return heuteLokalIso();
 }
 
 // Erster Tag NACH dem letzten SV-freien Tag (austrittsdatum_empfohlen ist
@@ -45,9 +47,9 @@ function todayIso() {
 // vorausgefüllten Statuswechsel-Vorschlag (Nutzer-Vorgabe 2026-11-05).
 function naechsterTagIso(datumIso: string | null): string | null {
   if (!datumIso) return null;
-  const d = new Date(datumIso + "T00:00:00");
-  d.setDate(d.getDate() + 1);
-  return d.toISOString().slice(0, 10);
+  // Reines Kalenderdatum + 1 - die frühere Rechnung über lokale Mitternacht
+  // + toISOString() lieferte in deutscher Zeit wieder denselben Tag.
+  return datumPlusTageIso(datumIso, 1);
 }
 
 const emptyForm = {
@@ -299,8 +301,14 @@ export default function MitarbeiterPage() {
   );
 
   const personalNrKonflikt = (() => {
-    const typed = form.personal_nr.trim().toLowerCase();
-    if (!typed) return null;
+    // Mit Bereichs-Präfix vergleichen ("123" im Vertrieb wird als "V-123"
+    // gespeichert, siehe handleSubmit).
+    const roh = form.personal_nr.trim();
+    if (!roh) return null;
+    const typed = personalNrFuerBereich(
+      roh,
+      bereiche.praefix(form.bereich || bereiche.standard)
+    ).toLowerCase();
     const eigeneNr = editingId
       ? employees
           .find((e) => e.id === editingId)
@@ -342,18 +350,37 @@ export default function MitarbeiterPage() {
         .order("personal_nr")
         .range(von, bis)
     );
+    // Eine Zeile je Person - über 1000 Zeilen möglich, daher seitenweise.
+    const [ersteTage, abrechnungen, fsData] = await Promise.all([
+      ladeAlleSeiten<{ employee_id: string; erster_arbeitstag: string }>((von, bis) =>
+        supabase
+          .from("employee_erster_arbeitstag")
+          .select("*")
+          .order("employee_id")
+          .range(von, bis)
+      ),
+      ladeAlleSeiten<{ employee_id: string; abgerechnet_am: string }>((von, bis) =>
+        supabase
+          .from("employee_letzte_abrechnung")
+          .select("*")
+          .order("employee_id")
+          .range(von, bis)
+      ),
+      ladeAlleSeiten<FuehrerscheinEintrag>((von, bis) =>
+        supabase
+          .from("employee_fuehrerschein_kategorien")
+          .select("*")
+          .order("employee_id")
+          .range(von, bis)
+      ),
+    ]);
     const [
-      { data: ersteTage },
-      { data: abrechnungen },
       { data: gruppenData },
       { data: herkunftData },
       { data: svData },
       { data: svAbschnitteData },
-      { data: fsData },
       { data: vSatzData },
     ] = await Promise.all([
-      supabase.from("employee_erster_arbeitstag").select("*"),
-      supabase.from("employee_letzte_abrechnung").select("*"),
       supabase.from("arbeitsgruppen").select("*").order("reihenfolge"),
       supabase.from("herkuenfte").select("*").order("reihenfolge"),
       supabase
@@ -364,7 +391,6 @@ export default function MitarbeiterPage() {
         .from("employee_sv_abschnitte")
         .select("*")
         .eq("saison_jahr", CURRENT_YEAR),
-      supabase.from("employee_fuehrerschein_kategorien").select("*"),
       supabase
         .from("verpflegungssaetze")
         .select("*")
@@ -372,16 +398,14 @@ export default function MitarbeiterPage() {
     ]);
     setEmployees(empListe);
     const map: Record<string, string> = {};
-    (ersteTage ?? []).forEach((row: { employee_id: string; erster_arbeitstag: string }) => {
+    ersteTage.forEach((row) => {
       map[row.employee_id] = row.erster_arbeitstag;
     });
     setAktivSeit(map);
     const abrechnungMap: Record<string, string> = {};
-    (abrechnungen ?? []).forEach(
-      (row: { employee_id: string; abgerechnet_am: string }) => {
-        abrechnungMap[row.employee_id] = row.abgerechnet_am;
-      }
-    );
+    abrechnungen.forEach((row) => {
+      abrechnungMap[row.employee_id] = row.abgerechnet_am;
+    });
     setLetzteAbrechnung(abrechnungMap);
     setGruppen((gruppenData as Arbeitsgruppe[]) ?? []);
     setHerkuenfte((herkunftData as Herkunft[]) ?? []);
@@ -393,7 +417,7 @@ export default function MitarbeiterPage() {
     setSvPruefung(svMap);
     setSvAbschnitte((svAbschnitteData as SvAbschnitt[]) ?? []);
     const fsMap: Record<string, string[]> = {};
-    (fsData as FuehrerscheinEintrag[] | null ?? []).forEach((row) => {
+    fsData.forEach((row) => {
       fsMap[row.employee_id] = row.fuehrerschein_kategorien;
     });
     setFuehrerschein(fsMap);
@@ -534,10 +558,15 @@ export default function MitarbeiterPage() {
     );
     if (datum === null) return; // abgebrochen
     const supabase = getSupabaseClient();
-    await supabase
+    setError(null);
+    const { error: aktivFehler } = await supabase
       .from("employee_personaldaten")
       .update({ aktiv: !emp.aktiv })
       .eq("id", emp.id);
+    if (aktivFehler) {
+      setError(aktivFehler.message);
+      return;
+    }
     const { error: abschnittFehler } = emp.aktiv
       ? await supabase.rpc("employee_beschaeftigung_abmelden", {
           p_employee_id: emp.id,
@@ -592,7 +621,16 @@ export default function MitarbeiterPage() {
     if (datum === null) return;
     setBulkLaufend(true);
     const supabase = getSupabaseClient();
-    await supabase.from("employee_personaldaten").update({ aktiv }).in("id", bulkAusgewaehlt);
+    setError(null);
+    const { error: aktivFehler } = await supabase
+      .from("employee_personaldaten")
+      .update({ aktiv })
+      .in("id", bulkAusgewaehlt);
+    if (aktivFehler) {
+      setError(aktivFehler.message);
+      setBulkLaufend(false);
+      return;
+    }
     const fehlerListe: string[] = [];
     for (const id of bulkAusgewaehlt) {
       const { error } = aktiv
@@ -619,11 +657,16 @@ export default function MitarbeiterPage() {
     if (bulkAusgewaehlt.length === 0) return;
     setBulkLaufend(true);
     const supabase = getSupabaseClient();
-    await supabase
+    setError(null);
+    const { error: gruppeFehler } = await supabase
       .from("employee_personaldaten")
       .update({ gruppe_nr: bulkZielGruppe || null })
       .in("id", bulkAusgewaehlt);
     setBulkLaufend(false);
+    if (gruppeFehler) {
+      setError(gruppeFehler.message);
+      return;
+    }
     setBulkAusgewaehlt([]);
     load();
   }
@@ -807,8 +850,26 @@ export default function MitarbeiterPage() {
         name: alt.name,
         vorname: alt.vorname,
         geburtsdatum: alt.geburtsdatum,
+        geburtsname: alt.geburtsname ?? null,
+        geburtsort: alt.geburtsort ?? null,
+        staatsangehoerigkeit: alt.staatsangehoerigkeit ?? null,
+        geschlecht: alt.geschlecht ?? null,
+        familienstand: alt.familienstand ?? null,
+        hochzeitsdatum: alt.hochzeitsdatum ?? null,
+        strasse: alt.strasse ?? null,
+        hausnummer: alt.hausnummer ?? null,
+        plz: alt.plz ?? null,
         ort: alt.ort,
         land: alt.land,
+        telefon_privat: alt.telefon_privat ?? null,
+        email_privat: alt.email_privat ?? null,
+        funktion: alt.funktion ?? null,
+        foto_pfad: alt.foto_pfad ?? null,
+        minijob_rv_befreit:
+          statuswechselAbrechnungsart === "minijob" ? alt.minijob_rv_befreit ?? false : false,
+        praemien_zuckermais: alt.praemien_zuckermais,
+        praemien_erdbeeren: alt.praemien_erdbeeren,
+        praemien_spargel: alt.praemien_spargel,
         sozialversicherungsnummer: alt.sozialversicherungsnummer,
         steuer_id: alt.steuer_id,
         iban: alt.iban,
@@ -861,74 +922,147 @@ export default function MitarbeiterPage() {
       return;
     }
 
+    // Folgeschritte - Fehler werden gesammelt und am Ende gemeldet, statt
+    // still verschluckt zu werden.
+    const folgeFehler: string[] = [];
+    const merke = (schritt: string, e: { message: string } | null) => {
+      if (e) folgeFehler.push(`${schritt}: ${e.message}`);
+    };
+
+    // Firma je Saison (Stufe 3a) für das Stichtagsjahr mitnehmen - sonst
+    // fiele die neue Nummer auf die Standard-Firma des Bereichs zurück.
+    const stichtagJahr = Number(statuswechselStichtag.slice(0, 4));
+    const { data: altSaison, error: saisonLeseFehler } = await supabase
+      .from("employee_saison")
+      .select("firma")
+      .eq("employee_id", alt.id)
+      .eq("saison_jahr", stichtagJahr)
+      .maybeSingle();
+    merke("Firma je Saison lesen", saisonLeseFehler);
+    if (altSaison?.firma) {
+      const { error } = await supabase
+        .from("employee_saison")
+        .upsert(
+          { employee_id: neu.id, saison_jahr: stichtagJahr, firma: altSaison.firma },
+          { onConflict: "employee_id,saison_jahr" }
+        );
+      merke("Firma je Saison übernehmen", error);
+    }
+
     // Hochgeladene Dokumente (Ausweiskopie etc.) auf die neue Nummer
     // umhängen - dieselben Dokumente derselben Person, kein Duplizieren.
-    await supabase
-      .from("employee_documents")
-      .update({ employee_id: neu.id })
-      .eq("employee_id", alt.id);
+    merke(
+      "Dokumente umhängen",
+      (
+        await supabase
+          .from("employee_documents")
+          .update({ employee_id: neu.id })
+          .eq("employee_id", alt.id)
+      ).error
+    );
 
     // Nutzer-Vorgabe 2026-09-22: ein Statuswechsel bedeutet NICHT, dass die
     // Person auszieht oder das Firmenhandy abgibt - sie wohnt/telefoniert
     // unverändert weiter, nur unter der neuen Personalnummer. Ohne dieses
     // Umhängen würde "unterkunft_auszug_offen" die alte (jetzt inaktive)
-    // Nummer fälschlich als abnahmebereit zeigen (die Sicht liest u.a.
-    // "not e.aktiv" als Auszugssignal) und "unterkunft_person_offen" die
-    // neue Nummer fälschlich als "ohne Bleibe" - weil die Belegung an der
-    // alten ID hängen geblieben wäre. Eine laufende Belegung (bis is null)
-    // sowie eine noch nicht angetretene, geplante Zuordnung gehören
-    // deshalb wie die Dokumente der Person, nicht der Personalnummer.
-    await supabase
-      .from("unterkunft_belegung")
-      .update({ employee_id: neu.id })
-      .eq("employee_id", alt.id)
-      .is("bis", null);
-    await supabase
-      .from("unterkunft_zuordnung")
-      .update({ employee_id: neu.id })
-      .eq("employee_id", alt.id)
-      .eq("status", "geplant");
+    // Nummer fälschlich als abnahmebereit zeigen und "unterkunft_person_offen"
+    // die neue Nummer fälschlich als "ohne Bleibe". Eine laufende Belegung
+    // (bis is null) sowie eine noch nicht angetretene, geplante Zuordnung
+    // gehören deshalb wie die Dokumente der Person, nicht der Personalnummer.
+    merke(
+      "Unterkunft-Belegung umhängen",
+      (
+        await supabase
+          .from("unterkunft_belegung")
+          .update({ employee_id: neu.id })
+          .eq("employee_id", alt.id)
+          .is("bis", null)
+      ).error
+    );
+    merke(
+      "Unterkunft-Zuordnung umhängen",
+      (
+        await supabase
+          .from("unterkunft_zuordnung")
+          .update({ employee_id: neu.id })
+          .eq("employee_id", alt.id)
+          .eq("status", "geplant")
+      ).error
+    );
     // Firmenhandy: gleicher Gedanke - die Person behält ihre Nummer.
-    await supabase
-      .from("firmenhandy")
-      .update({ employee_id: neu.id })
-      .eq("employee_id", alt.id);
-    // Fahrzeug-Zuordnung: gleicher Gedanke - wer Fahrer eines Fahrzeugs war,
-    // bleibt es auch unter der neuen Nummer. Ohne dieses Umhängen würde die
-    // Fahrzeugliste (lädt nur aktive Personen für das Fahrer-Dropdown) den
-    // Fahrer stillschweigend "verlieren", weil die alte Nummer dort nicht
-    // mehr auftaucht.
-    await supabase
-      .from("fahrzeug")
-      .update({ fahrer_employee_id: neu.id })
-      .eq("fahrer_employee_id", alt.id);
+    merke(
+      "Firmenhandy umhängen",
+      (
+        await supabase
+          .from("firmenhandy")
+          .update({ employee_id: neu.id })
+          .eq("employee_id", alt.id)
+      ).error
+    );
+    // Fahrzeug-Zuordnung: wer Fahrer eines Fahrzeugs war, bleibt es auch
+    // unter der neuen Nummer (die Fahrzeugliste lädt nur aktive Personen).
+    merke(
+      "Fahrzeug-Fahrer umhängen",
+      (
+        await supabase
+          .from("fahrzeug")
+          .update({ fahrer_employee_id: neu.id })
+          .eq("fahrer_employee_id", alt.id)
+      ).error
+    );
 
-    await supabase.from("employee_personaldaten").update({ aktiv: false }).eq("id", alt.id);
+    merke(
+      "Alte Nummer deaktivieren",
+      (
+        await supabase
+          .from("employee_personaldaten")
+          .update({ aktiv: false })
+          .eq("id", alt.id)
+      ).error
+    );
 
     // Beschäftigungsabschnitte nachziehen (Nutzer-Vorgabe 2026-11-04/05):
-    // ohne das würde der ALTE employee_id-Abschnitt nie schließen und für
-    // immer weiterzählen, obwohl die Person unter der alten Nummer nicht
-    // mehr beschäftigt ist. Der letzte Tag unter der alten Nummer ist der
-    // Tag vor dem Stichtag (Stunden AB DEM STICHTAG gehören schon zur
-    // neuen Nummer, siehe oben).
-    const stichtagDatum = new Date(statuswechselStichtag + "T00:00:00");
-    stichtagDatum.setDate(stichtagDatum.getDate() - 1);
-    const letzterTagAlt = stichtagDatum.toISOString().slice(0, 10);
-    await supabase.rpc("employee_beschaeftigung_abmelden", {
-      p_employee_id: alt.id,
-      p_abmeldedatum: letzterTagAlt,
-    });
-    await supabase.rpc("employee_beschaeftigung_anmelden", {
-      p_employee_id: neu.id,
-      p_anmeldedatum: statuswechselStichtag,
-      p_quelle: "statuswechsel",
-    });
+    // der letzte Tag unter der alten Nummer ist der Tag vor dem Stichtag.
+    const letzterTagAlt = datumPlusTageIso(statuswechselStichtag, -1);
+    merke(
+      "Beschäftigungsabschnitt (alt) schließen",
+      (
+        await supabase.rpc("employee_beschaeftigung_abmelden", {
+          p_employee_id: alt.id,
+          p_abmeldedatum: letzterTagAlt,
+        })
+      ).error
+    );
+    merke(
+      "Beschäftigungsabschnitt (neu) öffnen",
+      (
+        await supabase.rpc("employee_beschaeftigung_anmelden", {
+          p_employee_id: neu.id,
+          p_anmeldedatum: statuswechselStichtag,
+          p_quelle: "statuswechsel",
+        })
+      ).error
+    );
+
+    // Erntewirtschafts-Ausweis: der QR-Code enthält die Personalnummer.
+    const { data: ausweis } = await supabase
+      .from("ernte_ausweis")
+      .select("employee_id")
+      .eq("employee_id", alt.id)
+      .maybeSingle();
 
     setStatuswechselLaufend(false);
     setStatuswechselId(null);
     window.alert(
-      `Statuswechsel abgeschlossen: ${uebertragen ?? 0} Tag(e) mit Stunden auf ${neuePersonalNr} übertragen.`
+      `Statuswechsel abgeschlossen: ${uebertragen ?? 0} Tag(e) mit Stunden auf ${neuePersonalNr} übertragen.` +
+        (ausweis
+          ? `\n\nHinweis: Die Person hat einen Erntewirtschafts-Ausweis - der QR-Code enthält die alte Personalnummer. Bitte den Ausweis für ${neuePersonalNr} neu drucken (Erntewirtschaft → Ausweise).`
+          : "") +
+        (folgeFehler.length > 0
+          ? `\n\nAchtung, nicht alles hat geklappt:\n${folgeFehler.join("\n")}`
+          : "")
     );
+    if (folgeFehler.length > 0) setError(folgeFehler.join(" · "));
     load();
   }
 
@@ -1287,7 +1421,11 @@ export default function MitarbeiterPage() {
             Prämien/Boni bleiben unverändert bei {statuswechselPerson.personal_nr} -
             sie hängen an der Auszahlung, nicht am Beschäftigungszeitraum.
             Liegt im zu übertragenden Zeitraum ein per Monatsabschluss
-            gesperrter Monat, wird der Statuswechsel verweigert.
+            gesperrter Monat, wird der Statuswechsel verweigert. Firma der
+            Saison, Dokumente, Unterkunft, Firmenhandy und Fahrzeug wandern
+            mit. Ein vorhandener Erntewirtschafts-Ausweis muss danach für die
+            neue Nummer neu gedruckt werden (der QR-Code enthält die
+            Personalnummer).
           </p>
           <div className="flex flex-wrap items-end gap-3">
             <label className="flex flex-col gap-0.5 text-xs text-neutral-500">
@@ -1418,6 +1556,11 @@ export default function MitarbeiterPage() {
     <div className="flex flex-col gap-6">
       <PersonalTabs />
       <PageHeader icon={Users} titel="Personal" beschreibung="Stammdaten der Mitarbeiter. Löschen ist nicht möglich - Personen werden bei Bedarf deaktiviert, die Historie bleibt erhalten." />
+      {error && !editingId && !neuOffen && (
+        <p className="rounded border border-beere-300 bg-beere-50 px-3 py-2 text-sm text-beere-800">
+          ⚠ {error}
+        </p>
+      )}
 
       {canEdit && !editingId && (
         neuOffen ? (

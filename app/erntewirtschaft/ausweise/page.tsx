@@ -17,6 +17,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import QRCode from "qrcode";
 import { IdCard } from "lucide-react";
 import PageHeader from "@/components/PageHeader";
+import ErntewirtschaftTabs from "@/components/ErntewirtschaftTabs";
 import EmptyState from "@/components/EmptyState";
 import DokumentKameraAufnahme from "@/components/DokumentKameraAufnahme";
 import MitarbeiterAusweisKarte from "@/components/MitarbeiterAusweisKarte";
@@ -24,6 +25,7 @@ import MitarbeiterAusweisDruckbogen from "@/components/MitarbeiterAusweisDruckbo
 import { getSupabaseClient } from "@/lib/supabase/client";
 import { useProfile } from "@/lib/useProfile";
 import { formatDatumDE } from "@/lib/format";
+import { ladeAlleSeiten } from "@/lib/ladeAlle";
 import type { Arbeitsgruppe, FuehrerscheinEintrag } from "@/lib/types";
 
 import { hatRolle } from "@/lib/rollen";
@@ -90,29 +92,54 @@ export default function ErntewirtschaftAusweisePage() {
   const laden = useCallback(async () => {
     setLoading(true);
     const supabase = getSupabaseClient();
-    const [
-      { data: empData, error: empErr },
-      { data: ausweisData, error: ausweisErr },
-      { data: gruppenData, error: gruppenErr },
-      { data: fsData, error: fsErr },
-    ] = await Promise.all([
-      supabase
-        .from("employees")
-        .select("id, personal_nr, name, vorname, foto_pfad, gruppe_nr, herkunft")
-        .eq("aktiv", true)
-        .order("name"),
-      supabase
-        .from("ernte_ausweis")
-        .select("employee_id, suffix, erstellt_am, aktualisiert_am, generation, letzter_druck_nr"),
-      supabase.from("arbeitsgruppen").select("*").order("reihenfolge"),
-      supabase.from("employee_fuehrerschein_kategorien").select("*"),
-    ]);
-    setFehler(empErr?.message ?? ausweisErr?.message ?? gruppenErr?.message ?? fsErr?.message ?? null);
+    // Seitenweise (PostgREST-1000-Zeilen-Grenze), nur Landwirtschaft -
+    // Vertriebsleute brauchen keinen Ernte-Ausweis.
+    let empErr: { message: string } | null = null;
+    let fsErr: { message: string } | null = null;
+    const [empData, { data: ausweisData, error: ausweisErr }, { data: gruppenData, error: gruppenErr }, fsData] =
+      await Promise.all([
+        ladeAlleSeiten<Omit<MitarbeiterZeile, "fuehrerschein_kategorien">>((von, bis) =>
+          supabase
+            .from("employees")
+            .select("id, personal_nr, name, vorname, foto_pfad, gruppe_nr, herkunft")
+            .eq("aktiv", true)
+            .eq("bereich", "LW")
+            .order("name")
+            .order("id")
+            .range(von, bis)
+            .then((r) => {
+              if (r.error) empErr = r.error;
+              return r;
+            })
+        ),
+        supabase
+          .from("ernte_ausweis")
+          .select("employee_id, suffix, erstellt_am, aktualisiert_am, generation, letzter_druck_nr"),
+        supabase.from("arbeitsgruppen").select("*").order("reihenfolge"),
+        ladeAlleSeiten<FuehrerscheinEintrag>((von, bis) =>
+          supabase
+            .from("employee_fuehrerschein_kategorien")
+            .select("*")
+            .order("employee_id")
+            .range(von, bis)
+            .then((r) => {
+              if (r.error) fsErr = r.error;
+              return r;
+            })
+        ),
+      ]);
+    setFehler(
+      (empErr as { message: string } | null)?.message ??
+        ausweisErr?.message ??
+        gruppenErr?.message ??
+        (fsErr as { message: string } | null)?.message ??
+        null
+    );
     const fuehrerscheinMap = new Map(
-      ((fsData as FuehrerscheinEintrag[]) ?? []).map((f) => [f.employee_id, f.fuehrerschein_kategorien])
+      fsData.map((f) => [f.employee_id, f.fuehrerschein_kategorien])
     );
     setMitarbeiter(
-      ((empData as Omit<MitarbeiterZeile, "fuehrerschein_kategorien">[]) ?? []).map((e) => ({
+      empData.map((e) => ({
         ...e,
         fuehrerschein_kategorien: fuehrerscheinMap.get(e.id) ?? [],
       }))
@@ -299,6 +326,7 @@ export default function ErntewirtschaftAusweisePage() {
   return (
     <>
     <div className="flex flex-col gap-4 print:hidden">
+      <ErntewirtschaftTabs />
       <PageHeader
         icon={IdCard}
         titel="Ausweise"
@@ -506,6 +534,7 @@ export default function ErntewirtschaftAusweisePage() {
                               className="text-left hover:underline"
                               disabled={inArbeit}
                               onClick={() => setFotoKameraFuer(m)}
+                              title="Kamera: Passfoto aus dem Personalausweis - speichert zusätzlich die volle Aufnahme als Dokument „Ausweiskopie“"
                             >
                               {m.foto_pfad ? (
                                 "Foto ändern"

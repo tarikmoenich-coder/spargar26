@@ -18,7 +18,7 @@ import VertriebTabs from "@/components/VertriebTabs";
 import type { VtStand, VtStandZeit, VtTagesart, VtTour, VtTourStand } from "@/lib/types";
 import { TAGESARTEN, WOCHENTAGE, fahrerStandId, offenAnTagesart, zeitInput, zeitKurz } from "@/lib/vertrieb";
 
-type FahrzeugOpt = { id: number; bezeichnung: string; kennzeichen: string | null };
+type FahrzeugOpt = { id: number; bezeichnung: string; kennzeichen: string | null; aktiv: boolean };
 type Eintrag = { stand_id: number; nur_ware: boolean };
 
 interface TourForm {
@@ -88,7 +88,9 @@ export default function VertriebTourenPage() {
       sb.from("vt_tour").select("*").order("nummer"),
       sb.from("vt_tour_stand").select("*").order("reihenfolge"),
       // Fahrzeuge sieht nicht jede Rolle (fahrzeug_select) - dann leer.
-      sb.from("fahrzeug").select("id, bezeichnung, kennzeichen").eq("aktiv", true).order("bezeichnung"),
+      // Auch abgemeldete laden, damit ein bereits gesetztes Tour-Fahrzeug
+      // mit Namen erscheint (zur Auswahl stehen nur angemeldete).
+      sb.from("fahrzeug").select("id, bezeichnung, kennzeichen, aktiv").order("bezeichnung"),
     ]);
     const err = s.error ?? z.error ?? t.error ?? ts.error;
     setFehler(err ? err.message : null);
@@ -115,7 +117,9 @@ export default function VertriebTourenPage() {
   const fahrzeugName = (id: number | null) => {
     if (id == null) return null;
     const f = fahrzeuge.find((x) => x.id === id);
-    return f ? `${f.bezeichnung}${f.kennzeichen ? ` (${f.kennzeichen})` : ""}` : `Fahrzeug #${id}`;
+    return f
+      ? `${f.bezeichnung}${f.kennzeichen ? ` (${f.kennzeichen})` : ""}${f.aktiv ? "" : " – abgemeldet"}`
+      : `Fahrzeug #${id}`;
   };
 
   function neu(tagesart: VtTagesart) {
@@ -251,12 +255,15 @@ export default function VertriebTourenPage() {
           Fahrzeug
           <select value={form.fahrzeug_id} onChange={(e) => setForm({ ...form, fahrzeug_id: e.target.value })}>
             <option value="">— offen —</option>
-            {fahrzeuge.map((f) => (
-              <option key={f.id} value={f.id}>
-                {f.bezeichnung}
-                {f.kennzeichen ? ` (${f.kennzeichen})` : ""}
-              </option>
-            ))}
+            {fahrzeuge
+              .filter((f) => f.aktiv || String(f.id) === form.fahrzeug_id)
+              .map((f) => (
+                <option key={f.id} value={f.id}>
+                  {f.bezeichnung}
+                  {f.kennzeichen ? ` (${f.kennzeichen})` : ""}
+                  {f.aktiv ? "" : " – abgemeldet"}
+                </option>
+              ))}
           </select>
         </label>
         <label className="flex flex-col gap-1 text-sm">

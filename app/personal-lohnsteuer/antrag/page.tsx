@@ -46,6 +46,7 @@ import {
 } from "@/lib/types";
 
 import { hatRolle } from "@/lib/rollen";
+import { heuteLokalIso } from "@/lib/datum";
 const CURRENT_YEAR = new Date().getFullYear();
 
 interface Checkpunkt {
@@ -238,9 +239,22 @@ export default function LohnsteuerantragPage() {
     aktivEmployees.forEach((e) => {
       empMap[e.id] = e;
     });
+    // Personen im Antrag sind nach Saisonende meist schon deaktiviert -
+    // deshalb gezielt OHNE aktiv-Filter nachladen (sonst fehlen Name,
+    // Steuer-ID und Adresse in Liste, Checkliste und Excel).
+    const employeeIds = pos.map((p) => p.employee_id);
+    const fehlendeIds = employeeIds.filter((id) => !empMap[id]);
+    for (let i = 0; i < fehlendeIds.length; i += 100) {
+      const { data: inaktive } = await supabase
+        .from("employee_personaldaten")
+        .select("*")
+        .in("id", fehlendeIds.slice(i, i + 100));
+      ((inaktive as Employee[]) ?? []).forEach((e) => {
+        empMap[e.id] = e;
+      });
+    }
     setEmployees(empMap);
 
-    const employeeIds = pos.map((p) => p.employee_id);
     if (employeeIds.length > 0) {
       const [{ data: dhhData }, { data: docs }, { data: fruehere }] =
         await Promise.all([
@@ -323,7 +337,11 @@ export default function LohnsteuerantragPage() {
       )
     )
       return;
-    await getSupabaseClient().from("lohnsteuerantrag").delete().eq("id", a.id);
+    const { error } = await getSupabaseClient().from("lohnsteuerantrag").delete().eq("id", a.id);
+    if (error) {
+      window.alert(`Löschen fehlgeschlagen: ${error.message}`);
+      return;
+    }
     setAktivId(null);
     ladeAntraege();
   }
@@ -501,7 +519,7 @@ export default function LohnsteuerantragPage() {
       position &&
       rueckmeldungEntwurf.ergebnis !== "offen"
     ) {
-      await supabase.from("doppelte_haushaltsfuehrung").upsert(
+      const { error: dhhFehler } = await supabase.from("doppelte_haushaltsfuehrung").upsert(
         {
           employee_id: position.employee_id,
           saison_jahr: jahr,
@@ -512,6 +530,11 @@ export default function LohnsteuerantragPage() {
         },
         { onConflict: "employee_id,saison_jahr" }
       );
+      if (dhhFehler) {
+        setSpeichern(false);
+        setSpeichernFehler(`Gespeichert, aber Verfahrensstand nicht gesetzt: ${dhhFehler.message}`);
+        return;
+      }
     }
     setSpeichern(false);
     setEditingPositionId(null);
@@ -520,10 +543,11 @@ export default function LohnsteuerantragPage() {
 
   async function positionLoeschen(p: LohnsteuerantragPosition) {
     if (!window.confirm("Person aus diesem Antrag entfernen?")) return;
-    await getSupabaseClient()
+    const { error } = await getSupabaseClient()
       .from("lohnsteuerantrag_position")
       .delete()
       .eq("id", p.id);
+    if (error) window.alert(`Entfernen fehlgeschlagen: ${error.message}`);
     if (aktivId) ladeDetails(aktivId);
   }
 
@@ -542,10 +566,11 @@ export default function LohnsteuerantragPage() {
 
   async function alsBereitMarkieren() {
     if (!aktiv) return;
-    await getSupabaseClient()
+    const { error } = await getSupabaseClient()
       .from("lohnsteuerantrag")
       .update({ status: "bereit" })
       .eq("id", aktiv.id);
+    if (error) window.alert(`Status nicht gesetzt: ${error.message}`);
     ladeAntraege();
   }
 
@@ -558,7 +583,7 @@ export default function LohnsteuerantragPage() {
     )
       return;
     const supabase = getSupabaseClient();
-    await supabase
+    const { error } = await supabase
       .from("lohnsteuerantrag")
       .update({
         status: "verschickt",
@@ -566,8 +591,12 @@ export default function LohnsteuerantragPage() {
         verschickt_am: new Date().toISOString(),
       })
       .eq("id", aktiv.id);
-    const heute = new Date().toISOString().slice(0, 10);
-    await Promise.all(
+    if (error) {
+      window.alert(`Status nicht gesetzt: ${error.message}`);
+      return;
+    }
+    const heute = heuteLokalIso();
+    const ergebnisse = await Promise.all(
       positionen.map((p) =>
         supabase.from("doppelte_haushaltsfuehrung").upsert(
           {
@@ -580,6 +609,12 @@ export default function LohnsteuerantragPage() {
         )
       )
     );
+    const dhhFehler = ergebnisse.filter((e) => e.error);
+    if (dhhFehler.length > 0) {
+      window.alert(
+        `Verfahrensstand bei ${dhhFehler.length} Person(en) nicht gesetzt: ${dhhFehler[0].error!.message}`
+      );
+    }
     ladeAntraege();
   }
 

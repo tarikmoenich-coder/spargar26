@@ -4,10 +4,9 @@ import PageHeader from "@/components/PageHeader";
 import { Award } from "lucide-react";
 import ErntewirtschaftTabs from "@/components/ErntewirtschaftTabs";
 
-// Platzhalter (Stand 2026-08-09) - Struktur steht (Menü/Reiter), Aufbau
-// folgt nach Klärung der Waage-Anbindung (Rohdaten kommen von einer
-// externen Zwischenanwendung/Datenbank an der Waage) und der Feldstufen-
-// Logik. Siehe Memory "praemien-spargel-erdbeeren-zuckermais".
+// Platzhalter - die Wiegungen kommen inzwischen direkt von der Hofwaage
+// (Erntewirtschaft → Ernte/Waage). Offen ist die Prämienberechnung selbst
+// (Feldstufen/Boni, Teil F2 in docs/erntewirtschaft-plan.md).
 export default function PraemienSpargelPage() {
   return (
     <div className="flex flex-col gap-4">
@@ -15,10 +14,9 @@ export default function PraemienSpargelPage() {
       <div>
         <PageHeader icon={Award} titel="Prämien – Spargel" />
         <p className="text-sm text-neutral-500">
-          Noch in Vorbereitung. Die Rohdaten kommen von der Waage
-          (Zwischenanwendung mit eigener Datenbank) - die Anbindung wird als
-          nächstes gemeinsam geklärt (Zugangsdaten, Feld-Zuordnung je
-          Wiegung).
+          Noch in Vorbereitung. Die Wiegungen kommen bereits direkt von der
+          Hofwaage (Erntewirtschaft → Ernte/Waage); die Spargel-Prämie
+          (Feldstufen/Boni, Teil F2 der Planung) ist noch nicht gebaut.
         </p>
       </div>
     </div>

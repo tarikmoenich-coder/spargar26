@@ -12,10 +12,8 @@ import FahrzeugKarte, {
   type Stopppunkt,
 } from "@/components/FahrzeugKarte";
 import PageHeader from "@/components/PageHeader";
-
-function heuteIso(): string {
-  return new Date().toISOString().slice(0, 10);
-}
+import { ladeAlleSeiten } from "@/lib/ladeAlle";
+import { heuteLokalIso as heuteIso, tagesgrenzenLokal } from "@/lib/datum";
 
 function haversineKm(a: Trackpunkt, b: Trackpunkt): number {
   const R = 6371;
@@ -142,8 +140,9 @@ function stoppsAus(positionen: FahrzeugPosition[]): Stopppunkt[] {
 function VerlaufInner() {
   const params = useSearchParams();
   const [fahrzeuge, setFahrzeuge] = useState<
-    Pick<Fahrzeug, "id" | "bezeichnung" | "kennzeichen">[]
+    Pick<Fahrzeug, "id" | "bezeichnung" | "kennzeichen" | "aktiv">[]
   >([]);
+  const [fehler, setFehler] = useState<string | null>(null);
   const [fahrzeugId, setFahrzeugId] = useState<string>(
     params.get("fahrzeug") ?? ""
   );
@@ -151,13 +150,16 @@ function VerlaufInner() {
   const [positionen, setPositionen] = useState<FahrzeugPosition[]>([]);
   const [loading, setLoading] = useState(false);
 
+  // Alle Fahrzeuge (abgemeldete am Ende, markiert) - die Liste in der
+  // Übersicht verlinkt auch abgemeldete hierher.
   useEffect(() => {
     getSupabaseClient()
       .from("fahrzeug")
-      .select("id, bezeichnung, kennzeichen")
-      .eq("aktiv", true)
+      .select("id, bezeichnung, kennzeichen, aktiv")
+      .order("aktiv", { ascending: false })
       .order("bezeichnung")
-      .then(({ data }) => {
+      .then(({ data, error }) => {
+        if (error) setFehler(`Fahrzeuge nicht geladen: ${error.message}`);
         const liste = (data as typeof fahrzeuge) ?? [];
         setFahrzeuge(liste);
         setFahrzeugId((cur) => cur || (liste[0] ? String(liste[0].id) : ""));
@@ -170,17 +172,29 @@ function VerlaufInner() {
       return;
     }
     setLoading(true);
-    getSupabaseClient()
-      .from("fahrzeug_position")
-      .select("*")
-      .eq("fahrzeug_id", Number(fahrzeugId))
-      .gte("zeitpunkt", `${datum}T00:00:00`)
-      .lte("zeitpunkt", `${datum}T23:59:59.999`)
-      .order("zeitpunkt")
-      .then(({ data }) => {
-        setPositionen((data as FahrzeugPosition[]) ?? []);
-        setLoading(false);
-      });
+    // Tagesgrenzen in Ortszeit (ohne Offset würde die DB sie als UTC lesen)
+    // und seitenweise laden: je nach Melde-Intervall des Trackers hat ein
+    // Tag mehr als 1000 Punkte (PostgREST-Grenze je Abfrage).
+    const { von, bis } = tagesgrenzenLokal(datum);
+    let abgebrochen = false;
+    ladeAlleSeiten<FahrzeugPosition>((a, b) =>
+      getSupabaseClient()
+        .from("fahrzeug_position")
+        .select("*")
+        .eq("fahrzeug_id", Number(fahrzeugId))
+        .gte("zeitpunkt", von)
+        .lt("zeitpunkt", bis)
+        .order("zeitpunkt")
+        .order("id")
+        .range(a, b)
+    ).then((daten) => {
+      if (abgebrochen) return;
+      setPositionen(daten);
+      setLoading(false);
+    });
+    return () => {
+      abgebrochen = true;
+    };
   }, [fahrzeugId, datum]);
 
   const fahrten = useMemo(() => fahrtenAus(positionen), [positionen]);
@@ -216,6 +230,7 @@ function VerlaufInner() {
               <option key={f.id} value={f.id}>
                 {f.bezeichnung}
                 {f.kennzeichen ? ` (${f.kennzeichen})` : ""}
+                {f.aktiv ? "" : " – abgemeldet"}
               </option>
             ))}
           </select>
@@ -237,6 +252,8 @@ function VerlaufInner() {
               )} min unterwegs`}
         </span>
       </div>
+
+      {fehler && <p className="text-sm text-beere-600">{fehler}</p>}
 
       <FahrzeugKarte fahrzeuge={[]} track={track} stopps={stopps} hoehe="h-[60vh]" />
 

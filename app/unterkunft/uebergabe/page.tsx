@@ -39,6 +39,7 @@ import {
 } from "@/lib/types";
 
 import { hatRolle } from "@/lib/rollen";
+import { ladeAlleSeiten } from "@/lib/ladeAlle";
 interface PosEntwurf {
   zustand: UnterkunftPositionZustand;
   bemerkung: string;
@@ -104,10 +105,16 @@ export default function UnterkunftUebergabePage() {
     const [g, z, emp, v, bl, zu, lv, pn] = await Promise.all([
       supabase.from("unterkunft_gebaeude").select("*").eq("aktiv", true).order("name"),
       supabase.from("unterkunft_zimmer").select("*").eq("aktiv", true).order("nummer"),
-      supabase
-        .from("employees")
-        .select("id, personal_nr, name, vorname, aktiv")
-        .order("name"),
+      // ~4.000 Personen: seitenweise (PostgREST-Grenze 1000 je Abfrage).
+      ladeAlleSeiten<{ id: string; personal_nr: string; name: string; vorname: string; aktiv: boolean }>(
+        (von, bis) =>
+          supabase
+            .from("employees")
+            .select("id, personal_nr, name, vorname, aktiv")
+            .order("name")
+            .order("id")
+            .range(von, bis)
+      ),
       supabase
         .from("unterkunft_checkliste_vorlage")
         .select("*")
@@ -122,9 +129,11 @@ export default function UnterkunftUebergabePage() {
         .limit(25),
       supabase.from("profile_namen").select("*"),
     ]);
+    const ladeFehler = g.error ?? z.error ?? v.error ?? bl.error ?? zu.error ?? lv.error;
+    if (ladeFehler) setFehler(`Laden fehlgeschlagen: ${ladeFehler.message}`);
     setGebaeude((g.data as UnterkunftGebaeude[]) ?? []);
     setZimmer((z.data as UnterkunftZimmer[]) ?? []);
-    setEmployees((emp.data as typeof employees) ?? []);
+    setEmployees(emp);
     setVorlage((v.data as UnterkunftChecklisteVorlage[]) ?? []);
     setBelegungen((bl.data as UnterkunftBelegungAktuell[]) ?? []);
     setZuordnungen((zu.data as UnterkunftZuordnungOffen[]) ?? []);
@@ -500,12 +509,14 @@ export default function UnterkunftUebergabePage() {
         }
         // Die zu diesem Bereich aufgenommenen Fotos zusätzlich an den Mangel
         // hängen, damit sie in der Mängelliste erscheinen.
-        await supabase
+        const { error: fErr } = await supabase
           .from("unterkunft_foto")
           .update({ mangel_id: (mg as { id: number }).id })
           .eq("vorgang_id", vorgang.id)
           .eq("bereich", p.bereich)
           .is("mangel_id", null);
+        if (fErr)
+          setFehler(`Fotos zu „${p.bereich}“ nicht am Mangel: ${fErr.message}`);
       }
     }
 
@@ -535,7 +546,7 @@ export default function UnterkunftUebergabePage() {
           setFehler(`Belegung ${personName(employeeId)}: ${bErr.message}`);
           continue;
         }
-        await supabase
+        const { error: zErr } = await supabase
           .from("unterkunft_zuordnung")
           .update({
             status: "erledigt",
@@ -544,6 +555,10 @@ export default function UnterkunftUebergabePage() {
           })
           .eq("employee_id", employeeId)
           .eq("status", "geplant");
+        if (zErr)
+          setFehler(
+            `Belegung ${personName(employeeId)} angelegt, geplante Zuordnung nicht geschlossen: ${zErr.message}`
+          );
       }
     }
 
@@ -609,7 +624,7 @@ export default function UnterkunftUebergabePage() {
       <div className="space-y-6">
         <UnterkunftTabs />
         <p className="text-sm text-neutral-500">
-          Übergaben/Abnahmen dürfen nur admin/hr erfassen.
+          Übergaben/Abnahmen dürfen nur Admin, HR und Hausmeister erfassen.
         </p>
       </div>
     );

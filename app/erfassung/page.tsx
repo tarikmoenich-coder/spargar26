@@ -35,10 +35,12 @@ import {
 } from "@/lib/zettelZeiten";
 
 import { hatRolle, rollenVon, rolleLabel } from "@/lib/rollen";
+import { ladeAlleSeiten } from "@/lib/ladeAlle";
+import { heuteLokalIso } from "@/lib/datum";
 const OHNE_GRUPPE_KEY = "__ohne__";
 
 function todayIso() {
-  return new Date().toISOString().slice(0, 10);
+  return heuteLokalIso();
 }
 
 // Reine Kalendertag-Arithmetik auf Basis von "YYYY-MM-DD" - bewusst über
@@ -296,26 +298,45 @@ function ErfassungInner() {
     const supabase = getSupabaseClient();
     const alleTage = wochenTageVon(forDate);
     const kontext = alleTage.filter((d) => d !== forDate);
-    const [{ data: emp }, { data: we }, { data: gr }, { data: weKontext }] =
-      await Promise.all([
+    // Seitenweise (lib/ladeAlle.ts): die 6 Kontext-Tage der Woche liegen
+    // schnell über der 1000-Zeilen-Grenze von PostgREST.
+    const [emp, we, { data: gr }, weKontext] = await Promise.all([
+      ladeAlleSeiten<Employee>((von, bis) =>
         supabase
           .from("employees")
           .select("id, personal_nr, name, vorname, herkunft, aktiv, gruppe_nr")
           .eq("aktiv", true)
-          .order("name"),
-        supabase.from("work_entries").select("*").eq("datum", forDate),
-        supabase.from("arbeitsgruppen").select("*").order("reihenfolge"),
-        supabase.from("work_entries").select("*").in("datum", kontext),
-      ]);
-    setEmployees((emp as Employee[]) ?? []);
+          .order("name")
+          .order("id")
+          .range(von, bis)
+      ),
+      ladeAlleSeiten<WorkEntry>((von, bis) =>
+        supabase
+          .from("work_entries")
+          .select("*")
+          .eq("datum", forDate)
+          .order("id")
+          .range(von, bis)
+      ),
+      supabase.from("arbeitsgruppen").select("*").order("reihenfolge"),
+      ladeAlleSeiten<WorkEntry>((von, bis) =>
+        supabase
+          .from("work_entries")
+          .select("*")
+          .in("datum", kontext)
+          .order("id")
+          .range(von, bis)
+      ),
+    ]);
+    setEmployees(emp);
     setGruppen((gr as Arbeitsgruppe[]) ?? []);
     const map: Record<string, WorkEntry> = {};
-    ((we as WorkEntry[]) ?? []).forEach((row) => {
+    we.forEach((row) => {
       map[row.employee_id] = row;
     });
     setEntries(map);
     const kontextMap: Record<string, Record<string, WorkEntry>> = {};
-    ((weKontext as WorkEntry[]) ?? []).forEach((row) => {
+    weKontext.forEach((row) => {
       if (!kontextMap[row.datum]) kontextMap[row.datum] = {};
       kontextMap[row.datum][row.employee_id] = row;
     });
@@ -858,7 +879,11 @@ function ErfassungInner() {
       .from("employees")
       .update({ gruppe_nr })
       .eq("id", employeeId);
-    if (error) return; // z.B. fehlende Rechte - Auswahl bleibt unverändert
+    if (error) {
+      // z.B. fehlende Rechte - Auswahl bleibt unverändert
+      setSpeicherFehler(`Gruppe für ${empfaengerName(employeeId)} konnte nicht geändert werden: ${error.message}`);
+      return;
+    }
     setEmployees((prev) =>
       prev.map((e) => (e.id === employeeId ? { ...e, gruppe_nr } : e))
     );
@@ -1410,7 +1435,11 @@ function ErfassungInner() {
                             className="text-xs text-emerald-700 underline"
                             onClick={() => stundenkontoAufklappen(emp.id)}
                           >
-                            {stundenkontoOffen ? "Schließen" : "Verwalten"}
+                            {stundenkontoOffen
+                              ? "Schließen"
+                              : canStundenkontoBuchen
+                                ? "Verwalten"
+                                : "Ansehen"}
                           </button>
                         )}
                       </td>

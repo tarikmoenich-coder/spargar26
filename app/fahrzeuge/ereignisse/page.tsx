@@ -10,10 +10,7 @@ import type {
 } from "@/lib/types";
 import FahrzeugeTabs from "@/components/FahrzeugeTabs";
 import PageHeader from "@/components/PageHeader";
-
-function heuteIso(): string {
-  return new Date().toISOString().slice(0, 10);
-}
+import { heuteLokalIso as heuteIso, tagesgrenzenLokal } from "@/lib/datum";
 function uhr(iso: string | null): string {
   if (!iso) return "—";
   return new Date(iso).toLocaleTimeString("de-DE", {
@@ -39,20 +36,26 @@ export default function FahrzeugeEreignissePage() {
   const [ereignisse, setEreignisse] = useState<FahrzeugEreignis[]>([]);
   const [loading, setLoading] = useState(true);
   const [nurAuffaellig, setNurAuffaellig] = useState(false);
+  const [fehler, setFehler] = useState<string | null>(null);
 
   const laden = useCallback(async () => {
     setLoading(true);
     const supabase = getSupabaseClient();
+    // Tagesgrenzen in Ortszeit - wie die View fahrzeug_hofzeit_tag
+    // (Europe/Berlin); ohne Offset läse die DB sie als UTC.
+    const { von, bis } = tagesgrenzenLokal(datum);
     const [f, h, e] = await Promise.all([
       supabase.from("fahrzeug").select("id, bezeichnung, kennzeichen"),
       supabase.from("fahrzeug_hofzeit_tag").select("*").eq("tag", datum),
       supabase
         .from("fahrzeug_ereignis")
         .select("*")
-        .gte("zeitpunkt", `${datum}T00:00:00`)
-        .lte("zeitpunkt", `${datum}T23:59:59.999`)
+        .gte("zeitpunkt", von)
+        .lt("zeitpunkt", bis)
         .order("zeitpunkt", { ascending: false }),
     ]);
+    const ladeFehler = f.error ?? h.error ?? e.error;
+    setFehler(ladeFehler ? `Laden fehlgeschlagen: ${ladeFehler.message}` : null);
     setFahrzeuge((f.data as typeof fahrzeuge) ?? []);
     setHofzeiten((h.data as FahrzeugHofzeitTag[]) ?? []);
     setEreignisse((e.data as FahrzeugEreignis[]) ?? []);
@@ -96,6 +99,8 @@ export default function FahrzeugeEreignissePage() {
           onChange={(e) => setDatum(e.target.value)}
         />
       </label>
+
+      {fehler && <p className="text-sm text-beere-600">{fehler}</p>}
 
       {loading ? (
         <p className="p-4 text-sm text-neutral-500">Lädt …</p>

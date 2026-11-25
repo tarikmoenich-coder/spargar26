@@ -1,9 +1,8 @@
 "use client";
 
-// Reiter für den Kassenbuch-Bereich. Seit den mehreren Kassenbüchern
-// (Migration 2026-10-03) listet die Leiste zusätzlich jedes Buch: die
-// "Mömmel Lohnkasse" führt auf das bestehende Journal (/kasse), die übrigen
-// Bücher auf ihre eigene Unterseite (/kasse/<id>). Die ResizeObserver-Logik
+// Reiter für den Kassenbuch-Bereich. Die Leiste listet jedes aktive Buch:
+// Lohnkassen (MLK, ML, MD) führen auf /kasse?id=<id>, die übrigen Bücher auf
+// /kasse/buch?id=<id>. Die ResizeObserver-Logik
 // schreibt weiterhin die tatsächliche Höhe der Leiste in --subtabs-h, damit
 // darunterliegende sticky-Werkzeugleisten ihren Versatz danach ausrichten.
 
@@ -16,8 +15,9 @@ import type { Kassenbuch } from "@/lib/types";
 export default function KassenbuchTabs({
   aktivBuchId,
 }: {
-  /** Vom jeweiligen Buch-Journal gesetzt, damit der richtige Reiter aktiv
-   *  ist (der Query-Parameter ?id= steckt nicht im pathname). */
+  /** Vom jeweiligen Journal (/kasse bzw. /kasse/buch) gesetzt, damit der
+   *  richtige Reiter aktiv ist (der Query-Parameter ?id= steckt nicht im
+   *  pathname). */
   aktivBuchId?: number;
 }) {
   const pathname = usePathname();
@@ -49,7 +49,7 @@ export default function KassenbuchTabs({
   }, [buecher.length]);
 
   const buchHref = (b: Kassenbuch) =>
-    b.typ === "lohnkasse" ? "/kasse" : `/kasse/buch?id=${b.id}`;
+    b.typ === "lohnkasse" ? `/kasse?id=${b.id}` : `/kasse/buch?id=${b.id}`;
 
   const tabs: { href: string; label: string; aktiv: boolean }[] = [
     {
@@ -62,7 +62,7 @@ export default function KassenbuchTabs({
       label: b.bezeichnung,
       aktiv:
         b.typ === "lohnkasse"
-          ? pathname === "/kasse"
+          ? pathname === "/kasse" && aktivBuchId === b.id
           : pathname === "/kasse/buch" && aktivBuchId === b.id,
     })),
     {

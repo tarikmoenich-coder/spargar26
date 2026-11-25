@@ -27,6 +27,7 @@ import PageHeader from "@/components/PageHeader";
 import { ClipboardCheck } from "lucide-react";
 
 import { hatRolle } from "@/lib/rollen";
+import { heuteLokalIso } from "@/lib/datum";
 interface Teilnehmer {
   employeeId: string;
   personalNr: string;
@@ -34,8 +35,9 @@ interface Teilnehmer {
   vorname: string;
 }
 
+// Ortszeit statt UTC (toISOString lieferte nachts den Vortag)
 function heuteIso(): string {
-  return new Date().toISOString().slice(0, 10);
+  return heuteLokalIso();
 }
 
 export default function SchulungslistePage() {
@@ -63,7 +65,7 @@ export default function SchulungslistePage() {
         .eq("status", "anreiseliste")
         .order("name");
       if (kErr) {
-        setFehler(kErr.message);
+        setFehler(`Konnte nicht laden: ${kErr.message}`);
         setLoading(false);
         return;
       }
@@ -74,7 +76,7 @@ export default function SchulungslistePage() {
         ? await supabase.from("employees").select("id, personal_nr").in("id", employeeIds)
         : { data: [] as { id: string; personal_nr: string }[], error: null };
       if (empErr) {
-        setFehler(empErr.message);
+        setFehler(`Konnte nicht laden: ${empErr.message}`);
         setLoading(false);
         return;
       }
@@ -120,7 +122,7 @@ export default function SchulungslistePage() {
     );
     setTraegtEin(false);
     if (error) {
-      setFehler(error.message);
+      setFehler(`Eintragen fehlgeschlagen: ${error.message}`);
       return;
     }
     setHinweis(`Teilnahme für ${teilnehmer.length} Person(en) eingetragen.`);
@@ -177,7 +179,7 @@ export default function SchulungslistePage() {
       </div>
 
       {hinweis && <p className="text-sm text-emerald-700 print:hidden">{hinweis}</p>}
-      {fehler && <p className="text-sm text-beere-700 print:hidden">Konnte nicht laden: {fehler}</p>}
+      {fehler && <p className="text-sm text-beere-700 print:hidden">{fehler}</p>}
 
       <div>
         <h2 className="text-xl font-semibold">{titel}</h2>

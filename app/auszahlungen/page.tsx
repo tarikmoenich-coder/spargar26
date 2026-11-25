@@ -28,6 +28,7 @@ import {
 } from "@/lib/farben";
 
 import { hatRolle } from "@/lib/rollen";
+import { heuteLokalIso } from "@/lib/datum";
 function monatsSchluessel(d: Date) {
   const mm = String(d.getMonth() + 1).padStart(2, "0");
   return `KU-${mm}-${d.getFullYear()}`;
@@ -54,7 +55,7 @@ function sepaKurz(iso: string) {
 }
 
 function heuteIso() {
-  return new Date().toISOString().slice(0, 10);
+  return heuteLokalIso();
 }
 
 // Liest ein Feld aus dem eingefrorenen Schnappschuss (immer vorhanden, da
@@ -517,9 +518,15 @@ export default function AuszahlungenPage() {
       summe,
     };
     setSepaExporte((prev) => ({ ...prev, [beleg.id]: eintrag }));
-    await getSupabaseClient()
+    const { error: vermerkFehler } = await getSupabaseClient()
       .from("sepa_export")
       .upsert(eintrag, { onConflict: "art,beleg_id" });
+    if (vermerkFehler) {
+      setSepaFehler(
+        `SEPA-Datei erzeugt, aber Vermerk nicht gespeichert: ${vermerkFehler.message}`
+      );
+      return;
+    }
     setSepaBelegId(null);
   }
 
@@ -545,7 +552,7 @@ export default function AuszahlungenPage() {
       // "Haus A - Zimmer 8" auf dem Beleg, damit man die Person zum
       // Kassieren/Zurückgeben findet - nur die AKTUELL laufende Belegung,
       // keine Historie, damit der Beleg nicht überladen wird.
-      const heute = new Date().toISOString().slice(0, 10);
+      const heute = heuteLokalIso();
       const { data: belegungRoh } = await supabase
         .from("unterkunft_belegung_person")
         .select("employee_id, von, bis, gebaeude_name, zimmer_nummer")
@@ -677,14 +684,24 @@ export default function AuszahlungenPage() {
     );
     if (!grund) return;
     const supabase = getSupabaseClient();
-    await supabase
+    const { data, error } = await supabase
       .from("kautionsuebergaben")
       .update({
         storniert: true,
         storno_grund: grund,
         storniert_am: new Date().toISOString(),
       })
-      .eq("id", k.id);
+      .eq("id", k.id)
+      .select("id");
+    if (error) {
+      window.alert(`Stornieren fehlgeschlagen: ${error.message}`);
+    } else if (!data || data.length === 0) {
+      // RLS lässt die Zeile still unverändert, wenn sie zu einer bereits
+      // freigegebenen Kassenprüfung gehört (wie beim Vorschuss-Storno).
+      window.alert(
+        "Diese Kautionsübergabe gehört zu einer bereits freigegebenen Kassenprüfung und kann nicht mehr storniert werden. Bitte zunächst die Kassenprüfung im Kassenbuch wiedereröffnen."
+      );
+    }
     load();
   }
 
@@ -708,10 +725,11 @@ export default function AuszahlungenPage() {
       <div className="print:hidden">
         <PageHeader icon={Banknote} titel="Auszahlungen" />
         <p className="text-sm text-neutral-500">
-          Ein Beleg je „Jetzt Abrechnen"-Aktion auf der Lohnübersicht, auch
-          bei mehreren Personen gleichzeitig. „⚠" bedeutet: mindestens eine
-          Person in diesem Beleg weicht inzwischen von der Live-Berechnung
-          ab (z.B. weil danach ein Vorschuss oder Satz geändert wurde).
+          Ein Beleg je „Jetzt Abrechnen"-Aktion und Lohnkasse (bei Personen
+          verschiedener Firmen entsteht je Firma ein eigener Beleg). „⚠
+          Differenz" bedeutet: der Beleg enthält mindestens eine Person, die
+          für diese Saison schon einmal abgerechnet war - ausgezahlt wurde nur
+          die Differenz.
         </p>
       </div>
 
@@ -1106,7 +1124,7 @@ export default function AuszahlungenPage() {
             Auszahlungsliste – Beleg {druckZeilen.belegnummer}
           </h2>
           <p className="mt-1 text-base">
-            Datum: {formatDatumDE(new Date().toISOString())} ·{" "}
+            Datum: {formatDatumDE(heuteLokalIso())} ·{" "}
             {druckZeilen.zahlungsart === "BAR" ? "Bar" : "Überweisung"} ·
             Anzahl Personen: {druckZeilen.zeilen.length}
           </p>

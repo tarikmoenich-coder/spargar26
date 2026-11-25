@@ -26,6 +26,8 @@ import { getSupabaseClient } from "@/lib/supabase/client";
 import { useProfile } from "@/lib/useProfile";
 import ErntewirtschaftTabs from "@/components/ErntewirtschaftTabs";
 import { formatDatumDE, formatMenge } from "@/lib/format";
+import { ladeAlleSeiten } from "@/lib/ladeAlle";
+import { heuteLokalIso } from "@/lib/datum";
 import type {
   Employee,
   QsKontrolle,
@@ -181,11 +183,16 @@ export default function StatistikZuckermaisPage() {
           .gte("datum", `${jahr}-01-01`)
           .lte("datum", `${jahr}-12-31`)
           .order("zeitpunkt", { ascending: false }),
-        supabase
-          .from("zuckermais_annahme_quote")
-          .select("*")
-          .gte("datum", `${jahr}-01-01`)
-          .lte("datum", `${jahr}-12-31`),
+        // Person x Tag - über eine Saison schnell > 1000 Zeilen.
+        ladeAlleSeiten<ZuckermaisAnnahmeQuote>((von, bis) =>
+          supabase
+            .from("zuckermais_annahme_quote")
+            .select("*")
+            .gte("datum", `${jahr}-01-01`)
+            .lte("datum", `${jahr}-12-31`)
+            .order("id")
+            .range(von, bis)
+        ).then((data) => ({ data })),
       ]);
     if (!error) setZeilen((data as ZuckermaisStatistikTag[]) ?? []);
     const map: Record<string, ZuckermaisDruck> = {};
@@ -208,9 +215,7 @@ export default function StatistikZuckermaisPage() {
   // kann") statt des Saison-Jahr-Filters oben - Standardwert trotzdem an
   // "jahr" angelehnt (1. Januar bis heute bzw. bis Jahresende).
   const [personenVon, setPersonenVon] = useState(`${CURRENT_YEAR}-01-01`);
-  const [personenBis, setPersonenBis] = useState(
-    new Date().toISOString().slice(0, 10)
-  );
+  const [personenBis, setPersonenBis] = useState(heuteLokalIso());
   const [praemieZeilen, setPraemieZeilen] = useState<ZuckermaisPraemieTag[]>([]);
   const [mitarbeiterMap, setMitarbeiterMap] = useState<
     Record<
@@ -228,30 +233,47 @@ export default function StatistikZuckermaisPage() {
     if (!kannPersonenauswertungSehen) return;
     setPersonenLoading(true);
     const supabase = getSupabaseClient();
-    const [{ data: praemie, error }, { data: mitarbeiter }, { data: lohn }] = await Promise.all([
+    // Person x Tag - seitenweise laden (PostgREST-1000-Zeilen-Grenze).
+    let error: { message: string } | null = null;
+    const praemie = await ladeAlleSeiten<ZuckermaisPraemieTag>((von, bis) =>
       supabase
         .from("zuckermais_praemie_tag")
         .select("*")
         .gte("datum", personenVon)
-        .lte("datum", personenBis),
-      // Kein aktiv-Filter: eine Person, die inzwischen deaktiviert wurde
-      // (z.B. schon nach Hause geschickt), soll für einen zurückliegenden
-      // Zeitraum weiterhin korrekt ausgewertet werden können.
-      supabase
-        .from("employees")
-        .select("id, personal_nr, name, vorname, herkunft"),
-      // Stundenlohn nur über employee_lohndaten (Stufe 0c, 2026-11-24).
-      supabase.from("employee_lohndaten").select("id, stundenlohn"),
-    ]);
-    if (!error) setPraemieZeilen((praemie as ZuckermaisPraemieTag[]) ?? []);
+        .lte("datum", personenBis)
+        .order("id")
+        .range(von, bis)
+        .then((r) => {
+          if (r.error) error = r.error;
+          return r;
+        })
+    );
+    // Nur die Personen aus dem Zeitraum nachladen statt des ganzen
+    // Personalstamms (~4.000). Kein aktiv-Filter: eine inzwischen
+    // deaktivierte Person soll für einen zurückliegenden Zeitraum weiterhin
+    // korrekt ausgewertet werden. Stundenlohn nur über employee_lohndaten
+    // (Stufe 0c, 2026-11-24). In Blöcken, damit die URL nicht zu lang wird.
+    const ids = [...new Set(praemie.map((z) => z.employee_id))];
+    const mitarbeiter: Employee[] = [];
+    const lohn: { id: string; stundenlohn: number | null }[] = [];
+    for (let i = 0; i < ids.length; i += 200) {
+      const block = ids.slice(i, i + 200);
+      const [{ data: m }, { data: l }] = await Promise.all([
+        supabase.from("employees").select("id, personal_nr, name, vorname, herkunft").in("id", block),
+        supabase.from("employee_lohndaten").select("id, stundenlohn").in("id", block),
+      ]);
+      mitarbeiter.push(...((m as Employee[]) ?? []));
+      lohn.push(...((l as { id: string; stundenlohn: number | null }[]) ?? []));
+    }
+    if (!error) setPraemieZeilen(praemie);
     const lohnNachId = new Map(
-      ((lohn as { id: string; stundenlohn: number | null }[]) ?? []).map((l) => [l.id, l.stundenlohn])
+      lohn.map((l) => [l.id, l.stundenlohn])
     );
     const map: Record<
       string,
       Pick<Employee, "personal_nr" | "name" | "vorname" | "stundenlohn" | "herkunft">
     > = {};
-    ((mitarbeiter as Employee[]) ?? []).forEach((m) => {
+    mitarbeiter.forEach((m) => {
       map[m.id] = { ...m, stundenlohn: lohnNachId.get(m.id) ?? null };
     });
     setMitarbeiterMap(map);
@@ -713,7 +735,7 @@ export default function StatistikZuckermaisPage() {
                           {k.kolben_io} / {k.kolben_gesamt}
                         </td>
                         <td>
-                          <span className={qsBadge(q)}>{q ?? "—"} %</span>
+                          <span className={qsBadge(q)}>{formatMenge(q, 1)} %</span>
                         </td>
                         <td className="text-sm text-neutral-600">
                           {k.fehler_notiz ?? "—"}
@@ -770,7 +792,7 @@ export default function StatistikZuckermaisPage() {
                 <span>
                   Gruppen-Nacharbeitsquote:{" "}
                   <span className={naBadge(nacharbeitJePerson.gruppenQuote)}>
-                    {nacharbeitJePerson.gruppenQuote ?? "—"} %
+                    {formatMenge(nacharbeitJePerson.gruppenQuote, 1)} %
                   </span>
                 </span>
                 {nacharbeitJePerson.ohnePraemie > 0 && (
@@ -812,7 +834,7 @@ export default function StatistikZuckermaisPage() {
                         <td>{z.gesamt}</td>
                         <td>
                           <span className={naBadge(z.quote)}>
-                            {z.quote ?? "—"} %
+                            {formatMenge(z.quote, 1)} %
                           </span>
                         </td>
                       </tr>

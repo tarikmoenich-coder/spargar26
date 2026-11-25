@@ -89,14 +89,24 @@ export default function FormularDokumentZelle({
   async function loeschen(doc: EmployeeDocument) {
     if (!window.confirm(`"${doc.dateiname}" wirklich löschen?`)) return;
     const supabase = getSupabaseClient();
+    // Erst den Eintrag löschen, dann die Datei - scheitert der Eintrag,
+    // bleibt nichts Halbes zurück (vorher: Datei weg, Eintrag noch da).
+    const { error: dbError } = await supabase
+      .from("employee_documents")
+      .delete()
+      .eq("id", doc.id);
+    if (dbError) {
+      window.alert(`Löschen fehlgeschlagen: ${dbError.message}`);
+      return;
+    }
     const { error: storageError } = await supabase.storage
       .from(DOKUMENTE_BUCKET)
       .remove([doc.storage_path]);
     if (storageError) {
-      window.alert(`Löschen fehlgeschlagen: ${storageError.message}`);
-      return;
+      window.alert(
+        `Eintrag gelöscht, die Datei im Speicher aber nicht: ${storageError.message}`
+      );
     }
-    await supabase.from("employee_documents").delete().eq("id", doc.id);
     onGeaendert();
   }
 

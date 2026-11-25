@@ -144,6 +144,9 @@ export default function AnreiselisteKameraPage() {
 
   return (
     <div className="mx-auto flex max-w-2xl flex-col gap-4 p-3">
+      <a href="/personal-anreiseliste" className="w-fit text-sm text-emerald-700 underline">
+        ← Anreiseliste
+      </a>
       <PageHeader titel="Dokument per Kamera aufnehmen" />
 
       {fehler && <p className="text-sm text-beere-700">Konnte nicht laden: {fehler}</p>}

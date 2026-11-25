@@ -53,7 +53,7 @@ const de = {
   "erfassung.eintagvor": "Ein Tag vor",
   "erfassung.tagessumme": "Tagessumme: {wert} Std.",
   "erfassung.rollegesperrt":
-    "🔒 Deine Rolle ({rolle}) darf hier nur lesen, keine Stunden eintragen - die Felder sind deshalb gesperrt.",
+    "🔒 Deine Rollen ({rolle}) erlauben hier nur Lesen, keine Stunden eintragen - die Felder sind deshalb gesperrt.",
   "erfassung.monatgesperrt":
     "🔒 Dieser Monat ist im Rahmen des Monatsabschlusses gesperrt - die Stunden für diesen Tag können nicht mehr geändert werden. Zum Nachtragen muss der Monat auf der Lohnübersicht bewusst wieder geöffnet werden.",
   "erfassung.ausblenden": "Ausblenden",
@@ -114,7 +114,7 @@ const de = {
   // Suche (app/suche/page.tsx)
   "suche.title": "Suche",
   "suche.untertitel":
-    "Nach Name oder Personalnummer suchen, um Arbeitsstunden und Vorschüsse einer Person einzusehen.",
+    "Nach Name oder Personalnummer suchen, um Arbeitsstunden, Vorschüsse, Stundenkonto, Prämien und Unterkunft einer Person einzusehen (je nach Rolle).",
   "suche.platzhalter": "Name oder Personalnummer eingeben…",
   "suche.keinetreffer": "Keine Treffer.",
   "suche.personalnummer": "Personalnummer {nr}",
@@ -194,7 +194,7 @@ const hr: Record<TKey, string> = {
   "erfassung.eintagvor": "Jedan dan unaprijed",
   "erfassung.tagessumme": "Dnevni zbroj: {wert} h",
   "erfassung.rollegesperrt":
-    "🔒 Vaša uloga ({rolle}) ovdje smije samo čitati, ne i unositi sate - polja su zato zaključana.",
+    "🔒 Vaše uloge ({rolle}) ovdje dopuštaju samo čitanje, ne i unos sati - polja su zato zaključana.",
   "erfassung.monatgesperrt":
     "🔒 Ovaj mjesec je zaključan u sklopu mjesečnog obračuna - sati za ovaj dan se više ne mogu mijenjati. Za naknadni unos mjesec mora biti svjesno ponovno otvoren na pregledu plaća.",
   "erfassung.ausblenden": "Sakrij",
@@ -254,7 +254,7 @@ const hr: Record<TKey, string> = {
 
   "suche.title": "Pretraga",
   "suche.untertitel":
-    "Pretražite po imenu ili osobnom broju kako biste pregledali radne sate i predujmove osobe.",
+    "Pretražite po imenu ili osobnom broju kako biste pregledali radne sate, predujmove, račun sati, premije i smještaj osobe (ovisno o ulozi).",
   "suche.platzhalter": "Unesite ime ili osobni broj…",
   "suche.keinetreffer": "Nema rezultata.",
   "suche.personalnummer": "Osobni broj {nr}",

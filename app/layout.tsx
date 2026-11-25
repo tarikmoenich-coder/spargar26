@@ -14,7 +14,8 @@ const inter = Inter({
 
 export const metadata: Metadata = {
   title: "Spargar - Mömmel Agrar",
-  description: "Personal-, Zeit- und Kassenverwaltung",
+  description:
+    "Personal, Stunden, Lohn, Kasse, Unterkunft, Erntewirtschaft und Vertrieb",
   // Installierbar als „App" auf dem Startbildschirm (PWA). Bewusst OHNE
   // Service Worker - siehe README (Browser-Cache/bfcache-Stale-Data-Bug):
   // ein SW-Cache würde genau diese Fehlerklasse zurückholen. Manifest +

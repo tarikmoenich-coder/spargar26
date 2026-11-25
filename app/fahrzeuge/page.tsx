@@ -48,6 +48,7 @@ export default function FahrzeugeUebersichtPage() {
   const [bilder, setBilder] = useState<Record<number, string>>({});
   const [alarmHeute, setAlarmHeute] = useState(0);
   const [loading, setLoading] = useState(true);
+  const [fehler, setFehler] = useState<string | null>(null);
   const [zeige, setZeige] = useState<"karte" | "liste">("karte");
   // Kartenfilter nach Fahrzeugtyp ("" = alle). Wirkt auf Karte UND Liste.
   const [typFilter, setTypFilter] = useState("");
@@ -86,6 +87,8 @@ export default function FahrzeugeUebersichtPage() {
       supabase.from("fahrzeug_hof_status").select("*"),
       supabase.from("fahrzeug_km_vor_30_tagen").select("fahrzeug_id, gesamt_km"),
     ]);
+    const ladeFehler = f.error ?? t.error ?? g.error ?? al.error ?? h.error ?? km30.error;
+    setFehler(ladeFehler ? `Laden fehlgeschlagen: ${ladeFehler.message}` : null);
     setFahrzeuge((f.data as FahrzeugUebersicht[]) ?? []);
     setOffeneTracker((t.data as FahrzeugTracker[]) ?? []);
     setGeofences((g.data as FahrzeugGeofence[]) ?? []);
@@ -256,6 +259,8 @@ export default function FahrzeugeUebersichtPage() {
           )}
         </div>
       </div>
+
+      {fehler && <p className="text-sm font-medium text-beere-600">⚠ {fehler}</p>}
 
       {loading ? (
         <p className="p-4 text-sm text-neutral-500">Lädt …</p>

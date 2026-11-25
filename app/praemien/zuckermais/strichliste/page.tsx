@@ -15,7 +15,7 @@
 // Linie nach jedem 10. Kreuzfeld (erster Block 1-10). Nacharbeit-Block (12
 // Felder) und "Übertrag spargar" (Σ i.O. / Σ NA / Std.) rechts, je Person
 // über beide Zeilen hoch. Reine Druckseite - keine Erfassung, keine
-// Migration. Rückerfassung = Phase 2.
+// Migration. Rückerfassung: digitale Strichliste unter /qualitaet/strichliste.
 
 import { useEffect, useRef, useState } from "react";
 import { getSupabaseClient } from "@/lib/supabase/client";

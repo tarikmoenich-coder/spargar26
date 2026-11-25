@@ -26,6 +26,7 @@ export default function FahrzeugeEinstellungenPage() {
   const [zeiten, setZeiten] = useState<FahrzeugArbeitszeit[]>([]);
   const [geofences, setGeofences] = useState<FahrzeugGeofence[]>([]);
   const [loading, setLoading] = useState(true);
+  const [fehler, setFehler] = useState<string | null>(null);
 
   const laden = useCallback(async () => {
     const supabase = getSupabaseClient();
@@ -33,6 +34,8 @@ export default function FahrzeugeEinstellungenPage() {
       supabase.from("fahrzeug_arbeitszeit").select("*").order("wochentag"),
       supabase.from("fahrzeug_geofence").select("*").order("name"),
     ]);
+    const ladeFehler = z.error ?? g.error;
+    if (ladeFehler) setFehler(`Laden fehlgeschlagen: ${ladeFehler.message}`);
     setZeiten((z.data as FahrzeugArbeitszeit[]) ?? []);
     setGeofences((g.data as FahrzeugGeofence[]) ?? []);
     setLoading(false);
@@ -49,10 +52,22 @@ export default function FahrzeugeEinstellungenPage() {
     setZeiten((prev) =>
       prev.map((z) => (z.wochentag === wochentag ? { ...z, ...patch } : z))
     );
-    await getSupabaseClient()
+    const { error } = await getSupabaseClient()
       .from("fahrzeug_arbeitszeit")
       .update(patch)
       .eq("wochentag", wochentag);
+    speicherErgebnis(error);
+  }
+
+  // Die Oberfläche wird vorab aktualisiert - scheitert das Speichern, Meldung
+  // zeigen und den echten Stand neu laden (alarmrelevant).
+  function speicherErgebnis(error: { message: string } | null) {
+    if (error) {
+      setFehler(`Nicht gespeichert: ${error.message}`);
+      laden();
+    } else {
+      setFehler(null);
+    }
   }
 
   async function hofAendern(id: number, ist_hof: boolean) {
@@ -61,10 +76,11 @@ export default function FahrzeugeEinstellungenPage() {
         g.traccar_geofence_id === id ? { ...g, ist_hof } : g
       )
     );
-    await getSupabaseClient()
+    const { error } = await getSupabaseClient()
       .from("fahrzeug_geofence")
       .update({ ist_hof })
       .eq("traccar_geofence_id", id);
+    speicherErgebnis(error);
   }
 
   async function erlaubtAendern(id: number, erlaubt: boolean) {
@@ -73,10 +89,11 @@ export default function FahrzeugeEinstellungenPage() {
         g.traccar_geofence_id === id ? { ...g, erlaubt } : g
       )
     );
-    await getSupabaseClient()
+    const { error } = await getSupabaseClient()
       .from("fahrzeug_geofence")
       .update({ erlaubt })
       .eq("traccar_geofence_id", id);
+    speicherErgebnis(error);
   }
 
   return (
@@ -92,6 +109,10 @@ export default function FahrzeugeEinstellungenPage() {
         <p className="text-xs text-amber-700">
           Deine Rolle darf die Einstellungen nur ansehen.
         </p>
+      )}
+
+      {fehler && (
+        <p className="text-sm font-medium text-beere-600">⚠ {fehler}</p>
       )}
 
       {loading ? (
@@ -211,7 +232,7 @@ export default function FahrzeugeEinstellungenPage() {
                 {geofences.length === 0 && (
                   <tr>
                     <td colSpan={4} className="text-neutral-500">
-                      Noch keine Geofences aus Traccar. In Traccar 2 Geofences um
+                      Noch keine Geofences aus Traccar. In Traccar Geofences um
                       die Höfe anlegen und den Geräten zuweisen.
                     </td>
                   </tr>

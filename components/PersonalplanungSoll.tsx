@@ -240,7 +240,7 @@ export default function PersonalplanungSoll({
         </h2>
         <p className="text-sm text-neutral-500">
           Nur zur Übersicht (zugesagte Personen inkl. Platzhalter). Den
-          Bereich setzt du in der Namensliste je Person oder für mehrere
+          Einsatzbereich setzt du in der Namensliste je Person oder für mehrere
           markierte auf einmal.
         </p>
         {matrixZeilen.length === 0 ? (
@@ -265,7 +265,7 @@ export default function PersonalplanungSoll({
                             ),
                           }}
                         />
-                        {b === "__ohne__" ? "ohne Bereich" : b}
+                        {b === "__ohne__" ? "ohne Einsatzbereich" : b}
                       </span>
                     </th>
                   ))}
@@ -495,15 +495,15 @@ export default function PersonalplanungSoll({
           Saisonzeiträume der Einsatzbereiche – {saisonJahr}
         </h2>
         <p className="text-sm text-neutral-500">
-          Von–Bis je Bereich (z.B. Spargel, Erdbeeren, Zuckermais). Erscheint im
+          Von–Bis je Einsatzbereich (z.B. Spargel, Erdbeeren, Zuckermais). Erscheint im
           Anreise-Zeitstrahl als Balken über den Säulen. Leer lassen, wenn ein
-          Bereich keinen festen Zeitraum hat; beide Felder leeren entfernt ihn.
+          Einsatzbereich keinen festen Zeitraum hat; beide Felder leeren entfernt ihn.
         </p>
         <div className="overflow-x-auto">
           <table>
             <thead>
               <tr>
-                <th>Bereich</th>
+                <th>Einsatzbereich</th>
                 <th>von</th>
                 <th>bis</th>
                 <th>Wochen</th>

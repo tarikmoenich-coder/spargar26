@@ -29,7 +29,8 @@ import {
   type UnterkunftZimmerUebersicht,
 } from "@/lib/types";
 
-import {  nurHausmeisterSicht } from "@/lib/rollen";
+import { nurHausmeisterSicht } from "@/lib/rollen";
+import { ladeAlleSeiten } from "@/lib/ladeAlle";
 // Dringlichkeit für Sortierung/Rollup: nie kontrolliert und überfällig zuerst.
 const AMPEL_RANG: Record<KontrollAmpel, number> = {
   rot: 0,
@@ -65,6 +66,7 @@ export default function UnterkunftKontrollplanPage() {
     { zimmer_id: number; gesamtzustand: string | null }[]
   >([]);
   const [loading, setLoading] = useState(true);
+  const [fehler, setFehler] = useState<string | null>(null);
   const [gebaeudeFilter, setGebaeudeFilter] = useState("");
   const [nurFaellig, setNurFaellig] = useState(false);
   const [zeigeInaktive, setZeigeInaktive] = useState(false);
@@ -87,13 +89,21 @@ export default function UnterkunftKontrollplanPage() {
         .from("unterkunft_mangel")
         .select("id, zimmer_id, gemeldet_am, kategorie")
         .neq("status", "behoben"),
-      supabase
-        .from("unterkunft_vorgang")
-        .select("zimmer_id, gesamtzustand")
-        .eq("abgeschlossen", true)
-        .eq("storniert", false)
-        .order("abgeschlossen_am", { ascending: false }),
+      // Alle abgeschlossenen Vorgänge (wachsen jede Saison) seitenweise -
+      // PostgREST liefert je Abfrage höchstens 1000 Zeilen.
+      ladeAlleSeiten<{ zimmer_id: number; gesamtzustand: string | null }>((von, bis) =>
+        supabase
+          .from("unterkunft_vorgang")
+          .select("zimmer_id, gesamtzustand")
+          .eq("abgeschlossen", true)
+          .eq("storniert", false)
+          .order("abgeschlossen_am", { ascending: false })
+          .order("id")
+          .range(von, bis)
+      ),
     ]);
+    const ladeFehler = z.error ?? ki.error ?? m.error;
+    setFehler(ladeFehler ? `Laden fehlgeschlagen: ${ladeFehler.message}` : null);
     // Flure sind nicht kontrollpflichtig (Nutzer-Vorgabe 2026-09-01) - sie
     // dienen nur zum Hinterlegen von Mängeln/Reparaturen. Komplett aus dem
     // Kontrollplan (Baum, "Heute zu erledigen", Zähler) heraushalten.
@@ -118,9 +128,7 @@ export default function UnterkunftKontrollplanPage() {
         kategorie: string;
       }[]) ?? []
     );
-    setVorgaenge(
-      (v.data as { zimmer_id: number; gesamtzustand: string | null }[]) ?? []
-    );
+    setVorgaenge(v);
     setLoading(false);
   }, []);
 
@@ -584,6 +592,11 @@ export default function UnterkunftKontrollplanPage() {
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <PageHeader icon={CalendarCheck} titel="Kontrollplan" />
+          {fehler && (
+            <p className="rounded border border-beere-200 bg-beere-50 px-3 py-2 text-sm text-beere-700">
+              {fehler}
+            </p>
+          )}
           <p className="max-w-3xl text-sm text-neutral-500">
             Gebäude → Wohneinheit → Raum · letzte Kontrolle, offene Mängel und
             spätester nächster Kontrolltermin. Zeitzyklus je Raumtyp aus den{" "}

@@ -32,6 +32,8 @@ import {
 } from "@/lib/types";
 
 import { hatRolle, nurHausmeisterSicht } from "@/lib/rollen";
+import { ladeAlleSeiten } from "@/lib/ladeAlle";
+import Link from "next/link";
 const VERURSACHUNG_REIHENFOLGE: UnterkunftMangelVerursachung[] = [
   "bewohner",
   "verschleiss",
@@ -92,27 +94,43 @@ export default function UnterkunftReparaturenPage() {
       supabase.from("unterkunft_gebaeude").select("*").order("name"),
       supabase.from("unterkunft_wohneinheit").select("id, name").order("name"),
       supabase.from("unterkunft_zimmer").select("*").order("nummer"),
-      supabase
-        .from("unterkunft_mangel")
-        .select("*")
-        .eq("kategorie", "reparatur")
-        .order("gemeldet_am", { ascending: false }),
-      supabase
-        .from("unterkunft_belegung_person")
-        .select("*")
-        .order("von", { ascending: false }),
-      supabase
-        .from("employees")
-        .select("id, personal_nr, name, vorname")
-        .order("name"),
+      // Wachsende Listen und employees (~4.000) seitenweise laden -
+      // PostgREST liefert je Abfrage höchstens 1000 Zeilen.
+      ladeAlleSeiten<UnterkunftMangel>((von, bis) =>
+        supabase
+          .from("unterkunft_mangel")
+          .select("*")
+          .eq("kategorie", "reparatur")
+          .order("gemeldet_am", { ascending: false })
+          .order("id")
+          .range(von, bis)
+      ),
+      ladeAlleSeiten<UnterkunftBelegungPerson>((von, bis) =>
+        supabase
+          .from("unterkunft_belegung_person")
+          .select("*")
+          .order("von", { ascending: false })
+          .order("id")
+          .range(von, bis)
+      ),
+      ladeAlleSeiten<EmployeeMini>((von, bis) =>
+        supabase
+          .from("employees")
+          .select("id, personal_nr, name, vorname")
+          .order("name")
+          .order("id")
+          .range(von, bis)
+      ),
       supabase.from("unterkunft_belastung").select("*"),
     ]);
+    const ladeFehler = g.error ?? w.error ?? z.error ?? bl.error;
+    if (ladeFehler) setFehler(`Laden fehlgeschlagen: ${ladeFehler.message}`);
     setGebaeude((g.data as UnterkunftGebaeude[]) ?? []);
     setWohneinheiten((w.data as UnterkunftWohneinheit[]) ?? []);
     setZimmer((z.data as UnterkunftZimmer[]) ?? []);
-    setReparaturen((m.data as UnterkunftMangel[]) ?? []);
-    setBelegungen((bp.data as UnterkunftBelegungPerson[]) ?? []);
-    setEmployees((e.data as EmployeeMini[]) ?? []);
+    setReparaturen(m);
+    setBelegungen(bp);
+    setEmployees(e);
     setBelastungen((bl.data as UnterkunftBelastung[]) ?? []);
     setLoading(false);
   }, []);
@@ -1052,14 +1070,20 @@ export default function UnterkunftReparaturenPage() {
                                     </ul>
                                     {bl.some((b) => b.status === "offen") && (
                                       <p className="text-xs text-neutral-500">
-                                        Bestätigung unter{" "}
-                                        <a
-                                          href="/vorschuesse"
-                                          className="text-emerald-700 underline"
-                                        >
-                                          Vorschüsse
-                                        </a>
-                                        {" "}– erst dann wird abgezogen.
+                                        {istHausmeister ? (
+                                          "Bestätigung durch Kasse/HR unter Vorschüsse – erst dann wird abgezogen."
+                                        ) : (
+                                          <>
+                                            Bestätigung unter{" "}
+                                            <Link
+                                              href="/vorschuesse"
+                                              className="text-emerald-700 underline"
+                                            >
+                                              Vorschüsse
+                                            </Link>
+                                            {" "}– erst dann wird abgezogen.
+                                          </>
+                                        )}
                                       </p>
                                     )}
                                     {canEdit && (

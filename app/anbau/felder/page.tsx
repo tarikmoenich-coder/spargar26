@@ -12,6 +12,7 @@ import PageHeader from "@/components/PageHeader";
 import { MapPin } from "lucide-react";
 import { useEffect, useState } from "react";
 import { getSupabaseClient } from "@/lib/supabase/client";
+import { apiFetch } from "@/lib/apiFetch";
 import { useProfile } from "@/lib/useProfile";
 import ErntewirtschaftTabs from "@/components/ErntewirtschaftTabs";
 import {
@@ -76,13 +77,16 @@ export default function AnbauFelderPage() {
   async function load() {
     setLoading(true);
     const supabase = getSupabaseClient();
-    const [{ data: fData }, { data: pData }, { data: sData }] = await Promise.all([
+    const [{ data: fData, error: fError }, { data: pData, error: pError }, { data: sData, error: sError }] =
+      await Promise.all([
       supabase.from("feld_geojson").select("*").order("bezeichnung"),
       supabase
         .from("feld_anbau_uebersicht")
         .select("feld_id, saison_jahr, anzahl_abschnitte, anzahl_pflanzen"),
       supabase.from("spargel_sorte").select("*").order("bezeichnung"),
     ]);
+    const ladeFehler = fError ?? pError ?? sError;
+    if (ladeFehler) setFehler(`Konnte nicht laden: ${ladeFehler.message}`);
     setFelder((fData as FeldGeojson[]) ?? []);
     setSorten((sData as SpargelSorte[]) ?? []);
     const pMap: Record<number, PlanungsInfo[]> = {};
@@ -177,7 +181,7 @@ export default function AnbauFelderPage() {
     setFehler(null);
     setImportMeldung(null);
     try {
-      const res = await fetch(`/api/pachtwesen-schlaege?jahr=${importJahr}`);
+      const res = await apiFetch(`/api/pachtwesen-schlaege?jahr=${importJahr}`);
       const body = await res.json();
       if (!res.ok) {
         setFehler(body.error ?? "Import fehlgeschlagen.");

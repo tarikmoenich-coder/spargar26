@@ -31,8 +31,9 @@ import type {
 } from "@/lib/types";
 
 import { hatRolle } from "@/lib/rollen";
+import { heuteLokalIso } from "@/lib/datum";
 function heuteIso() {
-  return new Date().toISOString().slice(0, 10);
+  return heuteLokalIso();
 }
 
 function fmt(n: number | null | undefined) {
@@ -459,8 +460,9 @@ export default function PraemienErdbeerenPage() {
 
       {felder.length === 0 && !loading ? (
         <p className="rounded border border-amber-300 bg-amber-50 px-3 py-2 text-sm font-medium text-amber-800 print:hidden">
-          ⚠ Noch kein Feld angelegt - weiter unten unter „Anbau → Felder"
-          eins anlegen, bevor Prämien erfasst werden können.
+          ⚠ Noch kein Erdbeer-Feld angelegt - unter „Erntewirtschaft → Anbau
+          → Felder" anlegen (Rolle admin oder erntewirtschaft), bevor Prämien
+          erfasst werden können.
         </p>
       ) : (
         <div className="sticky top-[calc(3.5rem+var(--subtabs-h,2.5rem))] z-30 flex flex-wrap items-center gap-3 bg-sand py-2 print:hidden">

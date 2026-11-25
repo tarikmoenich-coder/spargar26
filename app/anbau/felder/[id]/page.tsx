@@ -68,11 +68,15 @@ export default function FeldDetailPage() {
     if (!feld?.pachtwesen_geometrie_geojson_neu || !feld.pachtwesen_geometrie_hash_neu) return;
     setFehler(null);
     const supabase = getSupabaseClient();
-    await supabase.rpc("feld_geometrie_setzen", {
+    const { error: geoFehler } = await supabase.rpc("feld_geometrie_setzen", {
       p_feld_id: feldId,
       p_geojson: feld.pachtwesen_geometrie_geojson_neu,
     });
-    await supabase
+    if (geoFehler) {
+      setFehler(`Geometrie konnte nicht übernommen werden: ${geoFehler.message}`);
+      return;
+    }
+    const { error } = await supabase
       .from("feld")
       .update({
         pachtwesen_geometrie_hash: feld.pachtwesen_geometrie_hash_neu,
@@ -80,6 +84,7 @@ export default function FeldDetailPage() {
         pachtwesen_geometrie_geojson_neu: null,
       })
       .eq("id", feldId);
+    if (error) setFehler(error.message);
     load();
   }
 

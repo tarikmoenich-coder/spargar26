@@ -1,6 +1,9 @@
 # Plan: Zwei Personalstämme (Landwirtschaft + Vertrieb), drei Firmen
 
-Stand: 2026-11-24 - Entwurf zur Freigabe. Noch nichts davon gebaut.
+Stand: 2026-11-25 - Stufen 0-4 gebaut und live (alle Migrationen eingespielt,
+siehe die Stand-Absätze je Stufe); Stufe 5 offen. Die Planungs-Texte der
+Stufen unten sind der ursprüngliche Entwurf - wo die Umsetzung anders heißt,
+steht es jeweils als "Umgesetzt als …" dabei.
 
 ## Ziel (Nutzer-Vorgabe 2026-11-24)
 
@@ -121,7 +124,7 @@ Jede Migration vorher in der lokalen Postgres-Kopie getestet.
 
 ### Stufe 1 - Mehrere Rollen je Nutzer
 
-Stand 2026-11-24: gebaut (Branch). Migration `2026-11-24f_mehrfachrollen`
+Stand 2026-11-25: live auf main. Migration `2026-11-24f_mehrfachrollen`
 schreibt alle Prüfungen automatisch aus dem Live-Stand um und bricht ab,
 falls eine übrig bleibt; Rechte-Matrix Einzelrollen vorher/nachher
 identisch, Mehrfachrolle = Vereinigung. Code: ~200 Prüfungen in 60 Dateien
@@ -143,7 +146,7 @@ Nutzerverwaltung mit Rollen-Häkchen + Hauptrolle.
 
 ### Stufe 2 - Personalstamm als Rechte-Grenze
 
-Stand 2026-11-24: gebaut (Branch), umbenannt in **Geschäftsbereich**
+Stand 2026-11-25: live auf main, umbenannt in **Geschäftsbereich**
 (LW/VT), weil der Nutzer die drei Firmen "Personalstämme" nennt. Nutzer-
 Entscheidung: Mönich und Mömmel brauchen keine Rechte-Trennung (nur
 Kassenbuch/Lohn-Monatsfilter/Kosten je Firma -> Stufe 3). Umsetzung über
@@ -151,6 +154,13 @@ zusätzliche einschränkende Policies (bestehende Rollen-Regeln unverändert),
 Filter in 10 Eigentümer-Views, Prüfung in 15 Funktionen. Unterkunft-
 Belegung bereichsübergreifend; auszahlungsbeleg_summary bleibt bis Stufe 3
 ungefiltert (speist den Kassenbestand). Bestehende Nutzer: nur LW.
+
+Umgesetzt als (Migration 2026-11-24h): Tabelle `geschaeftsbereich`
+(kuerzel, bezeichnung, personalnummer_praefix, reihenfolge);
+`employees.bereich`, `personal_kandidaten.bereich`, `arbeitsgruppen.bereich`;
+`profiles.bereiche` + `profiles.bereich_ansicht` (Umschalter); Helfer
+`current_bereiche()`, `bereich_filter_aktiv()`, `darf_mitarbeiter()`;
+restrictive Policies `bereich_grenze`. Ursprünglicher Entwurf:
 
 - Tabelle `personalstamm` (`LW`, `VT`; Bezeichnung, Personalnummer-Präfix,
   Standard-Kassenbuch).
@@ -165,8 +175,10 @@ ungefiltert (speist den Kassenbestand). Bestehende Nutzer: nur LW.
   erweitern; Test-Nutzer je Personalstamm.
 - Oberfläche: Wer beide sieht, bekommt Umschalter "Alle / Landwirtschaft /
   Vertrieb" (Nav, gemerkt je Nutzer) + Kennzeichen in Listen. Wer einen hat,
-  sieht keinen Unterschied.
+  sieht keinen Unterschied. **Gebaut** (`bereich_ansicht`, `useBereiche`).
 - Personalnummern-Vergabe (`/personalnummern`) je Personalstamm mit Präfix.
+  **Gebaut 2026-11-25** (Rundum-Check): Kreise je Bereich getrennt;
+  Personalstamm, Planung und Importe vergleichen Nummern mit Präfix "V-".
 - Rollen erntewirtschaft/waage: nur LW (Prämien/Ernte bleiben LW-only).
 
 ### Stufe 3 - Firmen, Saison-Zuordnung, Kassen, Sätze, Minijob
@@ -181,7 +193,18 @@ Nummernkreise mit Präfix); **3c** Lohnberechnung (Sätze je Bereich, Abzugs-Zei
 gebaut (Migration 2026-11-25; Ausnahmen als "ohne"-Zeiträume, Default =
 wie bisher jeder Anwesenheitstag; Nachweis + Umstellung atomar in einem
 DO-Block). Offen/Hinweis: SV-Prüfung (90-Tage-Grenze) kennt Minijob noch
-nicht gesondert.
+nicht gesondert. Stand 2026-11-25: 3a/3b/3c live.
+
+Umgesetzt als: Tabelle `firma` (Schlüssel `kuerzel`, name, bereich,
+ist_standard, IBAN/BIC, Steuernummer, Anschrift, `lohn_kassenbuch_id`,
+reihenfolge, aktiv) - `firmen_bankdaten` existiert live noch als Altlast
+(bitte bestätigen, ob sie entfernt werden kann); `kassenbuch.firma`;
+`employee_saison (employee_id, saison_jahr, firma)`; Ausnahmen als
+`employee_abzug_ausnahme (employee_id, art verpflegung|unterkunft, von, bis,
+notiz)` - nur "ohne"-Zeiträume, gepflegt in der Stammkarte (Abschnitt 03a);
+Sätze Vertrieb in eigener Tabelle `bereich_saetze (saison_jahr, bereich, …)`,
+`verpflegungssaetze` behält Mindestlohn und `minijob_grenze`. Ursprünglicher
+Entwurf:
 
 - Tabelle `firmen` (Name, Kurzname, IBAN/BIC, Steuernummer, Anschrift,
   Personalstamm) ersetzt `firmen_bankdaten`; Bestandswerte übernommen als
@@ -209,8 +232,9 @@ nicht gesondert.
 - SEPA-Datei, Lohnsteuer-Sammelantrag, Lohnübersicht/Monatsdruck: je Firma
   (aus `employee_saison`) bzw. Personalstamm filter-/trennbar.
 - `abrechnungsart` + `minijob`: keine App-Lohnsteuer, Netto aus HSC
-  (`netto_extern`). Felder `minijob_rv_befreit` (bool),
-  `minijob_pauschsteuer_arbeitgeber` (bool, default true) - Dokumentation.
+  (`netto_extern`). Felder `minijob_rv_befreit` (bool, gebaut),
+  `minijob_pauschsteuer_arbeitgeber` (bool, default true) - Dokumentation
+  (**nicht gebaut**, Spalte gibt es live nicht).
   `verpflegungssaetze.minijob_grenze` je Jahr (Einstellungen); Warnung in
   der Lohnübersicht, wenn ein Minijobber im Monat darüber liegt.
 
@@ -227,6 +251,12 @@ Herkunft leer. Seite /personal-import-hsc (Vorschau, dann Import;
 wiederholbar), Logik lib/hscImport.ts. Lokal mit den echten Dateien
 geprüft (Trockenlauf + vollständiger Import in der Testkopie, danach
 gelöscht).
+
+**Ersetzt durch** den HSC-Import oben (`/personal-import-hsc`,
+`lib/hscImport.ts`, CSV-Exporte je Firma) sowie den HSC-Abgleich
+Landwirtschaft (`/personal-import-hsc-lw`, `lib/hscImportLw.ts`, Migration
+2026-11-25f) und das Werkzeug Zusammenführen (`/personal-zusammenfuehren`,
+Migration 2026-11-25g). Der folgende Absatz ist der überholte Entwurf:
 
 Nutzer 2026-11-24: aktuell **keine aktiven Verkäufer** - übernommen wird die
 komplette Historie. Basis ist daher der vorhandene **Historie-Import**
@@ -245,7 +275,10 @@ nicht - Nutzer holt einen vollständigen Export nach.
   Firma Mönich Direkt für die Saison, Unterkunft/Verpflegung/
   Beschäftigungsart je Zeile. Benötigt: Spaltenköpfe der Vertriebs-Excel
   (+ eine erfundene Beispielzeile). Lokal testen, dann echter Import.
-- Arbeitsgruppen (Stände) Vertrieb anlegen, Sätze VT pflegen.
+  **Erledigt** über den HSC-Import.
+- Arbeitsgruppen (Stände) Vertrieb anlegen, Sätze VT pflegen. **Stände
+  ersetzt durch** `vt_stand` unter /vertrieb (docs/vertriebsplanung-plan.md);
+  Sätze VT = Nutzer-ToDo.
 - Vertriebs-Nutzer mit Vorlage anlegen; Rechte-Test mit echten Rollen,
   Probelauf eine Woche Stunden + Vorschüsse.
 
@@ -254,13 +287,17 @@ nicht - Nutzer holt einen vollständigen Export nach.
 Aus dem Abgleich unten, Stand 2026-11-24 - Kandidaten für den Start des
 Vertriebs: Monatsabschlag (Vorschussliste + SEPA), freie pauschale
 Prämie/Zulage in €, So-/Feiertags- und Urlaubsstunden getrennt,
-Wochenstundenzettel, Monatsnachweis je Person. Zurückgestellt: Standorte/
-Öffnungszeiten, Einsatzplan/Abfahrtszeiten, Fahrerlohn an Fahrtagen.
+Wochenstundenzettel, Monatsnachweis je Person. Zurückgestellt: Fahrerlohn an
+Fahrtagen. Standorte/Öffnungszeiten, Touren mit Abfahrt, Verfügbarkeit und
+Grundplan sind inzwischen gebaut (Vertriebsplanung V1-V3, siehe
+docs/vertriebsplanung-plan.md); Wochenplan (V4) offen.
 
 ### Später (eigene Planung)
 
-Personalplanung Vertrieb, Prämien Vertrieb, Firma je Saison in der
-Personalplanung vorbelegen, Entfernen von `profiles.role`.
+Personalplanung Vertrieb, Prämien Vertrieb, Entfernen von `profiles.role`
+(Spalte existiert live noch). Erledigt: Firma je Saison in der
+Personalplanung (Formularfeld, Sammelaktion „Firma setzen“, Übernahme nach
+`employee_saison` bei „Anreise vorbereiten“).
 
 ## Risiken / Gegenmaßnahmen
 
@@ -282,10 +319,10 @@ Legende: **vorhanden** = gibt es schon, ggf. nur für VT freizuschalten;
 | 1.1 | HSC-Anmeldung erfassen/kontrollieren | entfällt | ergibt sich aus den Vertragszeiträumen (Nutzer 2026-11-24) |
 | 1.2 | Freibetrag-Beantragung | vorhanden | `/personal-lohnsteuer` (Verfahrensstand bis "Freibetrag erteilt") - zu prüfen, ob für Deutsche/Vertrieb passend |
 | 1.3 | Fahrer eindeutig kennzeichnen (anderer Lohn) | zurückgestellt | anderer Lohn nur an Fahrtagen - Nutzer 2026-11-24: vorerst ignorieren |
-| 2.1 | Standorte statt Gruppen | zurückgestellt | Arbeitsgruppen werden je Personalstamm getrennt (Stufe 2); eigene Standorte später |
-| 2.2 | Standorte mit Öffnungszeiten | zurückgestellt | mit den Standorten |
-| 2.3 | Einsatzplan im Programm | zurückgestellt | erst wenn alles andere läuft (Nutzer 2026-11-24) |
-| 2.4 | Abfahrtszeiten vermerken | zurückgestellt | Teil des Einsatzplans |
+| 2.1 | Standorte statt Gruppen | gebaut | Stände `vt_stand` unter /vertrieb (Vertriebsplanung V1, docs/vertriebsplanung-plan.md) |
+| 2.2 | Standorte mit Öffnungszeiten | gebaut | `vt_stand_zeit` je Stand + Wochentag (V1) |
+| 2.3 | Einsatzplan im Programm | teilweise | Verfügbarkeit (V2) + Grundplan (V3) gebaut, Wochenplan (V4) offen |
+| 2.4 | Abfahrtszeiten vermerken | gebaut | Touren mit Abfahrt (`vt_tour.abfahrt`, V1) |
 | 2.5 | Wochenstundenzettel je Person | neu (klein), Entwurf | Erster Entwurf als Druckansicht aus der KW-Wochenansicht; Nutzer erwartet Nachbesserung nach Rückmeldung des Vertriebs |
 | 3.1 | Sonntags-/Feiertagszuschläge (Deutsche); Urlaub getrennt | neu (mittel) | App weist So-/Feiertagsstunden (Feiertagskalender Hessen) und Urlaub (`U`) getrennt aus; Zuschlag rechnet HSC |
 | 3.2 | Zulagen direkt in Euro | vorhanden | monatliche Zulage in € (Stundenkonto mit Monatszuordnung) + Saison-Zulagen in € |
@@ -296,4 +333,4 @@ Legende: **vorhanden** = gibt es schon, ggf. nur für VT freizuschalten;
 | 4.1 | Strafzettel | vorhanden | Vorschuss mit Pflicht-Beleg (Strafzettel/Rechnung) |
 | 4.2 | Zimmerkaution | vorhanden | `zimmer_kaution`, Kautionsübergabe |
 | 4.3 | Fahrerkaution (Auto) | vorhanden | `fahrer_kaution` - Regeln nochmal besprechen |
-| 5.1 | Ohne Essen; Wechsel "ohne Essen" ab Monat | im Plan | Abzugs-Zeiträume (Stufe 3) |
+| 5.1 | Ohne Essen; Wechsel "ohne Essen" ab Monat | gebaut | Ausnahme-Zeiträume `employee_abzug_ausnahme` (Stufe 3c, Stammkarte 03a) |

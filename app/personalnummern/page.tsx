@@ -8,7 +8,11 @@ import {
   kreisBereich,
   naechsteFreieNummer,
   parsePersonalNrNummer,
+  personalNrImBereich,
 } from "@/lib/personalnummern";
+import { useProfile } from "@/lib/useProfile";
+import { useBereiche } from "@/lib/useBereiche";
+import { hatRolle } from "@/lib/rollen";
 import PersonalTabs from "@/components/PersonalTabs";
 import PageHeader from "@/components/PageHeader";
 import { Hash } from "lucide-react";
@@ -19,9 +23,13 @@ interface Row {
   name: string;
   vorname: string;
   aktiv: boolean;
+  bereich: string | null;
 }
 
 export default function PersonalnummernPage() {
+  const { profile, loading: profilLaedt } = useProfile();
+  const darf = hatRolle(profile, "admin", "hr");
+  const bereiche = useBereiche(profile);
   const [rows, setRows] = useState<Row[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -36,7 +44,7 @@ export default function PersonalnummernPage() {
       const rows = await ladeAlleSeiten<Row>((von, bis) =>
         supabase
           .from("employees")
-          .select("personal_nr, herkunft, name, vorname, aktiv")
+          .select("personal_nr, herkunft, name, vorname, aktiv, bereich")
           .order("personal_nr")
           .range(von, bis)
       );
@@ -56,13 +64,22 @@ export default function PersonalnummernPage() {
     return Array.from(byKey.values()).filter((group) => group.length > 1);
   }, [rows]);
 
-  const kreise = useMemo(() => {
+  // Nummernkreise je Geschäftsbereich getrennt: Landwirtschaft ohne Präfix,
+  // Vertrieb mit "V-" (gleiche Zahl in beiden Bereichen ist kein Konflikt).
+  const bereichsListe = useMemo(() => {
+    const kuerzel = Array.from(new Set(rows.map((r) => r.bereich ?? "LW")));
+    return kuerzel.sort((a, b) => (a === "LW" ? -1 : b === "LW" ? 1 : a.localeCompare(b)));
+  }, [rows]);
+
+  const kreiseFuer = (bereich: string) => {
+    const praefix = bereiche.praefix(bereich);
+    const imBereich = rows.filter((r) => personalNrImBereich(r.personal_nr, praefix));
     const result = [];
     for (let kreis = 1; kreis <= ANZAHL_PERSONALNUMMERN_KREISE; kreis++) {
       const [von, bis] = kreisBereich(kreis);
       const belegt = new Set<number>();
       const herkuenfte = new Map<string, number>();
-      for (const r of rows) {
+      for (const r of imBereich) {
         const num = parsePersonalNrNummer(r.personal_nr);
         if (num === null || num < von || num > bis) continue;
         belegt.add(num);
@@ -82,17 +99,26 @@ export default function PersonalnummernPage() {
       });
     }
     return result;
-  }, [rows]);
+  };
 
   const nichtNumerisch = useMemo(
     () => rows.filter((r) => parsePersonalNrNummer(r.personal_nr) === null),
     [rows]
   );
 
+  if (!profilLaedt && !darf) {
+    return (
+      <div className="flex flex-col gap-6">
+        <PersonalTabs />
+        <p className="text-sm text-neutral-500">Nur Administrator und Personal (HR).</p>
+      </div>
+    );
+  }
+
   return (
     <div className="flex flex-col gap-6">
       <PersonalTabs />
-      <PageHeader icon={Hash} titel="Personalnummern" beschreibung="Übersicht über die 10 Personalnummern-Kreise (Kreis 1: 1–999, Kreis 2: 1000–1999, usw.) und ob eine Nummer doppelt vergeben wurde. Deaktivierte Mitarbeiter zählen weiter als „belegt“, da ihre Nummer aus Historiengründen nicht neu vergeben wird." />
+      <PageHeader icon={Hash} titel="Personalnummern" beschreibung="Übersicht über die 10 Personalnummern-Kreise je Bereich (Kreis 1: 1–999, Kreis 2: 1000–1999, usw.; Landwirtschaft ohne Präfix, Vertrieb mit „V-“) und ob eine Nummer doppelt vergeben wurde. Deaktivierte Mitarbeiter zählen weiter als „belegt“, da ihre Nummer aus Historiengründen nicht neu vergeben wird." />
 
       {loading ? (
         <p className="text-neutral-500">Lädt…</p>
@@ -135,9 +161,11 @@ export default function PersonalnummernPage() {
             )}
           </div>
 
-          <div className="flex flex-col gap-2">
+          {bereichsListe.map((bereich) => (
+          <div key={bereich} className="flex flex-col gap-2">
             <h2 className="text-base font-semibold text-emerald-800">
-              Kreise
+              Kreise {bereiche.label(bereich)}
+              {bereiche.praefix(bereich) ? ` (Präfix „${bereiche.praefix(bereich)}“)` : ""}
             </h2>
             <table>
               <thead>
@@ -150,7 +178,7 @@ export default function PersonalnummernPage() {
                 </tr>
               </thead>
               <tbody>
-                {kreise.map((k) => (
+                {kreiseFuer(bereich).map((k) => (
                   <tr key={k.kreis}>
                     <td>{k.kreis}</td>
                     <td>
@@ -174,6 +202,7 @@ export default function PersonalnummernPage() {
               </tbody>
             </table>
           </div>
+          ))}
 
           {nichtNumerisch.length > 0 && (
             <div className="flex flex-col gap-2">

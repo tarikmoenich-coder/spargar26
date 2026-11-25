@@ -10,10 +10,13 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Boxes } from "lucide-react";
 import PageHeader from "@/components/PageHeader";
+import ErntewirtschaftTabs from "@/components/ErntewirtschaftTabs";
 import EmptyState from "@/components/EmptyState";
 import { getSupabaseClient } from "@/lib/supabase/client";
 import { useProfile } from "@/lib/useProfile";
 import { formatMenge } from "@/lib/format";
+import { ladeAlleSeiten } from "@/lib/ladeAlle";
+import { heuteLokalIso, lokalIsoPlusTage, tagesgrenzenLokal } from "@/lib/datum";
 
 import { hatRolle } from "@/lib/rollen";
 type EmpOpt = {
@@ -64,15 +67,6 @@ function formatZeitpunktDE(iso: string | null): string {
   });
 }
 
-function heuteIso(): string {
-  return new Date().toISOString().slice(0, 10);
-}
-
-function vorTagenIso(tage: number): string {
-  const d = new Date();
-  d.setUTCDate(d.getUTCDate() - tage);
-  return d.toISOString().slice(0, 10);
-}
 
 // Nachträgliches Zuordnen einer Person - exakt dasselbe Muster wie
 // FahrerZelle in app/fahrzeuge/stammdaten/page.tsx, nur auf
@@ -91,6 +85,7 @@ function FahrerZelle({
   const [offen, setOffen] = useState(false);
   const [suche, setSuche] = useState("");
   const [speichert, setSpeichert] = useState(false);
+  const [fehler, setFehler] = useState<string | null>(null);
 
   const aktuell = zyklus.employees;
 
@@ -109,12 +104,15 @@ function FahrerZelle({
 
   async function setze(id: string | null) {
     setSpeichert(true);
+    setFehler(null);
     const { error } = await getSupabaseClient()
       .from("ernte_kiste_zyklus")
       .update({ employee_id: id })
       .eq("id", zyklus.id);
     setSpeichert(false);
-    if (!error) {
+    if (error) {
+      setFehler(`Speichern fehlgeschlagen: ${error.message}`);
+    } else {
       setOffen(false);
       setSuche("");
       onGesetzt();
@@ -143,6 +141,7 @@ function FahrerZelle({
 
   return (
     <div className="flex min-w-[13rem] flex-col gap-1">
+      {fehler && <p className="text-xs text-beere-700">{fehler}</p>}
       <input
         autoFocus
         className="w-full text-sm"
@@ -221,7 +220,7 @@ function csvExport(zeilen: KisteZyklusZeile[]) {
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
   a.href = url;
-  a.download = `kisten-zyklen_${heuteIso()}.csv`;
+  a.download = `kisten-zyklen_${heuteLokalIso()}.csv`;
   a.click();
   URL.revokeObjectURL(url);
 }
@@ -230,7 +229,7 @@ export default function ErntewirtschaftErntePage() {
   const { profile } = useProfile();
   const canEdit = hatRolle(profile, "admin", "hr");
 
-  const [datumAb, setDatumAb] = useState(vorTagenIso(7));
+  const [datumAb, setDatumAb] = useState(lokalIsoPlusTage(-7));
   const [nurLuecken, setNurLuecken] = useState(false);
   const [nurOhneZuordnung, setNurOhneZuordnung] = useState(false);
   const [zyklen, setZyklen] = useState<KisteZyklusZeile[]>([]);
@@ -242,32 +241,48 @@ export default function ErntewirtschaftErntePage() {
     setLoading(true);
     const supabase = getSupabaseClient();
 
-    let query = supabase
-      .from("ernte_kiste_zyklus")
-      .select(
-        `id, tag_uid, befuellt_am, voll_am, gewogen_am, gewicht_netto_kg, status, employee_id,
-         ernte_maschine(nummer, bezeichnung),
-         employees(name, vorname, personal_nr),
-         feld(bezeichnung)`
-      )
-      .gte("befuellt_am", `${datumAb}T00:00:00Z`)
-      .order("befuellt_am", { ascending: false });
+    // Bis zu ~1600 Kisten/Tag - darum seitenweise laden (PostgREST liefert
+    // je Abfrage höchstens 1000 Zeilen). Tagesgrenze in Ortszeit.
+    const ab = tagesgrenzenLokal(datumAb).von;
+    let error: { message: string } | null = null;
+    const holeZyklen = (von: number, bis: number) => {
+      let query = supabase
+        .from("ernte_kiste_zyklus")
+        .select(
+          `id, tag_uid, befuellt_am, voll_am, gewogen_am, gewicht_netto_kg, status, employee_id,
+           ernte_maschine(nummer, bezeichnung),
+           employees(name, vorname, personal_nr),
+           feld(bezeichnung)`
+        )
+        .gte("befuellt_am", ab)
+        .order("befuellt_am", { ascending: false })
+        .order("id", { ascending: false });
+      if (nurLuecken) query = query.in("status", ["offen", "ungeklaert"]);
+      if (nurOhneZuordnung) query = query.is("employee_id", null);
+      return query.range(von, bis).then((r) => {
+        if (r.error) error = r.error;
+        return r;
+      });
+    };
 
-    if (nurLuecken) query = query.in("status", ["offen", "ungeklaert"]);
-    if (nurOhneZuordnung) query = query.is("employee_id", null);
-
-    const [{ data, error }, { data: mitarbeiterData }] = await Promise.all([
-      query,
-      supabase
-        .from("employees")
-        .select("id, personal_nr, name, vorname")
-        .eq("aktiv", true)
-        .order("name"),
+    const [data, mitarbeiterData] = await Promise.all([
+      ladeAlleSeiten<KisteZyklusZeile>(holeZyklen),
+      // Nur Landwirtschaft - Vertriebsleute ernten nicht.
+      ladeAlleSeiten<EmpOpt>((von, bis) =>
+        supabase
+          .from("employees")
+          .select("id, personal_nr, name, vorname")
+          .eq("aktiv", true)
+          .eq("bereich", "LW")
+          .order("name")
+          .order("id")
+          .range(von, bis)
+      ),
     ]);
 
-    setFehler(error?.message ?? null);
-    setZyklen((data as unknown as KisteZyklusZeile[]) ?? []);
-    setMitarbeiter((mitarbeiterData as EmpOpt[]) ?? []);
+    setFehler((error as { message: string } | null)?.message ?? null);
+    setZyklen(data);
+    setMitarbeiter(mitarbeiterData);
     setLoading(false);
   }, [datumAb, nurLuecken, nurOhneZuordnung]);
 
@@ -279,6 +294,7 @@ export default function ErntewirtschaftErntePage() {
 
   return (
     <div className="flex flex-col gap-4">
+      <ErntewirtschaftTabs />
       <PageHeader
         icon={Boxes}
         titel="Ernte"

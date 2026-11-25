@@ -3,6 +3,7 @@
 import { Fragment, useEffect, useState } from "react";
 import { AlarmClock } from "lucide-react";
 import { getSupabaseClient } from "@/lib/supabase/client";
+import { ladeAlleSeiten } from "@/lib/ladeAlle";
 import { useProfile } from "@/lib/useProfile";
 import { formatDatumDE, formatMenge } from "@/lib/format";
 import {
@@ -34,6 +35,7 @@ export default function ControllingStundenmonitoringPage() {
   const [jahr, setJahr] = useState(CURRENT_YEAR);
   const [ueberstunden, setUeberstunden] = useState<UeberstundenEintrag[]>([]);
   const [loadingUeberstunden, setLoadingUeberstunden] = useState(true);
+  const [ladeFehler, setLadeFehler] = useState<string | null>(null);
   const [offenUeberstundenId, setOffenUeberstundenId] = useState<string | null>(
     null
   );
@@ -45,16 +47,27 @@ export default function ControllingStundenmonitoringPage() {
   async function loadUeberstunden() {
     setLoadingUeberstunden(true);
     const supabase = getSupabaseClient();
-    const { data, error } = await supabase
-      .from("work_entries")
-      .select(
-        "id, employee_id, datum, stunden, version, markierung, notiz, employees(personal_nr, name, vorname)"
-      )
-      .gt("stunden", MAX_STUNDEN_PRO_TAG)
-      .gte("datum", `${jahr}-01-01`)
-      .lte("datum", `${jahr}-12-31`)
-      .order("datum");
-    if (!error && data) {
+    // Seitenweise (1000-Zeilen-Grenze), Fehler mitschneiden.
+    let error: string | null = null;
+    const data = await ladeAlleSeiten<unknown>((von, bis) =>
+      supabase
+        .from("work_entries")
+        .select(
+          "id, employee_id, datum, stunden, version, markierung, notiz, employees(personal_nr, name, vorname)"
+        )
+        .gt("stunden", MAX_STUNDEN_PRO_TAG)
+        .gte("datum", `${jahr}-01-01`)
+        .lte("datum", `${jahr}-12-31`)
+        .order("datum")
+        .order("id")
+        .range(von, bis)
+        .then((r) => {
+          if (r.error) error = r.error.message;
+          return r;
+        })
+    );
+    setLadeFehler(error);
+    if (!error) {
       const proMitarbeiter = new Map<string, UeberstundenEintrag>();
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       (data as any[]).forEach((row) => {
@@ -153,6 +166,10 @@ export default function ControllingStundenmonitoringPage() {
           {loadingUeberstunden ? "…" : tageGesamt}
         </span>
       </p>
+
+      {ladeFehler && (
+        <p className="text-sm text-beere-600">⚠ Konnte nicht geladen werden: {ladeFehler}</p>
+      )}
 
       <label className="sticky top-[calc(3.5rem+var(--subtabs-h,2.5rem))] z-30 block bg-sand py-2 text-sm">
         Saison-Jahr{" "}

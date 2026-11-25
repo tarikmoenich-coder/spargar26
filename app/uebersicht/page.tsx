@@ -4,6 +4,7 @@ import { Fragment, useEffect, useState } from "react";
 import { getSupabaseClient } from "@/lib/supabase/client";
 import { firmaFuer, firmaKurz, firmaName, lohnkassenFuer } from "@/lib/firmen";
 import { ladeAlleSeiten } from "@/lib/ladeAlle";
+import { heuteLokalIso } from "@/lib/datum";
 import { useProfile } from "@/lib/useProfile";
 import {
   type Firma,
@@ -134,7 +135,7 @@ export default function UebersichtPage() {
   // Datum für die ganze Auswahl - analog zur bereits bestehenden
   // gemeinsamen Zahlungsart.
   const [abrechnenAustrittsdatum, setAbrechnenAustrittsdatum] = useState(
-    () => new Date().toISOString().slice(0, 10)
+    () => heuteLokalIso()
   );
 
   // Monatsfilter (0 = "Alle", d.h. die normale Saison-Ansicht oben) - für
@@ -227,15 +228,30 @@ export default function UebersichtPage() {
   // "periods_write" (nicht mit canEdit/lohnabrechnung).
   const canCloseMonth = hatRolle(profile, "admin", "hr");
 
+  // Fehler beim Laden/Speichern (Rundum-Check 2026-11-25: vorher still
+  // verschluckt).
+  const [ladeFehler, setLadeFehler] = useState<string | null>(null);
+  const [speicherFehler, setSpeicherFehler] = useState<string | null>(null);
+
   async function load() {
     setLoading(true);
     const supabase = getSupabaseClient();
-    const { data, error } = await supabase
-      .from("season_summary")
-      .select("*")
-      .eq("saison_jahr", jahr)
-      .order("name");
-    if (!error) setRows((data as SeasonSummaryRow[]) ?? []);
+    // Seitenweise (lib/ladeAlle.ts) - sonst schneidet PostgREST bei ~1000
+    // Zeilen ab.
+    const fehler: { text: string | null } = { text: null };
+    const daten = await ladeAlleSeiten<SeasonSummaryRow>(async (von, bis) => {
+      const r = await supabase
+        .from("season_summary")
+        .select("*")
+        .eq("saison_jahr", jahr)
+        .order("name")
+        .order("employee_id")
+        .range(von, bis);
+      if (r.error) fehler.text = r.error.message;
+      return r;
+    });
+    setLadeFehler(fehler.text ? `Lohnübersicht konnte nicht geladen werden: ${fehler.text}` : null);
+    setRows(daten);
     setLoading(false);
   }
 
@@ -353,9 +369,16 @@ export default function UebersichtPage() {
     }
     async function ladeStatusChain() {
       const supabase = getSupabaseClient();
-      const { data } = await supabase.from("employee_status_chain").select("*");
+      // Eine Zeile je Person (>1000) - seitenweise laden.
+      const data = await ladeAlleSeiten<EmployeeStatusChain>((von, bis) =>
+        supabase
+          .from("employee_status_chain")
+          .select("*")
+          .order("employee_id")
+          .range(von, bis)
+      );
       const map: Record<string, EmployeeStatusChain> = {};
-      ((data as EmployeeStatusChain[]) ?? []).forEach((c) => {
+      data.forEach((c) => {
         map[c.employee_id] = c;
       });
       setStatusChain(map);
@@ -367,12 +390,23 @@ export default function UebersichtPage() {
   useEffect(() => {
     async function ladeAktive() {
       const supabase = getSupabaseClient();
-      const { data } = await supabase
-        .from("employees")
-        .select("id, personal_nr, name, vorname, gruppe_nr, herkunft")
-        .eq("aktiv", true)
-        .order("name");
-      setAlleAktiven(data ?? []);
+      const data = await ladeAlleSeiten<{
+        id: string;
+        personal_nr: string;
+        name: string;
+        vorname: string;
+        gruppe_nr: string | null;
+        herkunft: string | null;
+      }>((von, bis) =>
+        supabase
+          .from("employees")
+          .select("id, personal_nr, name, vorname, gruppe_nr, herkunft")
+          .eq("aktiv", true)
+          .order("name")
+          .order("id")
+          .range(von, bis)
+      );
+      setAlleAktiven(data);
     }
     async function ladeNamen() {
       const supabase = getSupabaseClient();
@@ -606,11 +640,15 @@ export default function UebersichtPage() {
   useEffect(() => {
     async function ladeFuehrerschein() {
       const supabase = getSupabaseClient();
-      const { data } = await supabase
-        .from("employee_fuehrerschein_kategorien")
-        .select("*");
+      const data = await ladeAlleSeiten<FuehrerscheinEintrag>((von, bis) =>
+        supabase
+          .from("employee_fuehrerschein_kategorien")
+          .select("*")
+          .order("employee_id")
+          .range(von, bis)
+      );
       const map: Record<string, string[]> = {};
-      ((data as FuehrerscheinEintrag[]) ?? []).forEach((row) => {
+      data.forEach((row) => {
         map[row.employee_id] = row.fuehrerschein_kategorien;
       });
       setFuehrerschein(map);
@@ -826,7 +864,7 @@ export default function UebersichtPage() {
   // (wird z.B. eine Saison erst im Januar des Folgejahres abgerechnet, ist
   // der letzte Tag des Saisonjahres der späteste zulässige Tag).
   function skHeuteImSaisonjahr() {
-    const heute = new Date().toISOString().slice(0, 10);
+    const heute = heuteLokalIso();
     return Number(heute.slice(0, 4)) === jahr ? heute : `${jahr}-12-31`;
   }
 
@@ -869,13 +907,16 @@ export default function UebersichtPage() {
   async function nettoExternSpeichern(row: SeasonSummaryRow, wert: string) {
     const supabase = getSupabaseClient();
     const netto_extern = wert.trim() === "" ? null : Number(wert);
-    await supabase.from("season_bonuses").upsert(
+    const { error } = await supabase.from("season_bonuses").upsert(
       {
         employee_id: row.employee_id,
         saison_jahr: row.saison_jahr,
         netto_extern,
       },
       { onConflict: "employee_id,saison_jahr" }
+    );
+    setSpeicherFehler(
+      error ? `Speichern fehlgeschlagen (${row.name}, ${row.vorname}): ${error.message}` : null
     );
     load();
   }
@@ -928,13 +969,16 @@ export default function UebersichtPage() {
   ) {
     const supabase = getSupabaseClient();
     const verpflegungsfreie_tage = wert.trim() === "" ? 0 : Number(wert);
-    await supabase.from("season_bonuses").upsert(
+    const { error } = await supabase.from("season_bonuses").upsert(
       {
         employee_id: row.employee_id,
         saison_jahr: row.saison_jahr,
         verpflegungsfreie_tage,
       },
       { onConflict: "employee_id,saison_jahr" }
+    );
+    setSpeicherFehler(
+      error ? `Speichern fehlgeschlagen (${row.name}, ${row.vorname}): ${error.message}` : null
     );
     load();
   }
@@ -1040,13 +1084,16 @@ export default function UebersichtPage() {
   async function busKostenSpeichern(row: SeasonSummaryRow, wert: string) {
     const supabase = getSupabaseClient();
     const bus_hin = wert.trim() === "" ? 0 : Number(wert);
-    await supabase.from("season_bonuses").upsert(
+    const { error } = await supabase.from("season_bonuses").upsert(
       {
         employee_id: row.employee_id,
         saison_jahr: row.saison_jahr,
         bus_hin,
       },
       { onConflict: "employee_id,saison_jahr" }
+    );
+    setSpeicherFehler(
+      error ? `Speichern fehlgeschlagen (${row.name}, ${row.vorname}): ${error.message}` : null
     );
     load();
   }
@@ -1059,13 +1106,16 @@ export default function UebersichtPage() {
   ) {
     const supabase = getSupabaseClient();
     const betrag = wert.trim() === "" ? 0 : Number(wert);
-    await supabase.from("season_bonuses").upsert(
+    const { error } = await supabase.from("season_bonuses").upsert(
       {
         employee_id: row.employee_id,
         saison_jahr: row.saison_jahr,
         [feld]: betrag,
       },
       { onConflict: "employee_id,saison_jahr" }
+    );
+    setSpeicherFehler(
+      error ? `Speichern fehlgeschlagen (${row.name}, ${row.vorname}): ${error.message}` : null
     );
     load();
   }
@@ -1074,7 +1124,7 @@ export default function UebersichtPage() {
   // Wer "erwartungsgemäß" bis wann Einträge im gewählten Monat haben
   // sollte: bis heute (falls der Monat noch läuft) oder bis zum Monatsende
   // (falls er schon vorbei ist).
-  const heuteIso = new Date().toISOString().slice(0, 10);
+  const heuteIso = heuteLokalIso();
   const monatsEnde = monatFilter ? letzterTagDesMonats(jahr, monatFilter) : "";
   const erwartetesEnde = monatFilter
     ? heuteIso < monatsEnde
@@ -1180,18 +1230,14 @@ export default function UebersichtPage() {
       <div className="print:hidden">
         <PageHeader icon={Banknote} titel="Saison-Lohnübersicht" />
         <p className="text-sm text-neutral-500">
-          Automatisch aus Stunden, Prämien, Verpflegungs-/Wohnen-Abzügen und
-          Vorschüssen berechnet. <strong>Erster Entwurf</strong> - vor echten
-          Auszahlungen unbedingt gegen die bisherige Excel-Datei prüfen
-          (siehe README, offener Punkt OI-009).
+          Automatisch aus Stunden, Prämien, Verpflegungs-/Wohnen-Abzügen
+          (Sätze je Bereich, Ausnahme-Zeiträume) und Vorschüssen berechnet.
         </p>
         <p className="mt-1 text-sm text-neutral-500">
-          Bei Abrechnungsart „Lohnsteuerklasse 1" und
-          „Sozialversicherungspflichtig" kann die App die Lohnsteuer nicht
-          selbst berechnen - hier bitte den Netto-Betrag aus dem
-          Lohnprogramm eintragen (entspricht der früheren Excel-Spalte
-          „Netto-Summe (HSC)"). Ohne diesen Wert bleibt der
-          Auszahlungsbetrag leer.
+          Bei allen Abrechnungsarten außer „pauschal" (Lohnsteuerklasse 1,
+          SV-pflichtig, Minijob, kurzfristig) rechnet die App keine
+          Lohnsteuer - hier bitte den Netto-Betrag aus dem Lohnprogramm (HSC)
+          eintragen. Ohne diesen Wert bleibt der Auszahlungsbetrag leer.
         </p>
         <p className="mt-1 text-sm text-neutral-500">
           Abgerechnete Personen zeigen den eingefrorenen Stand von der
@@ -1353,6 +1399,12 @@ export default function UebersichtPage() {
           <span className="whitespace-pre-line text-sm text-beere-600">{abrechnenFehler}</span>
         )}
       </div>
+
+      {(ladeFehler || speicherFehler) && (
+        <p className="text-sm font-medium text-beere-600 print:hidden">
+          ⚠ {ladeFehler ?? speicherFehler}
+        </p>
+      )}
 
       {monatFilter === 0 && letzterBeleg && (
         <p className="text-sm text-emerald-800 print:hidden">
@@ -1930,9 +1982,9 @@ export default function UebersichtPage() {
 
           <p className="text-sm text-neutral-500">
             Reine Monats-Kontrolle: Stunden, Anwesenheitstage, Basis-Brutto
-            (nur Stunden × Stundenlohn, <strong>ohne</strong> Saison-Prämien
-            wie Akkord/Fahrer-Zulage/Erdbeer-/Spargel-Prämie - die werden
-            weiterhin nur einmal pro Saison erfasst) sowie Verpflegung/
+            (nur Stunden × Stundenlohn, <strong>ohne</strong> Prämien - weder
+            Saison-Prämien wie Akkord/Fahrer-Zulage noch die Tagesprämien
+            Zuckermais/Erdbeeren; die stehen nur in der Saison-Summe) sowie Verpflegung/
             Unterkunft als monatlicher Durchlaufposten. Die eigentliche
             Auszahlung bleibt ein Saison-Vorgang ("Jetzt Abrechnen" oben bei
             "Alle"). „⚠" bedeutet: letzter Eintrag liegt vor dem erwarteten
@@ -2322,7 +2374,7 @@ export default function UebersichtPage() {
                 Lohnübersicht {MONATSNAMEN[monatFilter - 1]} {jahr}
               </h2>
               <p className="mt-1 text-base">
-                Datum: {formatDatumDE(new Date().toISOString())} · Personen:{" "}
+                Datum: {formatDatumDE(heuteLokalIso())} · Personen:{" "}
                 {zeilen.length}
                 {gruppeFilter
                   ? ` · Gruppe: ${
@@ -2443,7 +2495,7 @@ export default function UebersichtPage() {
                 </h2>
                 <p className="mt-1 text-base">
                   {p.personalNr} · {p.name}, {p.vorname} · Datum:{" "}
-                  {formatDatumDE(new Date().toISOString())}
+                  {formatDatumDE(heuteLokalIso())}
                 </p>
                 {aktiveMonate.length === 0 ? (
                   <p className="mt-2 text-sm">Keine Stunden/Vorschüsse in {jahr} erfasst.</p>

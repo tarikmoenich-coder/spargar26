@@ -31,10 +31,13 @@ import { Camera, Plane } from "lucide-react";
 import SvFragebogenFormular from "@/components/SvFragebogenFormular";
 
 import { hatRolle } from "@/lib/rollen";
+import { heuteLokalIso } from "@/lib/datum";
 // Saison-Jahr für den SV-Fragebogen eines Kandidaten: aus dem geplanten
-// Ankunftsdatum abgeleitet (personal_kandidaten hat kein eigenes
-// Saison-Jahr-Feld) - per String-Slice statt new Date(...).getFullYear(),
-// um den bekannten Timezone-Stolperstein bei Datumswerten zu vermeiden.
+// Ankunftsdatum abgeleitet - so rechnen auch die Sicht
+// personal_kandidaten_checkliste und kandidat_buskosten_setzen. (Seit
+// 2026-11-21 gibt es personal_kandidaten.saison_jahr; eine Umstellung müsste
+// Sicht und RPC per Migration mitziehen.) Per String-Slice statt
+// new Date(...).getFullYear(), um den Timezone-Stolperstein zu vermeiden.
 function svSaisonJahrFuer(k: PersonalKandidat): number | null {
   return k.geplante_ankunft ? Number(k.geplante_ankunft.slice(0, 4)) : null;
 }
@@ -77,7 +80,6 @@ export default function AnreiselistePage() {
     const [
       { data: kData },
       eData,
-      { data: cData },
       { data: vData },
       { data: bData },
     ] = await Promise.all([
@@ -95,7 +97,6 @@ export default function AnreiselistePage() {
           .order("id")
           .range(von, bis)
       ),
-      supabase.from("personal_kandidaten_checkliste").select("*"),
       supabase
         .from("verpflegungssaetze")
         .select("*")
@@ -107,9 +108,19 @@ export default function AnreiselistePage() {
     ]);
     const kandidatenListe = (kData as PersonalKandidat[]) ?? [];
     setKandidaten(kandidatenListe);
+    // Checkliste nur für die Personen der Anreiseliste laden - die Sicht läuft
+    // über alle Kandidaten aller Jahre (über 1000 Zeilen möglich).
+    const cData: PersonalKandidatChecklisteRow[] = [];
+    for (const block of inBloecken(kandidatenListe.map((k) => k.id))) {
+      const { data } = await supabase
+        .from("personal_kandidaten_checkliste")
+        .select("*")
+        .in("kandidat_id", block);
+      cData.push(...((data as PersonalKandidatChecklisteRow[]) ?? []));
+    }
     setEmployees(eData);
     const cMap: Record<string, PersonalKandidatChecklisteRow> = {};
-    ((cData as PersonalKandidatChecklisteRow[]) ?? []).forEach((row) => {
+    cData.forEach((row) => {
       cMap[row.kandidat_id] = row;
     });
     setCheckliste(cMap);
@@ -183,24 +194,32 @@ export default function AnreiselistePage() {
   async function vertragszeitraumSpeichern(k: PersonalKandidat) {
     const werte = vertragsfelder[k.id];
     const supabase = getSupabaseClient();
-    await supabase
+    setDokumentFehler(null);
+    const { error } = await supabase
       .from("personal_kandidaten")
       .update({
         arbeitsbeginn_datum: werte?.beginn || null,
         arbeitsende_datum: werte?.ende || null,
       })
       .eq("id", k.id);
+    if (error) {
+      setDokumentFehler(`Vertragszeitraum nicht gespeichert: ${error.message}`);
+      return;
+    }
     // Das echte Vertrags-Startdatum ist jetzt bekannt - den bei der
     // Aktivierung nur als Platzhalter (heute) angelegten offenen
     // Beschäftigungsabschnitt (Nutzer-Vorgabe 2026-11-04/05) darauf
     // nachziehen, damit die 105-Tage-Prüfung ab dem echten Anmeldedatum
     // zählt statt ab dem Tag der Aktivierung.
     if (k.aktivierter_employee_id && werte?.beginn) {
-      await supabase
+      const { error: abschnittFehler } = await supabase
         .from("employee_beschaeftigungsabschnitte")
         .update({ anmeldedatum: werte.beginn })
         .eq("employee_id", k.aktivierter_employee_id)
         .is("abmeldedatum", null);
+      if (abschnittFehler) {
+        setDokumentFehler(`Beschäftigungsabschnitt nicht nachgezogen: ${abschnittFehler.message}`);
+      }
     }
     load();
   }
@@ -259,11 +278,14 @@ export default function AnreiselistePage() {
       .map((k) => k.aktivierter_employee_id)
       .filter((id): id is string => !!id);
     if (employeeIds.length > 0) {
-      await supabase
+      const { error: abschnittFehler } = await supabase
         .from("employee_beschaeftigungsabschnitte")
         .update({ anmeldedatum: datum })
         .in("employee_id", employeeIds)
         .is("abmeldedatum", null);
+      if (abschnittFehler) {
+        setDokumentFehler(`Beschäftigungsabschnitte nicht nachgezogen: ${abschnittFehler.message}`);
+      }
     }
     setVertragsfelder((prev) => ({ ...prev, ...neuLokal }));
   }
@@ -274,10 +296,11 @@ export default function AnreiselistePage() {
     wert: boolean
   ) {
     const supabase = getSupabaseClient();
-    await supabase
+    const { error } = await supabase
       .from("personal_kandidaten")
       .update({ [feld]: wert })
       .eq("id", k.id);
+    if (error) setDokumentFehler(error.message);
     load();
   }
 
@@ -291,13 +314,14 @@ export default function AnreiselistePage() {
     hochzeitsdatum: string | null
   ) {
     const supabase = getSupabaseClient();
-    await supabase
+    const { error } = await supabase
       .from("employee_personaldaten")
       .update({
         familienstand,
         hochzeitsdatum: familienstand === "verheiratet" ? hochzeitsdatum : null,
       })
       .eq("id", employeeId);
+    if (error) setDokumentFehler(`Familienstand nicht gespeichert: ${error.message}`);
     load();
   }
 
@@ -327,26 +351,42 @@ export default function AnreiselistePage() {
     );
     if (!grund) return;
     const supabase = getSupabaseClient();
+    setDokumentFehler(null);
+    const fehler: string[] = [];
     if (k.aktivierter_employee_id) {
-      await supabase
+      const { error } = await supabase
         .from("employee_personaldaten")
         .update({ aktiv: false })
         .eq("id", k.aktivierter_employee_id);
+      if (error) fehler.push(`Deaktivieren: ${error.message}`);
+      // Den bei der Aktivierung geöffneten Beschäftigungsabschnitt schließen
+      // (wie "Deaktivieren" im Personalstamm) - sonst zählt er weiter. Liegt
+      // der Arbeitsbeginn noch in der Zukunft, endet er an diesem Tag.
+      const heute = heuteLokalIso();
+      const beginn = k.arbeitsbeginn_datum ?? heute;
+      const { error: abFehler } = await supabase.rpc("employee_beschaeftigung_abmelden", {
+        p_employee_id: k.aktivierter_employee_id,
+        p_abmeldedatum: beginn > heute ? beginn : heute,
+      });
+      if (abFehler) fehler.push(`Beschäftigungsabschnitt: ${abFehler.message}`);
     }
-    await supabase
+    const { error: stornoFehler } = await supabase
       .from("personal_kandidaten")
       .update({ status: "storniert", storniert_grund: grund })
       .eq("id", k.id);
+    if (stornoFehler) fehler.push(`Zurückziehen: ${stornoFehler.message}`);
+    if (fehler.length > 0) setDokumentFehler(fehler.join(" · "));
     load();
   }
 
   async function markiereGedruckt(k: PersonalKandidat) {
     if (k.gedruckt) return;
     const supabase = getSupabaseClient();
-    await supabase
+    const { error } = await supabase
       .from("personal_kandidaten")
       .update({ gedruckt: true, gedruckt_am: new Date().toISOString() })
       .eq("id", k.id);
+    if (error) setDokumentFehler(`„Gedruckt“ nicht vermerkt: ${error.message}`);
     load();
   }
 
@@ -534,8 +574,7 @@ export default function AnreiselistePage() {
           aktiviert wurden - gruppiert nach geplantem Ankunftsdatum. Vor dem
           Drucken müssen Arbeitsbeginn und Arbeitsende erfasst sein. Nach der
           tatsächlichen Anreise hier die weiteren Unterlagen abhaken - erst
-          wenn alles erfüllt ist, springt der Status auf „Vollständig" (auch
-          im Personalstamm sichtbar).
+          wenn alles erfüllt ist, springt der Status auf „Vollständig".
         </p>
       </div>
 

@@ -28,6 +28,7 @@ import { useEffect, useState } from "react";
 import { getSupabaseClient } from "@/lib/supabase/client";
 import ErntewirtschaftTabs from "@/components/ErntewirtschaftTabs";
 import { formatDatumDE, formatMenge } from "@/lib/format";
+import { ladeAlleSeiten } from "@/lib/ladeAlle";
 import type {
   ErdbeerenGruppenkostenTag,
   ErdbeerenStatistikTag,
@@ -57,22 +58,33 @@ export default function StatistikErdbeerenPage() {
   const [zeilen, setZeilen] = useState<ErdbeerenStatistikTag[]>([]);
   const [gruppenZeilen, setGruppenZeilen] = useState<ErdbeerenGruppenkostenTag[]>([]);
   const [loading, setLoading] = useState(true);
+  const [fehler, setFehler] = useState<string | null>(null);
 
   async function load() {
     setLoading(true);
     const supabase = getSupabaseClient();
-    const [{ data: f }, { data }, { data: gz }] = await Promise.all([
+    let statFehler: { message: string } | null = null;
+    const [{ data: f, error: fError }, data, { data: gz, error: gzError }] = await Promise.all([
       supabase
         .from("feld")
         .select("*")
         .eq("kultur", "erdbeeren")
         .order("bezeichnung"),
-      supabase
-        .from("erdbeeren_statistik_tag")
-        .select("*")
-        .gte("datum", `${jahr}-01-01`)
-        .lte("datum", `${jahr}-12-31`)
-        .order("datum", { ascending: false }),
+      // Tag x Parzelle - über eine Saison ggf. > 1000 Zeilen.
+      ladeAlleSeiten<ErdbeerenStatistikTag>((von, bis) =>
+        supabase
+          .from("erdbeeren_statistik_tag")
+          .select("*")
+          .gte("datum", `${jahr}-01-01`)
+          .lte("datum", `${jahr}-12-31`)
+          .order("datum", { ascending: false })
+          .order("parzelle_id")
+          .range(von, bis)
+          .then((r) => {
+            if (r.error) statFehler = r.error;
+            return r;
+          })
+      ),
       supabase
         .from("erdbeeren_gruppenkosten_tag")
         .select("*")
@@ -81,7 +93,9 @@ export default function StatistikErdbeerenPage() {
         .order("datum", { ascending: false }),
     ]);
     setFelder((f as Feld[]) ?? []);
-    setZeilen((data as ErdbeerenStatistikTag[]) ?? []);
+    const ladeFehler = fError ?? (statFehler as { message: string } | null) ?? gzError;
+    setFehler(ladeFehler ? `Konnte nicht laden: ${ladeFehler.message}` : null);
+    setZeilen(data);
     setGruppenZeilen((gz as ErdbeerenGruppenkostenTag[]) ?? []);
     setLoading(false);
   }
@@ -203,6 +217,8 @@ export default function StatistikErdbeerenPage() {
           </select>
         </label>
       </div>
+
+      {fehler && <p className="text-sm text-beere-700">{fehler}</p>}
 
       {loading ? (
         <p className="text-neutral-500">Lädt…</p>

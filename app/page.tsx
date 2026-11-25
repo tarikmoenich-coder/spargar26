@@ -8,12 +8,18 @@ export default function Home() {
   const router = useRouter();
   const { loading, profile, userId } = useProfile();
 
+  // Angemeldet, aber ohne (ladbares) Profil oder deaktiviert: Hinweis statt
+  // Weiterleitung auf eine Seite, die dann endlos "Lädt…" zeigt.
+  const ohneProfil = !loading && !!userId && !profile;
+  const deaktiviert = !!profile && profile.aktiv === false;
+
   useEffect(() => {
     if (loading) return;
     if (!userId) {
       router.replace("/login");
       return;
     }
+    if (!profile || profile.aktiv === false) return;
     // zeiterfassung hat kein eigenes Dashboard (Stundenerfassung ist schon
     // ihr einziger Arbeitsbereich), hausmeister genauso (nur Unterkunft),
     // waage genauso (nur der Kiosk-Bildschirm, Nutzer-Vorgabe 2026-10-27) -
@@ -33,5 +39,20 @@ export default function Home() {
     router.replace(start);
   }, [loading, profile, userId, router]);
 
+  if (ohneProfil) {
+    return (
+      <p className="text-neutral-500">
+        Für dein Konto ist noch kein Profil angelegt. Bitte wende dich an den
+        Administrator.
+      </p>
+    );
+  }
+  if (deaktiviert) {
+    return (
+      <p className="text-neutral-500">
+        Dein Konto ist deaktiviert. Bitte wende dich an den Administrator.
+      </p>
+    );
+  }
   return <p className="text-neutral-500">Lädt…</p>;
 }

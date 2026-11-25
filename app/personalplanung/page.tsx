@@ -11,7 +11,7 @@ import {
   naechsteFreieNummer,
   parsePersonalNrNummer,
 } from "@/lib/personalnummern";
-import { formatDatumDE } from "@/lib/format";
+import { formatDatumDE, formatEuro } from "@/lib/format";
 import { ladeAlleSeiten } from "@/lib/ladeAlle";
 import { satzFuerJahr } from "@/lib/satzFuerJahr";
 import { inBloecken } from "@/lib/planungTermine";
@@ -50,6 +50,7 @@ import DokumentKameraAufnahme from "@/components/DokumentKameraAufnahme";
 import { CalendarRange, Pencil, Trash2 } from "lucide-react";
 
 import { hatRolle } from "@/lib/rollen";
+import { heuteLokalIso } from "@/lib/datum";
 const emptyForm = {
   personal_nr: "",
   name: "",
@@ -151,21 +152,26 @@ export default function PersonalplanungPage() {
     setLoading(true);
     const supabase = getSupabaseClient();
     const [
-      { data: kData },
+      kData,
       eList,
       { data: hData },
       { data: vData },
-      { data: shData },
+      shData,
       { data: ebData },
       { data: spData },
       { data: zrData },
       { data: firmaData },
     ] = await Promise.all([
-      supabase
-        .from("personal_kandidaten")
-        .select("*")
-        .order("herkunft")
-        .order("name"),
+      // Seitenweise (alle Saisonjahre zusammen können über 1000 Zeilen haben)
+      ladeAlleSeiten<PersonalKandidat>((von, bis) =>
+        supabase
+          .from("personal_kandidaten")
+          .select("*")
+          .order("herkunft")
+          .order("name")
+          .order("id")
+          .range(von, bis)
+      ),
       // Seitenweise inkl. inaktiver Personen - sonst schneidet PostgREST bei
       // ~1000 Zeilen ab (seit dem Historie-Import tausende inaktive) und
       // Rückkehrer wären hier nicht mehr zu finden bzw. die "belegt"-Zählung
@@ -184,7 +190,14 @@ export default function PersonalplanungPage() {
         .from("verpflegungssaetze")
         .select("*")
         .order("saison_jahr", { ascending: false }),
-      supabase.from("employee_saison_historie_agg").select("*"),
+      // Eine Zeile je Person mit Historie (tausende) - seitenweise.
+      ladeAlleSeiten<EmployeeSaisonHistorieAgg>((von, bis) =>
+        supabase
+          .from("employee_saison_historie_agg")
+          .select("*")
+          .order("employee_id")
+          .range(von, bis)
+      ),
       supabase.from("einsatzbereiche").select("*").order("reihenfolge"),
       supabase.from("unterkunft_herkunft_plan").select("*"),
       supabase.from("einsatzbereich_zeitraum").select("*"),
@@ -194,12 +207,12 @@ export default function PersonalplanungPage() {
     setFirmen((firmaData as Firma[]) ?? []);
     setEinsatzbereiche((ebData as Einsatzbereich[]) ?? []);
     setSollPlan((spData as UnterkunftHerkunftPlan[]) ?? []);
-    setKandidaten((kData as PersonalKandidat[]) ?? []);
+    setKandidaten(kData);
     setEmployees(eList);
     setHerkuenfte((hData as Herkunft[]) ?? []);
     setSaetze((vData as VerpflegungsSatz[]) ?? []);
     const shMap: Record<string, EmployeeSaisonHistorieAgg> = {};
-    ((shData as EmployeeSaisonHistorieAgg[] | null) ?? []).forEach((r) => {
+    shData.forEach((r) => {
       shMap[r.employee_id] = r;
     });
     setSaisonHistorie(shMap);
@@ -264,8 +277,13 @@ export default function PersonalplanungPage() {
   }
 
   const personalNrKonflikt = (() => {
-    const typed = form.personal_nr.trim().toLowerCase();
-    if (!typed || verknuepfterId) return null;
+    // Mit Bereichs-Präfix vergleichen ("123" im Vertrieb = "V-123").
+    const roh = form.personal_nr.trim();
+    if (!roh || verknuepfterId) return null;
+    const zielBereich = platzhalterZielId
+      ? kandidaten.find((k) => k.id === platzhalterZielId)?.bereich ?? bereiche.standard
+      : bereiche.standard;
+    const typed = personalNrFuerBereich(roh, bereiche.praefix(zielBereich)).toLowerCase();
     const inEmployees = employees.find(
       (e) => e.personal_nr.trim().toLowerCase() === typed
     );
@@ -436,7 +454,7 @@ export default function PersonalplanungPage() {
         form.fuehrerschein.length > 0 ? form.fuehrerschein : null,
     };
     // Wird ein Platzhalter befüllt, bleiben seine Planungsangaben (Anreise,
-    // Bereich, Notiz) stehen, sofern im Formular nichts anderes steht.
+    // Einsatzbereich, Firma, Notiz) stehen, sofern im Formular nichts anderes steht.
     const { error } = ziel
       ? await supabase
           .from("personal_kandidaten")
@@ -712,7 +730,7 @@ export default function PersonalplanungPage() {
           neuAngelegt.push({ id: employeeId, name: k.name, vorname: k.vorname });
         }
       }
-      await supabase
+      const { error: statusFehler } = await supabase
         .from("personal_kandidaten")
         .update({
           status: "anreiseliste",
@@ -720,6 +738,11 @@ export default function PersonalplanungPage() {
           stundenlohn: lohn,
         })
         .eq("id", k.id);
+      if (statusFehler) {
+        fehlerListe.push(
+          `${k.name}, ${k.vorname}: aktiviert, aber nicht in die Anreiseliste verschoben - ${statusFehler.message}`
+        );
+      }
 
       // Geplante Firma für die Saison übernehmen (Stufe 3a) - ohne Angabe
       // gilt die Standard-Firma des Bereichs, kein Eintrag nötig.
@@ -746,7 +769,7 @@ export default function PersonalplanungPage() {
           "employee_beschaeftigung_anmelden",
           {
             p_employee_id: employeeId,
-            p_anmeldedatum: k.arbeitsbeginn_datum || new Date().toISOString().slice(0, 10),
+            p_anmeldedatum: k.arbeitsbeginn_datum || heuteLokalIso(),
             p_quelle: k.verknuepfter_employee_id ? "reaktivierung" : "aktivierung",
           }
         );
@@ -773,7 +796,7 @@ export default function PersonalplanungPage() {
             employee_id: employeeId,
             wohneinheit_id: we.wohneinheit_id,
             geplant_ab:
-              k.geplante_ankunft ?? new Date().toISOString().slice(0, 10),
+              k.geplante_ankunft ?? heuteLokalIso(),
           });
           if (!error) {
             platziertProWe.set(
@@ -1251,7 +1274,7 @@ export default function PersonalplanungPage() {
             <div className="flex flex-wrap items-center gap-2 rounded bg-emerald-50 px-2 py-1.5 text-sm text-emerald-900">
               Namen für einen Platzhalter
               {zielPlatzhalter.herkunft ? ` (${zielPlatzhalter.herkunft})` : ""}{" "}
-              eintragen – Anreise, Bereich und Notiz des Platzhalters bleiben
+              eintragen – Anreise, Einsatzbereich und Notiz des Platzhalters bleiben
               erhalten.
               <button
                 type="button"
@@ -1596,7 +1619,7 @@ export default function PersonalplanungPage() {
               value={sammelBereich}
               onChange={(e) => setSammelBereich(e.target.value)}
             >
-              <option value="">— Bereich —</option>
+              <option value="">— Einsatzbereich —</option>
               {einsatzbereiche.map((b) => (
                 <option key={b.wert} value={b.wert}>
                   {b.wert}
@@ -1609,14 +1632,23 @@ export default function PersonalplanungPage() {
               disabled={sammelLaeuft || !sammelBereich}
               onClick={() => sammelSpeichern({ einsatzbereich: sammelBereich })}
             >
-              Bereich setzen
+              Einsatzbereich setzen
             </button>
           </span>
           {firmen.length > 1 && (
             <span className="flex items-center gap-1">
               <select value={sammelFirma} onChange={(e) => setSammelFirma(e.target.value)}>
                 <option value="">Firma: Standard</option>
-                {firmen.filter((f) => f.aktiv !== false).map((f) => (
+                {firmen
+                  .filter(
+                    (f) =>
+                      f.aktiv !== false &&
+                      ausgewaehlt.every(
+                        (id) =>
+                          (kandidaten.find((k) => k.id === id)?.bereich ?? "LW") === f.bereich
+                      )
+                  )
+                  .map((f) => (
                   <option key={f.kuerzel} value={f.kuerzel}>
                     {firmaKurz(firmen, f.kuerzel)}
                   </option>
@@ -1906,7 +1938,10 @@ export default function PersonalplanungPage() {
                   <th>Geburtsdatum</th>
                   <th>Geplante Ankunft</th>
                   <th>Stundenlohn €</th>
-                  <th>Bereich</th>
+                  <th>Einsatzbereich</th>
+                  <th title="Geplante Firma für die Saison (leer = Standard-Firma des Bereichs)">
+                    Firma
+                  </th>
                   <th>Führerschein</th>
                   <th title="Mehr Namen als Soll: Reserve zählt nicht ins Ist, den Zeitstrahl und die Bettenplanung">
                     Reserve
@@ -2030,7 +2065,7 @@ export default function PersonalplanungPage() {
                               }
                             />
                           ) : feld === "stundenlohn" ? (
-                            k.stundenlohn ?? "—"
+                            k.stundenlohn != null ? formatEuro(k.stundenlohn) : "—"
                           ) : (
                             formatDatumDE(k[feld])
                           )}
@@ -2056,6 +2091,9 @@ export default function PersonalplanungPage() {
                         ) : (
                           k.einsatzbereich ?? "—"
                         )}
+                      </td>
+                      <td className="text-xs">
+                        {k.firma ? firmaKurz(firmen, k.firma) : "Standard"}
                       </td>
                       <td>
                         {k.platzhalter && canEdit ? (
@@ -2148,7 +2186,7 @@ export default function PersonalplanungPage() {
                     </tr>
                     {bearbeitenId === k.id && bearbeitenForm && (
                       <tr>
-                        <td colSpan={14}>
+                        <td colSpan={15}>
                           <div className="flex flex-col gap-3 rounded border border-linie bg-sand p-3">
                             <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
                               <label className="flex flex-col gap-0.5 text-xs text-neutral-500">

@@ -19,6 +19,7 @@ import ControllingTabs from "@/components/ControllingTabs";
 import TageRaster from "@/components/TageRaster";
 
 import { hatRolle } from "@/lib/rollen";
+import { ladeAlleSeiten } from "@/lib/ladeAlle";
 function serieKey(s: ArbeitstageSerie) {
   return `${s.employee_id}-${s.serie_bis}`;
 }
@@ -43,14 +44,25 @@ export default function ControllingArbeitstagePage() {
   async function loadArbeitsserie() {
     setLoadingArbeitsserie(true);
     const supabase = getSupabaseClient();
-    const { data, error } = await supabase
-      .from("arbeitstage_serie_uebersicht")
-      .select("*");
-    if (error) {
-      setArbeitsserieFehler(error.message);
+    // Seitenweise (1000-Zeilen-Grenze), Fehler mitschneiden.
+    let fehler: string | null = null;
+    const data = await ladeAlleSeiten<ArbeitstageSerie>((von, bis) =>
+      supabase
+        .from("arbeitstage_serie_uebersicht")
+        .select("*")
+        .order("employee_id")
+        .order("serie_von")
+        .range(von, bis)
+        .then((r) => {
+          if (r.error) fehler = r.error.message;
+          return r;
+        })
+    );
+    if (fehler) {
+      setArbeitsserieFehler(fehler);
     } else {
       setArbeitsserieFehler(null);
-      setArbeitsserie((data as ArbeitstageSerie[]) ?? []);
+      setArbeitsserie(data);
     }
     setLoadingArbeitsserie(false);
   }
@@ -257,9 +269,7 @@ export default function ControllingArbeitstagePage() {
         <p className="text-neutral-500">Lädt…</p>
       ) : arbeitsserieFehler ? (
         <p className="text-sm text-beere-600">
-          Auswertung nicht verfügbar ({arbeitsserieFehler}). Vermutlich fehlt
-          die Migration 2026-09-19 (arbeitstage_serie_uebersicht) in der
-          Datenbank.
+          Auswertung nicht verfügbar ({arbeitsserieFehler}).
         </p>
       ) : relevante.length === 0 ? (
         <p className="text-neutral-500">

@@ -1,9 +1,11 @@
 "use client";
 
-// Gemeinsame Reiter für den Menüpunkt "Erntewirtschaft" (Nutzer-Vorgabe:
-// Prämien, Anbau und Statistik unter einem Menüpunkt). Zwei Ebenen:
-//   Zeile 1 = Bereich (Prämien / Anbau / Statistik) - je nach Rolle gefiltert
-//   Zeile 2 = Unterreiter des aktiven Bereichs (Kulturen bzw. Bestellung/Felder)
+// Gemeinsame Reiter für den Menüpunkt "Erntewirtschaft". Zwei Ebenen:
+//   Zeile 1 = Bereich (Prämien, Anbau, Statistik, Qualität, Ernte, Ausweise,
+//             Waage, Stammdaten, Überblick) - je nach Rolle gefiltert
+//             (MENUE_RECHTE in lib/rollen.ts)
+//   Zeile 2 = Unterreiter des aktiven Bereichs (Kulturen, Anbau-Unterseiten,
+//             Qualität-Unterseiten)
 // Ersetzt die früheren PraemienTabs / AnbauTabs / StatistikTabs.
 
 import Link from "next/link";
@@ -55,7 +57,7 @@ const BEREICHE: {
       { href: "/anbau/spargel", label: "Spargel" },
       { href: "/anbau/uebersicht", label: "Übersicht" },
       { href: "/anbau/ernteplanung", label: "Ernteplanung" },
-      { href: "/anbau/bestellung", label: "Bestellung" },
+      { href: "/anbau/bestellung", label: "Bestellung (Erdbeeren)" },
       { href: "/anbau/felder", label: "Felder" },
     ],
   },
@@ -150,6 +152,11 @@ export default function ErntewirtschaftTabs() {
 
   const sichtbar = BEREICHE.filter((b) => darfMenue(profile, b.rechteKey));
   const aktiv = sichtbar.find((b) => pathname?.startsWith(b.prefix));
+  // Exakter Treffer zuerst, sonst Detailseite (z.B. /anbau/felder/[id]) -
+  // so markiert /qualitaet/strichliste nicht zusätzlich "/qualitaet".
+  const aktiverUnterHref =
+    aktiv?.unter.find((u) => pathname === u.href)?.href ??
+    aktiv?.unter.find((u) => pathname?.startsWith(`${u.href}/`))?.href;
 
   const linkCls = (an: boolean) =>
     `-mb-px whitespace-nowrap border-b-2 pb-2 text-sm ${
@@ -177,7 +184,7 @@ export default function ErntewirtschaftTabs() {
               key={u.href}
               href={u.href}
               className={`whitespace-nowrap text-xs ${
-                pathname === u.href
+                u.href === aktiverUnterHref
                   ? "font-semibold text-emerald-800"
                   : "text-neutral-500 hover:text-emerald-800"
               }`}

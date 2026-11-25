@@ -9,6 +9,28 @@ weg von RFID, hin zu QR-Codes** (siehe Abschnitt direkt unter diesem).
 Arbeitsdokument (wie `unterkunft-plan.md`), damit der Planungsstand einen
 Konsolen-Neustart übersteht.
 
+**Stand 2026-11-25 (Rundum-Check):**
+- Gebaut seit 2026-11-05: Tages-Kacheln auf `/erntewirtschaft`
+  (`ernte_ertrag_tag`/`ernte_kette_luecken`), `/erntewirtschaft/stammdaten`,
+  Waagen-Kiosk mit Live-Verbindungsanzeige, Doppelwägungs-Schutz (11-04),
+  Ausweis-Versionierung `vGeneration.DruckNr` + Druckprotokoll (11-12).
+- **Live NICHT eingespielt:** `migration_2026-11-04_waage_kiosk_doppelwaegung_kultur.sql`
+  (kein `feld_kultur` in `ernte_kiosk_wiegung`, kein Doppelwägungs-Schutz im
+  Processor) und `migration_2026-11-05_erntewirtschaft_ertrag_luecken.sql`
+  (Views fehlen, die Kacheln zeigen eine Fehlermeldung). **Nicht mehr
+  einzeln einspielen** (11-04 würde die Rollenprüfung vom 2026-11-24 im
+  Processor überschreiben) - stattdessen
+  `migration_2026-11-25h_ernte_nachholen.sql` (11-04 + Rollenprüfung, 11-05
+  mit "fällig" in deutscher Zeit).
+- Seit 2026-11-24: Mehrfachrollen (RLS über `hat_rolle()` statt
+  `current_role_name()`) und Geschäftsbereiche LW/VT (restriktive Policy
+  `bereich_grenze` u.a. auf `ernte_schicht`, `ernte_kiste_zyklus`,
+  `ernte_ausweis`, `ernte_ausweis_druck`, `ernte_tag`).
+- Bekannte Lücke: Personalnummern-Änderungen (HSC-Umnummerierung,
+  Zusammenführen, Statuswechsel) machen gedruckte Ausweise ungültig, weil der
+  QR `P-<personal_nr>-<suffix>` die Nummer zum Druckzeitpunkt enthält und
+  `ernte_ausweis` sie nicht speichert - siehe Teil E `ernte_ausweis`.
+
 **Statuskorrektur 2026-11-05 (dieser Absatz war veraltet):** Alle
 Hardware-Entscheidungen sind getroffen (siehe Tabelle weiter unten), kein
 RTK, QR-Scan-Modul "Grouper" von Jacob geht bald in Serienfertigung,
@@ -21,11 +43,12 @@ Poller-Erweiterung (Teil G), Mitarbeiter-Ausweise, Edge Function
 `ernte-ingest` (Teil C), Waagen-Agent (Teil D), kompletter Pilot (Teil H).
 
 **Was konkret noch fehlt (Softwareseite, Stand 2026-11-05):**
-- `/erntewirtschaft/stammdaten` (Maschinen-CRUD, Waagen, Felder, Konfig,
-  Excel-/CSV-Import für die 140 Maschinen) - bisher steht nur der Prototyp
-  manuell in der Datenbank, siehe Teil F.
-- GPS-Daten-Auswertung/Übersichtskarten-Ausbau: Tages-Kacheln ("Kisten
-  ohne Zuordnung", "Kisten fehlen heute", braucht `ernte_kette_luecken`),
+- ~~`/erntewirtschaft/stammdaten`~~ - **gebaut** (Stand 2026-11-25):
+  Maschinen-CRUD inkl. Excel-/CSV-Import (Upsert auf Nummer, Import
+  standardmäßig inaktiv), Bulk aktiv/inaktiv/löschen, Waagen (IP/Port),
+  Konfig-Werte (nur admin). Felder werden unter `/anbau/felder` gepflegt.
+- GPS-Daten-Auswertung/Übersichtskarten-Ausbau: Tages-Kacheln sind gebaut
+  (2026-11-05, Migration 11-05 aber noch nicht eingespielt, s.o.); offen:
   Marker-Clusterung, Prozessor-Anpassung für echte Grünspargel-
   Gruppenmaschinen - siehe Teil F/E.
 - `/erntewirtschaft/effizienz` (Realitätscheck kg/h, Ertragsdichte) - Teil F.
@@ -80,9 +103,9 @@ Klartext) stehende Suffix verhindert "Buddy Punching" über die bekannte
 Personalnummer eines Kollegen und lässt sich bei Kartenverlust rotieren
 ("Verlust-Karte drucken" macht die alte Karte sofort ungültig). Gebaut auf
 `/erntewirtschaft/ausweise`, siehe Teil C und Teil F für Details. Ein
-eigener Kartendrucker (Blanko-Karten + Foto s/w) ist angeschafft/geplant,
-aber noch nicht da - die Druckansicht funktioniert bis dahin mit jedem
-normalen Drucker.
+eigener Kartendrucker (Blanko-Karten + Foto s/w) ist vorgesehen - die
+Seite hat inzwischen einen Druckmodus "Kartendrucker (Evolis Zenius)"
+neben "DIN A4 (Schere)" (ob der Drucker in Betrieb ist: bitte bestätigen).
 
 **Präzisionsanforderung geklärt (2026-09-23): RTK voraussichtlich NICHT
 nötig.** Die ursprüngliche „±1 m"-Vorgabe (Klärung 2026-09-03/04) stammte aus
@@ -246,9 +269,8 @@ Ergebnis:  pro Kiste: Maschine · Fahrer · Feld/Flur (aus GPS) · Zeit · netto
   (tec-tus.de) P/N `MAGNUM 4077-01-000-00`, Versorgung 12-36 V/2,5 A - wird
   nicht mehr für den laufenden Kisten-Scan an der Waage gebraucht (dafür seit
   2026-10-12 ein QR-Desktop-Scanner, z. B. Zebra DS457/DS9208), sondern für
-  die 300-kg-Kisten vorgesehen. Die **Waage selbst kommt noch** (siehe Teil D
-  für das gewählte Modell
-  RHEWA 84vario).
+  die 300-kg-Kisten vorgesehen. Die Waage (**RHEWA 84vario**, siehe Teil D)
+  ist in Betrieb (Praxistest 2026-10-12, Waagen-Agent 2026-11-04/05).
 - **±1 m Präzision (RTK)** — ursprüngliche Vorgabe, seit 2026-09-23
   voraussichtlich NICHT mehr nötig, siehe „Präzisionsanforderung geklärt"
   oben. Interne TRB246-GNSS liegt bei 2,5–5 m, für den jetzt bestätigten
@@ -497,9 +519,11 @@ Drei Ströme, **getrennt geführt**:
    `ernte_position` (throttled 5 s, mit `fix_qualitaet`). Nicht in
    `fahrzeug_position` (anderes Volumenprofil).
 2. **QR-Scans (Badge + Kisten, seit 2026-10-12 statt RFID) + Batterie
-   (VE.Direct)** → TRB246 „Data to Server" (HTTPS-POST JSON, auf Event, mit
-   Offline-Queue/Retry) → Edge Function **`ernte-ingest`** → Rohtabelle
-   `ernte_scan`. **Nicht** über Traccar.
+   (VE.Direct)** → eigenes Skript **`tools/ernte-scan-agent/`** auf dem
+   TRB246 (POSIX-sh, eigene Datei-Warteschlange + Retry; das eingebaute
+   „Data to Server" kann kein Seriell→HTTP) → HTTPS-POST JSON an die Edge
+   Function **`ernte-ingest`** → Rohtabelle `ernte_scan`. **Nicht** über
+   Traccar.
 3. **Waage** → lokaler **Waagen-Agent** am Hof paart QR-Lesung (Desktop-Scanner,
    seit 2026-10-12 statt MAGNUM UHF) + Gewicht (Schnittstelle TBD) → POST an
    denselben `ernte-ingest`-Endpunkt.
@@ -519,7 +543,9 @@ noch keinen Unique-Index hatte.
 
 Supabase Edge Function (Deno). Auth: `Authorization: Bearer <ERNTE_INGEST_TOKEN>`.
 **Dumm** — nur validieren + je Ereignis eine `ernte_scan`-Zeile schreiben
-(Idempotenz-Key = Hash aus `quelle|typ|ts|tag` → `on conflict do nothing`).
+(Idempotenz über den Unique-Index `(quelle, tag_uid_norm, ereignis,
+zeitpunkt)` → `on conflict do nothing`, siehe oben; der ursprünglich
+geplante Hash-Key wurde dadurch ersetzt).
 Business-Logik (Zyklen öffnen/schließen, Schichten anlegen) macht weiterhin
 der Processor (Teil E, pg_cron, einmal pro Minute) - **außer der schnellen
 Klassifizierung unten**, die dafür zu langsam wäre.
@@ -611,7 +637,8 @@ Payload Waage (Hof-Agent):
 {"waage":"hofwaage-1","code":"K-10293","gewicht_kg":9.42,"ts":"2026-04-18T13:07:55Z"}
 ```
 Antwort: `200 {"angenommen": n, "dubletten": m, "klassifizierung":
-[{"code":"K-10293", "typ": "person"|"kiste"|"person_unbekannt"}]}`
+[{"code":"K-10293", "typ": "person"|"kiste"|"person_unbekannt"|"person_gesperrt"}]}`,
+bei verworfenen Ereignissen zusätzlich `"fehler": [{"event": …, "grund": "…"}]`.
 
 <details>
 <summary>Stand bis 2026-10-11 (RFID-Klassifizierung, überholt — siehe Kurswechsel ganz oben)</summary>
@@ -791,11 +818,9 @@ nicht die komplette Teil-D-Kette, bewusst als erste testbare Scheibe:
   `ernte_maschine`/`ernte_position`/`ernte_kiste_zyklus`/`ernte_konfig`/
   Sichten/pg_cron-Processor, die hängen an der SpidertrackBox-Seite und
   folgen in einer eigenen Migration.
-- **Noch offen/nicht gebaut:** `ernte-ingest`-Edge-Function (für den
-  SpidertrackBox-Pfad), Traccar→PostgreSQL (Teil A), Poller-Erweiterung mit
-  Positions-Quelle-Adapter (Teil G), restliche DB-Migration + Processor
-  (Teil E), Frontend-Modul (Teil F), Traccar-Bulk-Anlage der 140
-  Maschinen-Geräte.
+- ~~Noch offen/nicht gebaut: `ernte-ingest`, Teil A, Teil G, Processor,
+  Frontend-Modul~~ - inzwischen alles gebaut (Stand 2026-11-25). Offen
+  bleibt nur die Traccar-Anlage der 140 Maschinen-Geräte beim Rollout.
 
 **Reader — TECTUS MAGNUM 4077, Handbuch V1.1 (Klärung 2026-09-21) — seit
 2026-09-22 umgewidmet auf die 300-kg-Rohware-/Fertigware-Kisten, siehe
@@ -887,7 +912,18 @@ im Regelfall komplett leer.
 **`ernte_ausweis`** — **Gebaut 2026-10-22** (ersetzt den
 Badge-Anlern-Workflow über `ernte_tag`): `employee_id uuid pk → employees`,
 `suffix text` (8 Hex-Zeichen, zufällig, check-constraint), `erstellt_am`,
-`erstellt_von → profiles`, `aktualisiert_am`. RLS bewusst **nur admin/hr**
+`erstellt_von → profiles`, `aktualisiert_am`, seit
+`migration_2026-11-12_ernte_ausweis_versionierung.sql` zusätzlich
+`generation` (zählt bei "Verlust-Karte" hoch) und `letzter_druck_nr`, dazu
+das Druckprotokoll `ernte_ausweis_druck (employee_id, generation, druck_nr,
+grund 'neu'|'erneut'|'verlust', gedruckt_am, gedruckt_von)`.
+**Offene Lücke (2026-11-25):** die beim Druck verwendete Personalnummer
+wird nicht gespeichert. Ändert sich die Nummer (HSC-Umnummerierung,
+Zusammenführen, Statuswechsel), ist die Karte ungültig, die Ausweis-Seite
+zeigt sie aber weiter als aktiv. Vorschlag: Spalte
+`ernte_ausweis.gedruckte_personal_nr` (beim Druck setzen) + Badge "Karte
+mit alter Nr. – neu drucken" auf `/erntewirtschaft/ausweise` (braucht
+Migration). RLS bewusst **nur admin/hr**
 (nicht wie `employees` selbst für jede eingeloggte Rolle lesbar) - der
 Suffix ist das Geheimnis, das eine Karte fälschungssicher macht, siehe
 Migrationskopf `migration_2026-10-22_ernte_ausweis.sql` für die ausführliche
@@ -966,7 +1002,10 @@ Index `(verarbeitet_am) where verarbeitet_am is null`, `(quelle, zeitpunkt desc)
 Processor unten). Alles Abgeleitete ist hieraus reprozessierbar.
 
 **`ernte_waage`** — Hofwaage(n): `id identity pk`, `name`, `standort`,
-`reader_uid text`, `aktiv boolean`, timestamps.
+`ip`, `port`, `aktiv boolean`, timestamps, seit
+`migration_2026-11-04_waage_live_status.sql` `live_gewicht_kg`/
+`live_aktualisiert_am` (vom Agenten alle paar Sekunden geschrieben). Die
+ursprünglich geplante Spalte `reader_uid` gibt es nicht.
 
 **`ernte_feld` — ERSETZT durch das generische `feld` (Migration
 2026-10-19, siehe `supabase/migration_2026-10-19_feld_anbau_schema.sql`).**
@@ -1066,13 +1105,13 @@ Deploy nachjustierbar bleiben statt hart codiert.
   **abgelehnt** statt einen zweiten, parallelen Zyklus anzulegen; die
   Rohzeile bleibt erhalten, `ernte_scan.verarbeitung_fehler` nennt den
   bereits offenen Zyklus, siehe `migration_2026-10-22_ernte_kiste_bereits_offen.sql`).
-  Alle fünf Fälle bis auf „gewogen ohne Befüllung" und den neuen
-  Doppel-Scan-Fall **existieren bisher nur als Beschreibung hier** - die
-  Sicht selbst ist noch nicht gebaut (geplanter nächster zusammenhängender
-  Baustein, statt die restlichen Faelle einzeln nachzuziehen).
+  **Stand 2026-11-25:** die Sicht ist geschrieben
+  (`migration_2026-11-05_erntewirtschaft_ertrag_luecken.sql`, inkl.
+  Konfig-Schlüssel `netto_plausibel_min_kg`/`_max_kg`), live aber noch
+  **nicht eingespielt**.
 
-  **Konkretisiert, Planungs-Update 2026-10-27 (noch nicht gebaut, nur
-  Entwurf):** eine einzige View bedient sowohl die „live, nicht erst nach
+  **Konkretisiert, Planungs-Update 2026-10-27 (seit 2026-11-05 als
+  Migration geschrieben, s.o.):** eine einzige View bedient sowohl die „live, nicht erst nach
   Tagesende"-Kacheln auf der künftigen Überblicksseite (Teil F) als auch die
   formale Tagesend-Reconciliation - über ein berechnetes `ist_faellig`-Flag
   statt zweier getrennter Sichten (Kacheln/Live-Ansicht ignorieren das Flag
@@ -1127,8 +1166,10 @@ Deploy nachjustierbar bleiben statt hart codiert.
   berechnet, keine weitere DB-View nötig - gleiches Muster wie der
   Kiosk-Kistenzähler (`app/erntewirtschaft/waage/kiosk/page.tsx`).
 
-  **Baureihenfolge der sechs noch fehlenden Teil-E-Sichten** (keine davon
-  existiert bisher): zuerst `ernte_maschine_live`/`ernte_ertrag_tag`
+  **Baureihenfolge der Teil-E-Sichten** (Stand 2026-11-25:
+  `ernte_maschine_live` live seit 2026-10-27, `ernte_ertrag_tag` und
+  `ernte_kette_luecken` als Migration 11-05 geschrieben, aber nicht
+  eingespielt; die übrigen fehlen): zuerst `ernte_maschine_live`/`ernte_ertrag_tag`
   (einfache Aggregate, Grundlage der Überblicksseite), dann
   `ernte_kette_luecken` (s. o.), zuletzt `ernte_laufmeter_tag`/
   `ernte_effizienz_schicht` (brauchen Pausenzeit-Logik + `work_entries`-
@@ -1152,10 +1193,14 @@ Deploy nachjustierbar bleiben statt hart codiert.
 - `select` auf alle `ernte_*`-Tabellen + Sichten: `admin`, `hr`, `management`,
   `erntewirtschaft`, **`zeiterfassung`** (= „Mitarbeiter"/„Techniker" im
   Pflichtenheft — Dashboard, Maschinenliste, Belegungen).
-- `ernte_maschine`, `ernte_tag`, `ernte_waage`, `ernte_konfig`:
-  `for all` `admin`, `hr`; laufende Korrekturen (Maschine↔Feld/Mitarbeiter
-  manuell überschreiben) zusätzlich `erntewirtschaft`, `zeiterfassung` — analog
-  zu `praemien/zuckermais`, wo dieselben zwei Rollen mit-editieren dürfen.
+- Tatsächlich umgesetzt (Stand 2026-11-25): `ernte_maschine` schreiben
+  `admin`, `hr`, `erntewirtschaft`, `zeiterfassung`; `ernte_waage` nur
+  `admin`, `hr`; `ernte_konfig` nur `admin`; `ernte_kiste_zyklus`/
+  `ernte_schicht` update nur `admin`, `hr`; `ernte_ausweis` nur `admin`,
+  `hr`. Seit 2026-11-24 laufen alle Prüfungen über `hat_rolle()`
+  (Mehrfachrollen), zusätzlich restriktive `bereich_grenze` (LW/VT) auf den
+  Tabellen mit `employee_id`. (Ursprünglicher Entwurf: alle vier
+  Stammtabellen `admin`/`hr` + Korrekturrollen.)
 - Feldstufen setzen/ändern und die finale Auszahlungs-„Manipulation" (Chef laut
   Pflichtenheft) bleiben **`admin`**-only, wie die Satz-Verwaltung bei
   Zuckermais.
@@ -1245,8 +1290,9 @@ danach:
 
 ## Teil F — App (Modul „Erntewirtschaft")
 
-- Nav-Eintrag „Erntewirtschaft" (`components/Nav.tsx`), Rollen `admin`, `hr`,
-  `management`, `erntewirtschaft`. Icon z. B. `Sprout`/`Tractor`.
+- Nav-Eintrag „Erntewirtschaft" (`components/Nav.tsx`), Rollen laut
+  `MENUE_RECHTE` in `lib/rollen.ts`: `admin`, `hr`, `zeiterfassung`,
+  `lohnabrechnung`, `management`, `erntewirtschaft`. Icon `Sprout`.
 - `components/ErntewirtschaftTabs.tsx`.
 - **`/erntewirtschaft`** — Überblick: Karte mit den Spinnen (Live-Position, Farbe
   nach Fix-Qualität RTK/Float/GPS, Klick → Maschine + aktuelle Schicht + kg heute),
@@ -1262,9 +1308,12 @@ danach:
   `FahrzeugKarte` (ggf. zu gemeinsamem `GpsKarte` verallgemeinern).
 
   **Gebaut (2026-10-27, `41f81cb`):** Karte + Rollen-Gate (siehe unten) sind
-  live, bewusst als erste schlanke Scheibe - **noch nicht Teil davon:** die
-  Tages-Kacheln (brauchen `ernte_kette_luecken`/`ernte_ertrag_tag`, siehe
-  Teil E), Marker-Clusterung (erst relevant ab vielen gleichzeitig
+  live. **Tages-Kacheln gebaut 2026-11-05** (Kisten heute, kg heute, Kisten
+  ohne Zuordnung, Kisten überfällig; brauchen Migration 11-05, die noch nicht
+  eingespielt ist - die Seite zeigt dann einen Hinweis). Die Kachel
+  „überfällig" filtert auf `ist_faellig` (nach `kiste_faellig_bis` bzw.
+  Vortage), ist also noch nicht „live während des Tages" wie oben gewünscht
+  (Entscheidung offen). **Noch nicht gebaut:** Marker-Clusterung (erst relevant ab vielen gleichzeitig
   sichtbaren Maschinen) und die Prozessor-Anpassung für echte
   Grünspargel-Gruppenmaschinen (aktuell nur die eine Weißspargel-
   Pilotmaschine, `max_personen=1` default - schadet ihr nicht, ändert aber
@@ -1322,7 +1371,16 @@ danach:
   und **„nur ohne Zuordnung"** (`employee_id is null`, siehe Prozessor oben) -
   hier auch das **nachträgliche Zuordnen** einer Person zu bereits
   entstandenen Kisten (admin/hr, `ernte_kiste_zyklus.employee_id` per Klick
-  setzen), CSV-Export.
+  setzen), CSV-Export. **Gebaut** (alle genannten Filter, Zuordnen, CSV).
+- **`/erntewirtschaft/waage`** (gebaut) — Rohprotokoll der Waage
+  (`ernte_scan`, quelle `waage`), Live-Verbindung je Waage, Tageswerte.
+- **`/erntewirtschaft/waage/kiosk`** (gebaut 2026-10-26, überarbeitet
+  2026-11-04) — Touchscreen am Waagen-PC für die Rolle `waage`: aktuelle
+  Wägung mit Foto/Feld/Sorte, letzte 3 Wägungen, Kistenzähler
+  Vormittag/Nachmittag/im Umlauf, Piepton, Realtime auf
+  `ernte_kiste_zyklus`, Sicht `ernte_kiosk_wiegung`. Doppelwägung derselben
+  Kiste innerhalb `doppelwaegung_minuten` ersetzt das alte Ergebnis
+  (Migration 11-04, noch nicht eingespielt).
 - **`/erntewirtschaft/effizienz`** — Realitätscheck: je Schicht/Fahrer/Maschine/
   Feld kg, Stunden (Schicht vs. `work_entries`), kg/h; Ertragsdichte-Heatmap aus
   `ernte_kiste_zyklus`-Positionen (gewichtet mit netto kg); Zeitraum-Wähler; Export.
@@ -1338,9 +1396,10 @@ danach:
   eingestuft hat. Tabelle + kg/h-Kennzahlen aus `ernte_effizienz_schicht`
   bleiben Teil des baldigen Baus, die Heatmap selbst kann ohne
   Funktionsverlust der restlichen Seite später nachgezogen werden.
-- **`/erntewirtschaft/stammdaten`** — Maschinen-CRUD, Waagen, Felder (Karten-
-  Editor / Import), Konfig-Konstanten. **Excel-/CSV-Import für die 140 Maschinen**
-  (siehe unten).
+- **`/erntewirtschaft/stammdaten`** (gebaut) — Maschinen-CRUD, Waagen,
+  Konfig-Konstanten. **Excel-/CSV-Import für die 140 Maschinen** (siehe
+  unten). Felder (Karten-Editor / Pachtwesen-Import) liegen unter
+  `/anbau/felder`.
 - **`/erntewirtschaft/transponder`** — **ERSETZT (2026-10-22)** durch
   `/erntewirtschaft/ausweise` (gebaut, siehe eigener Abschnitt unten): seit
   Codes direkt aus der Personalnummer ableitbar sind, gibt es keine
@@ -1353,8 +1412,11 @@ danach:
   (gleicher Suffix) / "Verlust-Karte drucken" (rotiert den Suffix, alte
   Karte sofort ungültig, mit Bestätigungsdialog). Druckansicht zeigt groß die
   Personalnummer als Klarnummer, der Suffix steckt nur im QR-Code
-  (`qrcode`-Paket, client-seitig). Noch ohne eigenen Kartendrucker (Stand
-  2026-10-22).
+  (`qrcode`-Paket, client-seitig). Inzwischen zusätzlich: Gruppenfilter,
+  Mehrfachauswahl + Seriendruck, Versionsnummer `vGeneration.DruckNr` auf
+  der Karte, Druckprotokoll (`ernte_ausweis_druck`), Herkunft und
+  Führerscheinklassen auf der Karte, Druckmodus Kartendrucker (Evolis) oder
+  DIN A4. Liste nur Personen des Bereichs Landwirtschaft.
   **Redesign 2026-10-22 ("Design und DIN-A4-Druck", eigene Spezifikation):**
   Karte exakt 85,60 x 53,98 mm (ID-1), eigenes Farbschema (Primärgrün
   `#286b38`, Text `#202820`, Sekundärtext `#737b73`), Kopfzeile "SPARGELHOF
@@ -1381,11 +1443,15 @@ danach:
   sondern **direkt bei der Anreise** in `app/personalplanung/page.tsx`
   (Nutzer-Vorgabe 2026-10-22: "muss beim Anlegen der Person während der
   Anreise schon passieren") - `anreiseVorbereiten()` öffnet nach dem
-  Anlegen für jede neu (nicht reaktivierte) Person nacheinander
-  `components/MitarbeiterFotoAufnahme.tsx`: Kamera-Vorschau mit gelbem
-  Rahmen, in den das Passfoto des physischen Personalausweises gehalten
-  wird - gespeichert wird NUR der zugeschnittene Rahmen-Ausschnitt, nie das
-  volle Kamerabild (keine Ausweiskopie mit Nummer/Geburtsdatum im Storage).
+  Anlegen für jede neu (nicht reaktivierte) Person nacheinander die
+  Kamera-Aufnahme mit gelbem Rahmen, in den das Passfoto des physischen
+  Personalausweises gehalten wird. **Ersetzt (2026-10-26):** statt
+  `MitarbeiterFotoAufnahme.tsx` jetzt `components/DokumentKameraAufnahme.tsx`
+  (`modus="ausweis"`). Diese speichert den Rahmen-Ausschnitt als
+  `employees.foto_pfad` **und zusätzlich das volle Kamerabild als Dokument
+  „Ausweiskopie“** (Bucket `mitarbeiter-dokumente`, erfüllt die
+  Anreise-Checkliste) - die frühere Aussage „nie das volle Kamerabild“ gilt
+  nicht mehr.
   Dieselbe Komponente steht auch auf `/erntewirtschaft/ausweise` für
   nachträgliches Hinzufügen/Ändern bereit (z. B. bei der Anreise
   übersprungen, oder für ältere Mitarbeiter ohne Foto).
@@ -1570,7 +1636,7 @@ Telegram-Nachricht. Genaue Melde-Schwelle (z.B. exakt bei `ist_kg >=
 ziel_kg` oder schon kurz davor am gerundeten Schwellwert) noch beim Bauen
 final festzuzurren.
 
-## Teil F4 — Feld-Fortschrittskarte: Maschinen-Status, Kisten, Reihen-Erntestand (Nutzer-Vorgabe 2026-10-31, noch nicht gebaut, wartet auf GPS-/Kisten-Pipeline)
+## Teil F4 — Feld-Fortschrittskarte: Maschinen-Status, Kisten, Reihen-Erntestand (Nutzer-Vorgabe 2026-10-31, noch nicht gebaut; die GPS-/Kisten-Pipeline läuft im Pilot, also baubar)
 
 Nutzer-Vorgabe: auf der `/erntewirtschaft`-Übersichtskarte je Feld auf einen
 Blick sehen, ob/wie es gerade bearbeitet wird - Maschinen-Status, Kisten-
@@ -1689,13 +1755,15 @@ Traccar-Instanz. Abweichungen gegenüber der ursprünglichen Skizze:
    Entscheidungen-Tabelle oben, Stand 2026-11-05: alles entschieden, kein
    RTK, QR-Scan-Modul "Grouper" von Jacob geht bald in Serienfertigung).
 2. Traccar auf PostgreSQL umstellen — **erledigt** (Teil A, 2026-10-31).
-3. Migration `erntewirtschaft` in Supabase (PostGIS ist bereits seit Migration
-   2026-10-19 aktiviert); `feld` befüllen (Import aus Pachtwesen2026 oder
-   Karten-Editor, siehe Phase 2/3 des Feld/Anbau-Plans).
+3. ~~Migration `erntewirtschaft` in Supabase; `feld` befüllen~~ —
+   **erledigt** (alle `ernte_*`-Tabellen und `feld` sind live). Offen nur die
+   Migrationen 11-04 und 11-05 (siehe Stand-Kopf).
 4. ~~Edge Function `ernte-ingest` deployen~~ — **erledigt, End-to-End im
    Prototyp erfolgreich getestet** (siehe Teil C, Nutzer-Korrektur
    2026-11-05).
-5. pg_cron-Processor einrichten.
+5. ~~pg_cron-Processor einrichten~~ — `migration_2026-10-22_ernte_processor_cron.sql`
+   (Job `ernte-scan-verarbeiten`, jede Minute) erledigt (bitte bestätigen,
+   dass der Cron-Job live läuft).
 6. ~~Eine Spinne als Pilot komplett aufbauen, End-to-End testen~~ —
    **erledigt** (Nutzer-Korrektur 2026-11-05): kompletter Prototyp gebaut
    und End-to-End durchgetestet - Scannen der Personalkarte, Scannen der
@@ -1729,8 +1797,8 @@ Traccar-Instanz. Abweichungen gegenüber der ursprünglichen Skizze:
    Sichtkontakt (anders als bei RFID, das auch durch leichten Dreck/Winkel
    noch liest) — der Pilottest muss deshalb auch die praktische Handhabung
    am Scan-Punkt prüfen (Erreichbarkeit vom Fahrersitz, Ausleuchtung).
-3. **Waage:** sobald das Modell feststeht — Schnittstelle (RS232 / Ethernet /
-   Impuls)? Rechner am Hof für den Agenten vorhanden oder Teil des Projekts (RPi)?
+3. ~~**Waage**~~ — **geklärt:** RHEWA 84vario über Ethernet/TCP, Waagen-Agent
+   (`tools/ernte-waage-agent/`) auf einem Rechner am Hof (Teil D).
 4. ~~`work_entries`-Kopplung~~ — **geklärt** (Pflichtenheft): der Stundenzettel
    bleibt führend, die Maschinenzeit ist Kontroll-/Differenzgröße.
 5. ~~**Tara**~~ — **geklärt (2026-10-12):** es wird immer an der Waage selbst

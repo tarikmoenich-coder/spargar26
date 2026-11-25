@@ -4,7 +4,8 @@
 // Ablauf: CSV-Exporte wählen (je Datei die Firma) -> Prüfen (Vorschau mit
 // allen Auffälligkeiten, nichts wird gespeichert) -> Importieren.
 // Logik in lib/hscImport.ts (lokal gegen die echten Exporte getestet).
-// Wiederholbar: bereits vorhandene V-Personalnummern werden übersprungen.
+// Wiederholbar: bereits vorhandene V-Personalnummern werden nicht neu
+// angelegt, aber um Saisonjahre und Beschäftigungszeiträume ergänzt.
 
 import PageHeader from "@/components/PageHeader";
 import PersonalTabs from "@/components/PersonalTabs";
@@ -256,14 +257,21 @@ export default function PersonalImportHscPage() {
       <PageHeader
         icon={FileUp}
         titel="Import Vertrieb (HSC)"
-        beschreibung="Personalstamm des Vertriebs aus HSC-Exporten (CSV) übernehmen - je Datei die Firma wählen, prüfen, dann importieren. Personalnummern bekommen das Präfix „V-“. Bereits vorhandene Nummern werden übersprungen."
+        beschreibung="Personalstamm des Vertriebs aus HSC-Exporten (CSV) übernehmen - je Datei die Firma wählen, prüfen, dann importieren. Personalnummern bekommen das Präfix „V-“. Bereits vorhandene Personen werden nicht neu angelegt, aber um Saisonjahre und Beschäftigungszeiträume ergänzt (Firma je Saison nur, wenn alle Dateien gemeinsam geladen sind)."
       />
 
       <div className="card flex flex-col gap-3">
+        {profile?.bereich_ansicht === "VT" && (
+          <p className="rounded border border-amber-300 bg-amber-50 p-2 text-sm text-amber-900">
+            Oben ist nur „Vertrieb“ gewählt - dann ist die Landwirtschaft ausgeblendet und der Abgleich
+            „auch in der Landwirtschaft als …“ findet nichts. Für einen vollständigen Abgleich oben „Alle
+            Bereiche“ wählen.
+          </p>
+        )}
         {(ansichtNurLw || firmen.length === 0) && (
           <p className="rounded border border-amber-300 bg-amber-50 p-2 text-sm text-amber-900">
             {ansichtNurLw
-              ? "Oben ist der Bereich „Landwirtschaft“ gewählt - dadurch sind die Vertriebs-Firmen ausgeblendet. Bitte oben auf „Alle Bereiche“ oder „Vertrieb“ umstellen."
+              ? "Oben ist der Bereich „Landwirtschaft“ gewählt - dadurch sind die Vertriebs-Firmen ausgeblendet. Bitte oben auf „Alle Bereiche“ umstellen (nur so wird auch mit der Landwirtschaft abgeglichen)."
               : "Keine Vertriebs-Firma sichtbar - für den Import braucht dein Nutzer den Bereich „Vertrieb“ (Einstellungen → Nutzer & Rollen)."}
           </p>
         )}
@@ -329,7 +337,7 @@ export default function PersonalImportHscPage() {
           <p>
             {personen.length} Personen in den Dateien · {zuImportieren.length} neu ·{" "}
             {personen.filter((p) => vorhandeneNummern.has(p.personal_nr)).length} schon vorhanden (werden
-            übersprungen) · {personen.filter((p) => p.fehler.length).length} mit Fehler (nicht importierbar) ·{" "}
+            ergänzt) · {personen.filter((p) => p.fehler.length).length} mit Fehler (nicht importierbar) ·{" "}
             {personen.filter((p) => p.aktiv).length} aktiv
           </p>
           <p>

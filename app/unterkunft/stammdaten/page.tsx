@@ -929,7 +929,8 @@ export default function UnterkunftStammdatenPage() {
           Kontrollzeitraum je Raumtyp
         </h2>
         <p className="text-sm text-neutral-500">
-          Steuert die Ampel „letzte Kontrolle“ im Grundriss. Grün: letzte
+          Steuert die Ampel „letzte Kontrolle“ im Grundriss und die Fristen
+          im Kontrollplan. Grün: letzte
           Kontrolle ≤ X Tage her · Gelb: ≤ Y Tage her · darüber Rot.
         </p>
         <table>
@@ -944,7 +945,7 @@ export default function UnterkunftStammdatenPage() {
             {intervalle.length === 0 && (
               <tr>
                 <td colSpan={3} className="text-sm text-neutral-400">
-                  Noch nicht angelegt – Migration 2026-09-08 ausführen.
+                  Keine Kontrollzeiträume hinterlegt.
                 </td>
               </tr>
             )}

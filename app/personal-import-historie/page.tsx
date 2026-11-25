@@ -24,6 +24,7 @@ import {
 import PersonalTabs from "@/components/PersonalTabs";
 
 import { hatRolle } from "@/lib/rollen";
+import { ladeAlleSeiten } from "@/lib/ladeAlle";
 const BLOCK = 200;
 
 function bloecke<T>(arr: T[], groesse = BLOCK): T[][] {
@@ -75,8 +76,13 @@ function ladeVerdachtCsv(personen: HistoriePerson[]) {
 
 export default function PersonalImportHistoriePage() {
   const { profile } = useProfile();
-  // Geschäftsbereich (Stufe 2) - Vertriebs-Historie folgt in Stufe 4.
+  // Geschäftsbereich (Stufe 2). Vertrieb: Historie kommt aus dem HSC-Import
+  // (/personal-import-hsc).
   const bereiche = useBereiche(profile);
+  // Schlüssel einer Personalnummer wie gespeichert (mit Bereichs-Präfix,
+  // "123" im Vertrieb = "V-123"), klein geschrieben.
+  const nrKey = (nr: string) =>
+    personalNrFuerBereich(nr, bereiche.praefix(bereiche.standard)).trim().toLowerCase();
   const canEdit = hatRolle(profile, "admin", "hr");
 
   const [dateiname, setDateiname] = useState<string | null>(null);
@@ -107,30 +113,32 @@ export default function PersonalImportHistoriePage() {
 
     const supabase = getSupabaseClient();
     const [
-      { data: bestehende },
+      bestehende,
       { data: gruppenData },
       { data: herkunftData },
     ] = await Promise.all([
-      supabase
-        .from("employee_personaldaten")
-        .select("id, personal_nr, name, vorname, geburtsdatum"),
+      // Seitenweise - der Stamm hat über 1000 Personen; sonst gälten
+      // vorhandene Personen als "neu" und der Block-Insert scheiterte.
+      ladeAlleSeiten<{
+        id: string;
+        personal_nr: string;
+        name: string;
+        vorname: string;
+        geburtsdatum: string | null;
+      }>((von, bis) =>
+        supabase
+          .from("employee_personaldaten")
+          .select("id, personal_nr, name, vorname, geburtsdatum")
+          .order("id")
+          .range(von, bis)
+      ),
       supabase.from("arbeitsgruppen").select("gruppe_nr"),
       supabase.from("herkuenfte").select("wert"),
     ]);
 
     const bestMap = new Map<string, string>();
     const bestListe: BestehenderMitarbeiter[] = [];
-    (
-      (bestehende as
-        | {
-            id: string;
-            personal_nr: string;
-            name: string;
-            vorname: string;
-            geburtsdatum: string | null;
-          }[]
-        | null) ?? []
-    ).forEach((r) => {
+    bestehende.forEach((r) => {
       bestMap.set(r.personal_nr.trim().toLowerCase(), r.id);
       bestListe.push({
         personal_nr: r.personal_nr,
@@ -209,11 +217,12 @@ export default function PersonalImportHistoriePage() {
         continue;
       }
       if (p.verdacht) verdacht++;
-      if (bestehendId.has(p.personal_nr.trim().toLowerCase())) imStamm++;
+      if (bestehendId.has(nrKey(p.personal_nr))) imStamm++;
       else neu++;
     }
     return { neu, imStamm, fehler, verdacht, gesamt: personen.length };
-  }, [personen, bestehendId]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [personen, bestehendId, bereiche.standard, bereiche.alle]);
 
   async function handleImport() {
     setImporting(true);
@@ -221,12 +230,8 @@ export default function PersonalImportHistoriePage() {
     const importierbar = personen.filter((p) => p.fehler.length === 0);
     const fehler: { personal_nr: string; grund: string }[] = [];
 
-    const neuePersonen = importierbar.filter(
-      (p) => !bestehendId.has(p.personal_nr.trim().toLowerCase())
-    );
-    const vorhandene = importierbar.filter((p) =>
-      bestehendId.has(p.personal_nr.trim().toLowerCase())
-    );
+    const neuePersonen = importierbar.filter((p) => !bestehendId.has(nrKey(p.personal_nr)));
+    const vorhandene = importierbar.filter((p) => bestehendId.has(nrKey(p.personal_nr)));
 
     // Personalnummer (klein) -> employee_id, für die Präsenz-Zeilen
     const idNachNr = new Map<string, string>(bestehendId);
@@ -272,7 +277,7 @@ export default function PersonalImportHistoriePage() {
     // wenn PostgREST die Rückgabe begrenzt) die id noch einmal gezielt holen,
     // damit keine Präsenz-Jahre verloren gehen.
     const fehlendeNrn = neuePersonen
-      .map((p) => p.personal_nr)
+      .map((p) => personalNrFuerBereich(p.personal_nr, bereiche.praefix(bereiche.standard)))
       .filter((nr) => !idNachNr.has(nr.trim().toLowerCase()));
     for (const block of bloecke(fehlendeNrn)) {
       const { data } = await supabase
@@ -291,7 +296,7 @@ export default function PersonalImportHistoriePage() {
       quelle: string;
     }[] = [];
     for (const p of [...neuePersonen, ...vorhandene]) {
-      const id = idNachNr.get(p.personal_nr.trim().toLowerCase());
+      const id = idNachNr.get(nrKey(p.personal_nr));
       if (!id) continue; // Anlegen ist fehlgeschlagen
       for (const jahr of p.jahre) {
         praesenz.push({ employee_id: id, saison_jahr: jahr, quelle: "import" });
@@ -317,9 +322,7 @@ export default function PersonalImportHistoriePage() {
     }
 
     // tatsächlich angelegt = neue Person, die jetzt eine id hat
-    const neuMitId = neuePersonen.filter((p) =>
-      idNachNr.has(p.personal_nr.trim().toLowerCase())
-    ).length;
+    const neuMitId = neuePersonen.filter((p) => idNachNr.has(nrKey(p.personal_nr))).length;
 
     setErgebnis({
       neu: neuMitId,
@@ -429,9 +432,7 @@ export default function PersonalImportHistoriePage() {
               </thead>
               <tbody>
                 {personen.slice(0, 400).map((p) => {
-                  const imStamm = bestehendId.has(
-                    p.personal_nr.trim().toLowerCase()
-                  );
+                  const imStamm = bestehendId.has(nrKey(p.personal_nr));
                   return (
                     <tr key={p.personal_nr}>
                       <td>{p.personal_nr}</td>

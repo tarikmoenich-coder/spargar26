@@ -13,6 +13,7 @@ import {
   type StundenZelle,
 } from "@/lib/stundenImport";
 import { formatDatumDE } from "@/lib/format";
+import { ladeAlleSeiten } from "@/lib/ladeAlle";
 import ErfassungTabs from "@/components/ErfassungTabs";
 
 function heuteIso(offsetTage: number): string {
@@ -50,14 +51,25 @@ export default function ErfassungImportPage() {
     setDateiname(file.name);
 
     const supabase = getSupabaseClient();
-    const { data: employeesData } = await supabase
-      .from("employees")
-      .select("id, personal_nr, name, vorname");
+    // Seitenweise (lib/ladeAlle.ts) - über 4.000 Personen, sonst fände der
+    // Import nur die ersten 1000 Personalnummern.
+    const employeesData = await ladeAlleSeiten<{
+      id: string;
+      personal_nr: string;
+      name: string;
+      vorname: string;
+    }>((von, bis) =>
+      supabase
+        .from("employees")
+        .select("id, personal_nr, name, vorname")
+        .order("id")
+        .range(von, bis)
+    );
     const employeesNachPersonalNr = new Map<
       string,
       { id: string; name: string }
     >();
-    (employeesData ?? []).forEach(
+    employeesData.forEach(
       (e: { id: string; personal_nr: string; name: string; vorname: string }) => {
         employeesNachPersonalNr.set(e.personal_nr.trim().toLowerCase(), {
           id: e.id,
@@ -87,18 +99,22 @@ export default function ErfassungImportPage() {
       new Set(spalten.map((s) => s.datum).filter((d): d is string => d !== null))
     );
 
-    const [{ data: bestehendeData }, { data: periodsData }] =
+    const [bestehendeData, { data: periodsData }] =
       await Promise.all([
         alleDaten.length > 0
-          ? supabase
-              .from("work_entries")
-              .select("employee_id, datum")
-              .in("datum", alleDaten)
-          : Promise.resolve({ data: [] }),
+          ? ladeAlleSeiten<{ employee_id: string; datum: string }>((von, bis) =>
+              supabase
+                .from("work_entries")
+                .select("employee_id, datum")
+                .in("datum", alleDaten)
+                .order("id")
+                .range(von, bis)
+            )
+          : Promise.resolve([] as { employee_id: string; datum: string }[]),
         supabase.from("periods").select("*").eq("gesperrt", true),
       ]);
     const bestehendeEintraege = new Set(
-      (bestehendeData ?? []).map(
+      bestehendeData.map(
         (r: { employee_id: string; datum: string }) =>
           `${r.employee_id}|${r.datum}`
       )

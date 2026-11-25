@@ -6,6 +6,7 @@ import { getSupabaseClient } from "@/lib/supabase/client";
 import { useProfile } from "@/lib/useProfile";
 import { ladeAlleSeiten } from "@/lib/ladeAlle";
 import { formatDatumDE, formatMenge } from "@/lib/format";
+import { heuteLokalIso } from "@/lib/datum";
 import type { SeasonSummaryRow } from "@/lib/types";
 
 import { hatRolle } from "@/lib/rollen";
@@ -106,6 +107,8 @@ function BelegInner() {
   const [vorschuesse, setVorschuesse] = useState<VorschussZeile[]>([]);
   const [belegnummer, setBelegnummer] = useState<string | null>(null);
   const [gruppeText, setGruppeText] = useState<string | null>(null);
+  // Arbeitgeber der Saison (Firma je Person/Saison, Stufe 3a).
+  const [firmaText, setFirmaText] = useState<string | null>(null);
   const [laedt, setLaedt] = useState(true);
   const [fehler, setFehler] = useState<string | null>(null);
 
@@ -137,7 +140,7 @@ function BelegInner() {
       setRow(gewaehlt);
       const jahr = gewaehlt.saison_jahr;
 
-      const [bonusRes, satzRes, tageListe, vorschussListe, belegRes, grpRes] =
+      const [bonusRes, satzRes, tageListe, vorschussListe, belegRes, grpRes, firmaRes] =
         await Promise.all([
           supabase
             .from("season_bonuses")
@@ -185,6 +188,7 @@ function BelegInner() {
                 .eq("gruppe_nr", gewaehlt.gruppe_nr)
                 .maybeSingle()
             : Promise.resolve({ data: null }),
+          supabase.rpc("firma_fuer", { p_employee_id: id, p_saison_jahr: jahr }),
         ]);
 
       setBonus((bonusRes.data as BonusDetail | null) ?? null);
@@ -204,6 +208,17 @@ function BelegInner() {
           ? `${gewaehlt.gruppe_nr} – ${grp?.bezeichnung ?? "?"}`
           : null
       );
+      const firmaKuerzel = (firmaRes.data as string | null) ?? null;
+      if (firmaKuerzel) {
+        const { data: f } = await supabase
+          .from("firma")
+          .select("name")
+          .eq("kuerzel", firmaKuerzel)
+          .maybeSingle();
+        setFirmaText((f as { name: string } | null)?.name ?? firmaKuerzel);
+      } else {
+        setFirmaText(null);
+      }
       setLaedt(false);
     })();
   }, [id, jahrParam, canView]);
@@ -492,6 +507,9 @@ function BelegInner() {
             {row.name}, {row.vorname}
             {!row.aktiv && " · inaktiv"}
           </p>
+          {firmaText && (
+            <p className="text-xs text-neutral-700">Arbeitgeber: {firmaText}</p>
+          )}
           <p className="text-xs text-neutral-500">
             {gruppeText ? `Gruppe ${gruppeText} · ` : ""}
             Abrechnungsart:{" "}
@@ -516,7 +534,7 @@ function BelegInner() {
               : "Vorläufig – noch nicht abgerechnet"}
           </div>
           <div className="text-[10px] text-neutral-500">
-            Stand {formatDatumDE(new Date().toISOString())}
+            Stand {formatDatumDE(heuteLokalIso())}
           </div>
         </div>
       </div>

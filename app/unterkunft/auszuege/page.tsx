@@ -19,12 +19,14 @@ import type { UnterkunftAuszugOffen } from "@/lib/types";
 export default function UnterkunftAuszuegePage() {
   const [zeilen, setZeilen] = useState<UnterkunftAuszugOffen[]>([]);
   const [loading, setLoading] = useState(true);
+  const [fehler, setFehler] = useState<string | null>(null);
 
   const laden = useCallback(async () => {
     setLoading(true);
-    const { data } = await getSupabaseClient()
+    const { data, error } = await getSupabaseClient()
       .from("unterkunft_auszug_offen")
       .select("*");
+    setFehler(error ? `Laden fehlgeschlagen: ${error.message}` : null);
     setZeilen((data as UnterkunftAuszugOffen[]) ?? []);
     setLoading(false);
   }, []);
@@ -65,7 +67,13 @@ export default function UnterkunftAuszuegePage() {
         </p>
       </div>
 
-      {zeilen.length === 0 ? (
+      {fehler && (
+        <p className="rounded border border-beere-200 bg-beere-50 px-3 py-2 text-sm text-beere-700">
+          {fehler}
+        </p>
+      )}
+
+      {fehler ? null : zeilen.length === 0 ? (
         <p className="rounded border border-emerald-200 bg-emerald-50 px-3 py-3 text-sm text-emerald-800">
           Kein offener Auszug. 👍
         </p>

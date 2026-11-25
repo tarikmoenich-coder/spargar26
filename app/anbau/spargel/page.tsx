@@ -69,7 +69,7 @@ export default function AnbauSpargelPage() {
   async function load() {
     setLoading(true);
     const supabase = getSupabaseClient();
-    const [{ data: fData }, { data: uData }] = await Promise.all([
+    const [{ data: fData, error: fError }, { data: uData, error: uError }] = await Promise.all([
       supabase
         .from("feld")
         .select("*")
@@ -83,6 +83,7 @@ export default function AnbauSpargelPage() {
         .in("kultur", ["spargel", "gruenspargel"])
         .order("feld_bezeichnung"),
     ]);
+    if (fError || uError) setFehler(`Konnte nicht laden: ${(fError ?? uError)!.message}`);
     setFelder((fData as Feld[]) ?? []);
     const ueb = (uData as FeldAnbauUebersicht[]) ?? [];
     setUebersicht(ueb);
@@ -127,10 +128,11 @@ export default function AnbauSpargelPage() {
     }
     // Direkt den einen, üblichen Abschnitt mit anlegen - erspart bei
     // Spargel den separaten "Abschnitt hinzufügen"-Klick im Normalfall.
-    await supabase.from("feld_anbau_abschnitt").insert({
+    const { error: abschnittFehler } = await supabase.from("feld_anbau_abschnitt").insert({
       feld_anbau_id: data.id,
       bezeichnung: "1",
     });
+    if (abschnittFehler) setFehler(abschnittFehler.message);
     setLaeuft(false);
     load();
   }
@@ -267,7 +269,8 @@ export default function AnbauSpargelPage() {
   async function abschnittLoeschen(id: number) {
     if (!window.confirm("Diesen Abschnitt wirklich entfernen?")) return;
     const supabase = getSupabaseClient();
-    await supabase.from("feld_anbau_abschnitt").delete().eq("id", id);
+    const { error } = await supabase.from("feld_anbau_abschnitt").delete().eq("id", id);
+    if (error) setFehler(error.message);
     load();
   }
 

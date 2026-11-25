@@ -72,9 +72,9 @@ export default function HerkuenftePage() {
       <div>
         <PageHeader icon={Globe} titel="Herkünfte" />
         <p className="text-sm text-neutral-500">
-          Feste Liste der Herkünfte für den Personalstamm – damit sich
-          Vorschüsse zuverlässig nach Herkunft auswählen lassen (keine
-          Tippfehler-Varianten).
+          Feste Liste der Herkünfte für Personalstamm, Personalplanung (Soll
+          je Herkunft), Unterkunft-Kontingente und die Vorschuss-Auswahl –
+          ohne Tippfehler-Varianten.
         </p>
       </div>
 

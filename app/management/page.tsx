@@ -83,8 +83,14 @@ export default function ControllingUebersichtPage() {
       <PageHeader
         icon={Gauge}
         titel="Controlling"
-        beschreibung="Offene Punkte je Thema – die Zähler zeigen den Handlungsbedarf für das laufende Jahr. Jede Liste ist als eigener Reiter erreichbar."
+        beschreibung="Offene Punkte je Thema. Sozialversicherung, Stunden, Abweichungen und Urlaub beziehen sich auf das laufende Saisonjahr; Anreiseliste und Arbeitstage am Stück auf den aktuellen Stand. Jede Liste ist als eigener Reiter erreichbar."
       />
+
+      {counts.fehler && (
+        <p className="text-sm text-beere-600">
+          ⚠ Einige Zähler konnten nicht geladen werden ({counts.fehler}).
+        </p>
+      )}
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
         {KACHELN.map((k) => {

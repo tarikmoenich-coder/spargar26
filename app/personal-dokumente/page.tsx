@@ -20,12 +20,12 @@ import { hatRolle } from "@/lib/rollen";
 const DOKUMENTE_BUCKET = "mitarbeiter-dokumente";
 const FUEHRERSCHEIN_KATEGORIE: DokumentKategorie = "Führerschein Kopie";
 
-// Die beiden Fach-Formulare ("Doppelte Haushaltsführung" und "Feststellung
-// der Versicherungspflicht") wurden 2026-08-11 als Dokument-Kategorie ganz
-// entfernt: sie werden nicht mehr hochgeladen, sondern ausschließlich über
-// ihre Eingabemaske erfasst (Personal → Lohnsteuer bzw.
-// Sozialversicherung). Die dort erfassten Angaben sind der Nachweis, und
-// die Anreiseliste-Checkliste prüft entsprechend diese Angaben.
+// SV-Fragebogen und die Angaben zur doppelten Haushaltsführung werden über
+// ihre Eingabemasken erfasst (Personal → Sozialversicherung bzw.
+// Lohnsteuer); die Anreiseliste-Checkliste prüft diese Angaben. Seit
+// 2026-09-17 gibt es zusätzlich die Upload-Kategorie "Doppelte
+// Haushaltsführung Bescheinigung" (unterschriebener Scan für den
+// Lohnsteuer-Sammelantrag).
 // Die Hochzeitsurkunde bleibt hier (allgemeiner Personalnachweis) und ist
 // zusätzlich auf der Lohnsteuer-Seite sichtbar, wo sie gebraucht wird.
 const SICHTBARE_KATEGORIEN: DokumentKategorie[] = [...DOKUMENT_KATEGORIEN];
@@ -189,14 +189,24 @@ function PersonalDokumenteInner() {
       return;
     }
     const supabase = getSupabaseClient();
+    // Erst den Eintrag, dann die Datei löschen - scheitert der Eintrag,
+    // bleibt nichts Halbes zurück.
+    const { error: dbError } = await supabase
+      .from("employee_documents")
+      .delete()
+      .eq("id", doc.id);
+    if (dbError) {
+      window.alert(`Löschen fehlgeschlagen: ${dbError.message}`);
+      return;
+    }
     const { error: storageError } = await supabase.storage
       .from(DOKUMENTE_BUCKET)
       .remove([doc.storage_path]);
     if (storageError) {
-      window.alert(`Löschen fehlgeschlagen: ${storageError.message}`);
-      return;
+      window.alert(
+        `Eintrag gelöscht, die Datei im Speicher aber nicht: ${storageError.message}`
+      );
     }
-    await supabase.from("employee_documents").delete().eq("id", doc.id);
     setDokumente((prev) => ({
       ...prev,
       [doc.employee_id]: (prev[doc.employee_id] ?? []).filter(
@@ -237,12 +247,13 @@ function PersonalDokumenteInner() {
         <PageHeader icon={FileText} titel="Dokumente" />
         <p className="text-sm text-neutral-500">
           Allgemeine Personaldokumente je Mitarbeiter und Kategorie. Leere
-          Felder bedeuten: für diese Kategorie wurde noch nichts hochgeladen.
-          Downloads laufen über zeitlich begrenzte Links. Die beiden
-          Fach-Formulare („Doppelte Haushaltsführung" und „Feststellung der
-          Versicherungspflicht") werden nicht mehr hochgeladen, sondern
-          ausschließlich über ihre Eingabemaske erfasst – unter Personal →
-          Lohnsteuer bzw. Personal → Sozialversicherung.
+          Felder bedeuten: noch nichts hochgeladen. Downloads laufen über
+          zeitlich begrenzte Links. Der unterschriebene Scan der Bescheinigung
+          Doppelte Haushaltsführung (für den Sammelantrag) kann hier oder im
+          Sammelantrag hochgeladen werden; die Angaben daraus (Familienstand,
+          Wohnsituation) werden unter Personal → Lohnsteuer erfasst, der
+          SV-Fragebogen nur über die Eingabemaske unter Personal →
+          Sozialversicherung.
         </p>
       </div>
 

@@ -2,7 +2,8 @@
 
 // Qualität - Schichtkontrolle Halle (Nutzer-Vorgabe 2026-09-09). Vom Handy in
 // der Halle: "Jetzt mache ich die Schichtkontrolle" -> fertige Kiste nehmen,
-// 20 Kolben prüfen, Ergebnis (i.O. von 20) + Foto + optional Notiz eintragen.
+// STANDARD_KOLBEN (50) Kolben prüfen, Ergebnis (i.O. von 50) + Foto + optional
+// Notiz eintragen.
 // Mehrere Kontrollen pro Tag möglich, jede mit Datum + Uhrzeit. Ergebnis
 // erscheint auch in /statistik/zuckermais. Tabelle qs_kontrolle
 // (kulturneutral, hier fest kultur = 'zuckermais').
@@ -14,6 +15,7 @@ import { getSupabaseClient } from "@/lib/supabase/client";
 import { useProfile } from "@/lib/useProfile";
 import ErntewirtschaftTabs from "@/components/ErntewirtschaftTabs";
 import { formatDatumDE, formatMenge } from "@/lib/format";
+import { heuteLokalIso, lokalIsoPlusTage } from "@/lib/datum";
 import { hatRolle, darfMenue } from "@/lib/rollen";
 import type { QsKontrolle, QsSchicht, ZuckermaisSatz } from "@/lib/types";
 
@@ -32,8 +34,9 @@ const MINDEST_KONTROLLEN_FUER_SATZVORSCHLAG = 2;
 // überhaupt gezeigt (kleine Schwankungen sind normal).
 const SATZ_ABWEICHUNG_SCHWELLE_PROZENT = 10;
 
+// Ortszeit statt UTC (zwischen 0 und 2 Uhr sonst der Vortag)
 function heuteIso() {
-  return new Date().toISOString().slice(0, 10);
+  return heuteLokalIso();
 }
 function jetztHhmm() {
   return new Date().toLocaleTimeString("de-DE", {
@@ -42,9 +45,7 @@ function jetztHhmm() {
   });
 }
 function vorTagen(n: number) {
-  const d = new Date();
-  d.setDate(d.getDate() - n);
-  return d.toISOString().slice(0, 10);
+  return lokalIsoPlusTage(-n);
 }
 function uhrzeit(iso: string) {
   return new Date(iso).toLocaleTimeString("de-DE", {
@@ -358,11 +359,11 @@ export default function QualitaetPage() {
           <span className="font-medium">Heute:</span>
           <span>{heuteZusammenfassung.anzahl} Kontrolle(n)</span>
           <span className={quoteKlasse(heuteZusammenfassung.quote)}>
-            Ø {heuteZusammenfassung.quote ?? "—"} %
+            Ø {heuteZusammenfassung.quote != null ? formatMenge(heuteZusammenfassung.quote, 1) : "—"} %
           </span>
           {heuteZusammenfassung.schlechteste !== null && (
             <span className="text-neutral-500">
-              schlechteste {heuteZusammenfassung.schlechteste} %
+              schlechteste {formatMenge(heuteZusammenfassung.schlechteste, 1)} %
             </span>
           )}
           <span className="text-neutral-400">
@@ -539,7 +540,7 @@ export default function QualitaetPage() {
               </button>
               <span className="text-neutral-500">Kolben</span>
               {vorschau !== null && (
-                <span className={quoteKlasse(vorschau)}>{vorschau} %</span>
+                <span className={quoteKlasse(vorschau)}>{vorschau != null ? formatMenge(vorschau, 1) : "—"} %</span>
               )}
             </div>
           </div>
@@ -668,7 +669,7 @@ export default function QualitaetPage() {
                     </div>
                   </div>
                   <span className={quoteKlasse(q)}>
-                    {k.kolben_io}/{k.kolben_gesamt} i.O. · {q ?? "—"} %
+                    {k.kolben_io}/{k.kolben_gesamt} i.O. · {q != null ? formatMenge(q, 1) : "—"} %
                   </span>
                   {k.fehler_notiz && (
                     <span className="text-sm text-neutral-600">

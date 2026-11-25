@@ -19,8 +19,10 @@ import { HandCoins } from "lucide-react";
 import { erzeugeSepaXml, sepaDateiHerunterladen } from "@/lib/sepa";
 
 import { hatRolle } from "@/lib/rollen";
+import { ladeAlleSeiten } from "@/lib/ladeAlle";
+import { heuteLokalIso } from "@/lib/datum";
 function heuteIsoDatum() {
-  return new Date().toISOString().slice(0, 10);
+  return heuteLokalIso();
 }
 
 function sepaKurz(iso: string) {
@@ -166,38 +168,51 @@ export default function VorschuessePage() {
     const supabase = getSupabaseClient();
     const [
       { data: adv },
-      { data: emp },
+      emp,
       { data: gr },
       { data: hk },
       { data: sepaEx },
-      { data: empBank },
     ] = await Promise.all([
       supabase
         .from("advances")
         .select("*")
         .order("datum", { ascending: false })
         .limit(100),
-      supabase
-        .from("employees")
-        .select("id, personal_nr, name, vorname, aktiv, gruppe_nr, herkunft")
-        .eq("aktiv", true)
-        .order("name"),
+      // Seitenweise (lib/ladeAlle.ts) - sonst schneidet PostgREST bei ~1000
+      // Zeilen ab.
+      ladeAlleSeiten<Employee>((von, bis) =>
+        supabase
+          .from("employees")
+          .select("id, personal_nr, name, vorname, aktiv, gruppe_nr, herkunft")
+          .eq("aktiv", true)
+          .order("name")
+          .order("id")
+          .range(von, bis)
+      ),
       supabase.from("arbeitsgruppen").select("*").order("reihenfolge"),
       supabase.from("herkuenfte").select("*").order("reihenfolge"),
       supabase.from("sepa_export").select("*").eq("art", "vorschuss"),
-      // Bankverbindung nur über employee_bankdaten (Stufe 0c, 2026-11-24):
-      // liefert nur für admin/hr/kasse/lohnabrechnung Zeilen - management
-      // und pruefer bekommen keine Bankdaten (Nutzer-Entscheidung).
-      supabase.from("employee_bankdaten").select("id, zahlungsempfaenger, iban, bic"),
     ]);
+    // Bankverbindung nur über employee_bankdaten (Stufe 0c, 2026-11-24):
+    // liefert nur für admin/hr/kasse/lohnabrechnung Zeilen - management
+    // und pruefer bekommen keine Bankdaten (Nutzer-Entscheidung). Nur für
+    // die aktiven Personen und in Paketen (die View hat eine Zeile je
+    // Person, ungefiltert weit über 1000).
+    const aktiveIds = emp.map((e) => e.id);
+    const empBank: Pick<Employee, "id" | "zahlungsempfaenger" | "iban" | "bic">[] = [];
+    for (let i = 0; i < aktiveIds.length; i += 200) {
+      const { data: teil } = await supabase
+        .from("employee_bankdaten")
+        .select("id, zahlungsempfaenger, iban, bic")
+        .in("id", aktiveIds.slice(i, i + 200));
+      empBank.push(
+        ...((teil as Pick<Employee, "id" | "zahlungsempfaenger" | "iban" | "bic">[]) ?? [])
+      );
+    }
     setAdvances((adv as Advance[]) ?? []);
-    const bankNachId = new Map(
-      (
-        (empBank as Pick<Employee, "id" | "zahlungsempfaenger" | "iban" | "bic">[]) ?? []
-      ).map((b) => [b.id, b])
-    );
+    const bankNachId = new Map(empBank.map((b) => [b.id, b]));
     setEmployees(
-      ((emp as Employee[]) ?? []).map((e) => {
+      emp.map((e) => {
         const b = bankNachId.get(e.id);
         return {
           ...e,
@@ -815,9 +830,14 @@ export default function VorschuessePage() {
       summe,
     };
     setSepaExporte((prev) => ({ ...prev, [beleg.id]: eintrag }));
-    await getSupabaseClient()
+    const { error: vermerkFehler } = await getSupabaseClient()
       .from("sepa_export")
       .upsert(eintrag, { onConflict: "art,beleg_id" });
+    if (vermerkFehler) {
+      setSepaFehler(
+        `SEPA-Datei erzeugt, aber Vermerk nicht gespeichert: ${vermerkFehler.message}`
+      );
+    }
   }
 
   // Nachträglich aus der Liste: Empfänger nachladen und dann die SEPA-Datei
@@ -1384,6 +1404,7 @@ export default function VorschuessePage() {
           </label>
           <span className="text-sm text-neutral-500">
             {advancesGefiltert.length} von {advances.length} Beleg(en)
+            {advances.length >= 100 && " (nur die letzten 100 Belege geladen)"}
           </span>
         </div>
       )}

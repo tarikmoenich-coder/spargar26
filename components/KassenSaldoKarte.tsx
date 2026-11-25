@@ -74,7 +74,7 @@ export default function KassenSaldoKarte({
       </p>
       <p className="mt-1 text-xs text-neutral-500">
         {hinweis ??
-          "Einzahlungen − Bar-Vorschüsse − Bar-Auszahlungen − Kautionsübergaben (Überweisungen zählen nicht zum Kassenbestand) - Details siehe Journal."}
+          "Eröffnungssaldo + Einzahlungen ± Umbuchungen − Bar-Vorschüsse − Bar-Auszahlungen − Kautionsübergaben (Überweisungen zählen nicht zum Kassenbestand) - Details siehe Journal."}
       </p>
     </div>
   );

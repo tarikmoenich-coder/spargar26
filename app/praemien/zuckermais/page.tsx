@@ -31,15 +31,14 @@ import type {
 } from "@/lib/types";
 
 import { hatRolle } from "@/lib/rollen";
+import { heuteLokalIso, lokalIsoPlusTage } from "@/lib/datum";
 function heuteIso() {
-  return new Date().toISOString().slice(0, 10);
+  return heuteLokalIso();
 }
 // Standardvorschlag für die Tageserfassung (Nutzer-Vorgabe 2026-09-16): am
 // Folgetag wird meist der Vortag nacherfasst, "gestern" spart das Umstellen.
 function gesternIso() {
-  const d = new Date();
-  d.setDate(d.getDate() - 1);
-  return d.toISOString().slice(0, 10);
+  return lokalIsoPlusTage(-1);
 }
 
 function fmt(n: number | null | undefined) {

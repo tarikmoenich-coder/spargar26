@@ -65,6 +65,10 @@ interface Kacheln {
   kistenOhneZuordnung: number;
   kistenFehlenGesamt: number;
   kistenFehlenJeMitarbeiter: { name: string; anzahl: number }[];
+  // Fehler der Kachel-Abfragen (z.B. Views aus
+  // migration_2026-11-05_erntewirtschaft_ertrag_luecken.sql fehlen noch) -
+  // werden angezeigt statt still als 0 zu erscheinen.
+  fehler: string[];
 }
 
 function FlottenUeberblick() {
@@ -92,8 +96,11 @@ function FlottenUeberblick() {
     const heuteMitternacht = new Date();
     heuteMitternacht.setHours(0, 0, 0, 0);
 
-    const [{ data: ertragRoh }, { count: ohneZuordnung }, { data: lueckenRoh }] =
-      await Promise.all([
+    const [
+      { data: ertragRoh, error: ertragFehler },
+      { count: ohneZuordnung, error: ohneFehler },
+      { data: lueckenRoh, error: lueckenFehler },
+    ] = await Promise.all([
         supabase
           .from("ernte_ertrag_tag")
           .select("*")
@@ -103,6 +110,9 @@ function FlottenUeberblick() {
           .from("ernte_kiste_zyklus")
           .select("*", { count: "exact", head: true })
           .is("employee_id", null)
+          // Nur an einer Maschine gescannte Kisten - "ungeklaert"-Zyklen
+          // (Waage ohne vorherigen Maschinen-Scan) haben keine maschine_id.
+          .not("maschine_id", "is", null)
           .gte("befuellt_am", heuteMitternacht.toISOString()),
         supabase
           .from("ernte_kette_luecken")
@@ -114,6 +124,11 @@ function FlottenUeberblick() {
     const ertragHeute = ((ertragRoh as ErnteErtragTag[]) ?? []).filter(
       (z) => z.tag.slice(0, 10) === heute
     );
+    const fehlerListe: string[] = [];
+    if (ertragFehler) fehlerListe.push(`ernte_ertrag_tag: ${ertragFehler.message}`);
+    if (ohneFehler) fehlerListe.push(`ernte_kiste_zyklus: ${ohneFehler.message}`);
+    if (lueckenFehler) fehlerListe.push(`ernte_kette_luecken: ${lueckenFehler.message}`);
+
     const kistenHeute = ertragHeute.reduce((s, z) => s + z.kisten, 0);
     const kgHeute = ertragHeute.reduce((s, z) => s + Number(z.netto_kg), 0);
 
@@ -139,6 +154,7 @@ function FlottenUeberblick() {
       kistenFehlenJeMitarbeiter: [...zaehlerJeMitarbeiter.entries()]
         .map(([name, anzahl]) => ({ name, anzahl }))
         .sort((a, b) => b.anzahl - a.anzahl),
+      fehler: fehlerListe,
     });
   }, []);
 
@@ -183,6 +199,12 @@ function FlottenUeberblick() {
           migration_2026-10-27_ernte_maschine_live.sql schon eingespielt?
         </p>
       )}
+      {kacheln && kacheln.fehler.length > 0 && (
+        <p className="text-sm text-beere-700">
+          Tages-Kacheln unvollständig ({kacheln.fehler.join("; ")}). Ist die Migration
+          migration_2026-11-25h_ernte_nachholen.sql schon eingespielt?
+        </p>
+      )}
       {kacheln && (
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
           <div className="card p-3">
@@ -211,7 +233,7 @@ function FlottenUeberblick() {
               .map((m) => `${m.name}: ${m.anzahl}`)
               .join("\n")}
           >
-            <p className="text-xs text-neutral-500">Kisten fehlen (befüllt, nie gewogen)</p>
+            <p className="text-xs text-neutral-500">Kisten überfällig (befüllt, nicht gewogen)</p>
             <p
               className={`text-2xl font-semibold ${
                 kacheln.kistenFehlenGesamt > 0 ? "text-beere-600" : "text-emerald-900"
