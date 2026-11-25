@@ -17,7 +17,7 @@ import { getSupabaseClient } from "@/lib/supabase/client";
 import { useProfile } from "@/lib/useProfile";
 import { hatRolle } from "@/lib/rollen";
 import { ladeAlleSeiten } from "@/lib/ladeAlle";
-import { hscCsvLesen, hscDekodieren } from "@/lib/hscImport";
+import { hscCsvLesen, hscDekodieren, normName } from "@/lib/hscImport";
 import {
   LW_FELDER,
   LW_GRUPPEN,
@@ -225,11 +225,20 @@ export default function PersonalImportHscLwPage() {
   const kandidatenKonflikte = useMemo(() => {
     if (!plan || !bestand) return [];
     const ziel = new Map<string, string>(); // nr -> wer
-    plan.umnummerierungen.forEach((u) => ziel.set(nrNorm(u.neu), `${u.name} (umnummeriert)`));
-    plan.neu.forEach((n) => ziel.set(nrNorm(String(n.stamm.personal_nr)), `${n.stamm.name}, ${n.stamm.vorname} (neu)`));
+    const zielName = new Map<string, string>(); // nr -> normierter Name
+    plan.umnummerierungen.forEach((u) => {
+      ziel.set(nrNorm(u.neu), `${u.name} (umnummeriert)`);
+      zielName.set(nrNorm(u.neu), normName(u.name));
+    });
+    plan.neu.forEach((n) => {
+      ziel.set(nrNorm(String(n.stamm.personal_nr)), `${n.stamm.name}, ${n.stamm.vorname} (neu)`);
+      zielName.set(nrNorm(String(n.stamm.personal_nr)), normName(`${n.stamm.name}, ${n.stamm.vorname}`));
+    });
     const umIds = new Set(plan.umnummerierungen.map((u) => u.id));
     return bestand.kandidaten
       .filter((k) => KANDIDAT_AKTIV(k.status) && ziel.has(nrNorm(k.personal_nr)))
+      // Rückkehrer: Kandidat ist dieselbe Person - kein Konflikt
+      .filter((k) => zielName.get(nrNorm(k.personal_nr)) !== normName(`${k.name}, ${k.vorname}`))
       .filter((k) => !(k.aktivierter_employee_id && umIds.has(k.aktivierter_employee_id)))
       .map((k) => `Kandidat ${k.name}, ${k.vorname} (Planung, ${k.status}) hat Nummer ${k.personal_nr} - bekommt jetzt ${ziel.get(nrNorm(k.personal_nr))}`);
   }, [plan, bestand]);
