@@ -39,7 +39,7 @@ export default function VertriebTabs() {
     >
       {tabs.map((tab) => {
         const aktiv = tab.exakt
-          ? pathname === tab.href
+          ? pathname === tab.href || (tab.href === "/vertrieb" && pathname === "/vertrieb/import")
           : pathname === tab.href || pathname?.startsWith(`${tab.href}/`);
         return (
           <Link

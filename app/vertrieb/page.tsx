@@ -7,9 +7,11 @@
 // lohnabrechnung/management/pruefer, pflegen admin/hr - jeweils nur mit
 // Bereich Vertrieb (vt_darf()).
 
+import Link from "next/link";
 import { Fragment, useCallback, useEffect, useMemo, useState } from "react";
 import { Store } from "lucide-react";
 import { getSupabaseClient } from "@/lib/supabase/client";
+import { ladeAlleMitFehler } from "@/lib/ladeAlle";
 import { useProfile } from "@/lib/useProfile";
 import { hatRolle } from "@/lib/rollen";
 import PageHeader from "@/components/PageHeader";
@@ -106,7 +108,7 @@ export default function VertriebStaendePage() {
     const sb = getSupabaseClient();
     const [s, z, t, ts] = await Promise.all([
       sb.from("vt_stand").select("*").order("nummer"),
-      sb.from("vt_stand_zeit").select("*"),
+      ladeAlleMitFehler<VtStandZeit>((von, bis) => sb.from("vt_stand_zeit").select("*").order("id").range(von, bis)),
       sb.from("vt_tour").select("*").order("nummer"),
       sb.from("vt_tour_stand").select("*"),
     ]);
@@ -393,9 +395,14 @@ export default function VertriebStaendePage() {
         beschreibung="Verkaufsstände mit Öffnungszeiten je Wochentag (Vormittag / Nachmittag) und Tour-Zuordnung."
         aktionen={
           darfPflegen && (
-            <button className="btn" onClick={neu}>
-              Neuer Stand
-            </button>
+            <div className="flex flex-wrap gap-2">
+              <Link href="/vertrieb/import" className="btn-secondary">
+                Ständeliste importieren
+              </Link>
+              <button className="btn" onClick={neu}>
+                Neuer Stand
+              </button>
+            </div>
           )
         }
       />
@@ -418,7 +425,7 @@ export default function VertriebStaendePage() {
         <EmptyState
           icon={Store}
           text="Noch keine Stände angelegt."
-          hinweis={darfPflegen ? "Stände einzeln anlegen - der Import der Ständeliste folgt." : undefined}
+          hinweis={darfPflegen ? "Ständeliste aus dem Google-Unternehmensprofil importieren oder Stände einzeln anlegen." : undefined}
         />
       ) : (
         <div className="overflow-x-auto">
