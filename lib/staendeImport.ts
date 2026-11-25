@@ -24,6 +24,7 @@ export interface StandZeitImport {
 
 export interface StandImport {
   zeile: number; // Zeile in der Datei (1 = Kopf)
+  datei: string; // Dateiname (mehrere Exporte je Google-Konto)
   name: string;
   status: string;
   strasse: string;
@@ -101,7 +102,7 @@ export function zeitenTeilen(
 
 // Tabelle (erste Zeile = Spaltenköpfe) -> Stände, alphabetisch nach Ort
 // und Name sortiert. Wirft einen Fehler, wenn es nicht der Google-Export ist.
-export function staendeLesen(zeilen: unknown[][]): StandImport[] {
+export function staendeLesen(zeilen: unknown[][], datei = ""): StandImport[] {
   if (zeilen.length < 2) throw new Error("Die Datei enthält keine Zeilen.");
   // Google schreibt teils geschützte Leerzeichen ("Adresszeile\u00a01")
   const kopf = zeilen[0].map((k) => text(k).normalize("NFC").replace(/\s+/g, " "));
@@ -137,6 +138,7 @@ export function staendeLesen(zeilen: unknown[][]): StandImport[] {
     }
     staende.push({
       zeile: i + 2,
+      datei,
       name: duplikat ? `${code} (Duplikat)` : code,
       status,
       strasse,
@@ -166,9 +168,31 @@ export function staendeLesen(zeilen: unknown[][]): StandImport[] {
       .filter(Boolean)
       .join(" · ");
   }
-  const vgl = new Intl.Collator("de", { sensitivity: "base", numeric: true });
-  staende.sort((a, b) => vgl.compare(a.ort, b.ort) || vgl.compare(a.name, b.name));
-  return staende;
+  return sortieren(staende);
+}
+
+const VGL = new Intl.Collator("de", { sensitivity: "base", numeric: true });
+
+function sortieren(staende: StandImport[]): StandImport[] {
+  return staende.sort((a, b) => VGL.compare(a.ort, b.ort) || VGL.compare(a.name, b.name));
+}
+
+// Mehrere Exporte (je Google-Konto einer, z.B. Mömmel und Reitz) zu einer
+// Liste zusammenführen und gemeinsam alphabetisch sortieren, damit die
+// Nummern über alle Stände durchlaufen. Gleiche Namen an verschiedenen
+// Adressen (z.B. "Kelsterbach" in beiden Konten) bekommen die Straße
+// angehängt: "Kelsterbach (Langer Kornweg)".
+export function staendeZusammenfuehren(listen: StandImport[][]): StandImport[] {
+  const alle = listen.flat();
+  const schluessel = (n: string) => n.trim().toLocaleLowerCase("de");
+  const anzahl = new Map<string, number>();
+  alle.forEach((s) => anzahl.set(schluessel(s.name), (anzahl.get(schluessel(s.name)) ?? 0) + 1));
+  for (const s of alle) {
+    if ((anzahl.get(schluessel(s.name)) ?? 0) < 2) continue;
+    const strasse = s.strasse.replace(/\s*\d.*$/, "").trim() || s.plz;
+    if (strasse) s.name = `${s.name} (${strasse})`;
+  }
+  return sortieren(alle);
 }
 
 export interface GeoTreffer {

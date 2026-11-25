@@ -25,6 +25,7 @@ import {
   HALBTAG_GRENZE,
   standSuchen,
   staendeLesen,
+  staendeZusammenfuehren,
   warten,
   type GeoTreffer,
   type StandImport,
@@ -51,7 +52,7 @@ export default function StaendeImportPage() {
   const [bestandZeiten, setBestandZeiten] = useState<VtStandZeit[]>([]);
   const [ladeFehler, setLadeFehler] = useState<string | null>(null);
 
-  const [dateiName, setDateiName] = useState<string | null>(null);
+  const [dateiNamen, setDateiNamen] = useState<string[]>([]);
   const [staende, setStaende] = useState<StandImport[]>([]);
   const [leseFehler, setLeseFehler] = useState<string | null>(null);
   const [startNummer, setStartNummer] = useState("1");
@@ -83,19 +84,30 @@ export default function StaendeImportPage() {
     ladeBestand();
   }, [ladeBestand]);
 
-  async function dateiGewaehlt(datei: File | undefined) {
+  // Mehrere Dateien auf einmal (ein Export je Google-Konto) - nur so laufen
+  // die Nummern alphabetisch über alle Stände.
+  async function dateienGewaehlt(liste: FileList | null) {
     setLeseFehler(null);
     setErgebnis(null);
     setFehler(null);
     setStaende([]);
     setGeo({});
-    if (!datei) return;
-    setDateiName(datei.name);
+    const dateien = liste ? Array.from(liste) : [];
+    setDateiNamen(dateien.map((d) => d.name));
+    if (!dateien.length) return;
     try {
-      const wb = XLSX.read(await datei.arrayBuffer(), { type: "array" });
-      const blatt = wb.Sheets[wb.SheetNames[0]];
-      const zeilen = XLSX.utils.sheet_to_json<unknown[]>(blatt, { header: 1, defval: null });
-      setStaende(staendeLesen(zeilen));
+      const listen: StandImport[][] = [];
+      for (const datei of dateien) {
+        try {
+          const wb = XLSX.read(await datei.arrayBuffer(), { type: "array" });
+          const blatt = wb.Sheets[wb.SheetNames[0]];
+          const zeilen = XLSX.utils.sheet_to_json<unknown[]>(blatt, { header: 1, defval: null });
+          listen.push(staendeLesen(zeilen, datei.name));
+        } catch (e) {
+          throw new Error(`${datei.name}: ${e instanceof Error ? e.message : String(e)}`);
+        }
+      }
+      setStaende(staendeZusammenfuehren(listen));
     } catch (e) {
       setLeseFehler(e instanceof Error ? e.message : String(e));
     }
@@ -249,7 +261,7 @@ export default function StaendeImportPage() {
       );
       setStaende([]);
       setGeo({});
-      setDateiName(null);
+      setDateiNamen([]);
       await ladeBestand();
     } catch (e) {
       setFehler(
@@ -334,22 +346,29 @@ export default function StaendeImportPage() {
 
       <div className="card flex flex-wrap items-center gap-4">
         <label className="flex items-center gap-2 text-sm">
-          <span>Datei</span>
+          <span>Dateien</span>
           <input
             id="staende-datei"
             type="file"
+            multiple
             accept=".xlsx,.xls,.csv"
-            onChange={(e) => dateiGewaehlt(e.target.files?.[0])}
+            onChange={(e) => dateienGewaehlt(e.target.files)}
           />
         </label>
-        {dateiName && <span className="text-sm text-neutral-600">{dateiName}</span>}
+        {dateiNamen.length > 0 && (
+          <span className="text-sm text-neutral-600">{dateiNamen.join(", ")}</span>
+        )}
+        <span className="w-full text-xs text-neutral-500">
+          Alle Exporte (je Google-Konto einer) zusammen auswählen, damit die Nummern über alle
+          Stände alphabetisch durchlaufen.
+        </span>
       </div>
       {leseFehler && <p className="text-sm text-beere-600">{leseFehler}</p>}
 
       {staende.length > 0 && (
         <>
           <div className="flex flex-wrap gap-3 text-sm">
-            <span className="badge">{staende.length} Stände in der Datei</span>
+            <span className="badge">{staende.length} Stände {dateiNamen.length > 1 ? `aus ${dateiNamen.length} Dateien` : "in der Datei"}</span>
             <span className="badge">{neu} neu</span>
             <span className="badge">{staende.length - neu} schon vorhanden (werden aktualisiert)</span>
             <span className="badge">
@@ -444,7 +463,7 @@ export default function StaendeImportPage() {
               </thead>
               <tbody>
                 {plan.map((p) => (
-                  <tr key={p.imp.zeile} className={p.nummerKonflikt ? "bg-beere-50" : undefined}>
+                  <tr key={`${p.imp.datei}:${p.imp.zeile}`} className={p.nummerKonflikt ? "bg-beere-50" : undefined}>
                     <td className="font-medium tabular-nums">
                       {p.nummer}
                       {p.bestand && p.bestand.nummer !== p.nummer && (
@@ -457,6 +476,9 @@ export default function StaendeImportPage() {
                         <span className="ml-1 text-xs text-neutral-500">vorhanden</span>
                       ) : (
                         <span className="ml-1 text-xs text-emerald-700">neu</span>
+                      )}
+                      {dateiNamen.length > 1 && (
+                        <div className="text-xs text-neutral-500">{p.imp.datei}</div>
                       )}
                     </td>
                     <td>{p.imp.adresse}</td>
