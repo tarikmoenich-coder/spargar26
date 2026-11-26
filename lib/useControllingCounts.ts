@@ -137,10 +137,16 @@ async function zaehlerLaden(): Promise<ControllingCounts> {
   };
 }
 
-export function useControllingCounts(): ControllingCounts {
+// aktiv=false: nichts laden (Startseite für Rollen ohne Controlling).
+export function useControllingCounts(aktiv = true): ControllingCounts {
   const [counts, setCounts] = useState<ControllingCounts>(LEER);
 
   useEffect(() => {
+    if (!aktiv) {
+      setCounts({ ...LEER, loading: false });
+      return;
+    }
+    setCounts((c) => (c.loading ? c : LEER));
     let abgebrochen = false;
     if (!geteilt || Date.now() - geteilt.zeit > TEILEN_MS) {
       geteilt = { zeit: Date.now(), promise: zaehlerLaden() };
@@ -151,7 +157,7 @@ export function useControllingCounts(): ControllingCounts {
     return () => {
       abgebrochen = true;
     };
-  }, []);
+  }, [aktiv]);
 
   return counts;
 }
