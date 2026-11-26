@@ -115,7 +115,7 @@ Stand, Wochentag, Halbtag, Person).
   füllt. [offen] Gebaut ist nur der Helfer "Montag → Di–Sa" (leere Felder
   mit der Montagsbesetzung füllen) und ein Ausdruck des Grundplans.
 
-### V4 - Wochenplan und Ausdrucke  [offen]
+### V4 - Wochenplan und Ausdrucke  [gebaut 2026-11-26, ohne Verkäufer-Wochenzettel]
 
 Nutzer-Vorgaben 2026-11-26:
 - **Feiertage = Sonntag**: Öffnungszeiten, Touren (Sonntagstouren) UND
@@ -129,6 +129,19 @@ Nutzer-Vorgaben 2026-11-26:
   morgens aus). Zusätzlich **nur bei Änderungen ein DIN-A4-Zettel je
   betroffener Tour** - Problem heute: Fahrer wissen nichts von einem
   Planwechsel und fahren ohne Vertretung los.
+
+Gebaut (Migration 2026-11-26c, `lib/tagesplan.ts`):
+- `/vertrieb/woche`: Kalenderwoche = Grundplan + Tagesänderungen
+  (`vt_tag_aenderung`: andere Person / "fehlt" / Stand zu), Abwesenheiten
+  rot, Feiertage-Liste mit Vorschlag (Hessen + Fronleichnam).
+- `/vertrieb/druck/tag`: A3-Tagesplan aller Touren (Auto/Kennzeichen,
+  Fahrer, Halte 1-2-3, wer wo, "nur Ware", "NEU" = anders als Grundplan),
+  "Ohne Auto"-Liste, Namensverzeichnis "Wer steht wo?". Auto/Abfahrt nur
+  für den Tag (`vt_tour_tag`). Drucken speichert den Stand (`vt_druck`).
+- `/vertrieb/druck/aenderung`: A4 je geänderter Tour seit dem letzten
+  Ausdruck ("ACHTUNG! HEUTE ANDERS").
+- Offen: Verkäufer-Wochenzettel je Person, Standbesetzung je Woche als
+  Aushang (mit Stufe 5 "Wochenstundenzettel" zusammen bauen).
 
 - Konkrete Kalenderwoche entsteht aus dem Grundplan; Änderungen nur für
   diese Woche (Krankheit, Tausch, Feiertag, Stand geschlossen).

@@ -12,6 +12,8 @@ const tabs = [
   { href: "/vertrieb/touren", label: "Touren" },
   { href: "/vertrieb/verfuegbarkeit", label: "Verfügbarkeit" },
   { href: "/vertrieb/grundplan", label: "Grundplan" },
+  { href: "/vertrieb/woche", label: "Woche" },
+  { href: "/vertrieb/druck/tag", label: "Tagesplan" },
 ];
 
 export default function VertriebTabs() {

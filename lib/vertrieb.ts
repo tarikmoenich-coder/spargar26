@@ -187,3 +187,11 @@ export function planPruefen(opts: {
   }
   return h;
 }
+
+// Farbe nach Geschlecht (Nutzer 2026-11-26: viele Einzelfarben störten):
+// Frauen gelb, Männer blau, unbekannt grau.
+export function farbeGeschlecht(g: "M" | "F" | null | undefined) {
+  if (g === "F") return { background: "#fef3c7", borderColor: "#f59e0b", color: "#78350f" };
+  if (g === "M") return { background: "#dbeafe", borderColor: "#3b82f6", color: "#1e3a8a" };
+  return { background: "#f5f5f4", borderColor: "#a8a29e", color: "#44403c" };
+}

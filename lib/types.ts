@@ -2649,6 +2649,47 @@ export interface VtAbwesenheit {
   grund: string | null;
 }
 
+// Vertriebsplanung V4 (migration_2026-11-26c_vertrieb_wochenplan.sql)
+export interface VtFeiertag {
+  id: number;
+  datum: string;
+  name: string;
+}
+// Abweichung vom Grundplan an einem Datum: employee_id = andere Person,
+// employee_id null + !geschlossen = unbesetzt, geschlossen = Stand zu
+export interface VtTagAenderung {
+  id: number;
+  datum: string;
+  stand_id: number;
+  halbtag: VtHalbtag;
+  employee_id: string | null;
+  geschlossen: boolean;
+  notiz: string | null;
+  geaendert_am: string;
+}
+export interface VtTourTag {
+  id: number;
+  datum: string;
+  tour_id: number;
+  fahrzeug_id: number | null;
+  abfahrt: string | null;
+  notiz: string | null;
+}
+export interface VtDruck {
+  id: number;
+  datum: string;
+  gedruckt_am: string;
+  stand: TagesplanStand;
+}
+// Stand des Tagesplans beim Drucken (für den Änderungszettel)
+export interface TagesplanStand {
+  art?: "A3" | "A4";
+  // "<stand_id>|<VM/NM>" -> employee_id | null (unbesetzt) | "zu" (geschlossen)
+  besetzung: Record<string, string | null>;
+  // "<tour_id>" -> Auto und Abfahrt
+  touren: Record<string, { fahrzeug_id: number | null; abfahrt: string | null }>;
+}
+
 // Vertriebsplanung V3 (migration_2026-11-25e_vertrieb_grundplan.sql)
 export interface VtGrundplan {
   id: number;
