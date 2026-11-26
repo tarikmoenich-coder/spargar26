@@ -59,6 +59,20 @@ class BasiskartenControl implements maplibregl.IControl {
   }
 }
 
+// Tourenplanung auf der Karte (Nutzer 2026-11-26): Linien zwischen den
+// Ständen einer Tour in Fahrtreihenfolge.
+export interface TourLinie {
+  tourId: number;
+  farbe: string;
+  coords: [number, number][]; // [lng, lat] in Fahrtreihenfolge
+  hervorgehoben: boolean;
+  gedimmt: boolean;
+}
+
+export type KartenFokus =
+  | { lat: number; lng: number; zoom: number; ts: number }
+  | { bounds: [[number, number], [number, number]]; ts: number };
+
 export interface StandEntwurf {
   lat: number | null;
   lng: number | null;
@@ -87,8 +101,8 @@ function markerElement(nummer: number): HTMLDivElement {
   return el;
 }
 
-function markerFaerben(el: HTMLElement, ausgewaehlt: boolean) {
-  el.style.background = ausgewaehlt ? "#b4235a" : "#2b711e";
+function markerFaerben(el: HTMLElement, ausgewaehlt: boolean, farbe: string | null) {
+  el.style.background = ausgewaehlt ? "#b4235a" : farbe ?? "#2b711e";
   el.style.zIndex = ausgewaehlt ? "2" : "1";
   el.style.outline = ausgewaehlt ? "3px solid rgba(180,35,90,.35)" : "none";
 }
@@ -101,6 +115,9 @@ export default function StandKarte({
   fokus,
   onWaehlen,
   onPosition,
+  tourLinien = [],
+  markerFarbe,
+  hoverHtml,
   hoehe = "h-[70vh]",
 }: {
   staende: VtStand[];
@@ -109,9 +126,15 @@ export default function StandKarte({
   entwurf: StandEntwurf | null;
   bearbeitbar: boolean;
   /** Kartenausschnitt: neues Objekt (ts) je Aufruf */
-  fokus: { lat: number; lng: number; zoom: number; ts: number } | null;
+  fokus: KartenFokus | null;
   onWaehlen: (id: number) => void;
   onPosition: (lat: number, lng: number) => void;
+  /** Touren als Linien (leer = aus) */
+  tourLinien?: TourLinie[];
+  /** Punktfarbe je Stand (z.B. Tourfarbe), null = Standardgrün */
+  markerFarbe?: (standId: number) => string | null;
+  /** Info beim Überfahren (nach 1 s), HTML - Texte vorher escapen */
+  hoverHtml?: (standId: number) => string;
   hoehe?: string;
 }) {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -119,9 +142,13 @@ export default function StandKarte({
   const markerRef = useRef(new Map<number, maplibregl.Marker>());
   const [bereit, setBereit] = useState(false);
   const erstesEinpassen = useRef(false);
+  const fokusRef = useRef<KartenFokus | null>(null);
+  fokusRef.current = fokus;
   // aktuelle Rückrufe/Werte für die einmalig registrierten Karten-Ereignisse
-  const aktuell = useRef({ auswahlId, bearbeitbar, onWaehlen, onPosition });
-  aktuell.current = { auswahlId, bearbeitbar, onWaehlen, onPosition };
+  const aktuell = useRef({ auswahlId, bearbeitbar, onWaehlen, onPosition, hoverHtml });
+  aktuell.current = { auswahlId, bearbeitbar, onWaehlen, onPosition, hoverHtml };
+  const popupRef = useRef<maplibregl.Popup | null>(null);
+  const hoverTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     if (!containerRef.current) return;
@@ -172,6 +199,18 @@ export default function StandKarte({
       );
       map.addControl(new BasiskartenControl(), "top-right");
 
+      map.addSource("touren", { type: "geojson", data: { type: "FeatureCollection", features: [] } });
+      map.addLayer({
+        id: "touren-linie",
+        type: "line",
+        source: "touren",
+        layout: { "line-join": "round", "line-cap": "round" },
+        paint: {
+          "line-color": ["get", "farbe"],
+          "line-width": ["case", ["get", "hervorgehoben"], 5, 3],
+          "line-opacity": ["case", ["get", "gedimmt"], 0.25, 0.9],
+        },
+      });
       map.addSource("radien", { type: "geojson", data: { type: "FeatureCollection", features: [] } });
       map.addLayer({
         id: "radien-flaeche",
@@ -233,6 +272,27 @@ export default function StandKarte({
           ev.stopPropagation();
           aktuell.current.onWaehlen(s.id);
         });
+        // Info nach 1 s Verweilen
+        const standId = s.id;
+        el.addEventListener("mouseenter", () => {
+          if (hoverTimer.current) clearTimeout(hoverTimer.current);
+          hoverTimer.current = setTimeout(() => {
+            const html = aktuell.current.hoverHtml?.(standId);
+            const mk = markerRef.current.get(standId);
+            if (!html || !mk) return;
+            popupRef.current?.remove();
+            popupRef.current = new maplibregl.Popup({ closeButton: false, offset: 16, maxWidth: "320px" })
+              .setLngLat(mk.getLngLat())
+              .setHTML(html)
+              .addTo(map);
+          }, 1000);
+        });
+        el.addEventListener("mouseleave", () => {
+          if (hoverTimer.current) clearTimeout(hoverTimer.current);
+          hoverTimer.current = null;
+          popupRef.current?.remove();
+          popupRef.current = null;
+        });
         m = new maplibregl.Marker({ element: el }).setLngLat([p.lng, p.lat]).addTo(map);
         m.on("dragend", () => {
           const ll = m!.getLngLat();
@@ -244,7 +304,7 @@ export default function StandKarte({
       const el = m.getElement();
       el.textContent = String(s.nummer);
       el.title = s.name;
-      markerFaerben(el, s.id === auswahlId);
+      markerFaerben(el, s.id === auswahlId, markerFarbe?.(s.id) ?? null);
       m.setDraggable(s.id === auswahlId && bearbeitbar);
     }
     marker.forEach((m, id) => {
@@ -271,8 +331,20 @@ export default function StandKarte({
       features,
     });
 
+    (map.getSource("touren") as maplibregl.GeoJSONSource).setData({
+      type: "FeatureCollection",
+      features: tourLinien
+        .filter((t) => t.coords.length >= 2)
+        .sort((a, b) => Number(a.hervorgehoben) - Number(b.hervorgehoben))
+        .map((t) => ({
+          type: "Feature" as const,
+          properties: { farbe: t.farbe, hervorgehoben: t.hervorgehoben, gedimmt: t.gedimmt },
+          geometry: { type: "LineString" as const, coordinates: t.coords },
+        })),
+    });
+
     // Beim ersten Laden alle Stände einpassen
-    if (!erstesEinpassen.current) {
+    if (!erstesEinpassen.current && !fokusRef.current) {
       const mitPos = staende.filter((s) => s.lat !== null && s.lng !== null);
       if (mitPos.length) {
         erstesEinpassen.current = true;
@@ -281,12 +353,17 @@ export default function StandKarte({
         map.fitBounds(b, { padding: 40, maxZoom: 16, duration: 0 });
       }
     }
-  }, [staende, auswahlId, entwurf, bearbeitbar, bereit]);
+  }, [staende, auswahlId, entwurf, bearbeitbar, bereit, tourLinien, markerFarbe]);
 
   useEffect(() => {
-    if (!fokus || !mapRef.current) return;
-    mapRef.current.flyTo({ center: [fokus.lng, fokus.lat], zoom: fokus.zoom, speed: 1.6 });
-  }, [fokus]);
+    if (!fokus || !mapRef.current || !bereit) return;
+    erstesEinpassen.current = true;
+    if ("bounds" in fokus) {
+      mapRef.current.fitBounds(fokus.bounds, { padding: 60, maxZoom: 15 });
+    } else {
+      mapRef.current.flyTo({ center: [fokus.lng, fokus.lat], zoom: fokus.zoom, speed: 1.6 });
+    }
+  }, [fokus, bereit]);
 
   return <div ref={containerRef} className={`${hoehe} w-full overflow-hidden rounded border border-linie`} />;
 }

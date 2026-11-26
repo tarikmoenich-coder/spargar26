@@ -13,7 +13,8 @@
 // "Rückgängig" für den letzten Schritt.
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { ArrowDown, ArrowUp, Car, GripVertical, Route, Undo2, X } from "lucide-react";
+import Link from "next/link";
+import { ArrowDown, ArrowUp, Car, GripVertical, Map as KartenIcon, Route, Undo2, X } from "lucide-react";
 import { getSupabaseClient } from "@/lib/supabase/client";
 import { ladeAlleMitFehler } from "@/lib/ladeAlle";
 import { useProfile } from "@/lib/useProfile";
@@ -593,11 +594,20 @@ export default function VertriebTourenPage() {
                             {t.abfahrt && ` · Abfahrt ${zeitKurz(t.abfahrt)}`}
                           </div>
                         </div>
-                        {darfPflegen && (
-                          <button className="btn-secondary" onClick={() => bearbeiten(t)}>
-                            Bearbeiten
-                          </button>
-                        )}
+                        <div className="flex gap-2">
+                          <Link
+                            href={`/vertrieb/karte?tour=${t.id}`}
+                            className="btn-secondary flex items-center gap-1"
+                            title="Tour auf der Karte anzeigen"
+                          >
+                            <KartenIcon className="h-4 w-4" /> Karte
+                          </Link>
+                          {darfPflegen && (
+                            <button className="btn-secondary" onClick={() => bearbeiten(t)}>
+                              Bearbeiten
+                            </button>
+                          )}
+                        </div>
                       </div>
                       <ol
                         className={`text-sm ${zug && zug.tagesart === t.tagesart ? "min-h-8 rounded outline-dashed outline-1 outline-linie" : ""}`}

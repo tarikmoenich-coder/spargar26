@@ -7,7 +7,7 @@
 // Grundplan (V3). Dazu Abwesenheiten mit Datum und der Führerschein (Pflicht
 // für den Fahrer der Tour).
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { CalendarCheck } from "lucide-react";
 import { getSupabaseClient } from "@/lib/supabase/client";
 import { useProfile } from "@/lib/useProfile";
@@ -139,25 +139,77 @@ export default function VertriebVerfuegbarkeitPage() {
     await load();
   }
 
-  // Zelle weiterschalten: offen -> kann -> kann nicht -> offen
-  async function zelleKlick(empId: string, tag: number, h: VtHalbtag) {
-    if (!darfPflegen) return;
-    const sb = getSupabaseClient();
-    const alt = rasterMap.get(`${empId}|${k(tag, h)}`);
-    if (!alt) {
-      setRaster((r) => [...r, { id: -Date.now(), employee_id: empId, saison_jahr: saison, wochentag: tag, halbtag: h, kann: true }]);
-      const { error } = await sb.from("vt_verfuegbarkeit").insert({ employee_id: empId, saison_jahr: saison, wochentag: tag, halbtag: h, kann: true });
-      return fehlerOderNeu(error);
-    }
-    if (alt.kann) {
-      setRaster((r) => r.map((x) => (x.id === alt.id ? { ...x, kann: false } : x)));
-      const { error } = await sb.from("vt_verfuegbarkeit").update({ kann: false }).eq("id", alt.id);
-      return fehlerOderNeu(error);
-    }
-    setRaster((r) => r.filter((x) => x.id !== alt.id));
-    const { error } = await sb.from("vt_verfuegbarkeit").delete().eq("id", alt.id);
-    return fehlerOderNeu(error);
+  // Zellen "malen" (Nutzer 2026-11-26): Maustaste auf einer Zelle drücken
+  // schaltet sie weiter (offen -> kann -> kann nicht -> offen); mit
+  // gedrückter Taste über weitere Zellen fahren setzt dort DENSELBEN Wert.
+  // Gespeichert wird beim Loslassen in einem Rutsch.
+  const malen = useRef<{ wert: boolean | null; geaendert: Map<string, { empId: string; tag: number; h: VtHalbtag }> } | null>(null);
+
+  function zelleSetzenLokal(empId: string, tag: number, h: VtHalbtag, wert: boolean | null) {
+    setRaster((r) => {
+      const ohne = r.filter((x) => !(x.employee_id === empId && x.wochentag === tag && x.halbtag === h));
+      return wert === null
+        ? ohne
+        : [...ohne, { id: -Date.now() - Math.random(), employee_id: empId, saison_jahr: saison, wochentag: tag, halbtag: h, kann: wert }];
+    });
   }
+
+  function malenStart(ev: React.MouseEvent, empId: string, tag: number, h: VtHalbtag) {
+    if (!darfPflegen || ev.button !== 0) return;
+    ev.preventDefault();
+    const alt = rasterMap.get(`${empId}|${k(tag, h)}`);
+    const wert = !alt ? true : alt.kann ? false : null;
+    malen.current = { wert, geaendert: new Map([[`${empId}|${k(tag, h)}`, { empId, tag, h }]]) };
+    zelleSetzenLokal(empId, tag, h, wert);
+  }
+
+  function malenUeber(empId: string, tag: number, h: VtHalbtag) {
+    const m = malen.current;
+    if (!m) return;
+    const key = `${empId}|${k(tag, h)}`;
+    if (m.geaendert.has(key)) return;
+    m.geaendert.set(key, { empId, tag, h });
+    zelleSetzenLokal(empId, tag, h, m.wert);
+  }
+
+  const malenEnde = useCallback(async () => {
+    const m = malen.current;
+    if (!m) return;
+    malen.current = null;
+    const zellen = [...m.geaendert.values()];
+    const sb = getSupabaseClient();
+    let error: { message: string } | null = null;
+    if (m.wert === null) {
+      for (const z of zellen) {
+        const r = await sb
+          .from("vt_verfuegbarkeit")
+          .delete()
+          .eq("employee_id", z.empId)
+          .eq("saison_jahr", saison)
+          .eq("wochentag", z.tag)
+          .eq("halbtag", z.h);
+        if (r.error) {
+          error = r.error;
+          break;
+        }
+      }
+    } else {
+      const r = await sb.from("vt_verfuegbarkeit").upsert(
+        zellen.map((z) => ({ employee_id: z.empId, saison_jahr: saison, wochentag: z.tag, halbtag: z.h, kann: m.wert })),
+        { onConflict: "employee_id,saison_jahr,wochentag,halbtag" }
+      );
+      error = r.error;
+    }
+    return fehlerOderNeu(error);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [saison]);
+
+  // Loslassen auch außerhalb der Tabelle beendet das Malen
+  useEffect(() => {
+    const ende = () => malenEnde();
+    window.addEventListener("mouseup", ende);
+    return () => window.removeEventListener("mouseup", ende);
+  }, [malenEnde]);
 
   // Ganze Zeile setzen: true = alles "kann", false = alles "kann nicht", null = leeren
   async function zeileSetzen(empId: string, wert: boolean | null) {
@@ -242,7 +294,7 @@ export default function VertriebVerfuegbarkeitPage() {
         icon={CalendarCheck}
         titel="Verfügbarkeit"
         beschreibung={`Wann die Verkäufer können - je Wochentag Vormittag/Nachmittag.${
-          darfPflegen ? " Klick auf ein Feld: ✓ kann → ✗ kann nicht → offen." : ""
+          darfPflegen ? " Klick auf ein Feld: ✓ kann → ✗ kann nicht → offen. Mit gedrückter Maustaste über weitere Felder fahren setzt dort denselben Wert." : ""
         }`}
         aktionen={
           <select value={saison} onChange={(e) => setSaison(Number(e.target.value))}>
@@ -349,7 +401,8 @@ export default function VertriebVerfuegbarkeitPage() {
                       return (
                         <td
                           key={k(s.tag, s.halbtag)}
-                          onClick={() => zelleKlick(p.id, s.tag, s.halbtag)}
+                          onMouseDown={(ev) => malenStart(ev, p.id, s.tag, s.halbtag)}
+                          onMouseEnter={() => malenUeber(p.id, s.tag, s.halbtag)}
                           className={`select-none px-1 text-center ${cls} ${darfPflegen ? "cursor-pointer hover:ring-1 hover:ring-emerald-400" : ""} ${
                             s.halbtag === "VM" ? "border-l border-linie" : ""
                           }`}
