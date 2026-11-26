@@ -88,6 +88,9 @@ function ausStand(s: VtStand, zeiten: VtStandZeit[]): StandForm {
 export default function VertriebStaendePage() {
   const { profile } = useProfile();
   const darfPflegen = hatRolle(profile, "admin", "hr");
+  // Position/Radius nur Admin und Management (Nutzer 2026-11-26), sonst über
+  // die Karte (/vertrieb/karte). HR pflegt Name, Adresse, Zeiten.
+  const darfPosition = hatRolle(profile, "admin", "management");
 
   const [staende, setStaende] = useState<VtStand[]>([]);
   const [zeiten, setZeiten] = useState<VtStandZeit[]>([]);
@@ -191,7 +194,7 @@ export default function VertriebStaendePage() {
     if (!Number.isInteger(nummer) || nummer <= 0) return setFormFehler("Standnummer muss eine positive ganze Zahl sein.");
     if (!form.name.trim()) return setFormFehler("Name fehlt.");
     let koord: { lat: number; lng: number } | null = null;
-    if (form.koordinaten.trim()) {
+    if (darfPosition && form.koordinaten.trim()) {
       koord = koordinatenLesen(form.koordinaten);
       if (!koord) return setFormFehler('Koordinaten nicht lesbar - bitte als "50.123, 8.654" eingeben.');
     }
@@ -210,9 +213,9 @@ export default function VertriebStaendePage() {
       nummer,
       name: form.name.trim(),
       adresse: form.adresse.trim() || null,
-      lat: koord?.lat ?? null,
-      lng: koord?.lng ?? null,
-      radius_m: Number(form.radius_m) || 100,
+      ...(darfPosition
+        ? { lat: koord?.lat ?? null, lng: koord?.lng ?? null, radius_m: Number(form.radius_m) || 100 }
+        : {}),
       aktiv: form.aktiv,
       notiz: form.notiz.trim() || null,
     };
@@ -291,6 +294,8 @@ export default function VertriebStaendePage() {
           Adresse
           <input value={form.adresse} onChange={(e) => setForm({ ...form, adresse: e.target.value })} />
         </label>
+        {darfPosition && (
+          <>
         <label className="flex flex-col gap-1 text-sm">
           Koordinaten
           <input
@@ -304,6 +309,8 @@ export default function VertriebStaendePage() {
           GPS-Radius (m)
           <input type="number" min={10} max={2000} value={form.radius_m} onChange={(e) => setForm({ ...form, radius_m: e.target.value })} />
         </label>
+          </>
+        )}
         <label className="col-span-2 flex flex-col gap-1 text-sm sm:col-span-3">
           Notiz
           <input value={form.notiz} onChange={(e) => setForm({ ...form, notiz: e.target.value })} />

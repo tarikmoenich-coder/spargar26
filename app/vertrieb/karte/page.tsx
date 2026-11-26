@@ -3,7 +3,9 @@
 // Vertriebsplanung: Stände auf der Karte. Position jedes Stands auf dem
 // Luftbild von Hand setzen (Punkt ziehen oder in die Karte klicken) und den
 // Radius der Standzone einstellen - Grundlage für die GPS-Auswertung
-// (Nutzer-Wunsch 2026-11-25). Bereich Vertrieb (vt_darf()).
+// (Nutzer-Wunsch 2026-11-25). Lesen: Bereich Vertrieb (vt_darf()).
+// Position/Radius setzen nur Admin und Management (Nutzer 2026-11-26) über
+// rpc vt_stand_position_setzen (Migration 2026-11-26).
 
 import Link from "next/link";
 import dynamic from "next/dynamic";
@@ -27,7 +29,7 @@ const RADIUS_MAX = 2000;
 
 export default function VertriebKartePage() {
   const { profile } = useProfile();
-  const darfPflegen = hatRolle(profile, "admin", "hr");
+  const darfPflegen = hatRolle(profile, "admin", "management");
 
   const [staende, setStaende] = useState<VtStand[]>([]);
   const [fehler, setFehler] = useState<string | null>(null);
@@ -133,10 +135,12 @@ export default function VertriebKartePage() {
     if (!auswahl || !entwurf) return;
     const r = Math.min(RADIUS_MAX, Math.max(RADIUS_MIN, entwurf.radius_m));
     setSpeichert(true);
-    const { error } = await getSupabaseClient()
-      .from("vt_stand")
-      .update({ lat: entwurf.lat, lng: entwurf.lng, radius_m: r })
-      .eq("id", auswahl.id);
+    const { error } = await getSupabaseClient().rpc("vt_stand_position_setzen", {
+      p_stand_id: auswahl.id,
+      p_lat: entwurf.lat,
+      p_lng: entwurf.lng,
+      p_radius_m: r,
+    });
     setSpeichert(false);
     if (error) {
       setFehler(`Speichern: ${error.message}`);
