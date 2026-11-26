@@ -2649,6 +2649,15 @@ export interface VtAbwesenheit {
   grund: string | null;
 }
 
+// Eröffnung/Schluss je Stand und Saison (migration_2026-11-26d); null = ganze Saison
+export interface VtStandSaison {
+  id: number;
+  stand_id: number;
+  saison_jahr: number;
+  eroeffnung: string | null;
+  schluss: string | null;
+}
+
 // Vertriebsplanung V4 (migration_2026-11-26c_vertrieb_wochenplan.sql)
 export interface VtFeiertag {
   id: number;

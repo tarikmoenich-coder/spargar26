@@ -29,6 +29,7 @@ import type {
   VtGrundplan,
   VtHalbtag,
   VtStand,
+  VtStandSaison,
   VtStandZeit,
   VtTour,
   VtTourStand,
@@ -47,6 +48,7 @@ import {
   type TourMitStaenden,
 } from "@/lib/vertrieb";
 import { ladeAlleSeiten, ladeAlleMitFehler } from "@/lib/ladeAlle";
+import { saisonText } from "@/lib/tagesplan";
 
 type Person = { id: string; personal_nr: string; name: string; vorname: string; fuehrerschein_b: boolean | null; geschlecht: "M" | "F" | null };
 type Feld = { stand_id: number; wochentag: number; halbtag: VtHalbtag };
@@ -81,6 +83,7 @@ export default function VertriebGrundplanPage() {
   const [touren, setTouren] = useState<VtTour[]>([]);
   const [tourStaende, setTourStaende] = useState<VtTourStand[]>([]);
   const [plan, setPlan] = useState<VtGrundplan[]>([]);
+  const [standSaison, setStandSaison] = useState<VtStandSaison[]>([]);
   const [loading, setLoading] = useState(true);
   const [fehler, setFehler] = useState<string | null>(null);
   const [meldung, setMeldung] = useState<string | null>(null);
@@ -141,7 +144,7 @@ export default function VertriebGrundplanPage() {
 
   const load = useCallback(async () => {
     const sb = getSupabaseClient();
-    const [p, fs, pl, v, s, z, t, ts, g] = await Promise.all([
+    const [p, fs, pl, v, s, z, t, ts, g, ss] = await Promise.all([
       // seitenweise - PostgREST liefert je Abfrage höchstens 1000 Zeilen
       ladeAlleSeiten<Person>((von, bis) =>
         sb
@@ -165,6 +168,7 @@ export default function VertriebGrundplanPage() {
       ladeAlleMitFehler<VtGrundplan>((von, bis) =>
         sb.from("vt_grundplan").select("*").eq("saison_jahr", saison).order("id").range(von, bis)
       ),
+      sb.from("vt_stand_saison").select("*").eq("saison_jahr", saison),
     ]);
     const err = pl.error ?? v.error ?? s.error ?? z.error ?? t.error ?? ts.error ?? g.error;
     setFehler(err ? err.message : null);
@@ -177,6 +181,7 @@ export default function VertriebGrundplanPage() {
     setTouren((t.data as VtTour[]) ?? []);
     setTourStaende((ts.data as VtTourStand[]) ?? []);
     setPlan((g.data as VtGrundplan[]) ?? []);
+    setStandSaison(ss.error ? [] : ((ss.data as VtStandSaison[]) ?? []));
     setLoading(false);
   }, [saison]);
 
@@ -1143,6 +1148,11 @@ export default function VertriebGrundplanPage() {
                                 {fahrerMoSa && (
                                   <span title="Fahrer-Stand: wer hier steht, fährt das Auto der Tour (Führerschein nötig, den ganzen Tag)">
                                     <Car className="h-4 w-4 text-violet-700" />
+                                  </span>
+                                )}
+                                {saisonText(standSaison, s.id, saison) && (
+                                  <span className="text-[11px] text-amber-700" title="Eröffnung / Schluss in dieser Saison (Ständeliste → Bearbeiten)">
+                                    {saisonText(standSaison, s.id, saison)}
                                   </span>
                                 )}
                                 {nurWareStaende.has(s.id) && (

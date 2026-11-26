@@ -13,6 +13,7 @@ import type {
   VtGrundplan,
   VtHalbtag,
   VtStand,
+  VtStandSaison,
   VtStandZeit,
   VtTagAenderung,
   VtTour,
@@ -108,6 +109,28 @@ export interface TagesFeld {
   zu: boolean; // heute geschlossen (Änderung)
   aenderung: VtTagAenderung | null;
   abwesend: VtAbwesenheit | null; // eingeplante Person ist laut Abwesenheit nicht da
+  // Stand an diesem Datum noch nicht eröffnet / schon geschlossen (vt_stand_saison), sonst null
+  ausserSaison: string | null;
+}
+
+// Außerhalb der Stand-Saison? -> Text ("öffnet am 15.4." / "seit 21.6. zu"), sonst null
+export function ausserhalbSaison(standSaison: VtStandSaison[], standId: number, datum: string): string | null {
+  const s = standSaison.find((x) => x.stand_id === standId && x.saison_jahr === Number(datum.slice(0, 4)));
+  if (!s) return null;
+  if (s.eroeffnung && datum < s.eroeffnung) return `öffnet am ${datumKurz(s.eroeffnung)}`;
+  if (s.schluss && datum > s.schluss) return `seit ${datumKurz(datumPlus1(s.schluss))} zu`;
+  return null;
+}
+function datumPlus1(d: string): string {
+  const x = new Date(`${d}T12:00:00Z`);
+  x.setUTCDate(x.getUTCDate() + 1);
+  return x.toISOString().slice(0, 10);
+}
+// "ab 15.4. · bis 20.6." für Listen, leer = ganze Saison
+export function saisonText(standSaison: VtStandSaison[], standId: number, jahr: number): string {
+  const s = standSaison.find((x) => x.stand_id === standId && x.saison_jahr === jahr);
+  if (!s) return "";
+  return [s.eroeffnung ? `ab ${datumKurz(s.eroeffnung)}` : "", s.schluss ? `bis ${datumKurz(s.schluss)}` : ""].filter(Boolean).join(" · ");
 }
 
 export interface TourHalt {
@@ -153,6 +176,7 @@ export function tagesplanBerechnen(o: {
   tourStaende: VtTourStand[];
   tourTage: VtTourTag[];
   fahrzeuge: Fahrzeug[];
+  standSaison?: VtStandSaison[];
 }): Tagesplan {
   const wochentag = wochentagVon(o.datum);
   const feiertag = o.feiertage.find((f) => f.datum === o.datum) ?? null;
@@ -171,9 +195,11 @@ export function tagesplanBerechnen(o: {
     const key = planKey(standId, planTag, h);
     const da = felder.get(key);
     if (da) return da;
-    const z = zeit.get(`${standId}|${h}`) ?? null;
-    const a = aend.get(`${standId}|${h}`) ?? null;
-    const grundEmp = grund.get(`${standId}|${h}`) ?? null;
+    // Vor der Eröffnung / nach dem Schluss: Stand zu, niemand eingeplant
+    const ausser = ausserhalbSaison(o.standSaison ?? [], standId, o.datum);
+    const z = ausser ? null : zeit.get(`${standId}|${h}`) ?? null;
+    const a = ausser ? null : aend.get(`${standId}|${h}`) ?? null;
+    const grundEmp = ausser ? null : grund.get(`${standId}|${h}`) ?? null;
     const zu = !!a?.geschlossen;
     const emp = a ? (a.geschlossen ? null : a.employee_id) : grundEmp;
     const f: TagesFeld = {
@@ -187,6 +213,7 @@ export function tagesplanBerechnen(o: {
       zu,
       aenderung: a,
       abwesend: abwesendVon(emp, h),
+      ausserSaison: ausser,
     };
     felder.set(key, f);
     return f;
@@ -203,7 +230,15 @@ export function tagesplanBerechnen(o: {
     .filter((t) => t.aktiv && t.tagesart === tagesart)
     .sort((a, b) => a.nummer - b.nummer)
     .map((t) => {
-      const liste = o.tourStaende.filter((x) => x.tour_id === t.id).sort((a, b) => a.reihenfolge - b.reihenfolge);
+      // Stände außerhalb ihrer Saison fallen heute aus der Tour (Reihenfolge und Fahrer neu)
+      const liste = o.tourStaende
+        .filter((x) => x.tour_id === t.id)
+        .sort((a, b) => a.reihenfolge - b.reihenfolge)
+        .filter((x) => {
+          if (!ausserhalbSaison(o.standSaison ?? [], x.stand_id, o.datum)) return true;
+          inTour.add(x.stand_id);
+          return false;
+        });
       const fs = fahrerStandId(liste);
       const halte: TourHalt[] = liste
         .map((x, i) => {
@@ -227,7 +262,11 @@ export function tagesplanBerechnen(o: {
         fahrer: fh ? fh.vm.emp ?? fh.nm.emp : null,
         fahrerStandId: fs,
       };
-    });
+    })
+    // Touren ohne offenen Stand fallen heute weg; Reihenfolge nach Abfahrt
+    // (Nutzer 2026-11-26), ohne Abfahrt ans Ende, dann nach Tournummer
+    .filter((t) => t.halte.length > 0)
+    .sort((a, b) => (a.abfahrt ?? "99").localeCompare(b.abfahrt ?? "99") || a.tour.nummer - b.tour.nummer);
   const ohneTour = o.staende
     .filter((s) => !inTour.has(s.id))
     .map((s) => ({ stand: s, vm: feld(s.id, "VM"), nm: feld(s.id, "NM") }))

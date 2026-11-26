@@ -8,6 +8,7 @@ import type {
   VtFeiertag,
   VtGrundplan,
   VtStand,
+  VtStandSaison,
   VtStandZeit,
   VtTagAenderung,
   VtTour,
@@ -44,13 +45,14 @@ export interface TagesplanDaten {
   abwesenheiten: VtAbwesenheit[];
   fahrzeuge: Fahrzeug[];
   drucke: VtDruck[];
+  standSaison: VtStandSaison[];
   fehler: string | null;
 }
 
 // von/bis = "YYYY-MM-DD" (inklusive). Saison = Kalenderjahr der Daten.
 export async function tagesplanDatenLaden(sb: SupabaseClient, von: string, bis: string): Promise<TagesplanDaten> {
   const jahre = [...new Set([Number(von.slice(0, 4)), Number(bis.slice(0, 4))])];
-  const [p, fs, pl, v, s, z, t, ts, g, fe, ae, tt, ab, fz, dr] = await Promise.all([
+  const [p, fs, pl, v, s, z, t, ts, g, fe, ae, tt, ab, fz, dr, ss] = await Promise.all([
     ladeAlleSeiten<VtPerson>((a, b) =>
       sb.from("employees").select("id, personal_nr, name, vorname, fuehrerschein_b, geschlecht").eq("bereich", "VT").order("id").range(a, b)
     ),
@@ -69,8 +71,9 @@ export async function tagesplanDatenLaden(sb: SupabaseClient, von: string, bis: 
     // Fahrzeuge dürfen nur admin/hr/management lesen - für andere bleibt das Kennzeichen leer
     sb.from("fahrzeug").select("id, kennzeichen, bezeichnung").order("bezeichnung"),
     sb.from("vt_druck").select("*").gte("datum", von).lte("datum", bis).order("gedruckt_am", { ascending: false }),
+    sb.from("vt_stand_saison").select("*").in("saison_jahr", jahre),
   ]);
-  const err = pl.error ?? v.error ?? s.error ?? z.error ?? t.error ?? ts.error ?? g.error ?? fe.error ?? ae.error ?? tt.error ?? ab.error ?? dr.error;
+  const err = pl.error ?? v.error ?? s.error ?? z.error ?? t.error ?? ts.error ?? g.error ?? fe.error ?? ae.error ?? tt.error ?? ab.error ?? dr.error ?? ss.error;
   return {
     personen: p,
     fsDoku: fs,
@@ -87,6 +90,7 @@ export async function tagesplanDatenLaden(sb: SupabaseClient, von: string, bis: 
     abwesenheiten: (ab.data as VtAbwesenheit[]) ?? [],
     fahrzeuge: fz.error ? [] : ((fz.data as Fahrzeug[]) ?? []),
     drucke: (dr.data as VtDruck[]) ?? [],
+    standSaison: (ss.data as VtStandSaison[]) ?? [],
     fehler: err ? err.message : null,
   };
 }
