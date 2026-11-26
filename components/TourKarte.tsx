@@ -87,7 +87,7 @@ export default function TourKarte({
               </span>
               <div className="min-w-0 flex-1">
                 <div className="flex flex-wrap items-baseline gap-x-2">
-                  <span className="font-bold uppercase">{h.stand.name}</span>
+                  <span className="rounded bg-black px-1.5 py-px font-bold uppercase text-white">{h.stand.name}</span>
                   {h.vm.von && (
                     <span className="text-neutral-600">
                       {zeitKurz(h.vm.von)}–{zeitKurz(h.nm.bis ?? h.vm.bis)}

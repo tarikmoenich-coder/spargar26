@@ -140,6 +140,11 @@ Gebaut (Migration 2026-11-26c, `lib/tagesplan.ts`):
   für den Tag (`vt_tour_tag`). Drucken speichert den Stand (`vt_druck`).
 - `/vertrieb/druck/aenderung`: A4 je geänderter Tour seit dem letzten
   Ausdruck ("ACHTUNG! HEUTE ANDERS").
+- Eröffnung/Schluss je Stand und Saison (`vt_stand_saison`, Migration
+  2026-11-26d, Nutzer 2026-11-26): im Stand-Formular "geöffnet ab/bis";
+  vorher/nachher ist der Stand in Woche und Tagesplan zu und fällt aus
+  seiner Tour (Reihenfolge und Fahrer rechnen sich neu). Tagesplan-Kacheln
+  nach Abfahrt sortiert, Standname im schwarzen Kasten.
 - Offen: Verkäufer-Wochenzettel je Person, Standbesetzung je Woche als
   Aushang (mit Stufe 5 "Wochenstundenzettel" zusammen bauen).
 

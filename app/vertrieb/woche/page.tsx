@@ -24,6 +24,7 @@ import {
   feiertageBerechnen,
   kalenderwoche,
   montagVon,
+  saisonText,
   tagesplanBerechnen,
   tourAenderungen,
   type TagesFeld,
@@ -91,6 +92,7 @@ export default function VertriebWochePage() {
         tourStaende: d.tourStaende,
         tourTage: d.tourTage,
         fahrzeuge: d.fahrzeuge,
+            standSaison: d.standSaison,
       })
     );
   }, [d, tage]);
@@ -274,6 +276,7 @@ export default function VertriebWochePage() {
         `${s.nummer} ${s.name} · ${datumLang(tp.datum)} ${u === "TAG" ? "" : u === "VM" ? "Vormittag" : "Nachmittag"}`,
         f.von ? `${zeitKurz(f.von)}–${zeitKurz((extra ?? f).bis)}` : "",
         zu ? "heute geschlossen" : "",
+        f.ausserSaison ? `Stand ${f.ausserSaison}` : "",
         fehlt ? "NIEMAND EINGEPLANT - Vertretung fehlt" : "",
         abw ? `${personName(f.emp ?? extra?.emp ?? "")} ist abwesend${abw.grund ? `: ${abw.grund}` : ""} - Vertretung einplanen` : "",
         geaendert ? `geändert - laut Grundplan: ${felder.map((x) => (x.grundEmp ? personName(x.grundEmp) : "niemand")).join(" / ")}` : "",
@@ -295,7 +298,9 @@ export default function VertriebWochePage() {
               : ""
           }`}
         >
-          {zu ? (
+          {f.ausserSaison ? (
+            <span className="text-[10px] text-neutral-400">{f.ausserSaison.startsWith("öffnet") ? "noch zu" : "Saison aus"}</span>
+          ) : zu ? (
             <span className="text-[10px] font-medium text-neutral-500">zu</span>
           ) : f.emp ? (
             chip(f.emp, !!abw)
@@ -445,6 +450,9 @@ export default function VertriebWochePage() {
                         <span className="inline-block w-7 text-right text-xs tabular-nums text-neutral-400">{s.nummer}</span>{" "}
                         <span className={fahrerMoSa.has(s.id) ? "font-semibold" : ""}>{s.name}</span>
                         {fahrerMoSa.has(s.id) && <Car className="ml-1 inline h-4 w-4 text-violet-700" />}
+                        {saisonText(d.standSaison, s.id, jahr) && (
+                          <span className="ml-1.5 text-[11px] text-amber-700">{saisonText(d.standSaison, s.id, jahr)}</span>
+                        )}
                       </td>
                       {plaene.flatMap((tp) => zellen(tp, s))}
                     </tr>

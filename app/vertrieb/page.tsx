@@ -17,11 +17,13 @@ import { hatRolle } from "@/lib/rollen";
 import PageHeader from "@/components/PageHeader";
 import EmptyState from "@/components/EmptyState";
 import VertriebTabs from "@/components/VertriebTabs";
-import type { VtHalbtag, VtStand, VtStandZeit, VtTour, VtTourStand } from "@/lib/types";
+import type { VtHalbtag, VtStand, VtStandSaison, VtStandZeit, VtTour, VtTourStand } from "@/lib/types";
+import { saisonText } from "@/lib/tagesplan";
 import {
   HALBTAGE,
   WOCHENTAGE,
   koordinatenLesen,
+  planungsSaison,
   zeitInput,
   zeitKurz,
 } from "@/lib/vertrieb";
@@ -38,6 +40,9 @@ interface StandForm {
   aktiv: boolean;
   notiz: string;
   zeiten: ZeitRaster;
+  // Eröffnung/Schluss in der Planungs-Saison (leer = ganze Saison)
+  eroeffnung: string;
+  schluss: string;
 }
 
 const STANDARD_ZEIT: Record<VtHalbtag, { von: string; bis: string }> = {
@@ -66,10 +71,12 @@ function leereForm(naechsteNummer: number): StandForm {
     aktiv: true,
     notiz: "",
     zeiten: leeresRaster(),
+    eroeffnung: "",
+    schluss: "",
   };
 }
 
-function ausStand(s: VtStand, zeiten: VtStandZeit[]): StandForm {
+function ausStand(s: VtStand, zeiten: VtStandZeit[], ss: VtStandSaison | undefined): StandForm {
   const raster = leeresRaster();
   for (const z of zeiten.filter((z) => z.stand_id === s.id))
     raster[schluessel(z.wochentag, z.halbtag)] = { offen: true, von: zeitInput(z.von), bis: zeitInput(z.bis) };
@@ -82,6 +89,8 @@ function ausStand(s: VtStand, zeiten: VtStandZeit[]): StandForm {
     aktiv: s.aktiv,
     notiz: s.notiz ?? "",
     zeiten: raster,
+    eroeffnung: ss?.eroeffnung ?? "",
+    schluss: ss?.schluss ?? "",
   };
 }
 
@@ -96,6 +105,8 @@ export default function VertriebStaendePage() {
   const [zeiten, setZeiten] = useState<VtStandZeit[]>([]);
   const [touren, setTouren] = useState<VtTour[]>([]);
   const [tourStaende, setTourStaende] = useState<VtTourStand[]>([]);
+  const [standSaison, setStandSaison] = useState<VtStandSaison[]>([]);
+  const saison = planungsSaison();
   const [loading, setLoading] = useState(true);
   const [fehler, setFehler] = useState<string | null>(null);
   const [suche, setSuche] = useState("");
@@ -109,11 +120,12 @@ export default function VertriebStaendePage() {
 
   const load = useCallback(async () => {
     const sb = getSupabaseClient();
-    const [s, z, t, ts] = await Promise.all([
+    const [s, z, t, ts, ss] = await Promise.all([
       sb.from("vt_stand").select("*").order("nummer"),
       ladeAlleMitFehler<VtStandZeit>((von, bis) => sb.from("vt_stand_zeit").select("*").order("id").range(von, bis)),
       sb.from("vt_tour").select("*").order("nummer"),
       sb.from("vt_tour_stand").select("*"),
+      sb.from("vt_stand_saison").select("*").eq("saison_jahr", planungsSaison()),
     ]);
     const err = s.error ?? z.error ?? t.error ?? ts.error;
     setFehler(err ? err.message : null);
@@ -121,6 +133,7 @@ export default function VertriebStaendePage() {
     setZeiten((z.data as VtStandZeit[]) ?? []);
     setTouren((t.data as VtTour[]) ?? []);
     setTourStaende((ts.data as VtTourStand[]) ?? []);
+    setStandSaison(ss.error ? [] : ((ss.data as VtStandSaison[]) ?? []));
     setLoading(false);
   }, []);
 
@@ -167,7 +180,7 @@ export default function VertriebStaendePage() {
   }
 
   function bearbeiten(s: VtStand) {
-    setForm(ausStand(s, zeiten));
+    setForm(ausStand(s, zeiten, standSaison.find((x) => x.stand_id === s.id)));
     setFormFehler(null);
     setBearbeite(s.id);
   }
@@ -198,6 +211,7 @@ export default function VertriebStaendePage() {
       koord = koordinatenLesen(form.koordinaten);
       if (!koord) return setFormFehler('Koordinaten nicht lesbar - bitte als "50.123, 8.654" eingeben.');
     }
+    if (form.eroeffnung && form.schluss && form.schluss < form.eroeffnung) return setFormFehler("„geöffnet bis“ liegt vor „geöffnet ab“.");
     const offen = Object.entries(form.zeiten).filter(([, z]) => z.offen);
     for (const [k, z] of offen) {
       if (!z.von || !z.bis || z.bis <= z.von) {
@@ -230,6 +244,27 @@ export default function VertriebStaendePage() {
       );
     }
     const standId = (res.data as { id: number }).id;
+
+    // Eröffnung/Schluss der Saison: beide leer = ganze Saison (Zeile weg)
+    const altSaison = standSaison.find((x) => x.stand_id === standId);
+    if (form.eroeffnung || form.schluss) {
+      const up = await sb
+        .from("vt_stand_saison")
+        .upsert(
+          { stand_id: standId, saison_jahr: saison, eroeffnung: form.eroeffnung || null, schluss: form.schluss || null, geaendert_am: new Date().toISOString() },
+          { onConflict: "stand_id,saison_jahr" }
+        );
+      if (up.error) {
+        setSpeichert(false);
+        return setFormFehler(`Stand gespeichert, Eröffnung/Schluss nicht: ${up.error.message}`);
+      }
+    } else if (altSaison) {
+      const del = await sb.from("vt_stand_saison").delete().eq("id", altSaison.id);
+      if (del.error) {
+        setSpeichert(false);
+        return setFormFehler(`Stand gespeichert, Eröffnung/Schluss nicht entfernt: ${del.error.message}`);
+      }
+    }
 
     // Öffnungszeiten: erst geöffnete Halbtage schreiben, dann die übrigen
     // löschen - schlägt das Schreiben fehl, bleibt der alte Stand erhalten.
@@ -319,6 +354,17 @@ export default function VertriebStaendePage() {
           <input type="checkbox" checked={form.aktiv} onChange={(e) => setForm({ ...form, aktiv: e.target.checked })} />
           aktiv
         </label>
+        <label className="flex flex-col gap-1 text-sm" title="Nur nötig, wenn der Stand später als die anderen aufmacht - leer = ganze Saison">
+          Saison {saison}: geöffnet ab
+          <input type="date" value={form.eroeffnung} onChange={(e) => setForm({ ...form, eroeffnung: e.target.value })} />
+        </label>
+        <label className="flex flex-col gap-1 text-sm" title="Nur nötig, wenn der Stand früher als die anderen schließt - leer = ganze Saison">
+          geöffnet bis (letzter Tag)
+          <input type="date" value={form.schluss} onChange={(e) => setForm({ ...form, schluss: e.target.value })} />
+        </label>
+        <p className="col-span-2 self-end text-xs text-neutral-500">
+          Leer lassen = ganze Saison. Vorher/nachher ist der Stand in Woche und Tagesplan zu und fällt aus seiner Tour.
+        </p>
       </div>
 
       <div>
@@ -472,7 +518,14 @@ export default function VertriebStaendePage() {
                     <tr className={s.aktiv ? "" : "opacity-50"}>
                       <td className="font-medium">{s.nummer}</td>
                       <td>
-                        <div>{s.name}</div>
+                        <div>
+                          {s.name}
+                          {saisonText(standSaison, s.id, saison) && (
+                            <span className="ml-2 text-xs text-amber-700" title={`Saison ${saison}`}>
+                              {saisonText(standSaison, s.id, saison)}
+                            </span>
+                          )}
+                        </div>
                         {s.adresse && <div className="text-xs text-neutral-500">{s.adresse}</div>}
                       </td>
                       <td className="whitespace-nowrap">{tourZelle("MO_SA")}</td>

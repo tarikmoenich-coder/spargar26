@@ -55,6 +55,7 @@ function Aenderungszettel() {
             tourStaende: d.tourStaende,
             tourTage: d.tourTage,
             fahrzeuge: d.fahrzeuge,
+            standSaison: d.standSaison,
           })
         : null,
     [d, datum]
