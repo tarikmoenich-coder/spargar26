@@ -58,8 +58,9 @@ Voraussetzung (erledigt): Vertriebs-Personal in spargar26
   angehängt. Der Google-Export enthält KEINE Koordinaten.
   Ständeliste 2026 (`lib/staendeListe2026.ts`, Nutzer 2026-11-26): eigene
   Standnamen statt Geschäftscode, 92 aktiv (86 aus Google + 6 ohne Profil:
-  Alsheim, Flörsheim-Dalsheim, Nackenheim, Osthofen, Rüsselsheim Globus,
-  Wörrstadt), 11 nicht gelistete inaktiv. Nummern: aktive zuerst.
+  Alsheim, Flörsheim-Dalsheim, Nackenheim, Osthofen, Wörrstadt = vom
+  Kollegen Sohling übernommen; Rüsselsheim Globus = neu 2026), 11 nicht
+  gelistete inaktiv. Nummern: aktive zuerst.
 - Karte [gebaut 2026-11-25]: `/vertrieb/karte` (`components/StandKarte.tsx`)
   zeigt alle Stände mit Radius-Kreis auf Satellit/Luftbild Hessen/OSM.
   Position von Hand setzen (Punkt ziehen oder in die Karte klicken), Radius

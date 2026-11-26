@@ -100,14 +100,15 @@ export const NAMEN_2026: Record<string, string> = {
   "Wörth": "Wörth",
 };
 
-// Auf der Liste, aber ohne Google-Profil
-export const OHNE_PROFIL_2026: { name: string; ort: string }[] = [
-  { name: "Alsheim", ort: "Alsheim" },
-  { name: "Flörsheim-Dalsheim", ort: "Flörsheim-Dalsheim" },
-  { name: "Nackenheim", ort: "Nackenheim" },
-  { name: "Osthofen", ort: "Osthofen" },
-  { name: "Rüsselsheim Globus", ort: "Rüsselsheim am Main" },
-  { name: "Wörrstadt", ort: "Wörrstadt" },
+// Auf der Liste, aber ohne Google-Profil (Nutzer 2026-11-26): fünf Stände
+// vom Kollegen Sohling übernommen, Rüsselsheim Globus 2026 neu.
+export const OHNE_PROFIL_2026: { name: string; ort: string; herkunft: string }[] = [
+  { name: "Alsheim", ort: "Alsheim", herkunft: "Von Sohling übernommen" },
+  { name: "Flörsheim-Dalsheim", ort: "Flörsheim-Dalsheim", herkunft: "Von Sohling übernommen" },
+  { name: "Nackenheim", ort: "Nackenheim", herkunft: "Von Sohling übernommen" },
+  { name: "Osthofen", ort: "Osthofen", herkunft: "Von Sohling übernommen" },
+  { name: "Rüsselsheim Globus", ort: "Rüsselsheim am Main", herkunft: "Neu 2026" },
+  { name: "Wörrstadt", ort: "Wörrstadt", herkunft: "Von Sohling übernommen" },
 ];
 
 export function liste2026Anwenden(staende: StandImport[]): StandImport[] {
@@ -135,7 +136,7 @@ export function liste2026Anwenden(staende: StandImport[]): StandImport[] {
       ort: z.ort,
       telefon: "",
       adresse: "",
-      notiz: "Kein Google-Profil - Adresse und Öffnungszeiten nachtragen",
+      notiz: `${z.herkunft} · kein Google-Profil - Adresse und Öffnungszeiten nachtragen`,
       zeiten: [],
       ohneZeiten: true,
       zeitFehler: [],
