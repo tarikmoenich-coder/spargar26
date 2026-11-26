@@ -13,14 +13,17 @@ import { useProfile } from "@/lib/useProfile";
 import { hatRolle } from "@/lib/rollen";
 import PageHeader from "@/components/PageHeader";
 import EmptyState from "@/components/EmptyState";
+import { ARTEN } from "@/components/VorschlagKnopf";
 
 type Status = "offen" | "in_arbeit" | "erledigt" | "abgelehnt";
+type Art = "fehler" | "aenderung" | "neu";
 type Vorschlag = {
   id: number;
   erstellt_am: string;
   erstellt_von: string | null;
   seite: string;
   seite_titel: string | null;
+  art: Art;
   text: string;
   screenshot: string | null;
   status: Status;
@@ -40,6 +43,7 @@ export default function VorschlaegePage() {
   const [liste, setListe] = useState<Vorschlag[]>([]);
   const [namen, setNamen] = useState<Map<string, string>>(new Map());
   const [filter, setFilter] = useState<Status | "alle">("offen");
+  const [artFilter, setArtFilter] = useState<Art | "alle">("alle");
   const [bild, setBild] = useState<string | null>(null);
   const [fehler, setFehler] = useState<string | null>(null);
   const [laedt, setLaedt] = useState(true);
@@ -64,7 +68,11 @@ export default function VorschlaegePage() {
     for (const v of liste) m.set(v.status, (m.get(v.status) ?? 0) + 1);
     return m;
   }, [liste]);
-  const sichtbar = liste.filter((v) => filter === "alle" || v.status === filter);
+  // Fehler zuerst, dann Änderungen, dann neue Ideen - jeweils neueste oben
+  const artRang = (a: Art) => ARTEN.findIndex((x) => x.wert === a);
+  const sichtbar = liste
+    .filter((v) => (filter === "alle" || v.status === filter) && (artFilter === "alle" || v.art === artFilter))
+    .sort((a, b) => artRang(a.art) - artRang(b.art) || b.erstellt_am.localeCompare(a.erstellt_am));
 
   async function aendern(id: number, teil: Partial<Vorschlag>) {
     const daten: Partial<Vorschlag> = { ...teil };
@@ -102,6 +110,18 @@ export default function VorschlaegePage() {
         ))}
       </div>
 
+      <div className="flex flex-wrap gap-1 text-sm">
+        <button className={artFilter === "alle" ? "btn px-3 py-1" : "btn-secondary px-3 py-1"} onClick={() => setArtFilter("alle")}>
+          jede Art
+        </button>
+        {ARTEN.map((a) => (
+          <button key={a.wert} className={artFilter === a.wert ? "btn px-3 py-1" : "btn-secondary px-3 py-1"} onClick={() => setArtFilter(a.wert)}>
+            <a.Icon className="mr-1 inline h-4 w-4" />
+            {a.label} ({liste.filter((v) => v.art === a.wert && (filter === "alle" || v.status === filter)).length})
+          </button>
+        ))}
+      </div>
+
       {!laedt && sichtbar.length === 0 && <EmptyState icon={Lightbulb} text="Keine Vorschläge in dieser Ansicht." />}
       <div className="flex flex-col gap-3">
         {sichtbar.map((v) => {
@@ -110,6 +130,17 @@ export default function VorschlaegePage() {
             <div key={v.id} className="card flex flex-col gap-3 md:flex-row">
               <div className="flex min-w-0 flex-1 flex-col gap-2">
                 <div className="flex flex-wrap items-center gap-2 text-sm">
+                  <span className={`rounded px-1.5 font-semibold ${v.art === "fehler" ? "bg-beere-100 text-beere-800" : v.art === "neu" ? "bg-violet-100 text-violet-800" : "bg-sand-200"}`}>
+                    {(() => {
+                      const a = ARTEN.find((x) => x.wert === v.art);
+                      return a ? (
+                        <>
+                          <a.Icon className="mr-1 inline h-3.5 w-3.5" />
+                          {a.label}
+                        </>
+                      ) : null;
+                    })()}
+                  </span>
                   <span className={st.klasse}>{st.label}</span>
                   <span className="font-medium">{v.erstellt_von ? namen.get(v.erstellt_von) ?? "?" : "?"}</span>
                   <span className="text-neutral-500">
@@ -122,6 +153,13 @@ export default function VorschlaegePage() {
                 </div>
                 <p className="whitespace-pre-wrap text-sm">{v.text}</p>
                 <div className="flex flex-wrap items-center gap-2 text-sm">
+                  <select value={v.art} onChange={(e) => aendern(v.id, { art: e.target.value as Art })} title="Art nachträglich ändern">
+                    {ARTEN.map((a) => (
+                      <option key={a.wert} value={a.wert}>
+                        {a.label}
+                      </option>
+                    ))}
+                  </select>
                   <select value={v.status} onChange={(e) => aendern(v.id, { status: e.target.value as Status })}>
                     {STATUS.map((s) => (
                       <option key={s.wert} value={s.wert}>

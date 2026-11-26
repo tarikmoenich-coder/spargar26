@@ -10,7 +10,7 @@
 import Link from "next/link";
 import { usePathname, useSearchParams } from "next/navigation";
 import { Suspense, useCallback, useEffect, useRef, useState } from "react";
-import { Eraser, Lightbulb, Pencil, Type, Undo2, X } from "lucide-react";
+import { Bug, Eraser, Lightbulb, Pencil, PencilLine, Sparkles, Type, Undo2, X, type LucideIcon } from "lucide-react";
 import { getSupabaseClient } from "@/lib/supabase/client";
 import { useProfile } from "@/lib/useProfile";
 import { hatRolle } from "@/lib/rollen";
@@ -18,6 +18,12 @@ import { hatRolle } from "@/lib/rollen";
 type Strich = { typ: "linie"; farbe: string; punkte: [number, number][] } | { typ: "text"; farbe: string; x: number; y: number; text: string };
 const FARBEN = ["#dc2626", "#2563eb", "#111827"];
 const MAX_BREITE = 1600;
+// Art des Vorschlags (Nutzer 2026-11-26) - einfache Worte statt Fachbegriffe
+export const ARTEN: { wert: "fehler" | "aenderung" | "neu"; Icon: LucideIcon; label: string; hinweis: string }[] = [
+  { wert: "fehler", Icon: Bug, label: "Etwas geht nicht", hinweis: "Fehler, falsche Anzeige, Knopf geht nicht" },
+  { wert: "aenderung", Icon: PencilLine, label: "Bitte ändern", hinweis: "Etwas Vorhandenes soll anders sein" },
+  { wert: "neu", Icon: Sparkles, label: "Neue Idee", hinweis: "Das gibt es noch gar nicht" },
+];
 
 function seitenTitel(): string {
   const h1 = document.querySelector("main h1");
@@ -34,6 +40,7 @@ function Knopf() {
   const [fotoLaeuft, setFotoLaeuft] = useState(false);
   const [mitFoto, setMitFoto] = useState(true);
   const [text, setText] = useState("");
+  const [art, setArt] = useState<"fehler" | "aenderung" | "neu" | null>(null);
   const [striche, setStriche] = useState<Strich[]>([]);
   const [werkzeug, setWerkzeug] = useState<"stift" | "text">("stift");
   const [farbe, setFarbe] = useState(FARBEN[0]);
@@ -90,6 +97,7 @@ function Knopf() {
     setMeldung(null);
     setFehler(null);
     setText("");
+    setArt(null);
     setStriche([]);
     setSeite({ pfad: `${pathname}${params.toString() ? `?${params.toString()}` : ""}`, titel: seitenTitel() });
     setFotoLaeuft(true);
@@ -156,6 +164,7 @@ function Knopf() {
   }
 
   async function absenden() {
+    if (!art) return setFehler("Bitte oben auswählen: Etwas geht nicht / Bitte ändern / Neue Idee.");
     if (!text.trim()) return setFehler("Bitte kurz beschreiben, was geändert werden soll.");
     setSenden(true);
     setFehler(null);
@@ -172,7 +181,7 @@ function Knopf() {
     // ohne .select(): Nutzer dürfen ihren Vorschlag danach nicht lesen (nur Admin)
     const { error } = await getSupabaseClient()
       .from("verbesserungsvorschlag")
-      .insert({ seite: seite.pfad, seite_titel: seite.titel || null, text: text.trim(), screenshot });
+      .insert({ seite: seite.pfad, seite_titel: seite.titel || null, art, text: text.trim(), screenshot });
     setSenden(false);
     if (error) return setFehler(error.message);
     setOffen(false);
@@ -224,10 +233,27 @@ function Knopf() {
               </button>
             </div>
 
+            <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
+              {ARTEN.map((a) => (
+                <button
+                  key={a.wert}
+                  onClick={() => setArt(a.wert)}
+                  className={`flex items-center gap-2 rounded-lg border-2 px-3 py-2 text-left ${
+                    art === a.wert ? "border-black bg-yellow-200" : "border-neutral-300 hover:border-neutral-500"
+                  }`}
+                >
+                  <a.Icon className="h-7 w-7 shrink-0" />
+                  <span>
+                    <span className="block font-semibold">{a.label}</span>
+                    <span className="block text-xs text-neutral-600">{a.hinweis}</span>
+                  </span>
+                </button>
+              ))}
+            </div>
+
             <label className="flex flex-col gap-1 text-sm">
               Was soll geändert werden?
               <textarea
-                autoFocus
                 rows={4}
                 value={text}
                 onChange={(e) => setText(e.target.value)}
