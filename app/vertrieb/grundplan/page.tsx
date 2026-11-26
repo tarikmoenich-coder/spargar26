@@ -38,6 +38,7 @@ import type {
 import {
   HALBTAGE,
   WOCHENTAGE,
+  farbeGeschlecht,
   fahrerStandId,
   planKey,
   planPruefen,
@@ -62,13 +63,6 @@ const DND_STAND = "application/x-spargar-stand";
 const POP_BREITE = 360;
 const POP_HOEHE = 420;
 
-// Farbe nach Geschlecht (Nutzer 2026-11-26: viele Einzelfarben störten):
-// Frauen gelb, Männer blau, unbekannt grau.
-function farbeGeschlecht(g: "M" | "F" | null | undefined) {
-  if (g === "F") return { background: "#fef3c7", borderColor: "#f59e0b", color: "#78350f" };
-  if (g === "M") return { background: "#dbeafe", borderColor: "#3b82f6", color: "#1e3a8a" };
-  return { background: "#f5f5f4", borderColor: "#a8a29e", color: "#44403c" };
-}
 const SCHRAFFUR = {
   backgroundImage: "repeating-linear-gradient(135deg, transparent 0 5px, rgba(0,0,0,0.045) 5px 6px)",
 };
