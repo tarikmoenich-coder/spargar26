@@ -19,7 +19,8 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Sprout } from "lucide-react";
+import { AlertTriangle, Package, Sprout, Weight } from "lucide-react";
+import { Kennzahl } from "@/components/Uebersicht";
 import PageHeader from "@/components/PageHeader";
 import ErntewirtschaftTabs from "@/components/ErntewirtschaftTabs";
 import ErnteMaschinenKarte, { type MaschineLive } from "@/components/ErnteMaschinenKarte";
@@ -206,42 +207,31 @@ function FlottenUeberblick() {
         </p>
       )}
       {kacheln && (
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-          <div className="card p-3">
-            <p className="text-xs text-neutral-500">Kisten heute</p>
-            <p className="text-2xl font-semibold text-emerald-900">{kacheln.kistenHeute}</p>
-          </div>
-          <div className="card p-3">
-            <p className="text-xs text-neutral-500">kg heute</p>
-            <p className="text-2xl font-semibold text-emerald-900">
-              {formatMenge(kacheln.kgHeute)} kg
-            </p>
-          </div>
-          <div className="card p-3" title="An der Maschine gescannt, ohne angemeldete Person">
-            <p className="text-xs text-neutral-500">Kisten ohne Zuordnung (heute)</p>
-            <p
-              className={`text-2xl font-semibold ${
-                kacheln.kistenOhneZuordnung > 0 ? "text-beere-600" : "text-emerald-900"
-              }`}
-            >
-              {kacheln.kistenOhneZuordnung}
-            </p>
-          </div>
-          <div
-            className="card p-3"
-            title={kacheln.kistenFehlenJeMitarbeiter
-              .map((m) => `${m.name}: ${m.anzahl}`)
-              .join("\n")}
-          >
-            <p className="text-xs text-neutral-500">Kisten überfällig (befüllt, nicht gewogen)</p>
-            <p
-              className={`text-2xl font-semibold ${
-                kacheln.kistenFehlenGesamt > 0 ? "text-beere-600" : "text-emerald-900"
-              }`}
-            >
-              {kacheln.kistenFehlenGesamt}
-            </p>
-          </div>
+        <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
+          <Kennzahl icon={Package} titel="Kisten heute" wert={kacheln.kistenHeute} />
+          <Kennzahl icon={Weight} titel="kg heute" wert={`${formatMenge(kacheln.kgHeute)} kg`} />
+          <Kennzahl
+            icon={AlertTriangle}
+            titel="Ohne Zuordnung"
+            wert={kacheln.kistenOhneZuordnung}
+            ton={kacheln.kistenOhneZuordnung > 0 ? "rot" : "gruen"}
+            unter="heute gescannt, keine Person angemeldet"
+          />
+          <Kennzahl
+            icon={AlertTriangle}
+            titel="Kisten überfällig"
+            wert={kacheln.kistenFehlenGesamt}
+            ton={kacheln.kistenFehlenGesamt > 0 ? "rot" : "gruen"}
+            unter={
+              kacheln.kistenFehlenJeMitarbeiter.length > 0
+                ? kacheln.kistenFehlenJeMitarbeiter
+                    .slice(0, 3)
+                    .map((m) => `${m.name}: ${m.anzahl}`)
+                    .join(" · ")
+                : "befüllt, aber nicht gewogen"
+            }
+            title={kacheln.kistenFehlenJeMitarbeiter.map((m) => `${m.name}: ${m.anzahl}`).join("\n")}
+          />
         </div>
       )}
       {loading ? (
