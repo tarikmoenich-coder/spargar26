@@ -9,20 +9,47 @@
 
 import Link from "next/link";
 import dynamic from "next/dynamic";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { MapPin } from "lucide-react";
 import { getSupabaseClient } from "@/lib/supabase/client";
 import { useProfile } from "@/lib/useProfile";
 import { hatRolle } from "@/lib/rollen";
 import PageHeader from "@/components/PageHeader";
 import VertriebTabs from "@/components/VertriebTabs";
-import type { StandEntwurf } from "@/components/StandKarte";
-import type { VtStand } from "@/lib/types";
+import type { KartenFokus, StandEntwurf, TourLinie } from "@/components/StandKarte";
+import type { VtGrundplan, VtStand, VtStandZeit, VtTagesart, VtTour, VtTourStand } from "@/lib/types";
+import { ladeAlleMitFehler } from "@/lib/ladeAlle";
+import { TAGESARTEN, WOCHENTAGE, fahrerStandId, planungsSaison } from "@/lib/vertrieb";
 
 const StandKarte = dynamic(() => import("@/components/StandKarte"), {
   ssr: false,
   loading: () => <div className="h-[70vh] animate-pulse rounded bg-neutral-100" />,
 });
+
+// Tourfarben (bewusst ohne Rot - Rot = ausgewählter Stand, Grün = Standard)
+const TOUR_FARBEN = ["#2563eb", "#ea580c", "#9333ea", "#0d9488", "#ca8a04", "#4f46e5", "#65a30d", "#0891b2", "#a16207", "#7c3aed", "#475569", "#be185d"];
+const OHNE_TOUR_FARBE = "#9ca3af";
+
+function esc(t: string): string {
+  return t.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]!);
+}
+
+// Öffnungstage kompakt: "Mo–Fr VM+NM · Sa VM"
+function oeffnungText(zeiten: VtStandZeit[]): string {
+  const muster = WOCHENTAGE.map((w) => {
+    const h = ["VM", "NM"].filter((x) => zeiten.some((z) => z.wochentag === w.nr && z.halbtag === x));
+    return { kurz: w.kurz, m: h.join("+") };
+  });
+  const teile: string[] = [];
+  let i = 0;
+  while (i < muster.length) {
+    let j = i;
+    while (j + 1 < muster.length && muster[j + 1].m === muster[i].m) j++;
+    if (muster[i].m) teile.push(`${muster[i].kurz}${j > i ? `–${muster[j].kurz}` : ""} ${muster[i].m}`);
+    i = j + 1;
+  }
+  return teile.length ? teile.join(" · ") : "keine Öffnungszeiten";
+}
 
 const RADIUS_MIN = 10;
 const RADIUS_MAX = 2000;
@@ -38,19 +65,66 @@ export default function VertriebKartePage() {
 
   const [auswahlId, setAuswahlId] = useState<number | null>(null);
   const [entwurf, setEntwurf] = useState<StandEntwurf | null>(null);
-  const [fokus, setFokus] = useState<{ lat: number; lng: number; zoom: number; ts: number } | null>(null);
+  const [fokus, setFokus] = useState<KartenFokus | null>(null);
+
+  // Tourenplanung auf der Karte
+  const [touren, setTouren] = useState<VtTour[]>([]);
+  const [tourStaende, setTourStaende] = useState<VtTourStand[]>([]);
+  const [zeiten, setZeiten] = useState<VtStandZeit[]>([]);
+  const [grundplan, setGrundplan] = useState<VtGrundplan[]>([]);
+  const [namen, setNamen] = useState<Map<string, string>>(new Map());
+  const [tourenAn, setTourenAn] = useState(false);
+  const [tagesart, setTagesart] = useState<VtTagesart>("MO_SA");
+  const [tourHervor, setTourHervor] = useState<number | null>(null);
+  const saison = planungsSaison();
+  const urlTourErledigt = useRef(false);
   const [hinweis, setHinweis] = useState<string | null>(null);
   const [speichert, setSpeichert] = useState(false);
 
   const load = useCallback(async () => {
-    const { data, error } = await getSupabaseClient().from("vt_stand").select("*").order("nummer");
-    setFehler(error ? error.message : null);
-    setStaende((data as VtStand[]) ?? []);
-  }, []);
+    const sb = getSupabaseClient();
+    const [st, t, ts, z, g] = await Promise.all([
+      sb.from("vt_stand").select("*").order("nummer"),
+      sb.from("vt_tour").select("*").order("nummer"),
+      sb.from("vt_tour_stand").select("*").order("reihenfolge"),
+      ladeAlleMitFehler<VtStandZeit>((von, bis) => sb.from("vt_stand_zeit").select("*").order("id").range(von, bis)),
+      ladeAlleMitFehler<VtGrundplan>((von, bis) =>
+        sb.from("vt_grundplan").select("*").eq("saison_jahr", saison).order("id").range(von, bis)
+      ),
+    ]);
+    const err = st.error ?? t.error ?? ts.error ?? z.error ?? g.error;
+    setFehler(err ? err.message : null);
+    setStaende((st.data as VtStand[]) ?? []);
+    setTouren((t.data as VtTour[]) ?? []);
+    setTourStaende((ts.data as VtTourStand[]) ?? []);
+    setZeiten(z.data);
+    setGrundplan(g.data);
+    // Namen der eingeplanten Verkäufer (für die Info beim Überfahren)
+    const ids = [...new Set(g.data.map((x) => x.employee_id))];
+    const m = new Map<string, string>();
+    for (let i = 0; i < ids.length; i += 200) {
+      const { data } = await sb.from("employees").select("id, name, vorname").in("id", ids.slice(i, i + 200));
+      for (const e of (data as { id: string; name: string; vorname: string | null }[]) ?? [])
+        m.set(e.id, `${e.vorname ? `${e.vorname} ` : ""}${e.name}`);
+    }
+    setNamen(m);
+  }, [saison]);
 
   useEffect(() => {
     load();
   }, [load]);
+
+  // ?tour=<id> aus der Tourenplanung: Touren einblenden, Tour hervorheben
+  useEffect(() => {
+    const id = Number(new URLSearchParams(window.location.search).get("tour"));
+    const t = touren.find((x) => x.id === id);
+    if (!t || urlTourErledigt.current) return;
+    urlTourErledigt.current = true;
+    setTourenAn(true);
+    setTagesart(t.tagesart);
+    tourZeigen(t.id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [touren, tourStaende, staende]);
 
   // ?stand=<id> aus der Ständeliste
   useEffect(() => {
@@ -58,6 +132,133 @@ export default function VertriebKartePage() {
     if (id && staende.some((s) => s.id === id) && auswahlId === null) waehlen(id);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [staende]);
+
+  const standById = useMemo(() => new Map(staende.map((x) => [x.id, x])), [staende]);
+  const tourenDerArt = useMemo(
+    () => touren.filter((t) => t.tagesart === tagesart && t.aktiv).sort((a, b) => a.nummer - b.nummer),
+    [touren, tagesart]
+  );
+  const tourFarbe = useMemo(() => {
+    const m = new Map<number, string>();
+    touren
+      .slice()
+      .sort((a, b) => a.nummer - b.nummer)
+      .forEach((t) => {
+        const i = touren.filter((x) => x.tagesart === t.tagesart && x.nummer < t.nummer).length;
+        m.set(t.id, TOUR_FARBEN[i % TOUR_FARBEN.length]);
+      });
+    return m;
+  }, [touren]);
+  const eintraegeVon = useCallback(
+    (tourId: number) => tourStaende.filter((x) => x.tour_id === tourId).sort((a, b) => a.reihenfolge - b.reihenfolge),
+    [tourStaende]
+  );
+
+  function tourZeigen(tourId: number | null) {
+    setTourHervor(tourId);
+    if (tourId === null) return;
+    const pts = eintraegeVon(tourId)
+      .map((e) => standById.get(e.stand_id))
+      .filter((x): x is VtStand => !!x && x.lat !== null && x.lng !== null);
+    if (!pts.length) return;
+    const lng = pts.map((p) => p.lng!);
+    const lat = pts.map((p) => p.lat!);
+    setFokus({ bounds: [[Math.min(...lng), Math.min(...lat)], [Math.max(...lng), Math.max(...lat)]], ts: Date.now() });
+  }
+
+  const tourLinien: TourLinie[] = useMemo(() => {
+    if (!tourenAn) return [];
+    return tourenDerArt.map((t) => ({
+      tourId: t.id,
+      farbe: tourFarbe.get(t.id) ?? OHNE_TOUR_FARBE,
+      coords: eintraegeVon(t.id)
+        .map((e) => {
+          // ausgewählter Stand: ungespeicherte Position mitziehen
+          const st = standById.get(e.stand_id);
+          if (st && st.id === auswahlId && entwurf && entwurf.lat !== null && entwurf.lng !== null)
+            return [entwurf.lng, entwurf.lat] as [number, number];
+          return st && st.lat !== null && st.lng !== null ? ([st.lng, st.lat] as [number, number]) : null;
+        })
+        .filter((x): x is [number, number] => !!x),
+      hervorgehoben: tourHervor === t.id,
+      gedimmt: tourHervor !== null && tourHervor !== t.id,
+    }));
+  }, [tourenAn, tourenDerArt, tourFarbe, eintraegeVon, standById, tourHervor, auswahlId, entwurf]);
+
+  const tourVonStand = useMemo(() => {
+    const m = new Map<string, VtTourStand>();
+    for (const x of tourStaende) m.set(`${x.tagesart}|${x.stand_id}`, x);
+    return m;
+  }, [tourStaende]);
+
+  const markerFarbe = useCallback(
+    (standId: number) => {
+      if (!tourenAn) return null;
+      const ts = tourVonStand.get(`${tagesart}|${standId}`);
+      if (!ts) return OHNE_TOUR_FARBE;
+      if (tourHervor !== null && ts.tour_id !== tourHervor) return OHNE_TOUR_FARBE;
+      return tourFarbe.get(ts.tour_id) ?? OHNE_TOUR_FARBE;
+    },
+    [tourenAn, tourVonStand, tagesart, tourFarbe, tourHervor]
+  );
+
+  const zeitenJeStand = useMemo(() => {
+    const m = new Map<number, VtStandZeit[]>();
+    for (const z of zeiten) m.set(z.stand_id, [...(m.get(z.stand_id) ?? []), z]);
+    return m;
+  }, [zeiten]);
+  const grundplanJeStand = useMemo(() => {
+    const m = new Map<number, VtGrundplan[]>();
+    for (const g of grundplan) m.set(g.stand_id, [...(m.get(g.stand_id) ?? []), g]);
+    return m;
+  }, [grundplan]);
+
+  // Info beim Überfahren: Stand der Planung
+  const hoverHtml = useCallback(
+    (standId: number): string => {
+      const st = standById.get(standId);
+      if (!st) return "";
+      const z = zeitenJeStand.get(standId) ?? [];
+      const zeilen: string[] = [];
+      zeilen.push(`<div style="font-weight:600">${st.nummer} ${esc(st.name)}${st.aktiv ? "" : " (inaktiv)"}</div>`);
+      if (st.adresse) zeilen.push(`<div style="color:#666">${esc(st.adresse)}</div>`);
+      zeilen.push(`<div style="margin-top:4px">Geöffnet: ${esc(oeffnungText(z))}</div>`);
+      for (const ta of TAGESARTEN) {
+        const offen = z.some((x) => ta.tage.includes(x.wochentag));
+        const ts = tourVonStand.get(`${ta.wert}|${standId}`);
+        let text: string;
+        if (ts) {
+          const t = touren.find((x) => x.id === ts.tour_id);
+          const liste = eintraegeVon(ts.tour_id);
+          const rolle =
+            fahrerStandId(liste) === standId ? "Fahrer" : ts.nur_ware ? "nur Ware" : "fährt mit";
+          text = `Tour ${t?.nummer ?? "?"}${t?.name ? ` ${esc(t.name)}` : ""} · Platz ${ts.reihenfolge}/${liste.length} · ${rolle}`;
+        } else {
+          text = offen ? '<span style="color:#b45309">keine Tour</span>' : '<span style="color:#999">geschlossen</span>';
+        }
+        zeilen.push(`<div>${ta.wert === "SO" ? "Sonntag" : "Mo–Sa"}: ${text}</div>`);
+      }
+      const soll = z.length;
+      if (soll) {
+        const gp = grundplanJeStand.get(standId) ?? [];
+        const besetzt = new Set(gp.map((g) => `${g.wochentag}|${g.halbtag}`)).size;
+        const leute = [...new Set(gp.map((g) => namen.get(g.employee_id) ?? "?"))];
+        zeilen.push(
+          `<div style="margin-top:4px">Grundplan ${saison}: ${besetzt} von ${soll} Halbtagen besetzt${
+            besetzt < soll ? ' <span style="color:#b45309">⚠</span>' : " ✓"
+          }</div>`
+        );
+        if (leute.length) zeilen.push(`<div style="color:#666">${leute.map(esc).join(", ")}</div>`);
+      }
+      zeilen.push(
+        `<div style="color:#666;margin-top:4px">${
+          st.lat !== null ? `Standzone ${st.radius_m} m` : "keine Position"
+        }</div>`
+      );
+      return `<div style="font:400 12px/1.45 system-ui">${zeilen.join("")}</div>`;
+    },
+    [standById, zeitenJeStand, tourVonStand, touren, eintraegeVon, grundplanJeStand, namen, saison]
+  );
 
   const auswahl = staende.find((s) => s.id === auswahlId) ?? null;
   const geaendert =
@@ -250,6 +451,65 @@ export default function VertriebKartePage() {
           )}
 
           <div className="card space-y-2">
+            <label className="flex items-center gap-2 text-sm font-medium">
+              <input
+                type="checkbox"
+                checked={tourenAn}
+                onChange={(e) => {
+                  setTourenAn(e.target.checked);
+                  setTourHervor(null);
+                }}
+              />
+              Touren anzeigen
+            </label>
+            {tourenAn && (
+              <>
+                <div className="flex gap-1">
+                  {TAGESARTEN.map((ta) => (
+                    <button
+                      key={ta.wert}
+                      className={tagesart === ta.wert ? "btn px-2 py-1 text-xs" : "btn-secondary px-2 py-1 text-xs"}
+                      onClick={() => {
+                        setTagesart(ta.wert);
+                        setTourHervor(null);
+                      }}
+                    >
+                      {ta.wert === "SO" ? "Sonntag" : "Mo–Sa"}
+                    </button>
+                  ))}
+                </div>
+                <ul className="max-h-48 space-y-0.5 overflow-y-auto text-sm">
+                  {tourenDerArt.map((t) => {
+                    const n = eintraegeVon(t.id).length;
+                    return (
+                      <li key={t.id}>
+                        <button
+                          className={`flex w-full items-center gap-2 rounded px-1 py-0.5 text-left hover:bg-sand ${
+                            tourHervor === t.id ? "bg-sand font-medium" : ""
+                          }`}
+                          onClick={() => tourZeigen(tourHervor === t.id ? null : t.id)}
+                        >
+                          <span className="h-1.5 w-5 shrink-0 rounded" style={{ background: tourFarbe.get(t.id) }} />
+                          <span className="flex-1">
+                            Tour {t.nummer}
+                            {t.name && <span className="text-neutral-500"> · {t.name}</span>}
+                          </span>
+                          <span className="text-xs text-neutral-400">{n}</span>
+                        </button>
+                      </li>
+                    );
+                  })}
+                  {tourenDerArt.length === 0 && <li className="text-neutral-500">Keine aktiven Touren.</li>}
+                </ul>
+                <p className="text-xs text-neutral-500">
+                  Graue Punkte: ohne Tour. Tour anklicken = hervorheben. Info zum Stand: Maus 1 Sekunde auf dem
+                  Punkt halten.
+                </p>
+              </>
+            )}
+          </div>
+
+          <div className="card space-y-2">
             <input
               type="search"
               className="w-full"
@@ -296,6 +556,9 @@ export default function VertriebKartePage() {
           fokus={fokus}
           onWaehlen={waehlen}
           onPosition={positionSetzen}
+          tourLinien={tourLinien}
+          markerFarbe={markerFarbe}
+          hoverHtml={hoverHtml}
         />
       </div>
     </div>
