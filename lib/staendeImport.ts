@@ -37,6 +37,7 @@ export interface StandImport {
   zeiten: StandZeitImport[];
   ohneZeiten: boolean;
   zeitFehler: string[];
+  aktiv: boolean;
 }
 
 // Spaltenköpfe des Google-Exports -> Wochentag (ISO)
@@ -151,6 +152,7 @@ export function staendeLesen(zeilen: unknown[][], datei = ""): StandImport[] {
       zeiten,
       ohneZeiten: !irgendeineAngabe,
       zeitFehler,
+      aktiv: true,
     });
   });
   // Die zentrale Telefonnummer steht bei fast allen Ständen - nur

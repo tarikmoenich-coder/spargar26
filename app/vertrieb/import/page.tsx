@@ -30,6 +30,7 @@ import {
   type GeoTreffer,
   type StandImport,
 } from "@/lib/staendeImport";
+import { liste2026Anwenden } from "@/lib/staendeListe2026";
 
 type GeoStatus = GeoTreffer | "nicht_gefunden" | "fehler";
 
@@ -53,7 +54,14 @@ export default function StaendeImportPage() {
   const [ladeFehler, setLadeFehler] = useState<string | null>(null);
 
   const [dateiNamen, setDateiNamen] = useState<string[]>([]);
-  const [staende, setStaende] = useState<StandImport[]>([]);
+  const [eingelesen, setEingelesen] = useState<StandImport[]>([]);
+  // Ständeliste 2026: eigene Namen, nicht gelistete inaktiv, Stände ohne
+  // Google-Profil ergänzen (lib/staendeListe2026.ts)
+  const [liste2026, setListe2026] = useState(true);
+  const staende = useMemo(
+    () => (liste2026 ? liste2026Anwenden(eingelesen) : eingelesen),
+    [eingelesen, liste2026]
+  );
   const [leseFehler, setLeseFehler] = useState<string | null>(null);
   const [startNummer, setStartNummer] = useState("1");
   const [nummernNeu, setNummernNeu] = useState(false);
@@ -90,7 +98,7 @@ export default function StaendeImportPage() {
     setLeseFehler(null);
     setErgebnis(null);
     setFehler(null);
-    setStaende([]);
+    setEingelesen([]);
     setGeo({});
     const dateien = liste ? Array.from(liste) : [];
     setDateiNamen(dateien.map((d) => d.name));
@@ -107,7 +115,7 @@ export default function StaendeImportPage() {
           throw new Error(`${datei.name}: ${e instanceof Error ? e.message : String(e)}`);
         }
       }
-      setStaende(staendeZusammenfuehren(listen));
+      setEingelesen(staendeZusammenfuehren(listen));
     } catch (e) {
       setLeseFehler(e instanceof Error ? e.message : String(e));
     }
@@ -148,7 +156,7 @@ export default function StaendeImportPage() {
   const neu = plan.filter((p) => !p.bestand).length;
 
   // Wer braucht Koordinaten? Neue Stände und vorhandene ohne Koordinaten.
-  const brauchtGeo = (p: PlanZeile) => !p.bestand || p.bestand.lat === null;
+  const brauchtGeo = (p: PlanZeile) => !!p.imp.adresse && (!p.bestand || p.bestand.lat === null);
   const offenGeo = plan.filter((p) => brauchtGeo(p) && geo[p.imp.name] === undefined);
   const geoGefunden = plan.filter((p) => {
     const g = geo[p.imp.name];
@@ -203,7 +211,8 @@ export default function StaendeImportPage() {
         const koord =
           typeof g === "object" && g.genauigkeit === "strasse" ? { lat: g.lat, lng: g.lng } : null;
         if (p.bestand) {
-          const patch: Partial<VtStand> = { nummer: p.nummer, adresse: p.imp.adresse };
+          const patch: Partial<VtStand> = { nummer: p.nummer, aktiv: p.imp.aktiv };
+          if (p.imp.adresse) patch.adresse = p.imp.adresse;
           if (koord && p.bestand.lat === null) Object.assign(patch, koord);
           if (!p.bestand.notiz && p.imp.notiz) patch.notiz = p.imp.notiz;
           const { error } = await sb.from("vt_stand").update(patch).eq("id", p.bestand.id);
@@ -216,9 +225,9 @@ export default function StaendeImportPage() {
             .insert({
               nummer: p.nummer,
               name: p.imp.name,
-              adresse: p.imp.adresse,
+              adresse: p.imp.adresse || null,
               notiz: p.imp.notiz || null,
-              aktiv: true,
+              aktiv: p.imp.aktiv,
               ...(koord ?? {}),
             })
             .select("id")
@@ -259,7 +268,7 @@ export default function StaendeImportPage() {
           (weg.length ? `, ${weg.length} nicht mehr geöffnete Halbtage entfernt` : "") +
           "."
       );
-      setStaende([]);
+      setEingelesen([]);
       setGeo({});
       setDateiNamen([]);
       await ladeBestand();
@@ -358,6 +367,10 @@ export default function StaendeImportPage() {
         {dateiNamen.length > 0 && (
           <span className="text-sm text-neutral-600">{dateiNamen.join(", ")}</span>
         )}
+        <label className="flex items-center gap-2 text-sm">
+          <input type="checkbox" checked={liste2026} onChange={(e) => setListe2026(e.target.checked)} />
+          Ständeliste 2026 anwenden (eigene Namen, nicht gelistete inaktiv, Stände ohne Google-Profil ergänzen)
+        </label>
         <span className="w-full text-xs text-neutral-500">
           Alle Exporte (je Google-Konto einer) zusammen auswählen, damit die Nummern über alle
           Stände alphabetisch durchlaufen.
@@ -370,6 +383,8 @@ export default function StaendeImportPage() {
           <div className="flex flex-wrap gap-3 text-sm">
             <span className="badge">{staende.length} Stände {dateiNamen.length > 1 ? `aus ${dateiNamen.length} Dateien` : "in der Datei"}</span>
             <span className="badge">{neu} neu</span>
+            <span className="badge">{staende.filter((s) => s.aktiv).length} aktiv</span>
+            <span className="badge">{staende.filter((s) => !s.aktiv).length} inaktiv</span>
             <span className="badge">{staende.length - neu} schon vorhanden (werden aktualisiert)</span>
             <span className="badge">
               Koordinaten: {geoGefunden} gefunden, {offenGeo.length} noch nicht gesucht
@@ -477,6 +492,7 @@ export default function StaendeImportPage() {
                       ) : (
                         <span className="ml-1 text-xs text-emerald-700">neu</span>
                       )}
+                      {!p.imp.aktiv && <span className="ml-1 badge-warn">inaktiv</span>}
                       {dateiNamen.length > 1 && (
                         <div className="text-xs text-neutral-500">{p.imp.datei}</div>
                       )}

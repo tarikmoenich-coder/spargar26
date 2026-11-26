@@ -97,9 +97,10 @@ export default function VertriebKartePage() {
         ? "Noch keine Position - in die Karte klicken, wo der Stand steht."
         : "Für diesen Stand ist noch keine Position hinterlegt."
     );
-    if (!s.adresse) return;
+    // ohne Adresse (Stand ohne Google-Profil): nach dem Namen = Ort suchen
+    const suchtext = s.adresse || s.name;
     try {
-      const p = new URLSearchParams({ q: s.adresse, countrycodes: "de", format: "jsonv2", limit: "1" });
+      const p = new URLSearchParams({ q: suchtext, countrycodes: "de", format: "jsonv2", limit: "1" });
       const res = await fetch(`https://nominatim.openstreetmap.org/search?${p.toString()}`);
       const d = res.ok ? ((await res.json()) as { lat: string; lon: string; place_rank?: number }[]) : [];
       if (d.length) {

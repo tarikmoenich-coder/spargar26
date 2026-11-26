@@ -56,6 +56,11 @@ Voraussetzung (erledigt): Vertriebs-Personal in spargar26
   Mehrere Exporte (je Google-Konto: Mömmel 72, Reitz 25) werden gemeinsam
   eingelesen und durchnummeriert; gleiche Namen bekommen die Straße
   angehängt. Der Google-Export enthält KEINE Koordinaten.
+  Ständeliste 2026 (`lib/staendeListe2026.ts`, Nutzer 2026-11-26): eigene
+  Standnamen statt Geschäftscode, 92 aktiv (86 aus Google + 6 ohne Profil:
+  Alsheim, Flörsheim-Dalsheim, Nackenheim, Osthofen, Wörrstadt = vom
+  Kollegen Sohling übernommen; Rüsselsheim Globus = neu 2026), 11 nicht
+  gelistete inaktiv. Nummern: aktive zuerst.
 - Karte [gebaut 2026-11-25]: `/vertrieb/karte` (`components/StandKarte.tsx`)
   zeigt alle Stände mit Radius-Kreis auf Satellit/Luftbild Hessen/OSM.
   Position von Hand setzen (Punkt ziehen oder in die Karte klicken), Radius
