@@ -38,7 +38,7 @@ import type {
 import {
   HALBTAGE,
   WOCHENTAGE,
-  fahrerAmTag,
+  fahrerStandId,
   planKey,
   planPruefen,
   planungsSaison,
@@ -47,7 +47,7 @@ import {
 } from "@/lib/vertrieb";
 import { ladeAlleSeiten, ladeAlleMitFehler } from "@/lib/ladeAlle";
 
-type Person = { id: string; personal_nr: string; name: string; vorname: string; fuehrerschein_b: boolean | null };
+type Person = { id: string; personal_nr: string; name: string; vorname: string; fuehrerschein_b: boolean | null; geschlecht: "M" | "F" | null };
 type Feld = { stand_id: number; wochentag: number; halbtag: VtHalbtag };
 type Umfang = "VM" | "NM" | "TAG";
 // Auswahl-Fenster: entweder für ein Feld (Tag eines Standes) oder für die ganze Zeile
@@ -58,19 +58,16 @@ type Auswahl =
 const LS_SONNTAG = "grundplan.sonntag";
 const LS_LEISTE = "grundplan.leiste";
 const DND_TYP = "application/x-spargar-person";
+const DND_STAND = "application/x-spargar-stand";
 const POP_BREITE = 360;
 const POP_HOEHE = 420;
 
-// Feste, gut unterscheidbare Farbe je Person (aus der ID abgeleitet)
-function farbe(id: string) {
-  let h = 0;
-  for (let i = 0; i < id.length; i++) h = (h * 31 + id.charCodeAt(i)) >>> 0;
-  const hue = (h % 24) * 15;
-  return {
-    background: `hsl(${hue} 75% 91%)`,
-    borderColor: `hsl(${hue} 45% 70%)`,
-    color: `hsl(${hue} 55% 24%)`,
-  };
+// Farbe nach Geschlecht (Nutzer 2026-11-26: viele Einzelfarben störten):
+// Frauen gelb, Männer blau, unbekannt grau.
+function farbeGeschlecht(g: "M" | "F" | null | undefined) {
+  if (g === "F") return { background: "#fef3c7", borderColor: "#f59e0b", color: "#78350f" };
+  if (g === "M") return { background: "#dbeafe", borderColor: "#3b82f6", color: "#1e3a8a" };
+  return { background: "#f5f5f4", borderColor: "#a8a29e", color: "#44403c" };
 }
 const SCHRAFFUR = {
   backgroundImage: "repeating-linear-gradient(135deg, transparent 0 5px, rgba(0,0,0,0.045) 5px 6px)",
@@ -107,6 +104,10 @@ export default function VertriebGrundplanPage() {
   const [nurFs, setNurFs] = useState(false);
   const [ziehe, setZiehe] = useState<string | null>(null);
   const [dropZiel, setDropZiel] = useState<string | null>(null);
+  // Stand per Drag & Drop in eine andere Tour / an andere Stelle (wie /vertrieb/touren)
+  const [zieheStand, setZieheStand] = useState<number | null>(null);
+  const [standZiel, setStandZiel] = useState<{ standId: number; unten: boolean } | { gruppe: string } | null>(null);
+  const [tourRueckgaengig, setTourRueckgaengig] = useState<{ text: string; teile: { tourId: number; liste: { stand_id: number; nur_ware: boolean }[] }[] } | null>(null);
 
   // Filter
   const [standSuche, setStandSuche] = useState("");
@@ -151,7 +152,7 @@ export default function VertriebGrundplanPage() {
       ladeAlleSeiten<Person>((von, bis) =>
         sb
           .from("employees")
-          .select("id, personal_nr, name, vorname, fuehrerschein_b")
+          .select("id, personal_nr, name, vorname, fuehrerschein_b, geschlecht")
           .eq("bereich", "VT")
           .order("id")
           .range(von, bis)
@@ -204,6 +205,7 @@ export default function VertriebGrundplanPage() {
     const p = personById.get(id);
     return p ? `${p.vorname} ${p.name.charAt(0)}.` : "?";
   };
+  const farbe = (id: string) => farbeGeschlecht(personById.get(id)?.geschlecht);
   const standName = useCallback(
     (id: number) => {
       const s = standById.get(id);
@@ -307,6 +309,10 @@ export default function VertriebGrundplanPage() {
     return m;
   }, [zeiten, planMap, problemFelder, zeigeSonntag]);
 
+  // Stände, die den Fahrer stellen (letzter mitfahrender Stand einer aktiven Tour)
+  const istFahrerStandMoSa = (id: number) =>
+    tourenMit.some((t) => t.aktiv && t.tagesart === "MO_SA" && fahrerStandId(t.staende) === id);
+  const istFahrerStandSo = (id: number) => tourenMit.some((t) => t.aktiv && t.tagesart === "SO" && fahrerStandId(t.staende) === id);
   const nurWareStaende = useMemo(
     () => new Set(tourenMit.filter((t) => t.aktiv && t.tagesart === "MO_SA").flatMap((t) => t.staende.filter((x) => x.nur_ware).map((x) => x.stand_id))),
     [tourenMit]
@@ -326,7 +332,7 @@ export default function VertriebGrundplanPage() {
       if (nurKonflikte && !f?.konflikt) return false;
       return true;
     };
-    const res: { key: string; titel: string; staende: VtStand[]; alle: VtStand[] }[] = [];
+    const res: { key: string; tourId: number | null; titel: string; staende: VtStand[]; alle: VtStand[] }[] = [];
     const vergeben = new Set<number>();
     for (const t of tourenMit.filter((x) => x.tagesart === "MO_SA")) {
       const alle = [...t.staende]
@@ -337,12 +343,12 @@ export default function VertriebGrundplanPage() {
       if (tourFilter !== "alle" && tourFilter !== String(t.id)) continue;
       const name = touren.find((x) => x.id === t.id)?.name;
       const liste = alle.filter(passt);
-      if (liste.length) res.push({ key: `t${t.id}`, titel: `Tour ${t.nummer}${name ? ` · ${name}` : ""}${t.aktiv ? "" : " (inaktiv)"}`, staende: liste, alle });
+      if (liste.length) res.push({ key: `t${t.id}`, tourId: t.id, titel: `Tour ${t.nummer}${name ? ` · ${name}` : ""}${t.aktiv ? "" : " (inaktiv)"}`, staende: liste, alle });
     }
     if (tourFilter === "alle" || tourFilter === "ohne") {
       const alle = staende.filter((s) => (s.aktiv || geplant.has(s.id)) && !vergeben.has(s.id));
       const liste = alle.filter(passt);
-      if (liste.length) res.push({ key: "ohne", titel: "Ohne Tour (Mo–Sa)", staende: liste, alle });
+      if (liste.length) res.push({ key: "ohne", tourId: null, titel: "Ohne Tour (Mo–Sa)", staende: liste, alle });
     }
     return res;
   }, [staende, plan, tourenMit, standById, touren, standSuche, tourFilter, nurLuecken, nurKonflikte, fortschritt]);
@@ -650,6 +656,114 @@ export default function VertriebGrundplanPage() {
     eintragen(felder, empId, "zeile", false);
   }
 
+  // --- Stände zwischen Touren verschieben (nur Mo–Sa-Touren) -------------------
+  type TourListe = { tourId: number; liste: { stand_id: number; nur_ware: boolean }[] };
+  const tourListe = (tourId: number): TourListe => ({
+    tourId,
+    liste: tourStaende
+      .filter((x) => x.tour_id === tourId)
+      .sort((a, b) => a.reihenfolge - b.reihenfolge)
+      .map((x) => ({ stand_id: x.stand_id, nur_ware: x.nur_ware })),
+  });
+  const moSaTourVon = (standId: number) =>
+    tourStaende.find((x) => x.stand_id === standId && touren.find((t) => t.id === x.tour_id)?.tagesart === "MO_SA")?.tour_id ?? null;
+
+  async function toureSetzen(teile: TourListe[]): Promise<boolean> {
+    const [q, z] = teile;
+    const { error } = await getSupabaseClient().rpc("vt_touren_umbauen", {
+      p_quelle_tour: q?.tourId ?? null,
+      p_quelle_staende: q?.liste.map((e) => e.stand_id) ?? null,
+      p_quelle_nur_ware: q?.liste.map((e) => e.nur_ware) ?? null,
+      p_ziel_tour: z?.tourId ?? null,
+      p_ziel_staende: z?.liste.map((e) => e.stand_id) ?? null,
+      p_ziel_nur_ware: z?.liste.map((e) => e.nur_ware) ?? null,
+    });
+    if (error) setFehler(error.message);
+    await load();
+    return !error;
+  }
+
+  // ziel: vor/nach einem Stand oder ans Ende einer Gruppe (Tour bzw. "Ohne Tour")
+  async function standVerschieben(standId: number, ziel: { standId: number; unten: boolean } | { gruppe: string }) {
+    const quellTour = moSaTourVon(standId);
+    let zielTour: number | null;
+    let zielStand: number | null = null;
+    let unten = true;
+    if ("gruppe" in ziel) zielTour = ziel.gruppe === "ohne" ? null : Number(ziel.gruppe.slice(1));
+    else {
+      if (ziel.standId === standId) return;
+      zielTour = moSaTourVon(ziel.standId);
+      zielStand = ziel.standId;
+      unten = ziel.unten;
+    }
+    if (quellTour === null && zielTour === null) return;
+    const vorher: TourListe[] = [];
+    const nachher: TourListe[] = [];
+    let eintrag = { stand_id: standId, nur_ware: false };
+    if (quellTour !== null) {
+      const q = tourListe(quellTour);
+      vorher.push(q);
+      eintrag = q.liste.find((x) => x.stand_id === standId) ?? eintrag;
+      nachher.push({ tourId: quellTour, liste: q.liste.filter((x) => x.stand_id !== standId) });
+    }
+    if (zielTour !== null) {
+      const basis = zielTour === quellTour ? nachher[0] : tourListe(zielTour);
+      if (zielTour !== quellTour) vorher.push(tourListe(zielTour));
+      const liste = basis.liste.filter((x) => x.stand_id !== standId);
+      let pos = liste.length;
+      if (zielStand !== null) {
+        const i = liste.findIndex((x) => x.stand_id === zielStand);
+        if (i >= 0) pos = unten ? i + 1 : i;
+      }
+      liste.splice(pos, 0, eintrag);
+      if (zielTour === quellTour) nachher[0] = { tourId: zielTour, liste };
+      else nachher.push({ tourId: zielTour, liste });
+    }
+    const tourText = (id: number | null) => (id === null ? "Ohne Tour" : `Tour ${touren.find((t) => t.id === id)?.nummer ?? "?"}`);
+    const text =
+      quellTour === zielTour ? `${standName(standId)}: Reihenfolge in ${tourText(zielTour)} geändert` : `${standName(standId)}: ${tourText(quellTour)} → ${tourText(zielTour)}`;
+    setMeldung(null);
+    // Quelle immer zuerst (Eindeutigkeit Stand je Tagesart)
+    if (await toureSetzen(nachher)) {
+      setTourRueckgaengig({ text, teile: vorher });
+      setMeldung(text);
+    }
+  }
+  async function tourRueckgaengigMachen() {
+    if (!tourRueckgaengig) return;
+    // Rückgängig: erst die Tour leeren, die den Stand jetzt hat (= Ziel), dann die alte Quelle
+    const teile = [...tourRueckgaengig.teile].reverse();
+    setTourRueckgaengig(null);
+    setMeldung(null);
+    await toureSetzen(teile);
+  }
+  const standZiehbar = darfPflegen && auswahl === null;
+  function standZiehStart(e: React.DragEvent, standId: number) {
+    e.dataTransfer.setData(DND_STAND, String(standId));
+    e.dataTransfer.setData("text/plain", standName(standId));
+    e.dataTransfer.effectAllowed = "move";
+    setZieheStand(standId);
+  }
+  function standZiehEnde() {
+    setZieheStand(null);
+    setStandZiel(null);
+  }
+  function standUeber(e: React.DragEvent, standId: number) {
+    if (zieheStand === null) return;
+    e.preventDefault();
+    e.dataTransfer.dropEffect = "move";
+    const r = e.currentTarget.getBoundingClientRect();
+    const unten = e.clientY > r.top + r.height / 2;
+    if (!standZiel || !("standId" in standZiel) || standZiel.standId !== standId || standZiel.unten !== unten) setStandZiel({ standId, unten });
+  }
+  function standAufStand(e: React.DragEvent, standId: number) {
+    e.preventDefault();
+    const quelle = zieheStand;
+    const ziel = standZiel && "standId" in standZiel ? standZiel : { standId, unten: true };
+    standZiehEnde();
+    if (quelle !== null) standVerschieben(quelle, ziel);
+  }
+
   // Seitenleiste: Verkäufer der Saison mit Auslastung
   const leiste = useMemo(() => {
     const q = leisteSuche.trim().toLowerCase();
@@ -672,7 +786,8 @@ export default function VertriebGrundplanPage() {
   }, [planung, personById, leisteSuche, nurFs, hatFuehrerschein, kann, anzahlJePerson, leisteSort, tage]);
 
   // --- Darstellung einer Zelle ------------------------------------------------
-  function chip(empId: string, fahrer: boolean) {
+  function chip(empId: string) {
+    const fs = hatFuehrerschein(empId);
     const gedimmt = markierePerson && markierePerson !== empId;
     return (
       <span
@@ -688,7 +803,7 @@ export default function VertriebGrundplanPage() {
         style={farbe(empId)}
         title={personName(empId)}
       >
-        {fahrer && <Car className="h-3 w-3 shrink-0" />}
+        {fs && <Car className="h-3 w-3 shrink-0" />}
         <span className="truncate">{kurzName(empId)}</span>
       </span>
     );
@@ -716,9 +831,9 @@ export default function VertriebGrundplanPage() {
     const oVM = offen.has(kVM);
     const oNM = offen.has(kNM);
     const tour = tourVonStandTag(s.id, tag);
-    const fahrer = tour ? fahrerAmTag(tour, tag, planEmpMap) : null;
+    // Fahrer-Stand dieser Tour an diesem Tag -> Feld leicht hervorheben
+    const fahrerStand = !!tour && fahrerStandId(tour.staende) === s.id;
     const nurWare = !!tour?.staende.find((x) => x.stand_id === s.id)?.nur_ware;
-    const istFahrer = (e?: VtGrundplan) => !!e && fahrer?.stand_id === s.id && fahrer.employee_id === e.employee_id;
     const gewaehlt = (u: Umfang) =>
       auswahl?.art === "feld" && auswahl.stand_id === s.id && auswahl.wochentag === tag && (auswahl.umfang === u || (u !== "TAG" && auswahl.umfang === "TAG"));
 
@@ -751,13 +866,13 @@ export default function VertriebGrundplanPage() {
           onDrop={klickbar ? (e) => aufFeld(e, s.id, tag, ganzTag ? "TAG" : u) : undefined}
           title={titel}
           style={geschlossen ? SCHRAFFUR : undefined}
-          className={`h-8 min-w-[4.25rem] whitespace-nowrap border-r-0 border-t-0 px-0.5 py-0.5 text-center align-middle ${u === "NM" ? "border-l-0" : ""} ${istFehler ? "bg-beere-50 ring-1 ring-inset ring-beere-300" : istWarn ? "bg-amber-50" : geschlossen ? "bg-neutral-50" : "bg-white"} ${
+          className={`h-8 min-w-[4.25rem] whitespace-nowrap border-r-0 border-t-0 px-0.5 py-0.5 text-center align-middle ${u === "NM" ? "border-l-0" : ""} ${istFehler ? "bg-beere-50 ring-1 ring-inset ring-beere-300" : istWarn ? "bg-amber-50" : geschlossen ? "bg-neutral-50" : fahrerStand ? "bg-violet-50" : "bg-white"} ${
             klickbar ? "cursor-pointer hover:bg-emerald-50/60" : ""
           } ${gewaehlt(u) ? "!bg-amber-100 ring-2 ring-inset ring-amber-500" : ""} ${
             ziehe && (dropZiel === zielKey || dropZiel === `${s.id}|${tag}|TAG`) ? "!bg-emerald-100 ring-2 ring-inset ring-emerald-500" : ""
           }`}
         >
-          {eintrag ? chip(eintrag.employee_id, istFahrer(eintrag)) : istOffen ? leerInhalt(s.id, tag, u === "TAG" ? "VM" : u, nurWare) : null}
+          {eintrag ? chip(eintrag.employee_id) : istOffen ? leerInhalt(s.id, tag, u === "TAG" ? "VM" : u, nurWare) : null}
         </td>
       );
     };
@@ -813,7 +928,16 @@ export default function VertriebGrundplanPage() {
         }
       />
       {fehler && <p className="text-sm text-beere-600">{fehler}</p>}
-      {meldung && <p className="text-sm text-emerald-700 print:hidden">{meldung}</p>}
+      {meldung && (
+        <p className="flex items-center gap-2 text-sm text-emerald-700 print:hidden">
+          {meldung}
+          {tourRueckgaengig && meldung === tourRueckgaengig.text && (
+            <button className="btn-secondary px-2 py-0.5 text-xs" onClick={tourRueckgaengigMachen}>
+              Rückgängig
+            </button>
+          )}
+        </p>
+      )}
 
       {!loading && planung.length === 0 && (
         <p className="text-sm text-amber-700 print:hidden">
@@ -928,8 +1052,33 @@ export default function VertriebGrundplanPage() {
                 const sum = summe(g.alle);
                 return (
                   <Fragment key={g.key}>
-                    <tr>
-                      <td className="sticky left-0 z-10 border-x-0 border-b border-t-0 bg-sand py-1.5">
+                    <tr
+                      onDragOver={
+                        standZiehbar && zieheStand !== null
+                          ? (e) => {
+                              e.preventDefault();
+                              e.dataTransfer.dropEffect = "move";
+                              if (!standZiel || !("gruppe" in standZiel) || standZiel.gruppe !== g.key) setStandZiel({ gruppe: g.key });
+                            }
+                          : undefined
+                      }
+                      onDrop={
+                        standZiehbar
+                          ? (e) => {
+                              e.preventDefault();
+                              const q = zieheStand;
+                              standZiehEnde();
+                              if (q !== null) standVerschieben(q, { gruppe: g.key });
+                            }
+                          : undefined
+                      }
+                    >
+                      <td
+                        className={`sticky left-0 z-10 border-x-0 border-b border-t-0 py-1.5 ${
+                          zieheStand !== null && standZiel && "gruppe" in standZiel && standZiel.gruppe === g.key ? "bg-emerald-100" : "bg-sand"
+                        }`}
+                        title={standZiehbar ? "Stand hierher ziehen = ans Ende dieser Tour" : undefined}
+                      >
                         <button
                           className="flex w-full items-center gap-1 text-left text-sm font-semibold text-emerald-900"
                           onClick={() =>
@@ -956,26 +1105,63 @@ export default function VertriebGrundplanPage() {
                         const soTour = sonntagsTour.get(s.id);
                         const f = fortschritt.get(s.id) ?? { soll: 0, ist: 0, konflikt: false };
                         const voll = f.soll > 0 && f.ist >= f.soll;
+                        const fahrerMoSa = istFahrerStandMoSa(s.id);
                         return (
-                          <tr key={s.id} className={`group ${s.aktiv ? "" : "opacity-50"}`}>
+                          <tr key={s.id} className={`group ${s.aktiv ? "" : "opacity-50"} ${zieheStand === s.id ? "opacity-40" : ""}`}>
                             <td
                               className={`sticky left-0 z-10 whitespace-nowrap border-x-0 border-b border-t-0 py-0.5 text-sm group-hover:bg-neutral-50 ${
-                                ziehe && dropZiel === `zeile|${s.id}` ? "bg-emerald-100 ring-2 ring-inset ring-emerald-500" : "bg-white"
+                                ziehe && dropZiel === `zeile|${s.id}` ? "bg-emerald-100 ring-2 ring-inset ring-emerald-500" : fahrerMoSa ? "bg-violet-50" : "bg-white"
+                              } ${
+                                zieheStand !== null && standZiel && "standId" in standZiel && standZiel.standId === s.id
+                                  ? standZiel.unten
+                                    ? "shadow-[inset_0_-3px_0_0_#059669]"
+                                    : "shadow-[inset_0_3px_0_0_#059669]"
+                                  : ""
                               }`}
-                              onDragOver={dndAktiv && ziehe ? (e) => ueber(e, `zeile|${s.id}`) : undefined}
+                              onDragOver={
+                                zieheStand !== null && standZiehbar
+                                  ? (e) => standUeber(e, s.id)
+                                  : dndAktiv && ziehe
+                                    ? (e) => ueber(e, `zeile|${s.id}`)
+                                    : undefined
+                              }
                               onDragLeave={() => dropZiel === `zeile|${s.id}` && setDropZiel(null)}
-                              onDrop={dndAktiv ? (e) => aufZeile(e, s.id) : undefined}
-                              title={dndAktiv ? "Person hierher ziehen = Stammbesetzung Mo–Sa" : undefined}
+                              onDrop={(e) => {
+                                if (zieheStand !== null && standZiehbar) standAufStand(e, s.id);
+                                else if (dndAktiv) aufZeile(e, s.id);
+                              }}
+                              title={dndAktiv ? "Person hierher ziehen = Stammbesetzung Mo–Sa · Stand am Griff ziehen = in andere Tour / andere Reihenfolge" : undefined}
                             >
                               <div className="flex items-center gap-1.5">
+                                {standZiehbar && (
+                                  <span
+                                    draggable
+                                    onDragStart={(e) => standZiehStart(e, s.id)}
+                                    onDragEnd={standZiehEnde}
+                                    className="cursor-grab text-neutral-300 hover:text-neutral-600 print:hidden"
+                                    title="Stand ziehen: in eine andere Tour oder an eine andere Stelle"
+                                  >
+                                    <GripVertical className="h-4 w-4" />
+                                  </span>
+                                )}
                                 <span className="w-7 text-right text-xs tabular-nums text-neutral-400">{s.nummer}</span>
-                                <span className="truncate">{s.name}</span>
+                                <span className={`truncate ${fahrerMoSa ? "font-semibold" : ""}`}>{s.name}</span>
+                                {fahrerMoSa && (
+                                  <span title="Fahrer-Stand: wer hier steht, fährt das Auto der Tour (Führerschein nötig, den ganzen Tag)">
+                                    <Car className="h-4 w-4 text-violet-700" />
+                                  </span>
+                                )}
                                 {nurWareStaende.has(s.id) && (
                                   <span className="rounded bg-sand-200 px-1 text-[10px] text-neutral-600" title="Stand bekommt nur Ware, der Verkäufer fährt nicht mit - trotzdem einplanen">
                                     nur Ware
                                   </span>
                                 )}
-                                {zeigeSonntag && soTour && <span className="text-[11px] text-neutral-500">So: T{soTour.nummer}</span>}
+                                {zeigeSonntag && soTour && (
+                                  <span className="text-[11px] text-neutral-500">
+                                    So: T{soTour.nummer}
+                                    {istFahrerStandSo(s.id) && <Car className="ml-0.5 inline h-3 w-3 text-violet-700" />}
+                                  </span>
+                                )}
                                 {zeigeSonntag && !soTour && offen.has(planKey(s.id, 7, "VM")) && (
                                   <span className="text-[11px] text-amber-700" title="Sonntags offen, aber in keiner Sonntagstour">
                                     So: keine Tour
@@ -1111,9 +1297,13 @@ export default function VertriebGrundplanPage() {
         </div>
       )}
       <p className="text-xs text-neutral-500">
-        <Car className="inline h-3 w-3" /> = Fahrer der Tour (letzter mitfahrender Stand, fährt hin und zurück). Jede Person hat eine feste Farbe; steht
-        sie vormittags und nachmittags am selben Stand, ist es ein Feld. · = offen, noch niemand eingeplant. Schraffiert = Stand geschlossen. Rot =
-        Konflikt, gelb = Hinweis. Sonntags gelten die Sonntagstouren.
+        <span className="rounded border px-1" style={farbeGeschlecht("F")}>gelb</span> = Frau,{" "}
+        <span className="rounded border px-1" style={farbeGeschlecht("M")}>blau</span> = Mann.{" "}
+        <Car className="inline h-3 w-3" /> am Namen = hat Führerschein. Lila Zeile mit <Car className="inline h-3 w-3 text-violet-700" /> =
+        Fahrer-Stand (letzter mitfahrender Stand der Tour: wer dort steht, fährt das Auto, den ganzen Tag). Steht eine Person vormittags und
+        nachmittags am selben Stand, ist es ein Feld. · = offen, noch niemand eingeplant. Schraffiert = Stand geschlossen. Rot = Konflikt, gelb
+        hinterlegt = Hinweis. Stand am Griff <GripVertical className="inline h-3 w-3" /> ziehen = in eine andere Tour oder an eine andere Stelle
+        (auf eine Tour-Überschrift = ans Ende). Sonntags gelten die Sonntagstouren.
       </p>
 
       {/* Auswahl-Fenster direkt am Feld */}

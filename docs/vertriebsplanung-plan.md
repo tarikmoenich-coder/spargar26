@@ -106,11 +106,29 @@ Stand, Wochentag, Halbtag, Person).
     kurzfristige Beschäftigung).
 - Ansicht nach Tour gruppiert (Stände der Tour untereinander), damit
   sichtbar ist, wer zusammen im Auto sitzt.
+- Ansicht 2026-11-26 überarbeitet: Stammbesetzung je Stand, Auswahl am Feld
+  (Tastatur), Verkäufer-Seitenleiste mit Drag & Drop, Frauen gelb / Männer
+  blau, Auto am Namen = Führerschein, Fahrer-Stand-Zeilen lila mit Auto,
+  Stände per Griff zwischen Touren verschieben (gleiche RPC wie
+  /vertrieb/touren) - die weitere Planung läuft im Grundplan.
 - Optional später: Vorschlagsfunktion, die Lücken aus den Verfügbarkeiten
   füllt. [offen] Gebaut ist nur der Helfer "Montag → Di–Sa" (leere Felder
   mit der Montagsbesetzung füllen) und ein Ausdruck des Grundplans.
 
 ### V4 - Wochenplan und Ausdrucke  [offen]
+
+Nutzer-Vorgaben 2026-11-26:
+- **Feiertage = Sonntag**: Öffnungszeiten, Touren (Sonntagstouren) UND
+  Besetzung kommen vom Sonntag des Grundplans; Änderungen nur für den Tag.
+- **Ausdrucke für einfache, oft nicht muttersprachliche Verkäufer**: Deutsch,
+  sehr wenig Text, große Schrift, Symbole. Jeder muss schnell finden: wo
+  verkaufe ich, wer ist Fahrer, welches Auto (Kennzeichen aus dem
+  Fahrzeug-Modul, `vt_tour.fahrzeug_id`), wer sitzt mit im Auto, wann steigt
+  wer wo aus.
+- **Gesamt-Tagesplan aller Touren auf DIN A3** (Hauptausdruck, liegt
+  morgens aus). Zusätzlich **nur bei Änderungen ein DIN-A4-Zettel je
+  betroffener Tour** - Problem heute: Fahrer wissen nichts von einem
+  Planwechsel und fahren ohne Vertretung los.
 
 - Konkrete Kalenderwoche entsteht aus dem Grundplan; Änderungen nur für
   diese Woche (Krankheit, Tausch, Feiertag, Stand geschlossen).
