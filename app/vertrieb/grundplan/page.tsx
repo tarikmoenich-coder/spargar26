@@ -24,6 +24,7 @@ import { hatRolle } from "@/lib/rollen";
 import PageHeader from "@/components/PageHeader";
 import EmptyState from "@/components/EmptyState";
 import VertriebTabs from "@/components/VertriebTabs";
+import StandZeitenDialog from "@/components/StandZeitenDialog";
 import type {
   FuehrerscheinEintrag,
   VtGrundplan,
@@ -84,6 +85,8 @@ export default function VertriebGrundplanPage() {
   const [tourStaende, setTourStaende] = useState<VtTourStand[]>([]);
   const [plan, setPlan] = useState<VtGrundplan[]>([]);
   const [standSaison, setStandSaison] = useState<VtStandSaison[]>([]);
+  // Klick auf den Standnamen: Öffnungszeiten + Saison bearbeiten
+  const [standDialog, setStandDialog] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
   const [fehler, setFehler] = useState<string | null>(null);
   const [meldung, setMeldung] = useState<string | null>(null);
@@ -903,7 +906,7 @@ export default function VertriebGrundplanPage() {
         icon={CalendarRange}
         titel={`Grundplan ${saison}`}
         beschreibung={`Wer steht wann an welchem Stand - gilt die ganze Saison.${
-          darfPflegen ? " Feld anklicken = einen Tag planen, Personen-Symbol am Stand = ganze Woche auf einmal." : ""
+          darfPflegen ? " Feld anklicken = einen Tag planen, Personen-Symbol am Stand = ganze Woche auf einmal, Standname anklicken = Öffnungszeiten und Saison." : ""
         }`}
         aktionen={
           <>
@@ -1144,7 +1147,17 @@ export default function VertriebGrundplanPage() {
                                   </span>
                                 )}
                                 <span className="w-7 text-right text-xs tabular-nums text-neutral-400">{s.nummer}</span>
-                                <span className={`truncate ${fahrerMoSa ? "font-semibold" : ""}`}>{s.name}</span>
+                                {darfPflegen ? (
+                                  <button
+                                    className={`truncate text-left hover:text-emerald-700 hover:underline ${fahrerMoSa ? "font-semibold" : ""}`}
+                                    onClick={() => setStandDialog(s.id)}
+                                    title="Öffnungszeiten und Saison (geöffnet ab/bis) bearbeiten"
+                                  >
+                                    {s.name}
+                                  </button>
+                                ) : (
+                                  <span className={`truncate ${fahrerMoSa ? "font-semibold" : ""}`}>{s.name}</span>
+                                )}
                                 {fahrerMoSa && (
                                   <span title="Fahrer-Stand: wer hier steht, fährt das Auto der Tour (Führerschein nötig, den ganzen Tag)">
                                     <Car className="h-4 w-4 text-violet-700" />
@@ -1422,6 +1435,19 @@ export default function VertriebGrundplanPage() {
             )}
           </div>
         </>
+      )}
+      {standDialog !== null && standById.get(standDialog) && (
+        <StandZeitenDialog
+          stand={standById.get(standDialog)!}
+          zeiten={zeiten}
+          standSaison={standSaison.find((x) => x.stand_id === standDialog)}
+          saison={saison}
+          onSchliessen={() => setStandDialog(null)}
+          onGespeichert={() => {
+            setStandDialog(null);
+            load();
+          }}
+        />
       )}
     </div>
   );
