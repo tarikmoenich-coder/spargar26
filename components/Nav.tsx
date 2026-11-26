@@ -287,7 +287,8 @@ export default function Nav() {
       <nav className="sticky top-0 z-50 h-14 border-b border-linie bg-white print:hidden">
         <div className="mx-auto flex h-full max-w-[1800px] items-center gap-4 px-4">
           <span className="flex shrink-0 items-center gap-1.5 font-bold text-emerald-700">
-            <Sprout className="h-5 w-5" />
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src="/icon-192.png" alt="" className="h-7 w-7" />
             Spargar
           </span>
 
@@ -362,7 +363,8 @@ export default function Nav() {
           <div className="absolute right-0 top-0 flex h-full w-72 max-w-[85vw] flex-col overflow-y-auto bg-white p-4 shadow-xl">
             <div className="mb-3 flex items-center justify-between">
               <span className="flex items-center gap-1.5 font-bold text-emerald-700">
-                <Sprout className="h-5 w-5" />
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src="/icon-192.png" alt="" className="h-7 w-7" />
                 Spargar
               </span>
               <button
