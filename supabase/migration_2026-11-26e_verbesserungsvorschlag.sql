@@ -5,6 +5,8 @@
 -- eingeloggt ist, schreibt hinein, was er gerne geändert hätte - Seite
 -- (automatisch), Text, optional ein Bildschirmfoto mit Markierungen, wer und
 -- wann. Sichtbar NUR für Admin (Seite /vorschlaege), der sie abarbeitet.
+-- Art (Nutzer 2026-11-26): fehler = etwas geht nicht, aenderung = Bestehendes
+-- anders, neu = neue Funktion/Idee. Admin kann die Art nachträglich ändern.
 --
 -- Rechte: eintragen jeder aktive Nutzer (nur als er selbst), lesen/ändern/
 -- löschen nur admin. Ohne Login nichts.
@@ -17,12 +19,17 @@ create table if not exists public.verbesserungsvorschlag (
   erstellt_von uuid not null default auth.uid() references public.profiles (id) on delete set null,
   seite text not null,            -- Pfad inkl. Parameter, z.B. /vertrieb/grundplan?tour=3
   seite_titel text,               -- Überschrift der Seite zum leichteren Lesen
+  art text not null default 'aenderung' check (art in ('fehler', 'aenderung', 'neu')),
   text text not null check (length(trim(text)) > 0),
   screenshot text,                -- verkleinertes JPEG als data-URL, mit Markierungen
   status text not null default 'offen' check (status in ('offen', 'in_arbeit', 'erledigt', 'abgelehnt')),
   admin_notiz text,
   erledigt_am timestamptz
 );
+-- falls die Tabelle schon ohne Art angelegt war
+alter table public.verbesserungsvorschlag
+  add column if not exists art text not null default 'aenderung' check (art in ('fehler', 'aenderung', 'neu'));
+
 create index if not exists idx_verbesserungsvorschlag_status on public.verbesserungsvorschlag (status, erstellt_am desc);
 
 alter table public.verbesserungsvorschlag enable row level security;
