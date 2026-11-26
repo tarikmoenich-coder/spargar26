@@ -10,6 +10,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { ArrowDown, ArrowUp, Car, Route, X } from "lucide-react";
 import { getSupabaseClient } from "@/lib/supabase/client";
+import { ladeAlleMitFehler } from "@/lib/ladeAlle";
 import { useProfile } from "@/lib/useProfile";
 import { hatRolle } from "@/lib/rollen";
 import PageHeader from "@/components/PageHeader";
@@ -84,7 +85,7 @@ export default function VertriebTourenPage() {
     const sb = getSupabaseClient();
     const [s, z, t, ts, f] = await Promise.all([
       sb.from("vt_stand").select("*").order("nummer"),
-      sb.from("vt_stand_zeit").select("*"),
+      ladeAlleMitFehler<VtStandZeit>((von, bis) => sb.from("vt_stand_zeit").select("*").order("id").range(von, bis)),
       sb.from("vt_tour").select("*").order("nummer"),
       sb.from("vt_tour_stand").select("*").order("reihenfolge"),
       // Fahrzeuge sieht nicht jede Rolle (fahrzeug_select) - dann leer.

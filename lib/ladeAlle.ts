@@ -25,3 +25,19 @@ export async function ladeAlleSeiten<T>(
   }
   return alle;
 }
+
+// Wie ladeAlleSeiten, aber mit Fehler im gewohnten { data, error }-Format -
+// so lässt es sich direkt an die Stelle einer einzelnen Abfrage in einem
+// Promise.all setzen.
+export async function ladeAlleMitFehler<T>(
+  hole: (von: number, bis: number) => PromiseLike<SeitenErgebnis>,
+  seitengroesse = 1000
+): Promise<{ data: T[]; error: { message: string } | null }> {
+  let fehler: { message: string } | null = null;
+  const data = await ladeAlleSeiten<T>(async (von, bis) => {
+    const r = await hole(von, bis);
+    if (r.error) fehler = r.error as { message: string };
+    return r;
+  }, seitengroesse);
+  return { data, error: fehler };
+}

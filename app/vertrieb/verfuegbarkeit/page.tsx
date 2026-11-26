@@ -26,7 +26,7 @@ import type {
   VtVerkaeuferSaison,
 } from "@/lib/types";
 import { HALBTAGE, WOCHENTAGE, planungsSaison } from "@/lib/vertrieb";
-import { ladeAlleSeiten } from "@/lib/ladeAlle";
+import { ladeAlleSeiten, ladeAlleMitFehler } from "@/lib/ladeAlle";
 
 type Person = {
   id: string;
@@ -75,10 +75,12 @@ export default function VertriebVerfuegbarkeitPage() {
         sb.from("employee_fuehrerschein_kategorien").select("*").order("employee_id").range(von, bis)
       ),
       sb.from("vt_verkaeufer_saison").select("*").eq("saison_jahr", saison),
-      sb.from("vt_verfuegbarkeit").select("*").eq("saison_jahr", saison),
+      ladeAlleMitFehler<VtVerfuegbarkeit>((von, bis) =>
+        sb.from("vt_verfuegbarkeit").select("*").eq("saison_jahr", saison).order("id").range(von, bis)
+      ),
       sb.from("vt_abwesenheit").select("*").gte("bis", `${saison}-01-01`).lte("von", `${saison}-12-31`).order("von"),
       sb.from("vt_stand").select("*").eq("aktiv", true),
-      sb.from("vt_stand_zeit").select("*"),
+      ladeAlleMitFehler<VtStandZeit>((von, bis) => sb.from("vt_stand_zeit").select("*").order("id").range(von, bis)),
     ]);
     const err = pl.error ?? r.error ?? a.error ?? s.error ?? z.error;
     setFehler(err ? err.message : null);

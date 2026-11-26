@@ -36,7 +36,7 @@ import {
   type PlanHinweis,
   type TourMitStaenden,
 } from "@/lib/vertrieb";
-import { ladeAlleSeiten } from "@/lib/ladeAlle";
+import { ladeAlleSeiten, ladeAlleMitFehler } from "@/lib/ladeAlle";
 
 type Person = { id: string; personal_nr: string; name: string; vorname: string; fuehrerschein_b: boolean | null };
 type Feld = { stand_id: number; wochentag: number; halbtag: VtHalbtag };
@@ -81,12 +81,16 @@ export default function VertriebGrundplanPage() {
         sb.from("employee_fuehrerschein_kategorien").select("*").order("employee_id").range(von, bis)
       ),
       sb.from("vt_verkaeufer_saison").select("*").eq("saison_jahr", saison),
-      sb.from("vt_verfuegbarkeit").select("*").eq("saison_jahr", saison),
+      ladeAlleMitFehler<VtVerfuegbarkeit>((von, bis) =>
+        sb.from("vt_verfuegbarkeit").select("*").eq("saison_jahr", saison).order("id").range(von, bis)
+      ),
       sb.from("vt_stand").select("*").order("nummer"),
-      sb.from("vt_stand_zeit").select("*"),
+      ladeAlleMitFehler<VtStandZeit>((von, bis) => sb.from("vt_stand_zeit").select("*").order("id").range(von, bis)),
       sb.from("vt_tour").select("*").order("nummer"),
       sb.from("vt_tour_stand").select("*"),
-      sb.from("vt_grundplan").select("*").eq("saison_jahr", saison),
+      ladeAlleMitFehler<VtGrundplan>((von, bis) =>
+        sb.from("vt_grundplan").select("*").eq("saison_jahr", saison).order("id").range(von, bis)
+      ),
     ]);
     const err = pl.error ?? v.error ?? s.error ?? z.error ?? t.error ?? ts.error ?? g.error;
     setFehler(err ? err.message : null);

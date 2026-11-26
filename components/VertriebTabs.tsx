@@ -8,6 +8,7 @@ import { useEffect, useRef } from "react";
 // wie FahrzeugeTabs.
 const tabs = [
   { href: "/vertrieb", label: "Stände", exakt: true },
+  { href: "/vertrieb/karte", label: "Karte" },
   { href: "/vertrieb/touren", label: "Touren" },
   { href: "/vertrieb/verfuegbarkeit", label: "Verfügbarkeit" },
   { href: "/vertrieb/grundplan", label: "Grundplan" },
@@ -39,7 +40,7 @@ export default function VertriebTabs() {
     >
       {tabs.map((tab) => {
         const aktiv = tab.exakt
-          ? pathname === tab.href
+          ? pathname === tab.href || (tab.href === "/vertrieb" && pathname === "/vertrieb/import")
           : pathname === tab.href || pathname?.startsWith(`${tab.href}/`);
         return (
           <Link

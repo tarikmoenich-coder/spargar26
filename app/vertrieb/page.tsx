@@ -7,9 +7,11 @@
 // lohnabrechnung/management/pruefer, pflegen admin/hr - jeweils nur mit
 // Bereich Vertrieb (vt_darf()).
 
+import Link from "next/link";
 import { Fragment, useCallback, useEffect, useMemo, useState } from "react";
 import { Store } from "lucide-react";
 import { getSupabaseClient } from "@/lib/supabase/client";
+import { ladeAlleMitFehler } from "@/lib/ladeAlle";
 import { useProfile } from "@/lib/useProfile";
 import { hatRolle } from "@/lib/rollen";
 import PageHeader from "@/components/PageHeader";
@@ -86,6 +88,9 @@ function ausStand(s: VtStand, zeiten: VtStandZeit[]): StandForm {
 export default function VertriebStaendePage() {
   const { profile } = useProfile();
   const darfPflegen = hatRolle(profile, "admin", "hr");
+  // Position/Radius nur Admin und Management (Nutzer 2026-11-26), sonst über
+  // die Karte (/vertrieb/karte). HR pflegt Name, Adresse, Zeiten.
+  const darfPosition = hatRolle(profile, "admin", "management");
 
   const [staende, setStaende] = useState<VtStand[]>([]);
   const [zeiten, setZeiten] = useState<VtStandZeit[]>([]);
@@ -106,7 +111,7 @@ export default function VertriebStaendePage() {
     const sb = getSupabaseClient();
     const [s, z, t, ts] = await Promise.all([
       sb.from("vt_stand").select("*").order("nummer"),
-      sb.from("vt_stand_zeit").select("*"),
+      ladeAlleMitFehler<VtStandZeit>((von, bis) => sb.from("vt_stand_zeit").select("*").order("id").range(von, bis)),
       sb.from("vt_tour").select("*").order("nummer"),
       sb.from("vt_tour_stand").select("*"),
     ]);
@@ -189,7 +194,7 @@ export default function VertriebStaendePage() {
     if (!Number.isInteger(nummer) || nummer <= 0) return setFormFehler("Standnummer muss eine positive ganze Zahl sein.");
     if (!form.name.trim()) return setFormFehler("Name fehlt.");
     let koord: { lat: number; lng: number } | null = null;
-    if (form.koordinaten.trim()) {
+    if (darfPosition && form.koordinaten.trim()) {
       koord = koordinatenLesen(form.koordinaten);
       if (!koord) return setFormFehler('Koordinaten nicht lesbar - bitte als "50.123, 8.654" eingeben.');
     }
@@ -208,9 +213,9 @@ export default function VertriebStaendePage() {
       nummer,
       name: form.name.trim(),
       adresse: form.adresse.trim() || null,
-      lat: koord?.lat ?? null,
-      lng: koord?.lng ?? null,
-      radius_m: Number(form.radius_m) || 100,
+      ...(darfPosition
+        ? { lat: koord?.lat ?? null, lng: koord?.lng ?? null, radius_m: Number(form.radius_m) || 100 }
+        : {}),
       aktiv: form.aktiv,
       notiz: form.notiz.trim() || null,
     };
@@ -289,6 +294,8 @@ export default function VertriebStaendePage() {
           Adresse
           <input value={form.adresse} onChange={(e) => setForm({ ...form, adresse: e.target.value })} />
         </label>
+        {darfPosition && (
+          <>
         <label className="flex flex-col gap-1 text-sm">
           Koordinaten
           <input
@@ -302,6 +309,8 @@ export default function VertriebStaendePage() {
           GPS-Radius (m)
           <input type="number" min={10} max={2000} value={form.radius_m} onChange={(e) => setForm({ ...form, radius_m: e.target.value })} />
         </label>
+          </>
+        )}
         <label className="col-span-2 flex flex-col gap-1 text-sm sm:col-span-3">
           Notiz
           <input value={form.notiz} onChange={(e) => setForm({ ...form, notiz: e.target.value })} />
@@ -393,9 +402,14 @@ export default function VertriebStaendePage() {
         beschreibung="Verkaufsstände mit Öffnungszeiten je Wochentag (Vormittag / Nachmittag) und Tour-Zuordnung."
         aktionen={
           darfPflegen && (
-            <button className="btn" onClick={neu}>
-              Neuer Stand
-            </button>
+            <div className="flex flex-wrap gap-2">
+              <Link href="/vertrieb/import" className="btn-secondary">
+                Ständeliste importieren
+              </Link>
+              <button className="btn" onClick={neu}>
+                Neuer Stand
+              </button>
+            </div>
           )
         }
       />
@@ -418,7 +432,7 @@ export default function VertriebStaendePage() {
         <EmptyState
           icon={Store}
           text="Noch keine Stände angelegt."
-          hinweis={darfPflegen ? "Stände einzeln anlegen - der Import der Ständeliste folgt." : undefined}
+          hinweis={darfPflegen ? "Ständeliste aus dem Google-Unternehmensprofil importieren oder Stände einzeln anlegen." : undefined}
         />
       ) : (
         <div className="overflow-x-auto">
@@ -476,13 +490,15 @@ export default function VertriebStaendePage() {
                         </td>
                       ))}
                       <td>
-                        {s.lat != null ? (
-                          <span className="badge-ok">✓</span>
-                        ) : (
-                          <span className="badge-warn" title="Koordinaten fehlen - nötig für die GPS-Auswertung">
-                            fehlt
-                          </span>
-                        )}
+                        <Link href={`/vertrieb/karte?stand=${s.id}`} title="Auf der Karte zeigen und Position setzen">
+                          {s.lat != null ? (
+                            <span className="badge-ok">✓ Karte</span>
+                          ) : (
+                            <span className="badge-warn" title="Koordinaten fehlen - nötig für die GPS-Auswertung">
+                              fehlt
+                            </span>
+                          )}
+                        </Link>
                       </td>
                       {darfPflegen && (
                         <td>

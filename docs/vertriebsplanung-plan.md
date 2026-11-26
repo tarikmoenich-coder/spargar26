@@ -4,7 +4,7 @@ Stand: 2026-11-25 - V1 (Stände, Touren), V2 (Verfügbarkeit) und V3
 (Grundplan) gebaut: Seiten /vertrieb, /vertrieb/touren,
 /vertrieb/verfuegbarkeit, /vertrieb/grundplan; Migrationen
 migration_2026-11-25c (Stände/Touren, vt_darf()), -25d (Verfügbarkeit),
--25e (Grundplan). V4-V6 offen, ebenso der Ständeliste-Import und die
+-25e (Grundplan). V4-V6 offen, ebenso die
 Geofences je Stand.
 Voraussetzung (erledigt): Vertriebs-Personal in spargar26
 (docs/zwei-personalstaemme-plan.md, Stufen 0-4).
@@ -32,7 +32,7 @@ Voraussetzung (erledigt): Vertriebs-Personal in spargar26
 
 ## Bausteine
 
-### V1 - Stammdaten Stände und Touren  [gebaut, außer Import + Geofence]
+### V1 - Stammdaten Stände und Touren  [gebaut, außer Geofence]
 
 - Tabelle `vt_stand`: Nummer, Name, Adresse, Kartenpunkt (`lat`/`lng`) +
   `radius_m`, aktiv, Notiz.
@@ -46,8 +46,20 @@ Voraussetzung (erledigt): Vertriebs-Personal in spargar26
 - Tabelle `vt_tour_stand`: Reihenfolge der Stände in der Tour, je Stand
   "fährt mit" oder "nur Ware". Ein Stand gehört je Tagesart zu höchstens
   einer Tour; der letzte "fährt mit"-Stand stellt den Fahrer.
-- Ständeliste-Import kommt später (Antwort 5); V1 bringt eine Eingabe-
-  Maske, der Import wird nachgereicht, sobald die Liste da ist.
+- Ständeliste-Import [gebaut 2026-11-25]: `/vertrieb/import`
+  (`lib/staendeImport.ts`) liest den Export des Google-Unternehmensprofils
+  (Geschäftscode = Standname, Adresse, Öffnungszeiten je Wochentag).
+  Nutzer-Vorgaben: alle Einträge inkl. der als „Duplikat“ markierten (Name
+  + „(Duplikat)“), Nummern alphabetisch nach Ort, Halbtag-Grenze 13:00,
+  Koordinaten über OpenStreetMap/Nominatim (nur straßengenaue Treffer;
+  Probelauf 68 von 72). Wiederholbar: gleicher Name = aktualisieren.
+  Mehrere Exporte (je Google-Konto: Mömmel 72, Reitz 25) werden gemeinsam
+  eingelesen und durchnummeriert; gleiche Namen bekommen die Straße
+  angehängt. Der Google-Export enthält KEINE Koordinaten.
+- Karte [gebaut 2026-11-25]: `/vertrieb/karte` (`components/StandKarte.tsx`)
+  zeigt alle Stände mit Radius-Kreis auf Satellit/Luftbild Hessen/OSM.
+  Position von Hand setzen (Punkt ziehen oder in die Karte klicken), Radius
+  per Regler; das ist die verbindliche Standposition (Nutzer 2026-11-25).
 - [offen] Jeder Stand wird automatisch als Geofence im GPS-System angelegt
   (Grundlage für V6). Noch nicht gebaut - Koordinaten und Radius werden
   aber schon erfasst (Spalte "GPS" in der Ständeliste).
