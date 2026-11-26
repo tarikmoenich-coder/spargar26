@@ -101,6 +101,26 @@ function markerElement(nummer: number): HTMLDivElement {
   return el;
 }
 
+// Kleines Schild am Punkt (z.B. Platz in der Tour, "🚗" = Fahrer-Stand)
+function markerBeschriften(el: HTMLElement, nummer: number, schild: { text: string; farbe: string; fahrer: boolean } | null) {
+  el.textContent = String(nummer);
+  if (!schild) return;
+  // Marker-Element ist absolut positioniert (MapLibre) -> Bezugsrahmen fürs Schild
+  const b = document.createElement("span");
+  if (schild.fahrer) {
+    // Auto-Symbol (wie lucide "car") statt Emoji - Emoji fehlen auf manchen Geräten
+    b.innerHTML =
+      '<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="margin-right:1px"><path d="M19 17h2c.6 0 1-.4 1-1v-3c0-.9-.7-1.7-1.5-1.9C18.7 10.6 16 10 16 10s-1.3-1.4-2.2-2.3c-.5-.4-1.1-.7-1.8-.7H5c-.6 0-1.1.4-1.4.9l-1.4 2.9A3.7 3.7 0 0 0 2 12v4c0 .6.4 1 1 1h2"/><circle cx="7" cy="17" r="2"/><path d="M9 17h6"/><circle cx="17" cy="17" r="2"/></svg>';
+    b.appendChild(document.createTextNode(schild.text));
+  } else b.textContent = schild.text;
+  b.style.cssText =
+    "position:absolute;top:-9px;right:-11px;min-width:16px;height:16px;padding:0 3px;border-radius:8px;" +
+    "display:flex;align-items:center;justify-content:center;font:700 10px/1 system-ui;background:#fff;" +
+    `color:${schild.farbe};border:1.5px solid ${schild.farbe};box-shadow:0 1px 2px rgba(0,0,0,.35);white-space:nowrap`;
+  if (schild.fahrer) b.style.background = "#fef3c7";
+  el.appendChild(b);
+}
+
 function markerFaerben(el: HTMLElement, ausgewaehlt: boolean, farbe: string | null) {
   el.style.background = ausgewaehlt ? "#b4235a" : farbe ?? "#2b711e";
   el.style.zIndex = ausgewaehlt ? "2" : "1";
@@ -117,6 +137,7 @@ export default function StandKarte({
   onPosition,
   tourLinien = [],
   markerFarbe,
+  markerSchild,
   hoverHtml,
   hoehe = "h-[70vh]",
 }: {
@@ -133,6 +154,8 @@ export default function StandKarte({
   tourLinien?: TourLinie[];
   /** Punktfarbe je Stand (z.B. Tourfarbe), null = Standardgrün */
   markerFarbe?: (standId: number) => string | null;
+  /** Schild am Punkt, z.B. Platz in der Tour (1, 2, ...) und Fahrer */
+  markerSchild?: (standId: number) => { text: string; farbe: string; fahrer: boolean } | null;
   /** Info beim Überfahren (nach 1 s), HTML - Texte vorher escapen */
   hoverHtml?: (standId: number) => string;
   hoehe?: string;
@@ -302,8 +325,9 @@ export default function StandKarte({
       }
       m.setLngLat([p.lng, p.lat]);
       const el = m.getElement();
-      el.textContent = String(s.nummer);
-      el.title = s.name;
+      const schild = markerSchild?.(s.id) ?? null;
+      markerBeschriften(el, s.nummer, schild);
+      el.title = schild?.fahrer ? `${s.name} - Fahrer-Stand (letzter Halt der Tour)` : s.name;
       markerFaerben(el, s.id === auswahlId, markerFarbe?.(s.id) ?? null);
       m.setDraggable(s.id === auswahlId && bearbeitbar);
     }
@@ -353,7 +377,7 @@ export default function StandKarte({
         map.fitBounds(b, { padding: 40, maxZoom: 16, duration: 0 });
       }
     }
-  }, [staende, auswahlId, entwurf, bearbeitbar, bereit, tourLinien, markerFarbe]);
+  }, [staende, auswahlId, entwurf, bearbeitbar, bereit, tourLinien, markerFarbe, markerSchild]);
 
   useEffect(() => {
     if (!fokus || !mapRef.current || !bereit) return;

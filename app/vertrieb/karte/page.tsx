@@ -10,7 +10,7 @@
 import Link from "next/link";
 import dynamic from "next/dynamic";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { MapPin } from "lucide-react";
+import { Car, MapPin } from "lucide-react";
 import { getSupabaseClient } from "@/lib/supabase/client";
 import { useProfile } from "@/lib/useProfile";
 import { hatRolle } from "@/lib/rollen";
@@ -200,6 +200,23 @@ export default function VertriebKartePage() {
       return tourFarbe.get(ts.tour_id) ?? OHNE_TOUR_FARBE;
     },
     [tourenAn, tourVonStand, tagesart, tourFarbe, tourHervor]
+  );
+
+  // Platz in der Tour am Punkt: 1 = erster Halt, Auto = Fahrer-Stand (letzter
+  // mitfahrender Stand, dort steigt der Fahrer aus und holt später alle ab)
+  const markerSchild = useCallback(
+    (standId: number) => {
+      if (!tourenAn) return null;
+      const ts = tourVonStand.get(`${tagesart}|${standId}`);
+      if (!ts) return null;
+      if (tourHervor !== null && ts.tour_id !== tourHervor) return null;
+      const liste = eintraegeVon(ts.tour_id);
+      const platz = liste.findIndex((x) => x.stand_id === standId) + 1;
+      const fahrer = fahrerStandId(liste) === standId;
+      const farbe = tourFarbe.get(ts.tour_id) ?? OHNE_TOUR_FARBE;
+      return { text: ts.nur_ware ? `${platz}·W` : String(platz), farbe, fahrer };
+    },
+    [tourenAn, tourVonStand, tagesart, tourHervor, eintraegeVon, tourFarbe]
   );
 
   const zeitenJeStand = useMemo(() => {
@@ -502,8 +519,9 @@ export default function VertriebKartePage() {
                   {tourenDerArt.length === 0 && <li className="text-neutral-500">Keine aktiven Touren.</li>}
                 </ul>
                 <p className="text-xs text-neutral-500">
-                  Graue Punkte: ohne Tour. Tour anklicken = hervorheben. Info zum Stand: Maus 1 Sekunde auf dem
-                  Punkt halten.
+                  Schild am Punkt = Reihenfolge der Tour (1 = erster Halt), <Car className="inline h-3 w-3" /> = Fahrer-Stand
+                  (letzter Halt, der Fahrer setzt alle anderen vorher ab), W = nur Ware. Graue Punkte: ohne Tour. Tour anklicken = hervorheben. Info
+                  zum Stand: Maus 1 Sekunde auf dem Punkt halten.
                 </p>
               </>
             )}
@@ -558,6 +576,7 @@ export default function VertriebKartePage() {
           onPosition={positionSetzen}
           tourLinien={tourLinien}
           markerFarbe={markerFarbe}
+          markerSchild={markerSchild}
           hoverHtml={hoverHtml}
         />
       </div>
