@@ -245,4 +245,5 @@ export const MENUE_RECHTE: Record<string, UserRole[]> = {
   "/aenderungsprotokoll": ["admin", "pruefer"],
   // zeiterfassung: nur Unterseite Arbeitsgruppen (EinstellungenTabs leitet um)
   "/einstellungen": ["admin", "zeiterfassung"],
+  "/vorschlaege": ["admin"],
 };

@@ -3,6 +3,7 @@ import { Inter } from "next/font/google";
 import "./globals.css";
 import Nav from "@/components/Nav";
 import InaktivitaetsAbmeldung from "@/components/InaktivitaetsAbmeldung";
+import VorschlagKnopf from "@/components/VorschlagKnopf";
 
 // UI-Schrift, beim Build lokal gebündelt (kein externer Request zur
 // Laufzeit). Nimmt der Oberfläche das "Behörden-Grau"-Gefühl.
@@ -50,6 +51,8 @@ export default function RootLayout({
         <InaktivitaetsAbmeldung />
         <Nav />
         <main className="mx-auto max-w-[1800px] px-4 py-6">{children}</main>
+        {/* Glühbirne "Änderung vorschlagen" auf jeder Seite (Nutzer 2026-11-26) */}
+        <VorschlagKnopf />
       </body>
     </html>
   );
