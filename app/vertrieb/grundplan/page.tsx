@@ -17,7 +17,7 @@
 // - Fortschritt je Stand/Tour, Filter, Sonntag ausblendbar, fester Kopf.
 
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Car, CalendarRange, ChevronDown, ChevronRight, Printer, UserPlus, X } from "lucide-react";
+import { Car, CalendarRange, ChevronDown, ChevronRight, GripVertical, PanelRightClose, PanelRightOpen, Printer, UserPlus, X } from "lucide-react";
 import { getSupabaseClient } from "@/lib/supabase/client";
 import { useProfile } from "@/lib/useProfile";
 import { hatRolle } from "@/lib/rollen";
@@ -56,6 +56,8 @@ type Auswahl =
   | { art: "zeile"; stand_id: number; umfang: Umfang; mitSonntag: boolean; ueberschreiben: boolean; x: number; y: number; h: number };
 
 const LS_SONNTAG = "grundplan.sonntag";
+const LS_LEISTE = "grundplan.leiste";
+const DND_TYP = "application/x-spargar-person";
 const POP_BREITE = 360;
 const POP_HOEHE = 420;
 
@@ -98,6 +100,14 @@ export default function VertriebGrundplanPage() {
   const [zeigeListe, setZeigeListe] = useState(false);
   const [markierePerson, setMarkierePerson] = useState<string>("");
 
+  // Verkäufer-Seitenleiste + Drag & Drop (Stufe 3)
+  const [zeigeLeiste, setZeigeLeiste] = useState(true);
+  const [leisteSuche, setLeisteSuche] = useState("");
+  const [leisteSort, setLeisteSort] = useState<"frei" | "name">("frei");
+  const [nurFs, setNurFs] = useState(false);
+  const [ziehe, setZiehe] = useState<string | null>(null);
+  const [dropZiel, setDropZiel] = useState<string | null>(null);
+
   // Filter
   const [standSuche, setStandSuche] = useState("");
   const [tourFilter, setTourFilter] = useState<string>("alle");
@@ -112,10 +122,19 @@ export default function VertriebGrundplanPage() {
   useEffect(() => {
     try {
       setZeigeSonntag(localStorage.getItem(LS_SONNTAG) === "1");
+      setZeigeLeiste(localStorage.getItem(LS_LEISTE) !== "0");
     } catch {
       /* ohne Speicher: Standard */
     }
   }, []);
+  function leisteUmschalten(an: boolean) {
+    setZeigeLeiste(an);
+    try {
+      localStorage.setItem(LS_LEISTE, an ? "1" : "0");
+    } catch {
+      /* egal */
+    }
+  }
   function sonntagUmschalten(an: boolean) {
     setZeigeSonntag(an);
     try {
@@ -584,12 +603,86 @@ export default function VertriebGrundplanPage() {
   const prozent = gesamt.soll ? Math.round((gesamt.ist / gesamt.soll) * 100) : 0;
   const tourOptionen = touren.filter((t) => t.tagesart === "MO_SA");
 
+  // --- Drag & Drop -------------------------------------------------------------
+  // Person aus der Seitenleiste (oder ein Namens-Chip aus dem Plan) auf ein
+  // Feld ziehen = dort einplanen (wie Auswahl am Feld; steht sie zur selben
+  // Zeit woanders, wird sie verschoben). Auf den Standnamen ziehen =
+  // Stammbesetzung Mo-Sa (nur passende Halbtage).
+  const dndAktiv = darfPflegen && auswahl === null;
+  function ziehStart(e: React.DragEvent, empId: string) {
+    e.dataTransfer.setData(DND_TYP, empId);
+    e.dataTransfer.setData("text/plain", personName(empId));
+    e.dataTransfer.effectAllowed = "copyMove";
+    setZiehe(empId);
+  }
+  function ziehEnde() {
+    setZiehe(null);
+    setDropZiel(null);
+  }
+  function ueber(e: React.DragEvent, ziel: string) {
+    if (!ziehe) return;
+    e.preventDefault();
+    e.dataTransfer.dropEffect = "copy";
+    if (dropZiel !== ziel) setDropZiel(ziel);
+  }
+  function aufFeld(e: React.DragEvent, standId: number, tag: number, umfang: Umfang) {
+    e.preventDefault();
+    const empId = e.dataTransfer.getData(DND_TYP) || ziehe;
+    ziehEnde();
+    if (!empId) return;
+    const felder = halbtageVon(umfang)
+      .map((h) => ({ stand_id: standId, wochentag: tag, halbtag: h }))
+      .filter((f) => {
+        const k = planKey(f.stand_id, f.wochentag, f.halbtag);
+        return offen.has(k) || planMap.has(k);
+      });
+    eintragen(felder, empId, "feld", true);
+  }
+  function aufZeile(e: React.DragEvent, standId: number) {
+    e.preventDefault();
+    const empId = e.dataTransfer.getData(DND_TYP) || ziehe;
+    ziehEnde();
+    if (!empId) return;
+    const felder: Feld[] = [];
+    for (const t of [1, 2, 3, 4, 5, 6])
+      for (const h of ["VM", "NM"] as const)
+        if (offen.has(planKey(standId, t, h))) felder.push({ stand_id: standId, wochentag: t, halbtag: h });
+    eintragen(felder, empId, "zeile", false);
+  }
+
+  // Seitenleiste: Verkäufer der Saison mit Auslastung
+  const leiste = useMemo(() => {
+    const q = leisteSuche.trim().toLowerCase();
+    const sichtTage = tage.map((t) => t.nr);
+    return planung
+      .map((pl) => ({ p: personById.get(pl.employee_id), max: pl.max_halbtage_woche ?? null }))
+      .filter((x): x is { p: Person; max: number | null } => !!x.p)
+      .filter(({ p }) => !q || `${p.vorname} ${p.name} ${p.personal_nr}`.toLowerCase().includes(q))
+      .filter(({ p }) => !nurFs || hatFuehrerschein(p.id))
+      .map(({ p, max }) => {
+        let kannN = 0;
+        for (const t of sichtTage) for (const h of ["VM", "NM"] as const) if (kann(p.id, t, h) === true) kannN++;
+        const anz = anzahlJePerson.get(p.id) ?? 0;
+        const ziel = max ?? kannN;
+        return { p, max, anz, kannN, ziel, frei: ziel - anz };
+      })
+      .sort((a, b) =>
+        leisteSort === "name" ? a.p.name.localeCompare(b.p.name, "de") : b.frei - a.frei || a.p.name.localeCompare(b.p.name, "de")
+      );
+  }, [planung, personById, leisteSuche, nurFs, hatFuehrerschein, kann, anzahlJePerson, leisteSort, tage]);
+
   // --- Darstellung einer Zelle ------------------------------------------------
   function chip(empId: string, fahrer: boolean) {
     const gedimmt = markierePerson && markierePerson !== empId;
     return (
       <span
-        className={`inline-flex max-w-[7.5rem] items-center gap-0.5 truncate rounded border px-1.5 py-0.5 text-[11px] font-medium leading-tight ${
+        draggable={dndAktiv}
+        onDragStart={(e) => {
+          e.stopPropagation();
+          ziehStart(e, empId);
+        }}
+        onDragEnd={ziehEnde}
+        className={`inline-flex max-w-[7.5rem] items-center gap-0.5 truncate rounded border px-1.5 py-0.5 text-[11px] font-medium leading-tight ${dndAktiv ? "cursor-grab" : ""} ${
           gedimmt ? "opacity-30" : ""
         } ${markierePerson === empId ? "ring-2 ring-emerald-700" : ""}`}
         style={farbe(empId)}
@@ -635,6 +728,9 @@ export default function VertriebGrundplanPage() {
       const istWarn = !istFehler && probleme.length > 0;
       const geschlossen = !istOffen && !eintrag;
       const klickbar = darfPflegen && (istOffen || !!eintrag);
+      // Leerer Tag mit beiden Hälften offen: Klick/Ablegen plant gleich den ganzen Tag
+      const ganzTag = u === "TAG" || (oVM && oNM && !vm && !nm);
+      const zielKey = `${s.id}|${tag}|${ganzTag ? "TAG" : u}`;
       const zeit = u !== "TAG" ? zeitVon.get(planKey(s.id, tag, u)) : null;
       const titel = [
         `${s.nummer} ${s.name} · ${WOCHENTAGE.find((w) => w.nr === tag)!.lang} ${u === "TAG" ? "ganzer Tag" : u === "VM" ? "Vormittag" : "Nachmittag"}`,
@@ -649,12 +745,17 @@ export default function VertriebGrundplanPage() {
           key={`${tag}${u}`}
           colSpan={u === "TAG" ? 2 : 1}
           data-zelle={`${s.id}|${tag}|${u}`}
-          onClick={(e) => klickbar && feldOeffnen(e.currentTarget, s.id, tag, u === "TAG" || (oVM && oNM && !vm && !nm) ? "TAG" : u)}
+          onClick={(e) => klickbar && feldOeffnen(e.currentTarget, s.id, tag, ganzTag ? "TAG" : u)}
+          onDragOver={klickbar && ziehe ? (e) => ueber(e, zielKey) : undefined}
+          onDragLeave={() => dropZiel === zielKey && setDropZiel(null)}
+          onDrop={klickbar ? (e) => aufFeld(e, s.id, tag, ganzTag ? "TAG" : u) : undefined}
           title={titel}
           style={geschlossen ? SCHRAFFUR : undefined}
           className={`h-8 min-w-[4.25rem] whitespace-nowrap border-r-0 border-t-0 px-0.5 py-0.5 text-center align-middle ${u === "NM" ? "border-l-0" : ""} ${istFehler ? "bg-beere-50 ring-1 ring-inset ring-beere-300" : istWarn ? "bg-amber-50" : geschlossen ? "bg-neutral-50" : "bg-white"} ${
             klickbar ? "cursor-pointer hover:bg-emerald-50/60" : ""
-          } ${gewaehlt(u) ? "!bg-amber-100 ring-2 ring-inset ring-amber-500" : ""}`}
+          } ${gewaehlt(u) ? "!bg-amber-100 ring-2 ring-inset ring-amber-500" : ""} ${
+            ziehe && (dropZiel === zielKey || dropZiel === `${s.id}|${tag}|TAG`) ? "!bg-emerald-100 ring-2 ring-inset ring-emerald-500" : ""
+          }`}
         >
           {eintrag ? chip(eintrag.employee_id, istFahrer(eintrag)) : istOffen ? leerInhalt(s.id, tag, u === "TAG" ? "VM" : u, nurWare) : null}
         </td>
@@ -800,8 +901,9 @@ export default function VertriebGrundplanPage() {
       {!loading && staende.length === 0 ? (
         <EmptyState icon={CalendarRange} text="Noch keine Stände angelegt." />
       ) : (
+        <div className="flex flex-col gap-3 xl:flex-row xl:items-start">
         <div
-          className="max-h-[calc(100vh-15rem)] overflow-auto rounded border border-linie print:max-h-none print:overflow-visible"
+          className="max-h-[calc(100vh-15rem)] min-w-0 flex-1 overflow-auto rounded border border-linie print:max-h-none print:overflow-visible"
           onScroll={() => auswahl && Date.now() > scrollIgnorierenBis.current && setAuswahl(null)}
         >
           <table className="w-auto min-w-full border-separate border-spacing-0 text-xs">
@@ -856,7 +958,15 @@ export default function VertriebGrundplanPage() {
                         const voll = f.soll > 0 && f.ist >= f.soll;
                         return (
                           <tr key={s.id} className={`group ${s.aktiv ? "" : "opacity-50"}`}>
-                            <td className="sticky left-0 z-10 whitespace-nowrap border-x-0 border-b border-t-0 bg-white py-0.5 text-sm group-hover:bg-neutral-50">
+                            <td
+                              className={`sticky left-0 z-10 whitespace-nowrap border-x-0 border-b border-t-0 py-0.5 text-sm group-hover:bg-neutral-50 ${
+                                ziehe && dropZiel === `zeile|${s.id}` ? "bg-emerald-100 ring-2 ring-inset ring-emerald-500" : "bg-white"
+                              }`}
+                              onDragOver={dndAktiv && ziehe ? (e) => ueber(e, `zeile|${s.id}`) : undefined}
+                              onDragLeave={() => dropZiel === `zeile|${s.id}` && setDropZiel(null)}
+                              onDrop={dndAktiv ? (e) => aufZeile(e, s.id) : undefined}
+                              title={dndAktiv ? "Person hierher ziehen = Stammbesetzung Mo–Sa" : undefined}
+                            >
                               <div className="flex items-center gap-1.5">
                                 <span className="w-7 text-right text-xs tabular-nums text-neutral-400">{s.nummer}</span>
                                 <span className="truncate">{s.name}</span>
@@ -906,6 +1016,98 @@ export default function VertriebGrundplanPage() {
               )}
             </tbody>
           </table>
+        </div>
+        {zeigeLeiste ? (
+          <aside className="flex max-h-[calc(100vh-15rem)] w-full shrink-0 flex-col gap-2 rounded border border-linie bg-white p-2 print:hidden xl:w-72">
+            <div className="flex items-center justify-between">
+              <span className="text-sm font-semibold text-emerald-900">Verkäufer {saison}</span>
+              <button className="rounded p-1 hover:bg-neutral-100" onClick={() => leisteUmschalten(false)} title="Liste ausblenden">
+                <PanelRightClose className="h-4 w-4" />
+              </button>
+            </div>
+            <input placeholder="Name suchen …" value={leisteSuche} onChange={(e) => setLeisteSuche(e.target.value)} />
+            <div className="flex items-center gap-2 text-xs">
+              <select value={leisteSort} onChange={(e) => setLeisteSort(e.target.value as "frei" | "name")} className="py-0.5 text-xs">
+                <option value="frei">noch frei zuerst</option>
+                <option value="name">nach Name</option>
+              </select>
+              <label className="flex items-center gap-1">
+                <input type="checkbox" checked={nurFs} onChange={(e) => setNurFs(e.target.checked)} />
+                <Car className="h-3 w-3" /> Führerschein
+              </label>
+            </div>
+            {darfPflegen && (
+              <p className="text-[11px] leading-snug text-neutral-500">
+                Auf ein Feld ziehen = dort einplanen, auf den Standnamen = ganze Woche. Klick = im Plan hervorheben.
+              </p>
+            )}
+            <div className="-mx-1 flex-1 overflow-y-auto">
+              {leiste.map(({ p, max, anz, kannN, ziel }) => {
+                const voll = ziel > 0 && anz >= ziel;
+                const aktiv = markierePerson === p.id;
+                return (
+                  <div
+                    key={p.id}
+                    draggable={dndAktiv}
+                    onDragStart={(e) => ziehStart(e, p.id)}
+                    onDragEnd={ziehEnde}
+                    onClick={() => setMarkierePerson(aktiv ? "" : p.id)}
+                    className={`group/p flex cursor-pointer items-start gap-1.5 rounded px-1 py-1 text-xs hover:bg-neutral-50 ${aktiv ? "bg-emerald-50 ring-1 ring-emerald-500" : ""} ${
+                      ziehe === p.id ? "opacity-50" : ""
+                    }`}
+                    title={`${p.vorname} ${p.name} · ${anz} Halbtage verplant${max != null ? `, höchstens ${max}` : ""} · kann laut Verfügbarkeit ${kannN} Halbtage`}
+                  >
+                    {dndAktiv && <GripVertical className="mt-0.5 h-3.5 w-3.5 shrink-0 cursor-grab text-neutral-300 group-hover/p:text-neutral-500" />}
+                    <span className="mt-0.5 h-3 w-3 shrink-0 rounded-sm border" style={farbe(p.id)} />
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-1">
+                        <span className="truncate font-medium">
+                          {p.name}, {p.vorname}
+                        </span>
+                        {hatFuehrerschein(p.id) && <Car className="h-3 w-3 shrink-0 text-neutral-500" />}
+                        <span
+                          className={`ml-auto shrink-0 tabular-nums ${
+                            max != null && anz > max ? "font-semibold text-beere-700" : voll ? "text-emerald-700" : anz > 0 ? "text-neutral-700" : "text-neutral-400"
+                          }`}
+                        >
+                          {anz}/{ziel || "–"}
+                        </span>
+                      </div>
+                      {/* Woche im Kleinen: Farbe = verplant, grün = kann, rot = kann nicht, grau = unbekannt */}
+                      <div className="mt-0.5 flex gap-[3px]">
+                        {tage.map((t) => (
+                          <div key={t.nr} className="flex gap-px" title={t.lang}>
+                            {(["VM", "NM"] as const).map((h) => {
+                              const b = personBelegt.get(`${p.id}|${t.nr}|${h}`);
+                              const k = kann(p.id, t.nr, h);
+                              return (
+                                <span
+                                  key={h}
+                                  className={`h-2 w-1.5 rounded-[1px] ${b ? "" : k === true ? "bg-emerald-300" : k === false ? "bg-beere-200" : "bg-neutral-200"}`}
+                                  style={b ? { background: farbe(p.id).borderColor } : undefined}
+                                  title={`${t.kurz} ${h}: ${b ? standName(b.stand_id) : k === true ? "kann" : k === false ? "kann nicht" : "unbekannt"}`}
+                                />
+                              );
+                            })}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+              {leiste.length === 0 && <div className="px-1 py-2 text-sm text-neutral-500">Niemand gefunden.</div>}
+            </div>
+            <p className="text-[10px] leading-snug text-neutral-500">
+              Kästchen je Halbtag: kräftig = verplant, grün = kann, rot = kann nicht, grau = unbekannt. Zahl = verplant / höchstens (sonst: kann).
+            </p>
+          </aside>
+        ) : (
+          <button className="btn-secondary self-start print:hidden" onClick={() => leisteUmschalten(true)} title="Verkäufer-Liste einblenden">
+            <PanelRightOpen className="mr-1 inline h-4 w-4" />
+            Verkäufer
+          </button>
+        )}
         </div>
       )}
       <p className="text-xs text-neutral-500">
