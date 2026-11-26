@@ -8,6 +8,7 @@ import {
   Clock,
   Gauge,
   History,
+  Lightbulb,
   LayoutDashboard,
   LogOut,
   Menu,
@@ -129,6 +130,12 @@ const items: NavItem[] = [
     href: "/aenderungsprotokoll",
     label: "Protokoll",
     icon: History,
+  },
+  {
+    // Glühbirnen-Vorschläge aller Nutzer (nur Admin), Nutzer 2026-11-26
+    href: "/vorschlaege",
+    label: "Vorschläge",
+    icon: Lightbulb,
   },
   {
     href: "/einstellungen",
