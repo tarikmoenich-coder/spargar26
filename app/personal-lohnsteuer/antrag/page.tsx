@@ -45,7 +45,7 @@ import {
   type LohnsteuerantragPosition,
 } from "@/lib/types";
 
-import { hatRolle } from "@/lib/rollen";
+import { darf } from "@/lib/rollen";
 import { heuteLokalIso } from "@/lib/datum";
 const CURRENT_YEAR = new Date().getFullYear();
 
@@ -142,7 +142,7 @@ function rueckmeldungZuEntwurf(p: LohnsteuerantragPosition): RueckmeldungEntwurf
 
 export default function LohnsteuerantragPage() {
   const { profile } = useProfile();
-  const canEdit = hatRolle(profile, "admin", "hr");
+  const canEdit = darf(profile, "personal.lohnsteuer:S");
 
   const [jahr, setJahr] = useState(CURRENT_YEAR);
   const [antraege, setAntraege] = useState<Lohnsteuerantrag[]>([]);

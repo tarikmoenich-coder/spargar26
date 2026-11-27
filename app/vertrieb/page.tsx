@@ -13,7 +13,7 @@ import { Store } from "lucide-react";
 import { getSupabaseClient } from "@/lib/supabase/client";
 import { ladeAlleMitFehler } from "@/lib/ladeAlle";
 import { useProfile } from "@/lib/useProfile";
-import { hatRolle } from "@/lib/rollen";
+import { darf } from "@/lib/rollen";
 import PageHeader from "@/components/PageHeader";
 import EmptyState from "@/components/EmptyState";
 import VertriebTabs from "@/components/VertriebTabs";
@@ -96,10 +96,10 @@ function ausStand(s: VtStand, zeiten: VtStandZeit[], ss: VtStandSaison | undefin
 
 export default function VertriebStaendePage() {
   const { profile } = useProfile();
-  const darfPflegen = hatRolle(profile, "admin", "hr");
+  const darfPflegen = darf(profile, "vertrieb.planung:S");
   // Position/Radius nur Admin und Management (Nutzer 2026-11-26), sonst über
   // die Karte (/vertrieb/karte). HR pflegt Name, Adresse, Zeiten.
-  const darfPosition = hatRolle(profile, "admin", "management");
+  const darfPosition = darf(profile, "vertrieb.planung:S");
 
   const [staende, setStaende] = useState<VtStand[]>([]);
   const [zeiten, setZeiten] = useState<VtStandZeit[]>([]);

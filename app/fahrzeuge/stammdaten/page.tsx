@@ -22,7 +22,7 @@ import {
 import FahrzeugeTabs from "@/components/FahrzeugeTabs";
 import PageHeader from "@/components/PageHeader";
 
-import { hatRolle } from "@/lib/rollen";
+import { darf } from "@/lib/rollen";
 import { ladeAlleSeiten } from "@/lib/ladeAlle";
 // Foto client-seitig auf eine kleine Kante herunterrechnen und als JPEG-data-URL
 // zurückgeben. Reicht, um auf der Karte das Auto zum Kennzeichen zu erkennen.
@@ -253,7 +253,7 @@ function FahrerZelle({
 
 export default function FahrzeugeStammdatenPage() {
   const { profile } = useProfile();
-  const canEdit = hatRolle(profile, "admin", "hr");
+  const canEdit = darf(profile, "fahrzeuge.stammdaten:S");
 
   const [fahrzeuge, setFahrzeuge] = useState<Fahrzeug[]>([]);
   const [tracker, setTracker] = useState<FahrzeugTracker[]>([]);

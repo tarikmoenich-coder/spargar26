@@ -15,7 +15,7 @@ import { Merge } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { getSupabaseClient } from "@/lib/supabase/client";
 import { useProfile } from "@/lib/useProfile";
-import { hatRolle } from "@/lib/rollen";
+import { darf as hatRecht } from "@/lib/rollen";
 import { ladeAlleSeiten } from "@/lib/ladeAlle";
 import { dublettenFinden, type DublettenPerson } from "@/lib/dubletten";
 import { formatDatumDE as formatDatum } from "@/lib/format";
@@ -108,7 +108,7 @@ function PersonWahl({
 
 export default function PersonalZusammenfuehrenPage() {
   const { profile } = useProfile();
-  const darf = hatRolle(profile, "admin", "hr");
+  const darf = hatRecht(profile, "personal.verwaltung:S");
   const [personen, setPersonen] = useState<Person[]>([]);
   const [laedt, setLaedt] = useState(true);
   const [modus, setModus] = useState<"zusammen" | "jahre">("zusammen");

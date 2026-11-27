@@ -11,7 +11,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { CalendarCheck } from "lucide-react";
 import { getSupabaseClient } from "@/lib/supabase/client";
 import { useProfile } from "@/lib/useProfile";
-import { hatRolle } from "@/lib/rollen";
+import { darf } from "@/lib/rollen";
 import { formatDatumDE } from "@/lib/format";
 import PageHeader from "@/components/PageHeader";
 import EmptyState from "@/components/EmptyState";
@@ -42,7 +42,7 @@ const k = (tag: number, h: VtHalbtag) => `${tag}-${h}`;
 
 export default function VertriebVerfuegbarkeitPage() {
   const { profile } = useProfile();
-  const darfPflegen = hatRolle(profile, "admin", "hr");
+  const darfPflegen = darf(profile, "vertrieb.planung:S");
 
   const [saison, setSaison] = useState(planungsSaison());
   const [personen, setPersonen] = useState<Person[]>([]);

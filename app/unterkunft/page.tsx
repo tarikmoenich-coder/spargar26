@@ -50,7 +50,7 @@ import {
   type UnterkunftZuordnungOffen,
 } from "@/lib/types";
 
-import { hatRolle, nurHausmeisterSicht } from "@/lib/rollen";
+import { darf, nurHausmeisterSicht } from "@/lib/rollen";
 const MIN_COLS = 14;
 const MIN_ROWS = 10;
 
@@ -233,13 +233,13 @@ export default function UnterkunftGrundrissPage() {
   const { profile } = useProfile();
   const router = useRouter();
   // Kacheln verschieben / Räume anlegen: nur admin.
-  const canEditPlan = hatRolle(profile, "admin");
+  const canEditPlan = darf(profile, "einstellungen.grund:S");
   // Zimmer sperren: wie bei den übrigen Zimmer-Stammdaten (RLS: admin/hr).
-  const canManage = hatRolle(profile, "admin", "hr");
+  const canManage = darf(profile, "unterkunft.immobilien:S");
   // Belegen + Umzug: admin/hr/hausmeister (RLS unterkunft_belegung). Der
   // Hausmeister macht die Zimmerübergaben und wickelt Umzüge vor Ort ab.
   const canMove =
-    hatRolle(profile, "admin", "hr", "hausmeister");
+    darf(profile, "unterkunft.belegung:S");
   // Mängel anlegen/bearbeiten: admin/hr/hausmeister (RLS unterkunft_mangel).
   const canEditMangel = canMove;
   // Hausmeister: schlanke Ansicht - Zimmer-Liste als Standard (auch am

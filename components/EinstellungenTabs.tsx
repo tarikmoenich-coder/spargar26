@@ -10,31 +10,32 @@ import { usePathname, useRouter } from "next/navigation";
 import { useProfile } from "@/lib/useProfile";
 import { useEffect, useRef } from "react";
 
-import { hatRolle } from "@/lib/rollen";
-const tabs = [
-  { href: "/einstellungen", label: "Allgemein" },
-  { href: "/einstellungen/arbeitsgruppen", label: "Arbeitsgruppen" },
-  { href: "/einstellungen/herkuenfte", label: "Herkünfte" },
-  { href: "/einstellungen/einsatzbereiche", label: "Einsatzbereiche" },
-  { href: "/einstellungen/nutzer", label: "Nutzer & Rollen" },
+import { darf, istAdmin } from "@/lib/rollen";
+import type { Profile } from "@/lib/types";
+
+// Je Reiter das nötige Recht. "Nutzer & Rollen" nur für den echten
+// Administrator (nicht Geschäftsführer, Nutzer-Vorgabe 2026-11-27).
+const tabs: { href: string; label: string; sichtbar: (p: Profile | null) => boolean }[] = [
+  { href: "/einstellungen", label: "Allgemein", sichtbar: (p) => darf(p, "einstellungen.grund:S") },
+  { href: "/einstellungen/arbeitsgruppen", label: "Arbeitsgruppen", sichtbar: (p) => darf(p, "erfassung.gruppen:S") },
+  { href: "/einstellungen/herkuenfte", label: "Herkünfte", sichtbar: (p) => darf(p, "einstellungen.grund:S") },
+  { href: "/einstellungen/einsatzbereiche", label: "Einsatzbereiche", sichtbar: (p) => darf(p, "einstellungen.grund:S") },
+  { href: "/einstellungen/nutzer", label: "Nutzer & Rollen", sichtbar: (p) => istAdmin(p) },
 ];
 
 export default function EinstellungenTabs() {
   const pathname = usePathname();
   const router = useRouter();
   const { profile } = useProfile();
-  // Rolle "zeiterfassung" darf in den Einstellungen NUR die Arbeitsgruppen
-  // pflegen (Nutzer-Vorgabe 2026-09-21): andere Reiter ausblenden und
-  // direkte Aufrufe auf die Arbeitsgruppen umleiten.
-  const nurGruppen = hatRolle(profile, "zeiterfassung") && !hatRolle(profile, "admin");
+  // Nur Reiter mit Recht zeigen; direkte Aufrufe eines anderen Reiters auf
+  // den ersten erlaubten umleiten (z.B. Stundenerfassung: nur Arbeitsgruppen,
+  // Nutzer-Vorgabe 2026-09-21).
+  const sichtbar = profile ? tabs.filter((tab) => tab.sichtbar(profile)) : [];
+  const ziel =
+    profile && sichtbar.length > 0 && !sichtbar.some((t) => t.href === pathname) ? sichtbar[0].href : null;
   useEffect(() => {
-    if (nurGruppen && pathname !== "/einstellungen/arbeitsgruppen") {
-      router.replace("/einstellungen/arbeitsgruppen");
-    }
-  }, [nurGruppen, pathname, router]);
-  const sichtbar = nurGruppen
-    ? tabs.filter((tab) => tab.href === "/einstellungen/arbeitsgruppen")
-    : tabs;
+    if (ziel) router.replace(ziel);
+  }, [ziel, router]);
   const ref = useRef<HTMLDivElement>(null);
 
   useEffect(() => {

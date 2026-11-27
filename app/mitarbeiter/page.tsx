@@ -33,7 +33,7 @@ import PageHeader from "@/components/PageHeader";
 import BeschaeftigungsabschnitteHistorie from "@/components/BeschaeftigungsabschnitteHistorie";
 import { Users } from "lucide-react";
 
-import { hatRolle } from "@/lib/rollen";
+import { darf, istAdmin } from "@/lib/rollen";
 import { datumPlusTageIso, heuteLokalIso } from "@/lib/datum";
 const CURRENT_YEAR = new Date().getFullYear();
 
@@ -292,10 +292,10 @@ export default function MitarbeiterPage() {
   const [dokumenteVertragsende, setDokumenteVertragsende] = useState("");
   const [dokumenteFehler, setDokumenteFehler] = useState<string | null>(null);
 
-  const canEdit = hatRolle(profile, "admin", "hr");
+  const canEdit = darf(profile, "personal.stamm:S");
   // "Zuletzt geändert" nur für admin (Nutzer-Vorgabe 2026-08-11) - zeigt,
   // wann welcher Nutzer diesen Stammdatensatz zuletzt bearbeitet hat.
-  const istAdmin = hatRolle(profile, "admin");
+  const istAdmin = darf(profile, "einstellungen.grund:S");
   const gruppenLabel: Record<string, string> = Object.fromEntries(
     gruppen.map((g) => [g.gruppe_nr, g.bezeichnung])
   );

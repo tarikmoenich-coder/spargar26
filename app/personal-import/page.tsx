@@ -18,7 +18,7 @@ import { personalNrFuerBereich, useBereiche } from "@/lib/useBereiche";
 import PageHeader from "@/components/PageHeader";
 import { Upload } from "lucide-react";
 import { ladeAlleSeiten } from "@/lib/ladeAlle";
-import { hatRolle } from "@/lib/rollen";
+import { darf as hatRecht } from "@/lib/rollen";
 
 const TEMPLATE_SPALTEN: Record<ImportFeld, string> = {
   personal_nr: "Personalnummer",
@@ -70,7 +70,7 @@ export default function PersonalImportPage() {
   // (Umschalter oben bzw. einziger erlaubter Bereich).
   const { profile } = useProfile();
   const bereiche = useBereiche(profile);
-  const darf = hatRolle(profile, "admin", "hr");
+  const darf = hatRecht(profile, "personal.verwaltung:S");
   const [dateiname, setDateiname] = useState<string | null>(null);
   const [erkannteSpalten, setErkannteSpalten] = useState<string[]>([]);
   const [unbekannteSpalten, setUnbekannteSpalten] = useState<string[]>([]);

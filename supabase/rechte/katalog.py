@@ -82,7 +82,6 @@ START_ROLLEN = [
         "einstellungen.einsatzbereiche": "S", "einstellungen.saisons": "S",
     }),
     ("zeiterfassung", "Stundenerfassung", "", {
-        "personal.stamm": "L",
         "erfassung.stunden": "S", "erfassung.kleidung": "S", "erfassung.gruppen": "S",
         "ernte.praemien": "S", "ernte.qualitaet": "S", "ernte.ernte": "L", "ernte.waage": "L",
         "ernte.maschinen": "S",

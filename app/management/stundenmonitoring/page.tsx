@@ -21,14 +21,14 @@ import StundenkontoBereich from "@/components/StundenkontoBereich";
 import PageHeader from "@/components/PageHeader";
 import ControllingTabs from "@/components/ControllingTabs";
 
-import { hatRolle } from "@/lib/rollen";
+import { darf } from "@/lib/rollen";
 const CURRENT_YEAR = new Date().getFullYear();
 
 export default function ControllingStundenmonitoringPage() {
   const { profile } = useProfile();
   // Muss exakt zu work_entries_write/-update in schema.sql passen (RLS).
   const canEditStunden =
-    hatRolle(profile, "admin", "hr", "zeiterfassung");
+    darf(profile, "erfassung.stunden:S");
   const canStundenkontoBuchen = kannStundenkontoBuchen(profile);
   const canStundenkontoAuszahlen = kannStundenkontoAuszahlen(profile);
 

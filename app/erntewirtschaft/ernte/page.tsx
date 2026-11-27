@@ -18,7 +18,7 @@ import { formatMenge } from "@/lib/format";
 import { ladeAlleSeiten } from "@/lib/ladeAlle";
 import { heuteLokalIso, lokalIsoPlusTage, tagesgrenzenLokal } from "@/lib/datum";
 
-import { hatRolle } from "@/lib/rollen";
+import { darf } from "@/lib/rollen";
 type EmpOpt = {
   id: string;
   personal_nr: string;
@@ -227,7 +227,7 @@ function csvExport(zeilen: KisteZyklusZeile[]) {
 
 export default function ErntewirtschaftErntePage() {
   const { profile } = useProfile();
-  const canEdit = hatRolle(profile, "admin", "hr");
+  const canEdit = darf(profile, "ernte.ernte:S");
 
   const [datumAb, setDatumAb] = useState(lokalIsoPlusTage(-7));
   const [nurLuecken, setNurLuecken] = useState(false);

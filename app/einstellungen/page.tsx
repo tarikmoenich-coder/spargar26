@@ -15,12 +15,12 @@ import { useProfile } from "@/lib/useProfile";
 import EinstellungenTabs from "@/components/EinstellungenTabs";
 import type { BereichSatz, Firma, VerpflegungsSatz } from "@/lib/types";
 
-import { hatRolle } from "@/lib/rollen";
+import { darf } from "@/lib/rollen";
 const CURRENT_YEAR = new Date().getFullYear();
 
 export default function EinstellungenAllgemeinPage() {
   const { profile } = useProfile();
-  const isAdmin = hatRolle(profile, "admin");
+  const isAdmin = darf(profile, "einstellungen.grund:S");
 
   const [saetze, setSaetze] = useState<VerpflegungsSatz[]>([]);
   const [loading, setLoading] = useState(true);

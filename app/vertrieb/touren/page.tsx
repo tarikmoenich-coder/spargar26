@@ -18,7 +18,7 @@ import { ArrowDown, ArrowUp, Car, GripVertical, Map as KartenIcon, Route, Undo2,
 import { getSupabaseClient } from "@/lib/supabase/client";
 import { ladeAlleMitFehler } from "@/lib/ladeAlle";
 import { useProfile } from "@/lib/useProfile";
-import { hatRolle } from "@/lib/rollen";
+import { darf } from "@/lib/rollen";
 import PageHeader from "@/components/PageHeader";
 import EmptyState from "@/components/EmptyState";
 import VertriebTabs from "@/components/VertriebTabs";
@@ -79,7 +79,7 @@ function tourHinweise(
 
 export default function VertriebTourenPage() {
   const { profile } = useProfile();
-  const darfPflegen = hatRolle(profile, "admin", "hr");
+  const darfPflegen = darf(profile, "vertrieb.planung:S");
 
   const [staende, setStaende] = useState<VtStand[]>([]);
   const [zeiten, setZeiten] = useState<VtStandZeit[]>([]);

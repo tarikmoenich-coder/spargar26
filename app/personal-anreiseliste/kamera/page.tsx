@@ -24,7 +24,7 @@ import PageHeader from "@/components/PageHeader";
 import DokumentKameraAufnahme from "@/components/DokumentKameraAufnahme";
 import { ArrowLeft, Check, IdCard, Car } from "lucide-react";
 
-import { hatRolle } from "@/lib/rollen";
+import { darf } from "@/lib/rollen";
 interface Person {
   employeeId: string;
   name: string;
@@ -48,7 +48,7 @@ type Schritt =
 
 export default function AnreiselisteKameraPage() {
   const { profile, loading: profilLaedt } = useProfile();
-  const canEdit = hatRolle(profile, "admin", "hr");
+  const canEdit = darf(profile, "personal.planung:S");
 
   const [personen, setPersonen] = useState<Person[]>([]);
   const [loading, setLoading] = useState(true);

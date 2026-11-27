@@ -16,7 +16,7 @@ import PageHeader from "@/components/PageHeader";
 import PersonalTabs from "@/components/PersonalTabs";
 import type { Firmenhandy } from "@/lib/types";
 
-import { hatRolle } from "@/lib/rollen";
+import { darf } from "@/lib/rollen";
 type EmpOpt = {
   id: string;
   personal_nr: string;
@@ -204,7 +204,7 @@ function syncBadge(status: Firmenhandy["sync_status"]) {
 
 export default function FirmenhandyPage() {
   const { profile } = useProfile();
-  const canEdit = hatRolle(profile, "admin", "hr");
+  const canEdit = darf(profile, "personal.handys:S");
 
   const [firmenhandys, setFirmenhandys] = useState<Firmenhandy[]>([]);
   const [mitarbeiter, setMitarbeiter] = useState<EmpOpt[]>([]);

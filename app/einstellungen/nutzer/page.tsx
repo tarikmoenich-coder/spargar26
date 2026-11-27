@@ -17,7 +17,7 @@ import { useCallback, useEffect, useState } from "react";
 import { getSupabaseClient } from "@/lib/supabase/client";
 import { useProfile } from "@/lib/useProfile";
 import { formatDatumDE } from "@/lib/format";
-import { ROLLEN, rolleLabel, hatRolle, rollenVon } from "@/lib/rollen";
+import { ROLLEN, rollenVon, rolleLabel, darf, istAdmin as istAdminProfil } from "@/lib/rollen";
 import EinstellungenTabs from "@/components/EinstellungenTabs";
 import { useBereiche } from "@/lib/useBereiche";
 import type { UserRole } from "@/lib/types";
@@ -49,7 +49,7 @@ function sortiert(rollen: UserRole[]): UserRole[] {
 
 export default function NutzerVerwaltungPage() {
   const { profile } = useProfile();
-  const istAdmin = hatRolle(profile, "admin");
+  const istAdmin = istAdminProfil(profile);
   const bereiche = useBereiche(profile);
 
   const [nutzer, setNutzer] = useState<Nutzer[]>([]);

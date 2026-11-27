@@ -16,7 +16,7 @@ import { Upload } from "lucide-react";
 import { getSupabaseClient } from "@/lib/supabase/client";
 import { ladeAlleMitFehler } from "@/lib/ladeAlle";
 import { useProfile } from "@/lib/useProfile";
-import { hatRolle } from "@/lib/rollen";
+import { darf } from "@/lib/rollen";
 import PageHeader from "@/components/PageHeader";
 import VertriebTabs from "@/components/VertriebTabs";
 import type { VtStand, VtStandZeit } from "@/lib/types";
@@ -47,7 +47,7 @@ function nameSchluessel(n: string) {
 
 export default function StaendeImportPage() {
   const { profile } = useProfile();
-  const darfPflegen = hatRolle(profile, "admin", "hr");
+  const darfPflegen = darf(profile, "vertrieb.planung:S");
 
   const [bestand, setBestand] = useState<VtStand[]>([]);
   const [bestandZeiten, setBestandZeiten] = useState<VtStandZeit[]>([]);

@@ -16,7 +16,7 @@ import { useProfile } from "@/lib/useProfile";
 import ErntewirtschaftTabs from "@/components/ErntewirtschaftTabs";
 import { formatDatumDE, formatMenge } from "@/lib/format";
 import { heuteLokalIso, lokalIsoPlusTage } from "@/lib/datum";
-import { hatRolle, darfMenue } from "@/lib/rollen";
+import { darf, darfMenue } from "@/lib/rollen";
 import type { QsKontrolle, QsSchicht, ZuckermaisSatz } from "@/lib/types";
 
 const KULTUR = "zuckermais";
@@ -103,12 +103,12 @@ export default function QualitaetPage() {
     !!profile &&
     darfMenue(profile, "/qualitaet");
   const canWrite =
-    hatRolle(profile, "admin", "hr", "zeiterfassung", "erntewirtschaft");
+    darf(profile, "ernte.qualitaet:S");
   const canDelete =
-    hatRolle(profile, "admin", "hr", "erntewirtschaft");
+    darf(profile, "ernte.qualitaet:S");
   // Den Satz (zuckermais_saetze) darf nur admin ändern (RLS), siehe
   // app/praemien/zuckermais/page.tsx.
-  const canSatzAendern = hatRolle(profile, "admin");
+  const canSatzAendern = darf(profile, "einstellungen.grund:S");
 
   // --- Formular ---
   const [datum, setDatum] = useState(heuteIso());

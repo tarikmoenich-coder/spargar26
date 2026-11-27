@@ -31,7 +31,7 @@ import {
 } from "@/lib/types";
 import { formatDatumDE } from "@/lib/format";
 
-import { hatRolle } from "@/lib/rollen";
+import { darf } from "@/lib/rollen";
 const CURRENT_YEAR = new Date().getFullYear();
 // Das Formular "Doppelte Haushaltsführung" wird seit 2026-08-11 NICHT mehr
 // als Datei hochgeladen (Nutzer-Vorgabe) - die über das Eingabeformular
@@ -74,7 +74,7 @@ function statusFarbe(status: LohnsteuerStatus): string {
 
 export default function LohnsteuerPage() {
   const { profile } = useProfile();
-  const canEdit = hatRolle(profile, "admin", "hr");
+  const canEdit = darf(profile, "personal.lohnsteuer:S");
 
   const [jahr, setJahr] = useState(CURRENT_YEAR);
   const [showInactive, setShowInactive] = useState(false);

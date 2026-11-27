@@ -31,7 +31,7 @@ import {
   FARBE_ZULAGE_TH,
 } from "@/lib/farben";
 
-import { hatRolle } from "@/lib/rollen";
+import { darf } from "@/lib/rollen";
 const OHNE_GRUPPE_KEY = "__ohne__";
 
 const CURRENT_YEAR = new Date().getFullYear();
@@ -223,10 +223,10 @@ export default function UebersichtPage() {
     useState<string | null>(null);
 
   const canEdit =
-    hatRolle(profile, "admin", "lohnabrechnung");
+    darf(profile, "lohn.uebersicht:S");
   // Monatsabschluss: eigene Berechtigung, deckt sich mit der RLS-Policy
   // "periods_write" (nicht mit canEdit/lohnabrechnung).
-  const canCloseMonth = hatRolle(profile, "admin", "hr");
+  const canCloseMonth = darf(profile, "einstellungen.saisons:S");
 
   // Fehler beim Laden/Speichern (Rundum-Check 2026-11-25: vorher still
   // verschluckt).
@@ -323,7 +323,7 @@ export default function UebersichtPage() {
       ?.kuerzel ?? "";
   const passtZurFirma = (employeeId: string) =>
     !firmaFilter || firmaVon(employeeId) === firmaFilter;
-  const canFirmaSetzen = hatRolle(profile, "admin", "hr", "lohnabrechnung");
+  const canFirmaSetzen = darf(profile, "lohn.saison:S");
 
   async function firmaSetzen() {
     if (!firmaSetzenZiel || ausgewaehlt.size === 0) return;

@@ -1,4 +1,4 @@
-import { hatRolle } from "@/lib/rollen";
+import { darf } from "@/lib/rollen";
 
 // Rollen-Regeln fürs Stundenkonto (Nutzer-Vorgabe 2026-08-20/21) - an
 // EINER Stelle definiert, damit die Stundenerfassung UND das Controlling-
@@ -12,8 +12,8 @@ import { hatRolle } from "@/lib/rollen";
 // Stundenerfassung selbst. Seit 2026-11-16 MIT Lohnwirkung (der Saldo
 // zählt sofort zum Brutto) - Nutzer-Vorgabe: zeiterfassung darf trotzdem
 // weiterhin buchen.
-export function kannStundenkontoBuchen(profile: Parameters<typeof hatRolle>[0]): boolean {
-  return hatRolle(profile, "admin", "hr", "zeiterfassung");
+export function kannStundenkontoBuchen(profile: Parameters<typeof darf>[0]): boolean {
+  return darf(profile, "erfassung.stunden:S");
 }
 
 // Ursprünglich: "In Auszahlung umwandeln". Seit 2026-11-16 gibt es den
@@ -23,6 +23,6 @@ export function kannStundenkontoBuchen(profile: Parameters<typeof hatRolle>[0]):
 // Nutzer-Vorgabe 2026-08-21: hr und management dürfen das ebenfalls sehen
 // (nicht nur admin/lohnabrechnung wie beim ursprünglichen Bau am
 // 2026-08-20) - ausdrücklich NICHT zeiterfassung.
-export function kannStundenkontoAuszahlen(profile: Parameters<typeof hatRolle>[0]): boolean {
-  return hatRolle(profile, "admin", "hr", "lohnabrechnung", "management");
+export function kannStundenkontoAuszahlen(profile: Parameters<typeof darf>[0]): boolean {
+  return darf(profile, "lohn.stundenkonto:S", "controlling:L");
 }

@@ -18,7 +18,7 @@ import PageHeader from "@/components/PageHeader";
 import ControllingTabs from "@/components/ControllingTabs";
 import TageRaster from "@/components/TageRaster";
 
-import { hatRolle } from "@/lib/rollen";
+import { darf } from "@/lib/rollen";
 import { ladeAlleSeiten } from "@/lib/ladeAlle";
 function serieKey(s: ArbeitstageSerie) {
   return `${s.employee_id}-${s.serie_bis}`;
@@ -28,7 +28,7 @@ export default function ControllingArbeitstagePage() {
   const { profile } = useProfile();
   // Muss zu work_entries_write/-update (RLS) passen - wie Stundenerfassung.
   const canEditStunden =
-    hatRolle(profile, "admin", "hr", "zeiterfassung");
+    darf(profile, "erfassung.stunden:S");
 
   const [arbeitsserie, setArbeitsserie] = useState<ArbeitstageSerie[]>([]);
   const [loadingArbeitsserie, setLoadingArbeitsserie] = useState(true);

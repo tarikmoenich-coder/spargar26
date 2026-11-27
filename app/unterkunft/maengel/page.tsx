@@ -26,12 +26,12 @@ import {
   type UnterkunftZimmer,
 } from "@/lib/types";
 
-import { hatRolle } from "@/lib/rollen";
+import { darf } from "@/lib/rollen";
 import { ladeAlleSeiten } from "@/lib/ladeAlle";
 export default function UnterkunftMaengelPage() {
   const { profile } = useProfile();
   const canEdit =
-    hatRolle(profile, "admin", "hr", "hausmeister");
+    darf(profile, "unterkunft.maengel:S");
 
   const [gebaeude, setGebaeude] = useState<UnterkunftGebaeude[]>([]);
   const [wohneinheiten, setWohneinheiten] = useState<

@@ -78,18 +78,23 @@ export function useProfile() {
         const { data, error } = await mitTimeout(
           supabase
             .from("profiles")
-            // "*" statt Spaltenliste: funktioniert vor und nach der Migration
-            // 2026-11-24f (Spalte rollen) - profiles hat keine Spaltenrechte.
-            .select("*")
+            // "*" statt Spaltenliste (profiles hat keine Spaltenrechte) plus die
+            // vorberechneten Rechte (profil_rechte, Rechte-Umbau 2026-11-28) -
+            // eine Abfrage, kein zusätzlicher Weg zur Datenbank.
+            .select("*, profil_rechte(rechte, bereiche, admin, angemeldet, buero)")
             .eq("id", uid)
             .single(),
           LADE_TIMEOUT_MS
         );
         if (abgehaengt) return;
         if (!error && data) {
-          const p = data as Profile;
+          const p = data as Profile & { profil_rechte?: unknown };
+          // PostgREST liefert die 1:1-Beziehung als Objekt (ältere Versionen
+          // als Liste mit einem Eintrag).
+          const pr = Array.isArray(p.profil_rechte) ? p.profil_rechte[0] : p.profil_rechte;
           setProfile({
             ...p,
+            profil_rechte: (pr as Profile["profil_rechte"]) ?? null,
             rollen: Array.isArray(p.rollen) && p.rollen.length > 0 ? p.rollen : [p.role],
           });
         } else if (!error) {

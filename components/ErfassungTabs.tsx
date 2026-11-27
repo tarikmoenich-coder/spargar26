@@ -4,26 +4,23 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useRef } from "react";
 import { useProfile } from "@/lib/useProfile";
-import type { UserRole } from "@/lib/types";
+import { darf } from "@/lib/rollen";
 
-import { hatRolle } from "@/lib/rollen";
 interface Tab {
   href: string;
   label: string;
-  // Fehlt roles, sehen alle Rollen mit Zugriff auf diesen Reiter-Bereich
-  // den Tab (bisheriges Verhalten). "Lager" ist bewusst enger (Nutzer-
-  // Vorgabe 2026-08-25: "Den Lagerbestand soll nur 'admin und hr' sehen
-  // und bearbeiten können. 'Stundenerfassung' macht nur die Ausgabe") -
-  // zeiterfassung soll den Tab gar nicht erst sehen, nicht nur eine
-  // "keine Berechtigung"-Seite dahinter finden.
-  roles?: UserRole[];
+  // Recht (lesen), das den Reiter einblendet. "Lager" ist bewusst eigenes
+  // Recht (Nutzer-Vorgabe 2026-08-25: "Den Lagerbestand soll nur 'admin und
+  // hr' sehen und bearbeiten können. 'Stundenerfassung' macht nur die
+  // Ausgabe").
+  recht: string;
 }
 
 const tabs: Tab[] = [
-  { href: "/erfassung", label: "Erfassung" },
-  { href: "/erfassung-import", label: "Import" },
-  { href: "/arbeitskleidung", label: "Arbeitskleidung" },
-  { href: "/lager", label: "Lager", roles: ["admin", "hr"] },
+  { href: "/erfassung", label: "Erfassung", recht: "erfassung.stunden:L" },
+  { href: "/erfassung-import", label: "Import", recht: "erfassung.stunden:S" },
+  { href: "/arbeitskleidung", label: "Arbeitskleidung", recht: "erfassung.kleidung:L" },
+  { href: "/lager", label: "Lager", recht: "erfassung.lager:L" },
 ];
 
 // Analog zu components/PersonalTabs.tsx - siehe dort für die Erklärung der
@@ -33,9 +30,7 @@ const tabs: Tab[] = [
 export default function ErfassungTabs() {
   const pathname = usePathname();
   const { profile } = useProfile();
-  const sichtbareTabs = tabs.filter(
-    (tab) => !tab.roles || hatRolle(profile, ...tab.roles)
-  );
+  const sichtbareTabs = tabs.filter((tab) => darf(profile, tab.recht));
   const ref = useRef<HTMLDivElement>(null);
 
   useEffect(() => {

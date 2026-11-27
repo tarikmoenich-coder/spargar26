@@ -26,7 +26,7 @@ import ErntewirtschaftTabs from "@/components/ErntewirtschaftTabs";
 import ErnteMaschinenKarte, { type MaschineLive } from "@/components/ErnteMaschinenKarte";
 import { getSupabaseClient } from "@/lib/supabase/client";
 import { useProfile } from "@/lib/useProfile";
-import { darfMenue } from "@/lib/rollen";
+import { MENUE_RECHTE, darfMenue } from "@/lib/rollen";
 import { formatMenge } from "@/lib/format";
 import type { ErnteErtragTag, ErnteKetteLuecke, FeldGeojson } from "@/lib/types";
 

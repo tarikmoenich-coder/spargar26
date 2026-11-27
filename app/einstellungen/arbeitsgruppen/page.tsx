@@ -14,7 +14,7 @@ import { useBereiche } from "@/lib/useBereiche";
 import EinstellungenTabs from "@/components/EinstellungenTabs";
 import { KULTUREN, KULTUR_LABELS, type Arbeitsgruppe } from "@/lib/types";
 
-import { hatRolle } from "@/lib/rollen";
+import { darf } from "@/lib/rollen";
 const leer = { gruppe_nr: "", bezeichnung: "", reihenfolge: "0", kultur: "", bereich: "" };
 
 export default function ArbeitsgruppenPage() {
@@ -22,7 +22,7 @@ export default function ArbeitsgruppenPage() {
   // Geschäftsbereich (Stufe 2): Vertriebs-Stände sind eigene Gruppen.
   const bereiche = useBereiche(profile);
   // admin und zeiterfassung dürfen Arbeitsgruppen pflegen (RLS: arbeitsgruppen_write)
-  const isAdmin = hatRolle(profile, "admin", "zeiterfassung");
+  const isAdmin = darf(profile, "erfassung.gruppen:S");
 
   const [gruppen, setGruppen] = useState<Arbeitsgruppe[]>([]);
   const [loading, setLoading] = useState(true);

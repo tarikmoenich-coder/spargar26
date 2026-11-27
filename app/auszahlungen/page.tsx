@@ -27,7 +27,7 @@ import {
   FARBE_ZULAGE_TH,
 } from "@/lib/farben";
 
-import { hatRolle } from "@/lib/rollen";
+import { darf } from "@/lib/rollen";
 import { heuteLokalIso } from "@/lib/datum";
 function monatsSchluessel(d: Date) {
   const mm = String(d.getMonth() + 1).padStart(2, "0");
@@ -219,7 +219,7 @@ const MONATSNAMEN = [
 export default function AuszahlungenPage() {
   const { profile } = useProfile();
   const canKaution =
-    hatRolle(profile, "admin", "kasse", "lohnabrechnung");
+    darf(profile, "lohn.auszahlungen:S");
   const canSepa = canKaution;
 
   const [belege, setBelege] = useState<AuszahlungsbelegSummary[]>([]);

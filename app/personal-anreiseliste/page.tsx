@@ -30,7 +30,7 @@ import PageHeader from "@/components/PageHeader";
 import { Camera, Plane } from "lucide-react";
 import SvFragebogenFormular from "@/components/SvFragebogenFormular";
 
-import { hatRolle } from "@/lib/rollen";
+import { darf } from "@/lib/rollen";
 import { heuteLokalIso } from "@/lib/datum";
 // Saison-Jahr für den SV-Fragebogen eines Kandidaten: aus dem geplanten
 // Ankunftsdatum abgeleitet - so rechnen auch die Sicht
@@ -51,7 +51,7 @@ interface Vertragsfeld {
 
 export default function AnreiselistePage() {
   const { profile } = useProfile();
-  const canEdit = hatRolle(profile, "admin", "hr");
+  const canEdit = darf(profile, "personal.planung:S");
 
   const [kandidaten, setKandidaten] = useState<PersonalKandidat[]>([]);
   const [employees, setEmployees] = useState<Employee[]>([]);

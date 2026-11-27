@@ -13,7 +13,7 @@ import { FileUp } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { getSupabaseClient } from "@/lib/supabase/client";
 import { useProfile } from "@/lib/useProfile";
-import { hatRolle } from "@/lib/rollen";
+import { darf as hatRecht } from "@/lib/rollen";
 import { ladeAlleSeiten } from "@/lib/ladeAlle";
 import {
   hscCsvLesen,
@@ -49,7 +49,7 @@ function firmaRaten(dateiname: string): string {
 
 export default function PersonalImportHscPage() {
   const { profile } = useProfile();
-  const darf = hatRolle(profile, "admin", "hr");
+  const darf = hatRecht(profile, "personal.verwaltung:S");
   // Steht der Bereichs-Umschalter auf "Landwirtschaft", blendet die
   // Datenbank die Vertriebs-Firmen aus - dann klarer Hinweis statt leerer
   // Auswahl.
