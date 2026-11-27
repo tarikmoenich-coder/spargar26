@@ -44,33 +44,37 @@ Recht: neues Sonderrecht **„Spargel-Kategorien festlegen“** – nur die Roll
 
 Optional je Feld eine **Standard-Kategorie** (wie heute die Feldstufen) – nur als Vorschlag.
 
-### 2. Tagesdaten
-Tabelle `spargel_rohdaten`: Person, Datum, Feld, kg, Stunden, Kisten, **Kategorie aus dem
-Import**, Herkunft der Zeile (Import / eigene Waage).
-- **Jetzt:** täglicher Import der Tagesauswertung (Spalten C–O, als Datei oder per Einfügen).
-  Personen über die Personalnummer, Felder über den Namen (einmalige Zuordnung Feldname → Feld).
-  Die Import-Kategorie wird aus dem Preis/kg über die Kategorien-Tabelle bestimmt. Gebraucht
-  werden nur Pers.-Nr., Datum, kg, Preis/kg, Std., Kisten, Feld; Ges.Std.Lohn, Akkord und
-  Akkord-Stu entfallen. Doppelter Import desselben Tages wird erkannt.
-- Zeilen ohne Kategorie (Preis/kg 0 oder unbekannt) werden markiert und müssen gesetzt werden.
-- **Gruppen-Zeilen** („Gruppe 1–7“) werden für Feld- und Ertragsstatistik übernommen, bekommen
-  aber keine Prämie und werden nicht auf Personen verteilt.
-- **Später:** dieselbe Tabelle wird automatisch aus den Spinnen-/Waagedaten gefüllt
-  (Kisten je Person, Tag, Feld). Die Prämienberechnung bleibt gleich.
+### 2. Datenquelle: die neue Ernteerfassung (kein laufender Import)
+Nutzer-Vorgabe 2026-11-28: kein Import des alten Programms, die Daten kommen aus der Ernteerfassung.
+- **kg je Person, Tag und Feld**: gewogene Kisten (`ernte_kiste_zyklus`, Status gewogen, Netto-kg,
+  Feld aus GPS, Person aus der Schicht).
+- **Stunden**: aus der Stundenerfassung (`work_entries`) – laut Erntewirtschafts-Plan bleibt der
+  Stundenzettel führend, die Maschinenzeit ist nur Kontrollgröße.
+- **Gruppenmaschinen** (Grünspargel, mehrere Personen): keine Prämie, nur Statistik.
+- **Vorgeschlagene Kategorie** (ersetzt die Import-Kategorie): Standard-Kategorie des Feldes; ab
+  dem zweiten Erntetag die Kategorie des Feldes vom Vortag.
+
+### 2a. Daten 2026 einmalig übernehmen
+„1 Rohdaten Flächen“ (7.489 Zeilen) einmalig als **Saison 2026** übernehmen: Person, Datum, Feld,
+kg, Std., Kisten, die damals wirksame Kategorie (Spalte P) und die Import-Kategorie (aus Preis/kg).
+Gruppen-Zeilen als Gruppe. Zweck: Vorjahresvergleich je Feld/Person, Startwerte für die
+Standard-Kategorien je Feld, Prüfung der neuen Berechnung (muss die Excel-Summen ergeben).
+**Kein Einfluss auf den Lohn 2026** (ist über die Excel gelaufen).
 
 ### 3. Kategorie übernehmen oder tageweise überschreiben
 Seite Prämien → Spargel, Ansicht **je Tag**: alle Felder des Tages mit ihrer Import-Kategorie.
 - Je **Tag** eine Kategorie für alle Felder setzen, je **Feld und Tag**, oder je **Person**
   (kommt oft vor: schnellere Personen bekommen eine höhere Kategorie). Die Zeilen sind dafür nach
   kg/h sortierbar.
-- Wirksam ist: Einzelzeile → sonst Feld/Tag → sonst Import → sonst Standard des Feldes.
-- Überschriebene Werte sind markiert (wie „Unterschied“), mit Import-Wert daneben; jede
+- Wirksam ist: Person → sonst Feld/Tag → sonst Tag (alle Felder) → sonst Vorschlag (Vortag /
+  Standard des Feldes).
+- Überschriebene Werte sind markiert (wie „Unterschied“), mit Vorschlag daneben; jede
   Änderung steht im Änderungsprotokoll. Recht: „Spargel-Kategorien festlegen“ (nur
   Geschäftsführer). Andere sehen die Kategorien nur.
 
 ### 4. Berechnung (Datenbank-Sicht `spargel_praemie_tag`)
-Genau wie die Excel: Preis je kg aus der wirksamen Kategorie, Akkordwert, Lohnanspruch,
-Prämie = max(0, Akkordwert − Lohn) je Zeile, Differenz zur Info. Stornieren wie bei
+Wie die Excel, je Person und Tag (siehe unten): Preis je kg aus der wirksamen Kategorie,
+Akkordwert, Lohnanspruch, Prämie = max(0, Akkordwert − Lohn), Fehlbetrag zur Info. Stornieren wie bei
 Zuckermais/Erdbeeren.
 
 ### 5. Ausgaben
@@ -82,10 +86,18 @@ Zuckermais/Erdbeeren.
 - **Lohn**: Saisonsumme fließt automatisch in `spargel_praemie` der Lohnübersicht (Spalte gibt es
   schon), wie bei Zuckermais.
 
+## Prämie je Person und Tag
+Die Stundenerfassung kennt Stunden je Person und Tag (nicht je Feld). Gerechnet wird daher je
+Person und Tag: Akkordwert = Summe über die Felder (kg × €/kg der jeweiligen Kategorie),
+Lohn = Tagesstunden × Mindestlohn, Prämie = Differenz, wenn positiv. 2026 hat niemand am selben
+Tag auf mehreren Feldern geerntet (6.905 Personen-Tage) – das Ergebnis ist damit identisch zur
+Excel (Prüfsumme Saison 2026: 49.541,50 € Prämie über alle Personen-Zeilen).
+
 ## Antworten (Nutzer, 2026-11-28)
 1. Gruppen-Zeilen: keine Verteilung auf Personen, keine Prämie.
 2. Negative Tage werden nicht verrechnet; Fehlbetrag nur als Liste (wie Zuckermais), aufsummiert.
 3. 0,25 und 1,1 komplett ignorieren.
 4. Kategorie 0 soll es nicht geben (in der Excel: 10 Zeilen am 18.04. ohne Feld).
-5. Import = Spalten C–O, Tagesauswertung des alten Erntewirtschafts-Programms.
+5. Import = Spalten C–O, Tagesauswertung des alten Erntewirtschafts-Programms. Kein laufender
+   Import – Datenquelle ist die neue Ernteerfassung; nur 2026 wird einmalig übernommen.
 6. Kategorien festlegen/überschreiben: nur Rolle Geschäftsführer.
