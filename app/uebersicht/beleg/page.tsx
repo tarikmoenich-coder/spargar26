@@ -293,7 +293,7 @@ function BelegInner() {
   const wohnenSatz = anwTage > 0 ? wohnen / anwTage : null;
   const istPauschal = row.abrechnungsart === "pauschal";
 
-  // Prämien: mit Detailzugriff einzeln, der Rest (Zuckermais/Erdbeeren aus
+  // Prämien: mit Detailzugriff einzeln, der Rest (Zuckermais/Erdbeeren/Spargel aus
   // der Tageserfassung) ergibt sich als Differenz zur Summe der Sicht - so
   // geht die Aufschlüsselung immer exakt auf.
   const praemienZeilen: Zeile[] = [];
@@ -314,7 +314,7 @@ function BelegInner() {
     const rest = Math.round((praemienSumme - bekannt) * 100) / 100;
     if (Math.abs(rest) > 0.004) {
       praemienZeilen.push({
-        label: "Prämien aus Tageserfassung (Zuckermais/Erdbeeren)",
+        label: "Prämien aus Tageserfassung (Zuckermais/Erdbeeren/Spargel)",
         betrag: rest,
         art: "plus",
       });

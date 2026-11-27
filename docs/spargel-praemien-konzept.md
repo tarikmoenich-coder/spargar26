@@ -170,5 +170,9 @@ Excel (Prüfsumme Saison 2026: 49.541,50 € Prämie über alle Personen-Zeilen)
 - Stufe 2 (2026-11-28): Preise & Standard je Feld pflegen, Saison anlegen, Kategorien je Tag
   (alle Felder / Feld / Person) mit Fortschreibung; Preis je kg in den Tageszeilen
   festgeschrieben (Preisänderungen ändern abgerechnete Tage nicht). 2026 bleibt unverändert.
-- Stufe 3 offen: Tageszeilen aus der Ernteerfassung, Prämienstunden aus Maschinendaten,
-  Prüfen/Freigeben, Lohn-Anbindung.
+- Stufe 3 (2026-11-28, Migration 28f): Tagesvorschau aus der Ernteerfassung (Einzel je
+  Person/Feld, Grünspargel-Gruppen gleich verteilt), Prüfhinweise, Stundenkorrektur mit
+  Begründung, Freigabe/Zurücknehmen (Sonderrecht), Lohn über season_summary.
+  **Stunden vorerst aus dem Stundenzettel** – die Prämienstunden aus den Maschinendaten
+  (Abschnitt oben) ersetzen die CTE `stunden` in `spargel_tag_vorschau`, sobald eine echte
+  Maschine gefahren ist und die Schwellen kalibriert sind.
