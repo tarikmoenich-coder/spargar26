@@ -48,11 +48,13 @@ Optional je Feld eine **Standard-Kategorie** (wie heute die Feldstufen) – nur 
 Nutzer-Vorgabe 2026-11-28: kein Import des alten Programms, die Daten kommen aus der Ernteerfassung.
 - **kg je Person, Tag und Feld**: gewogene Kisten (`ernte_kiste_zyklus`, Status gewogen, Netto-kg,
   Feld aus GPS, Person aus der Schicht).
-- **Stunden**: aus der Stundenerfassung (`work_entries`) – laut Erntewirtschafts-Plan bleibt der
-  Stundenzettel führend, die Maschinenzeit ist nur Kontrollgröße.
-- **Gruppenmaschinen** (Grünspargel, mehrere Personen): keine Prämie, nur Statistik.
-- **Vorgeschlagene Kategorie** (ersetzt die Import-Kategorie): Standard-Kategorie des Feldes; ab
-  dem zweiten Erntetag die Kategorie des Feldes vom Vortag.
+- **Prämienstunden**: aus den Maschinendaten (Abschnitt „Prämienstunden“ unten). Die
+  Stundenerfassung (`work_entries`) dient nur behelfsweise, wenn Maschinendaten fehlen.
+  (Nutzer-Vorgabe 2026-11-28; der Lohn selbst bleibt beim Stundenzettel.)
+- **Gruppenmaschinen** (Grünspargel, `max_personen > 1`, in der App vorgesehen): Prämie je
+  Maschine und Tag, **gleichmäßig auf alle angemeldeten Personen verteilt**.
+- **Vorgeschlagene Kategorie**: Standard-Kategorie des Feldes = die **erste Kategorie des Feldes
+  in den Rohdaten 2026**; ab dem Folgetag jeweils die (ggf. geänderte) Kategorie des Vortags.
 
 ### 2a. Daten 2026 einmalig übernehmen
 „1 Rohdaten Flächen“ (7.489 Zeilen) einmalig als **Saison 2026** übernehmen: Person, Datum, Feld,
@@ -86,9 +88,64 @@ Zuckermais/Erdbeeren.
 - **Lohn**: Saisonsumme fließt automatisch in `spargel_praemie` der Lohnübersicht (Spalte gibt es
   schon), wie bei Zuckermais.
 
+## Prämienstunden aus den Maschinendaten
+
+Nutzer-Vorgabe 2026-11-28: **Anmeldung an der Maschine bis letzte Bewegung der Maschine des
+Tages; Standzeiten über 30 Minuten zwischen zwei Bewegungen sind Pausen** und zählen nicht.
+
+### Begriffe
+- **Anmeldung** = Ausweis-Scan an der Maschine (`ernte_schicht.beginn`).
+- **Aktivität** = eine Minute, in der die Maschine sich bewegt hat **oder** eine Kiste gescannt
+  wurde (ein Kisten-Scan beweist Arbeit, auch ohne messbare Bewegung).
+- **Bewegung** (robust gegen GPS-Zittern, das bei 2,5–5 m liegt): je Minute die mittlere Position
+  (Median) aus `ernte_position`; die Minute zählt als Bewegung, wenn sie mindestens
+  `bewegung_min_meter` (Start: 3 m) von der Median-Position zwei Minuten vorher entfernt ist.
+  Punkte mit schlechtem Empfang (`hdop` > Grenze) zählen nicht. Eine erntende Spinne legt in zwei
+  Minuten deutlich mehr als 3 m zurück, Zittern im Stand im Mittel nicht.
+- **Standzeit** = Zeit zwischen zwei Aktivitäten. **> 30 min** (`pause_ab_min`) = Pause, wird ganz
+  abgezogen; ≤ 30 min zählt als Arbeitszeit.
+
+### Formel je Schicht
+Prämienstunden = (letzte Aktivität − Anmeldung) − Summe der Pausen.
+
+### Sonderfälle (alle Regeln fest, nichts bleibt offen)
+| Fall | Regel |
+|---|---|
+| Zwischen Anmeldung und erster Aktivität > 30 min | gilt als Pause (wie zwischen zwei Bewegungen) |
+| Bewegung nach dem Ende der Schicht (nächste Person meldet sich an, Tagesende) | zählt nicht – das Schichtfenster begrenzt |
+| Rangieren am Abend: Bewegungsblock nach der letzten Kiste, durch > 30 min Pause getrennt | zählt nicht (sonst verlängert z.B. ein Umsetzen am Abend die Stunden) |
+| Mehrere Schichten einer Person am Tag (Maschinenwechsel) | Stunden je Schicht, dann je Person und Tag addiert |
+| Datenlücke (Box sendet nichts, auch kein Heartbeat) > 30 min | **nicht** automatisch Pause/Arbeit: Tag wird „zu prüfen“ markiert |
+| Box sendet Heartbeat, aber keine Position | gilt als Standzeit (Box lebt, Maschine steht) |
+| Anmeldung, aber keine Aktivität | 0 Prämienstunden, Tag „zu prüfen“ |
+| Kisten ohne Anmeldung (Ausweis vergessen) | bleiben „ungeklärt“ (wie heute), keine Prämie, bis zugeordnet |
+| Keine Maschinendaten für den Tag | behelfsweise Stunden aus der Stundenerfassung, sichtbar markiert |
+| Prämienstunden weichen stark vom Stundenzettel ab (> `abweichung_max_h`, Start 1,5 h) | „zu prüfen“ |
+| Tag | Kalendertag Europe/Berlin der Anmeldung; minutengenau, keine Rundung |
+
+### Gruppenmaschinen (Grünspargel)
+Jede angemeldete Person bekommt ihre Prämienstunden wie oben (ab ihrer Anmeldung, Pausen der
+Maschine). Prämie der Maschine am Tag = Akkordwert aller Kisten der Maschine (kg × €/kg) − Summe
+der Lohnansprüche aller Personen; wenn positiv, **gleichmäßig** auf die Personen verteilt.
+
+### Prüfen und Freigeben
+- Je Tag eine Liste: Person, Anmeldung, letzte Aktivität, Pausen, Prämienstunden, Stundenzettel,
+  Abweichung, Markierung „zu prüfen“ mit Grund.
+- Markierte Zeilen muss die Geschäftsführung klären: Vorschlag übernehmen, Stundenzettel
+  übernehmen oder Stunden von Hand setzen (mit Begründung, im Änderungsprotokoll).
+- **Freigabe je Tag**: Stunden, Kategorie und Prämie werden festgeschrieben (Schnappschuss) –
+  spätere Datenänderungen oder das Löschen alter GPS-Daten (365 Tage) ändern nichts mehr. Nur
+  freigegebene Tage fließen in den Lohn.
+
+### Voraussetzungen / Kalibrierung vor der Saison
+1. Prüfen, ob die Box im Stand regelmäßig Positionen oder Heartbeats schickt (sonst sind Stehen
+   und Funkloch nicht zu unterscheiden).
+2. `bewegung_min_meter` und `hdop`-Grenze mit Pilotdaten einstellen: ein Tag mit bekannten
+   Pausen (handschriftlich notiert) muss genau diese Pausen ergeben.
+3. Alle Schwellen in `ernte_konfig`, ohne Programmänderung anpassbar.
+
 ## Prämie je Person und Tag
-Die Stundenerfassung kennt Stunden je Person und Tag (nicht je Feld). Gerechnet wird daher je
-Person und Tag: Akkordwert = Summe über die Felder (kg × €/kg der jeweiligen Kategorie),
+Gerechnet wird je Person und Tag: Akkordwert = Summe über die Felder (kg × €/kg der jeweiligen Kategorie),
 Lohn = Tagesstunden × Mindestlohn, Prämie = Differenz, wenn positiv. 2026 hat niemand am selben
 Tag auf mehreren Feldern geerntet (6.905 Personen-Tage) – das Ergebnis ist damit identisch zur
 Excel (Prüfsumme Saison 2026: 49.541,50 € Prämie über alle Personen-Zeilen).
