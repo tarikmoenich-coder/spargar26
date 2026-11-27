@@ -6,7 +6,7 @@ Aufruf: python3 matrix_bericht.py matrix.txt > bericht.md
 """
 import sys
 
-SUBJEKTE = ["anon", "ohne_profil", "inaktiv_admin", "admin", "hr", "zeiterfassung",
+SUBJEKTE = ["anon", "ohne_profil", "inaktiv_admin", "admin", "geschaeftsfuehrer", "hr", "zeiterfassung",
             "kasse", "lohnabrechnung", "pruefer", "management", "erntewirtschaft",
             "hausmeister", "waage"]
 m = {}

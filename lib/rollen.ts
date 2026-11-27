@@ -120,6 +120,15 @@ export function bereicheVon(profile: ProfilLike): string[] {
   return profile.profil_rechte?.bereiche ?? [];
 }
 
+// Bereiche, in denen der Nutzer eines der Rechte hat (Stufe 2: Bereiche je
+// Rolle) - wie bereiche_fuer() in der Datenbank, ohne gewählte Ansicht.
+export function bereicheFuer(profile: ProfilLike, ...rechte: string[]): string[] {
+  if (!profile || profile.aktiv === false) return [];
+  const rb = profile.profil_rechte?.rechte_bereich;
+  if (!rb) return bereicheVon(profile);
+  return Array.from(new Set(rechte.flatMap((r) => rb[r] ?? []))).sort();
+}
+
 // Schlanke Hausmeister-Ansicht der Unterkunft (Zimmer-Liste statt Grundriss-
 // Werkzeuge, nur Immobilien/Belegungsplan/Auszüge/Reparaturen/Planung):
 // wer in der Unterkunft arbeitet, aber keine Kontrollen machen darf.
@@ -215,6 +224,9 @@ export function darfMenue(profile: ProfilLike, href: string): boolean {
   switch (href) {
     case "/vorschlaege":
       return istAdmin(profile);
+    case "/vertrieb":
+      // Vertriebsplanung gibt es nur im Bereich Vertrieb
+      return bereicheFuer(profile, "vertrieb.planung:L").includes("VT");
     case "/einstellungen":
       return istAdmin(profile) || darf(profile, "einstellungen.grund:S", "erfassung.gruppen:S");
   }

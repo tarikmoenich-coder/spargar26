@@ -138,7 +138,7 @@ export default function DashboardPage() {
       // die Abweichungen schon).
       lohn: darf(profile, "lohn.uebersicht:S") && !controlling,
       unterkunft: darfMenue(profile, "/unterkunft"),
-      vertrieb: darfMenue(profile, "/vertrieb") && bereicheVon(profile).includes("VT"),
+      vertrieb: darfMenue(profile, "/vertrieb"),
       vorschlaege: istAdmin(profile),
       protokoll: darfMenue(profile, "/aenderungsprotokoll"),
       ernte: darf(profile, "ernte.anbau:S"),

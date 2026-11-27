@@ -81,7 +81,7 @@ export function useProfile() {
             // "*" statt Spaltenliste (profiles hat keine Spaltenrechte) plus die
             // vorberechneten Rechte (profil_rechte, Rechte-Umbau 2026-11-28) -
             // eine Abfrage, kein zusätzlicher Weg zur Datenbank.
-            .select("*, profil_rechte(rechte, bereiche, admin, angemeldet, buero)")
+            .select("*, profil_rechte(*)")
             .eq("id", uid)
             .single(),
           LADE_TIMEOUT_MS

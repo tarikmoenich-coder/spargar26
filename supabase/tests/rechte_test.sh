@@ -10,6 +10,11 @@ mkdir -p "$AUS"
 STRUKTUR_JSON="$AUS/struktur.json" "$HIER/nachbau_laden.sh" "$LOKAL" "$DB"
 python3 "$HIER/testdaten.py" "$AUS/struktur.json" > "$AUS/testdaten.sql"
 psql $LOKAL -d "$DB" -q -f "$AUS/testdaten.sql" 2>&1 | grep ERROR && { echo "Testdaten fehlerhaft"; exit 1; } || true
+# Seit dem Rechte-Umbau (2026-11-28): Rollen + Katalog sind Daten, nicht Struktur
+if psql $LOKAL -d "$DB" -Atc "select to_regclass('public.rolle')" | grep -q rolle; then
+  (cd "$HIER/../rechte" && python3 seed_erzeugen.py) > "$AUS/seed_rollen.sql"
+  (echo "set role postgres;"; cat "$AUS/seed_rollen.sql") | psql $LOKAL -d "$DB" -q 2>&1 | grep ERROR || true
+fi
 for mig in "$@"; do
   echo "Migration: $mig"
   (echo "set role postgres;"; cat "$mig") | psql $LOKAL -d "$DB" -q 2>&1 | grep -E "ERROR|NOTICE" || true
