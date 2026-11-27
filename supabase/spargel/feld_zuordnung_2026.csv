@@ -1,9 +1,9 @@
 feld_excel;feld_id;feld_app;sicherheit;hinweis
-A67;56;Büttelborn A67;wahrscheinlich;
-B-42;3;Tankstelle B 42;wahrscheinlich;
+A67;56;Büttelborn A67;sicher;(vom Nutzer bestätigt)
+B-42;3;Tankstelle B 42;sicher;(vom Nutzer bestätigt)
 Bock;61;Bock;sicher;
 Deponie;84;Deponie;sicher;
-Dünen klein;72;kleines Dünenfeld;wahrscheinlich;Großes Dünenfeld ist Erdbeeren
+Dünen klein;72;kleines Dünenfeld;sicher;Großes Dünenfeld ist Erdbeeren (vom Nutzer bestätigt)
 Edeka;51;Edeka;sicher;
 Eiche;54;Eiche;sicher;Grünspargel
 Flughafen;79;Flughafen;sicher;
@@ -12,34 +12,34 @@ Forst West;81;Forst West;sicher;
 Gass gross;62;Gass groß;sicher;
 Gass klein;63;Gass klein;sicher;
 Graf;7;Graf;sicher;
-Gruenspargel Kleiner Klos;36;Klos klein;wahrscheinlich;
-Gruenspargel Klos 1;;;unklar;Klos Groß 2019 (85) oder Klos groß 2021 (49)?
+Gruenspargel Kleiner Klos;36;Klos klein;sicher;(vom Nutzer bestätigt)
+Gruenspargel Klos 1;85;Klos Groß 2019;offen;Nutzer: Klos Groß 2019 + 2021 zusammen - Zeilen lassen sich nicht aufteilen
 Heinrich gross;64;Heinrich Gr.;sicher;
 Heinrich klein;65;Heinrich Kl.;sicher;
-Himbeerfeld;;;unklar;kein passendes Feld
-Hinter der Bach Kahlenbach;89;Hinter der Bach;wahrscheinlich;Grünspargel
-Hoehl Sandbach;;;unklar;kein passendes Feld
+Himbeerfeld;;;entfallen;gibt es nicht mehr (Nutzer 2026-11-28) - 2026 nur mit Feldname, ohne App-Feld
+Hinter der Bach Kahlenbach;89;Hinter der Bach;sicher;Grünspargel (vom Nutzer bestätigt)
+Hoehl Sandbach;;;entfallen;gibt es nicht mehr (Nutzer 2026-11-28) - 2026 nur mit Feldname, ohne App-Feld
 Insel;57;Insel;sicher;
-Jordan;83;Jourdan;wahrscheinlich;
+Jordan;83;Jourdan;sicher;(vom Nutzer bestätigt)
 Kanal 1;58;Kanal 1;sicher;
 Kanal 2;59;Kanal 2;sicher;
 Kanal 3;43;Kanal 3;sicher;
 Kirschen;71;Kirschen;sicher;
-Kuhwaide;12;Kuhweide (2023);wahrscheinlich;Kuhweide (11) ohne Kultur
-Lenhardt Eichwald;;;unklar;Eichwäldchen (21)?
-Lenhardt Eichwald klein;;;unklar;
-Lenhardt Kanal 1.5;13;Kanal 1,5;wahrscheinlich;
-Lenhardt Schuppenplatte;;;unklar;Auf der Platte (75)?
-Lenhardt Weichhof;24;Weichhof;wahrscheinlich;
-Lenhardt Weigandsbusch Re;;;unklar;Wgb Autob (46) / Wgb Klein (28) / Wgb Weide (15)?
-Lenhardt Weißer Berg;18;Weißer Berg;wahrscheinlich;
+Kuhwaide;12;Kuhweide (2023);sicher;Kuhweide (11) ohne Kultur (vom Nutzer bestätigt)
+Lenhardt Eichwald;;;entfallen;"gibt es nicht mehr (Nutzer 2026-11-28) - 2026 nur mit Feldname, ohne App-Feld; dort jetzt Erdbeeren"
+Lenhardt Eichwald klein;;;entfallen;"gibt es nicht mehr (Nutzer 2026-11-28) - 2026 nur mit Feldname, ohne App-Feld; dort jetzt Erdbeeren"
+Lenhardt Kanal 1.5;13;Kanal 1,5;sicher;(vom Nutzer bestätigt)
+Lenhardt Schuppenplatte;;;entfallen;gibt es nicht mehr (Nutzer 2026-11-28) - 2026 nur mit Feldname, ohne App-Feld
+Lenhardt Weichhof;24;Weichhof;sicher;(vom Nutzer bestätigt)
+Lenhardt Weigandsbusch Re;;;entfallen;gibt es nicht mehr (Nutzer 2026-11-28) - 2026 nur mit Feldname, ohne App-Feld
+Lenhardt Weißer Berg;18;Weißer Berg;sicher;(vom Nutzer bestätigt)
 Melchior;82;Melchior;sicher;
 Orah;50;Orah;sicher;
 Pumpenhaus gross;70;Pumpenhaus gr.;sicher;
 Pumpenhaus klein;69;Pumpenhaus kl;sicher;
-R- 30 Morgen;96;Die 30 Morgen;wahrscheinlich;
+R- 30 Morgen;96;Die 30 Morgen;sicher;(vom Nutzer bestätigt)
 R- Edeka 2;;;unklar;kein passendes Feld (Edeka = 51)
-R- GS Bruchweg;;;unklar;Bruchweg Xe (90) oder Bruchweg 3 Xe (91)?
+R- GS Bruchweg;90;Bruchweg Xe;sicher;
 R- Im Damm A;88;Im Damm A;sicher;
 R- Im Damm B;87;Im Damm B;sicher;
 R- Zirkus 3;93;Zirkus 3;sicher;
@@ -49,7 +49,7 @@ R-Kanal 3;;;unklar;eigenes Feld neben Kanal 3?
 Rehbock;44;Rehbock;sicher;
 Schaefer 3;9;Schäfer 3;sicher;
 Schaefer 4;78;Schäfer 4;sicher;
-Schaefer 5;;;unklar;fehlt in der App (nur 2 Zeilen)
+Schaefer 5;;;entfallen;gibt es nicht mehr (Nutzer 2026-11-28) - 2026 nur mit Feldname, ohne App-Feld
 Schaefer 6;32;Schäfer 6;sicher;
 Schmidt;5;Schmidt;sicher;
 Schneidereck;60;Schneidereck;sicher;
