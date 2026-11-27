@@ -108,7 +108,7 @@ Tages; Standzeiten über 30 Minuten zwischen zwei Bewegungen sind Pausen** und z
 ### Formel je Schicht
 Prämienstunden = (letzte Aktivität − Anmeldung) − Summe der Pausen.
 
-### Sonderfälle (alle Regeln fest, nichts bleibt offen)
+### Sonderfälle (alle Regeln fest, nichts bleibt offen; Regeln 1–3 vom Nutzer bestätigt 2026-11-28)
 | Fall | Regel |
 |---|---|
 | Zwischen Anmeldung und erster Aktivität > 30 min | gilt als Pause (wie zwischen zwei Bewegungen) |
