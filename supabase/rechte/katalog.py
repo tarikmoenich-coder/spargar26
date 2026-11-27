@@ -60,6 +60,7 @@ KATALOG = [
     ("sonder.kasse_freigeben", "Sonderrechte", "Kassenprüfung freigeben", "Nie die eigene (Vier-Augen-Prinzip)", False, False),
     ("sonder.protokoll", "Sonderrechte", "Änderungsprotokoll einsehen", "", True, False),
     ("sonder.waage_kiosk", "Sonderrechte", "Waagen-Bildschirm", "Kiosk an der Hofwaage", False, False),
+    ("sonder.spargel_kategorie", "Sonderrechte", "Spargel-Kategorien festlegen", "Preise je Kategorie, Standard je Feld, Kategorien je Tag/Feld/Person überschreiben", False, False),
 ]
 KEYS = [k[0] for k in KATALOG]
 
