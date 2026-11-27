@@ -1,7 +1,7 @@
 # Spargelprämien – schlankes Konzept
 
 Stand 2026-11-28, Antworten des Nutzers eingearbeitet. Grundlage: `Spargelprämien_2026.xlsx`
-(Saison 2026: 7.489 Tageszeilen, 227 Personen, 56 Felder, 23.03.–21.06.). Ziel: die Excel
+(Saison 2026: 7.489 Tageszeilen, 227 Personen, 55 Felder, 23.03.–21.06.). Ziel: die Excel
 ablösen; das Anlegen von Kategorien bleibt, die Kategorie aus dem Import wird übernommen oder
 überschrieben (je Tag/Feld oder je Person).
 
@@ -62,6 +62,12 @@ kg, Std., Kisten, die damals wirksame Kategorie (Spalte P) und die Import-Katego
 Gruppen-Zeilen als Gruppe. Zweck: Vorjahresvergleich je Feld/Person, Startwerte für die
 Standard-Kategorien je Feld, Prüfung der neuen Berechnung (muss die Excel-Summen ergeben).
 **Kein Einfluss auf den Lohn 2026** (ist über die Excel gelaufen).
+
+### 2b. Felder 2026
+Zuordnung Excel-Feldname → Feld in der App: `supabase/spargel/feld_zuordnung_2026.csv`
+(vom Nutzer geklärt 2026-11-28): 46 Felder zugeordnet, 9 entfallen (gibt es nicht mehr bzw.
+unbekannt) – deren Zeilen werden mit dem alten Feldnamen ohne App-Feld übernommen.
+„Gruenspargel Klos 1“ steht für Klos Groß 2019 + 2021 und wird Klos Groß 2019 zugeordnet.
 
 ### 3. Kategorie übernehmen oder tageweise überschreiben
 Seite Prämien → Spargel, Ansicht **je Tag**: alle Felder des Tages mit ihrer Import-Kategorie.
