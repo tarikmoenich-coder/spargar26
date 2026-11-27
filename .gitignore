@@ -12,3 +12,6 @@ tsconfig.tsbuildinfo
 # Office-Sperrdateien (entstehen, wenn z.B. README.md gerade in Word offen ist)
 ~$*
 __pycache__/
+
+# Daten mit Personalbezug (Spargelprämien-Übernahme) nicht ins Repository
+supabase/spargel/daten/
