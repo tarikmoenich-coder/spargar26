@@ -164,3 +164,11 @@ Excel (Prüfsumme Saison 2026: 49.541,50 € Prämie über alle Personen-Zeilen)
 5. Import = Spalten C–O, Tagesauswertung des alten Erntewirtschafts-Programms. Kein laufender
    Import – Datenquelle ist die neue Ernteerfassung; nur 2026 wird einmalig übernommen.
 6. Kategorien festlegen/überschreiben: nur Rolle Geschäftsführer.
+
+## Stand Umsetzung
+- Stufe 1 (2026-11-28, live): Kategorien, Tageszeilen, Berechnung, Daten 2026 (Summe = Excel).
+- Stufe 2 (2026-11-28): Preise & Standard je Feld pflegen, Saison anlegen, Kategorien je Tag
+  (alle Felder / Feld / Person) mit Fortschreibung; Preis je kg in den Tageszeilen
+  festgeschrieben (Preisänderungen ändern abgerechnete Tage nicht). 2026 bleibt unverändert.
+- Stufe 3 offen: Tageszeilen aus der Ernteerfassung, Prämienstunden aus Maschinendaten,
+  Prüfen/Freigeben, Lohn-Anbindung.

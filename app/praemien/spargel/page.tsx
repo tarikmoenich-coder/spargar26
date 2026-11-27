@@ -6,7 +6,8 @@
 // wenn positiv, Fehlbetrag nur zur Information (wird nicht verrechnet).
 // Gruppenzeilen (z.B. Grünspargel-Gruppen 2026) bekommen keine Prämie.
 // Daten 2026 einmalig aus der Excel übernommen; ab 2027 aus der Ernteerfassung.
-// Kategorien festlegen/überschreiben kommt in Stufe 2 (nur Geschäftsführung).
+// Stufe 2: Kategorien pflegen und je Tag/Feld/Person festlegen
+// (components/SpargelKategorien.tsx, ändern nur Geschäftsführung).
 
 import PageHeader from "@/components/PageHeader";
 import ErntewirtschaftTabs from "@/components/ErntewirtschaftTabs";
@@ -18,6 +19,7 @@ import { useProfile } from "@/lib/useProfile";
 import { ladeAlleSeiten } from "@/lib/ladeAlle";
 import { formatDatumDE, formatEuro, formatMenge } from "@/lib/format";
 import { darf } from "@/lib/rollen";
+import { KategorienFestlegen, KategorienPflege } from "@/components/SpargelKategorien";
 
 interface TagZeile {
   datum: string;
@@ -46,13 +48,14 @@ interface Kat {
   preis_kg: number;
 }
 
-type Ansicht = "personen" | "tag" | "kategorien";
+type Ansicht = "personen" | "tag" | "festlegen" | "kategorien";
 const MONATE = ["März", "April", "Mai", "Juni", "Juli"];
 const monatVon = (iso: string) => Number(iso.slice(5, 7));
 
 export default function PraemienSpargelPage() {
   const { profile } = useProfile();
   const darfLesen = darf(profile, "ernte.praemien:L", "ernte.statistik:L", "lohn.uebersicht:L");
+  const darfKategorien = darf(profile, "sonder.spargel_kategorie:S");
 
   const [zeilen, setZeilen] = useState<TagZeile[]>([]);
   const [kats, setKats] = useState<Kat[]>([]);
@@ -101,7 +104,11 @@ export default function PraemienSpargelPage() {
     })();
   }, [darfLesen]);
 
-  const jahre = useMemo(() => Array.from(new Set(zeilen.map((x) => x.saison_jahr))).sort(), [zeilen]);
+  const [extraJahre, setExtraJahre] = useState<number[]>([]);
+  const jahre = useMemo(
+    () => Array.from(new Set([...zeilen.map((x) => x.saison_jahr), ...kats.map((k) => k.saison_jahr), ...extraJahre])).sort(),
+    [zeilen, kats, extraJahre]
+  );
   const saisonZeilen = useMemo(() => zeilen.filter((z) => z.saison_jahr === saison), [zeilen, saison]);
   const tage = useMemo(() => Array.from(new Set(saisonZeilen.map((z) => z.datum))).sort(), [saisonZeilen]);
   useEffect(() => {
@@ -161,7 +168,6 @@ export default function PraemienSpargelPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [saisonZeilen, tag, namen]
   );
-  const saisonKats = kats.filter((k) => k.saison_jahr === saison);
   const quelle = saison === 2026 ? "Übernommen aus der Excel „Spargelprämien 2026“ (nicht lohnwirksam, lief über die Excel)." : null;
 
   if (!darfLesen) {
@@ -223,7 +229,8 @@ export default function PraemienSpargelPage() {
               [
                 ["personen", "Je Person"],
                 ["tag", "Tagesliste"],
-                ["kategorien", "Kategorien"],
+                ["festlegen", "Kategorien festlegen"],
+                ["kategorien", "Preise & Standard"],
               ] as [Ansicht, string][]
             ).map(([w, l]) => (
               <button
@@ -366,31 +373,18 @@ export default function PraemienSpargelPage() {
             </div>
           )}
 
-          {ansicht === "kategorien" && (
-            <div className="flex max-w-lg flex-col gap-2">
-              <p className="text-sm text-neutral-500">
-                Preis je kg je Kategorie in der Saison {saison}. „Lohnt ab“ = ab dieser Leistung liegt der Akkordwert über dem
-                Mindestlohn. Ändern kann die Geschäftsführung (folgt mit der nächsten Ausbaustufe).
-              </p>
-              <table>
-                <thead>
-                  <tr>
-                    <th className="text-right">Kategorie</th>
-                    <th className="text-right">€ je kg</th>
-                    <th className="text-right">Lohnt ab (kg/h)</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {saisonKats.map((k) => (
-                    <tr key={k.kategorie}>
-                      <td className="text-right tabular-nums">{formatMenge(k.kategorie, k.kategorie % 1 ? 1 : 0)}</td>
-                      <td className="text-right tabular-nums">{formatEuro(k.preis_kg)}</td>
-                      <td className="text-right tabular-nums">{formatMenge(k.preis_kg && saison && mindestlohn[saison] ? mindestlohn[saison] / k.preis_kg : null, 1)}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+          {ansicht === "festlegen" && <KategorienFestlegen darfAendern={darfKategorien} />}
+
+          {ansicht === "kategorien" && saison && (
+            <KategorienPflege
+              saison={saison}
+              darfAendern={darfKategorien}
+              mindestlohn={mindestlohn[saison] ?? null}
+              onSaisonAngelegt={(j) => {
+                setExtraJahre((x) => [...x, j]);
+                setSaison(j);
+              }}
+            />
           )}
         </>
       )}
