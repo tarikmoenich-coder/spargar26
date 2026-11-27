@@ -5,7 +5,10 @@ import { useEffect, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import {
   Building2,
+  ChevronDown,
   Clock,
+  Eye,
+  EyeOff,
   Gauge,
   History,
   Lightbulb,
@@ -15,6 +18,7 @@ import {
   Notebook,
   Search,
   Settings,
+  SlidersHorizontal,
   Sprout,
   Store,
   Truck,
@@ -160,10 +164,22 @@ export default function Nav() {
   // ~13 Links plus der Rolle-Block in einer festen 56px-Zeile und
   // überlappten am Telefon (Nutzer-Vorgabe 2026-09-01).
   const [menuOffen, setMenuOffen] = useState(false);
+  // Selbst ausgeblendete Menüpunkte (Nutzer-Vorgabe 2026-11-27: "sehen
+  // DÜRFEN heißt nicht, es ständig sehen WOLLEN"). Reine Anzeige: über
+  // "Mehr" bzw. "Ausgeblendet" bleibt jeder Punkt mit einem Klick erreichbar.
+  const [ausgeblendet, setAusgeblendet] = useState<string[]>([]);
+  const [mehrOffen, setMehrOffen] = useState(false);
+  const [anpassenOffen, setAnpassenOffen] = useState(false);
+  const [ausgeblendetAufgeklappt, setAusgeblendetAufgeklappt] = useState(false);
+
+  useEffect(() => {
+    setAusgeblendet(profile?.menue_ausgeblendet ?? []);
+  }, [profile?.menue_ausgeblendet]);
 
   // Beim Seitenwechsel die Schublade schließen.
   useEffect(() => {
     setMenuOffen(false);
+    setMehrOffen(false);
   }, [pathname]);
 
   // Body-Scroll sperren, solange die Schublade offen ist.
@@ -260,12 +276,34 @@ export default function Nav() {
         (bereiche.erlaubt.includes(item.bereich) &&
           (!bereiche.ansicht || bereiche.ansicht === item.bereich)))
   );
+  // Ausblendbar ist alles außer der Startseite.
+  const ausblendbar = (item: NavItem) => item.href !== "/dashboard";
+  const istAusgeblendet = (item: NavItem) => ausblendbar(item) && ausgeblendet.includes(item.href);
+
+  async function sichtbarkeitUmschalten(href: string) {
+    if (!profile) return;
+    const vorher = ausgeblendet;
+    const neu = vorher.includes(href) ? vorher.filter((h) => h !== href) : [...vorher, href];
+    setAusgeblendet(neu);
+    const { error } = await getSupabaseClient()
+      .from("profiles")
+      .update({ menue_ausgeblendet: neu })
+      .eq("id", profile.id);
+    if (error) {
+      setAusgeblendet(vorher);
+      alert(`Konnte nicht gespeichert werden: ${error.message}`);
+    }
+  }
+
   const istAktiv = (item: NavItem) =>
     !!(
       pathname?.startsWith(item.href) ||
       item.auchAktivBei?.some((p) => pathname?.startsWith(p))
     );
   const aktuellerBereich = sichtbareItems.find(istAktiv);
+  // Die gerade geöffnete Seite bleibt im Menü, auch wenn sie ausgeblendet ist.
+  const menueItems = sichtbareItems.filter((i) => !istAusgeblendet(i) || istAktiv(i));
+  const versteckteItems = sichtbareItems.filter((i) => istAusgeblendet(i) && !istAktiv(i));
 
   const sprachWahl = profile && (
     <select
@@ -293,24 +331,74 @@ export default function Nav() {
           </span>
 
           {/* Ab lg: alle Links inline */}
-          <div className="hidden flex-1 items-center gap-3 overflow-x-auto lg:flex [scrollbar-width:thin]">
-            {sichtbareItems.map((item) => {
-              const Icon = item.icon;
-              return (
-                <Link
-                  key={item.href}
-                  href={item.href}
-                  className={`inline-flex items-center gap-1.5 whitespace-nowrap text-sm ${
-                    istAktiv(item)
-                      ? "font-semibold text-emerald-800"
-                      : "text-neutral-600 hover:text-emerald-800"
-                  }`}
+          <div className="hidden min-w-0 flex-1 items-center gap-3 lg:flex">
+            <div className="flex min-w-0 items-center gap-3 overflow-x-auto [scrollbar-width:thin]">
+              {menueItems.map((item) => {
+                const Icon = item.icon;
+                return (
+                  <Link
+                    key={item.href}
+                    href={item.href}
+                    className={`inline-flex items-center gap-1.5 whitespace-nowrap text-sm ${
+                      istAktiv(item)
+                        ? "font-semibold text-emerald-800"
+                        : "text-neutral-600 hover:text-emerald-800"
+                    }`}
+                  >
+                    <Icon className="h-4 w-4 shrink-0" />
+                    {item.label}
+                  </Link>
+                );
+              })}
+            </div>
+            {versteckteItems.length > 0 && (
+              <div className="relative shrink-0">
+                <button
+                  type="button"
+                  onClick={() => setMehrOffen((v) => !v)}
+                  aria-expanded={mehrOffen}
+                  title="Ausgeblendete Menüpunkte"
+                  className="inline-flex items-center gap-1 whitespace-nowrap rounded-md px-1.5 py-1 text-sm text-neutral-500 hover:bg-emerald-50 hover:text-emerald-800"
                 >
-                  <Icon className="h-4 w-4 shrink-0" />
-                  {item.label}
-                </Link>
-              );
-            })}
+                  Mehr
+                  <span className="rounded-full bg-neutral-100 px-1.5 text-xs tabular-nums text-neutral-600">
+                    {versteckteItems.length}
+                  </span>
+                  <ChevronDown className="h-3.5 w-3.5" />
+                </button>
+                {mehrOffen && (
+                  <>
+                    <div className="fixed inset-0 z-10" onClick={() => setMehrOffen(false)} />
+                    <div className="absolute left-0 top-full z-20 mt-2 w-56 rounded-lg border border-linie bg-white p-1 shadow-lg">
+                      {versteckteItems.map((item) => {
+                        const Icon = item.icon;
+                        return (
+                          <Link
+                            key={item.href}
+                            href={item.href}
+                            className="flex items-center gap-2.5 rounded-md px-2 py-1.5 text-sm text-neutral-700 hover:bg-emerald-50"
+                          >
+                            <Icon className="h-4 w-4 shrink-0 text-neutral-400" />
+                            {item.label}
+                          </Link>
+                        );
+                      })}
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setMehrOffen(false);
+                          setAnpassenOffen(true);
+                        }}
+                        className="mt-1 flex w-full items-center gap-2.5 rounded-md border-t border-linie px-2 py-1.5 text-left text-sm text-emerald-700 hover:bg-emerald-50"
+                      >
+                        <SlidersHorizontal className="h-4 w-4 shrink-0" />
+                        Menü anpassen
+                      </button>
+                    </div>
+                  </>
+                )}
+              </div>
+            )}
           </div>
           <div className="hidden shrink-0 items-center gap-3 text-sm text-neutral-600 lg:flex">
             {profile && (
@@ -321,6 +409,15 @@ export default function Nav() {
                 </span>
                 {bereichWahl}
                 {sprachWahl}
+                <button
+                  type="button"
+                  onClick={() => setAnpassenOffen(true)}
+                  title="Menü anpassen: Menüpunkte ein- und ausblenden"
+                  aria-label="Menü anpassen"
+                  className="rounded-md p-1.5 text-neutral-500 hover:bg-emerald-50 hover:text-emerald-800"
+                >
+                  <SlidersHorizontal className="h-4 w-4" />
+                </button>
               </>
             )}
             <button className="btn-secondary" onClick={logout}>
@@ -377,7 +474,7 @@ export default function Nav() {
               </button>
             </div>
             <div className="flex flex-col gap-1">
-              {sichtbareItems.map((item) => {
+              {menueItems.map((item) => {
                 const Icon = item.icon;
                 return (
                   <Link
@@ -395,6 +492,38 @@ export default function Nav() {
                 );
               })}
             </div>
+            {versteckteItems.length > 0 && (
+              <div className="mt-2">
+                <button
+                  type="button"
+                  onClick={() => setAusgeblendetAufgeklappt((v) => !v)}
+                  aria-expanded={ausgeblendetAufgeklappt}
+                  className="flex w-full items-center gap-2.5 rounded-md px-2 py-2 text-sm text-neutral-500 hover:bg-emerald-50"
+                >
+                  <ChevronDown
+                    className={`h-4 w-4 shrink-0 transition ${ausgeblendetAufgeklappt ? "" : "-rotate-90"}`}
+                  />
+                  Ausgeblendet ({versteckteItems.length})
+                </button>
+                {ausgeblendetAufgeklappt && (
+                  <div className="flex flex-col gap-1">
+                    {versteckteItems.map((item) => {
+                      const Icon = item.icon;
+                      return (
+                        <Link
+                          key={item.href}
+                          href={item.href}
+                          className="flex items-center gap-2.5 rounded-md px-2 py-2 text-sm text-neutral-500 hover:bg-emerald-50"
+                        >
+                          <Icon className="h-4 w-4 shrink-0" />
+                          {item.label}
+                        </Link>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            )}
             {profile && (
               <div className="mt-4 border-t border-linie pt-4 text-sm text-neutral-600">
                 <div className="mb-3">
@@ -411,12 +540,78 @@ export default function Nav() {
                   Sprache
                   {sprachWahl}
                 </label>
+                <button
+                  type="button"
+                  className="btn-secondary mb-2 w-full"
+                  onClick={() => {
+                    setMenuOffen(false);
+                    setAnpassenOffen(true);
+                  }}
+                >
+                  <SlidersHorizontal className="h-4 w-4" />
+                  Menü anpassen
+                </button>
                 <button className="btn-secondary w-full" onClick={logout}>
                   <LogOut className="h-4 w-4" />
                   Abmelden
                 </button>
               </div>
             )}
+          </div>
+        </div>
+      )}
+
+      {anpassenOffen && (
+        <div className="fixed inset-0 z-[70] flex items-start justify-center overflow-y-auto bg-black/30 p-4 pt-16 print:hidden">
+          <div className="fixed inset-0" onClick={() => setAnpassenOffen(false)} />
+          <div
+            role="dialog"
+            aria-label="Menü anpassen"
+            className="relative w-full max-w-sm rounded-xl border border-linie bg-white p-5 shadow-xl"
+          >
+            <div className="mb-1 flex items-center justify-between">
+              <h2 className="font-semibold text-neutral-900">Menü anpassen</h2>
+              <button
+                type="button"
+                aria-label="Schließen"
+                className="text-neutral-500"
+                onClick={() => setAnpassenOffen(false)}
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+            <p className="mb-3 text-sm text-neutral-500">
+              Blende aus, was du selten brauchst. Ausgeblendetes bleibt unter „Mehr“ erreichbar.
+            </p>
+            <ul className="divide-y divide-linie">
+              {sichtbareItems.map((item) => {
+                const Icon = item.icon;
+                const aus = istAusgeblendet(item);
+                return (
+                  <li key={item.href} className="flex items-center gap-2.5 py-2 text-sm">
+                    <Icon className={`h-4 w-4 shrink-0 ${aus ? "text-neutral-300" : "text-neutral-500"}`} />
+                    <span className={aus ? "text-neutral-400" : "text-neutral-800"}>{item.label}</span>
+                    {ausblendbar(item) ? (
+                      <button
+                        type="button"
+                        onClick={() => sichtbarkeitUmschalten(item.href)}
+                        aria-pressed={!aus}
+                        className={`ml-auto inline-flex items-center gap-1.5 rounded-md border px-2 py-1 text-xs font-medium transition ${
+                          aus
+                            ? "border-linie text-neutral-500 hover:bg-neutral-50"
+                            : "border-emerald-200 bg-emerald-50 text-emerald-800 hover:bg-emerald-100"
+                        }`}
+                      >
+                        {aus ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
+                        {aus ? "Ausgeblendet" : "Sichtbar"}
+                      </button>
+                    ) : (
+                      <span className="ml-auto text-xs text-neutral-400">immer sichtbar</span>
+                    )}
+                  </li>
+                );
+              })}
+            </ul>
           </div>
         </div>
       )}
