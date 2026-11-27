@@ -34,7 +34,11 @@ export function useRollen(aktiv = true) {
       ab = true;
     };
   }, [aktiv]);
-  const neuLaden = useCallback(async () => setRollen(await laden(true)), []);
+  const neuLaden = useCallback(async () => {
+    const r = await laden(true);
+    setRollen(r);
+    return r;
+  }, []);
   const label = useCallback(
     (id: string | null | undefined) =>
       id ? rollen.find((r) => r.id === id)?.bezeichnung ?? ROLLEN_LABELS[id] ?? id : "—",
