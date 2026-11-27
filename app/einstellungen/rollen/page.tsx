@@ -73,8 +73,20 @@ function schluesselAus(text: string, vergeben: Set<string>): string {
   return id;
 }
 
+// Inhaltlich vergleichen: die Datenbank speichert die Rechte (jsonb) in
+// eigener Schlüssel-Reihenfolge - die darf nicht als Änderung zählen.
+function normal(e: Entwurf) {
+  return JSON.stringify({
+    bezeichnung: e.bezeichnung.trim(),
+    beschreibung: e.beschreibung.trim(),
+    alle_rechte: e.alle_rechte,
+    rechte: e.alle_rechte ? [] : Object.entries(e.rechte).sort(([a], [b]) => a.localeCompare(b)),
+    bereiche: [...e.bereiche].sort(),
+  });
+}
+
 function gleich(a: Entwurf, b: Entwurf): boolean {
-  return JSON.stringify(a) === JSON.stringify(b);
+  return normal(a) === normal(b);
 }
 
 const STUFEN: { wert: Stufe; label: string; kurz: string }[] = [
@@ -275,9 +287,9 @@ export default function RollenPage() {
       });
       return;
     }
-    await neuLaden();
+    const frisch = (await neuLaden()).find((r) => r.id === id);
     setAuswahl(id);
-    setEntwurf({ ...entwurf, id, bezeichnung: bez, beschreibung: entwurf.beschreibung.trim() });
+    setEntwurf(frisch ? entwurfAus(frisch) : { ...entwurf, id, bezeichnung: bez, beschreibung: entwurf.beschreibung.trim() });
     setMeldung({ ok: true, text: "Gespeichert. Die Rechte gelten sofort für alle Nutzer dieser Rolle." });
   }
 
