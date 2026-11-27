@@ -22,7 +22,7 @@ import { useProfile } from "@/lib/useProfile";
 import ErntewirtschaftTabs from "@/components/ErntewirtschaftTabs";
 import { formatDatumDE, formatMenge } from "@/lib/format";
 import { lokalIsoPlusTage } from "@/lib/datum";
-import { hatRolle, darfMenue } from "@/lib/rollen";
+import { darf, darfMenue } from "@/lib/rollen";
 import type { Employee } from "@/lib/types";
 
 // Ortszeit statt UTC. Standardvorschlag für die Strichliste (Nutzer-Vorgabe 2026-09-16): wird
@@ -50,7 +50,7 @@ export default function StrichlistePage() {
     !!profile &&
     darfMenue(profile, "/qualitaet");
   const canWrite =
-    hatRolle(profile, "admin", "hr", "zeiterfassung", "erntewirtschaft");
+    darf(profile, "ernte.qualitaet:S");
 
   const [datum, setDatum] = useState(gesternIso());
 

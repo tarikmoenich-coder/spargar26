@@ -12,12 +12,12 @@ import { useProfile } from "@/lib/useProfile";
 import EinstellungenTabs from "@/components/EinstellungenTabs";
 import type { Einsatzbereich } from "@/lib/types";
 
-import { hatRolle } from "@/lib/rollen";
+import { darf } from "@/lib/rollen";
 const leer = { wert: "", reihenfolge: "0", farbe: "#8a8984" };
 
 export default function EinsatzbereichePage() {
   const { profile } = useProfile();
-  const isAdmin = hatRolle(profile, "admin");
+  const isAdmin = darf(profile, "einstellungen.grund:S");
 
   const [bereiche, setBereiche] = useState<Einsatzbereich[]>([]);
   const [loading, setLoading] = useState(true);

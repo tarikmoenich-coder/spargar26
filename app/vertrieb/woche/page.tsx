@@ -12,7 +12,7 @@ import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "rea
 import { CalendarDays, Car, ChevronLeft, ChevronRight, Printer, X } from "lucide-react";
 import { getSupabaseClient } from "@/lib/supabase/client";
 import { useProfile } from "@/lib/useProfile";
-import { hatRolle } from "@/lib/rollen";
+import { darf } from "@/lib/rollen";
 import PageHeader from "@/components/PageHeader";
 import VertriebTabs from "@/components/VertriebTabs";
 import type { VtHalbtag, VtStand } from "@/lib/types";
@@ -39,7 +39,7 @@ type Auswahl = { datum: string; stand_id: number; umfang: Umfang; x: number; y: 
 
 export default function VertriebWochePage() {
   const { profile } = useProfile();
-  const darfPflegen = hatRolle(profile, "admin", "hr");
+  const darfPflegen = darf(profile, "vertrieb.planung:S");
   const [montag, setMontag] = useState(() => montagVon(heuteLokalIso()));
   const [d, setD] = useState<TagesplanDaten | null>(null);
   const [fehler, setFehler] = useState<string | null>(null);

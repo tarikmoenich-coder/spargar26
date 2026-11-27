@@ -24,7 +24,7 @@ import {
 } from "@/lib/types";
 import { formatMenge, formatZahlDE } from "@/lib/format";
 
-import { hatRolle } from "@/lib/rollen";
+import { darf } from "@/lib/rollen";
 const CURRENT_YEAR = new Date().getFullYear();
 
 interface PachtwesenSchlag {
@@ -45,7 +45,7 @@ interface PlanungsInfo {
 export default function AnbauFelderPage() {
   const { profile } = useProfile();
   const canEdit =
-    hatRolle(profile, "admin", "erntewirtschaft");
+    darf(profile, "ernte.anbau:S");
 
   const [felder, setFelder] = useState<FeldGeojson[]>([]);
   const [planung, setPlanung] = useState<Record<number, PlanungsInfo[]>>({});

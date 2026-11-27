@@ -13,7 +13,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Car, MapPin } from "lucide-react";
 import { getSupabaseClient } from "@/lib/supabase/client";
 import { useProfile } from "@/lib/useProfile";
-import { hatRolle } from "@/lib/rollen";
+import { darf } from "@/lib/rollen";
 import PageHeader from "@/components/PageHeader";
 import VertriebTabs from "@/components/VertriebTabs";
 import type { KartenFokus, StandEntwurf, TourLinie } from "@/components/StandKarte";
@@ -56,7 +56,7 @@ const RADIUS_MAX = 2000;
 
 export default function VertriebKartePage() {
   const { profile } = useProfile();
-  const darfPflegen = hatRolle(profile, "admin", "management");
+  const darfPflegen = darf(profile, "vertrieb.planung:S");
 
   const [staende, setStaende] = useState<VtStand[]>([]);
   const [fehler, setFehler] = useState<string | null>(null);

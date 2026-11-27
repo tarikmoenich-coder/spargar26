@@ -23,7 +23,7 @@ import {
 } from "@/lib/personalImportHistorie";
 import PersonalTabs from "@/components/PersonalTabs";
 
-import { hatRolle } from "@/lib/rollen";
+import { darf } from "@/lib/rollen";
 import { ladeAlleSeiten } from "@/lib/ladeAlle";
 const BLOCK = 200;
 
@@ -83,7 +83,7 @@ export default function PersonalImportHistoriePage() {
   // "123" im Vertrieb = "V-123"), klein geschrieben.
   const nrKey = (nr: string) =>
     personalNrFuerBereich(nr, bereiche.praefix(bereiche.standard)).trim().toLowerCase();
-  const canEdit = hatRolle(profile, "admin", "hr");
+  const canEdit = darf(profile, "personal.verwaltung:S");
 
   const [dateiname, setDateiname] = useState<string | null>(null);
   const [erkannteSpalten, setErkannteSpalten] = useState<string[]>([]);

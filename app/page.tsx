@@ -3,6 +3,7 @@
 import { useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useProfile } from "@/lib/useProfile";
+import { darfMenue, ersteSeite } from "@/lib/rollen";
 
 export default function Home() {
   const router = useRouter();
@@ -20,22 +21,10 @@ export default function Home() {
       return;
     }
     if (!profile || profile.aktiv === false) return;
-    // zeiterfassung hat kein eigenes Dashboard (Stundenerfassung ist schon
-    // ihr einziger Arbeitsbereich), hausmeister genauso (nur Unterkunft),
-    // waage genauso (nur der Kiosk-Bildschirm, Nutzer-Vorgabe 2026-10-27) -
-    // alle anderen Rollen (inkl. erntewirtschaft, hat seit 2026-08-09 ein
-    // eigenes Dashboard) landen auf ihrem rollenabhängigen Dashboard, siehe
-    // app/dashboard/page.tsx.
-    const start =
-      // Startseite nach der HAUPTROLLE (profiles.role) - bei mehreren
-      // Rollen wählt der Admin sie in der Nutzerverwaltung (Stufe 1).
-      profile?.role === "zeiterfassung"
-        ? "/erfassung"
-        : profile?.role === "hausmeister"
-          ? "/unterkunft/reparaturen"
-          : profile?.role === "waage"
-            ? "/erntewirtschaft/waage/kiosk"
-            : "/dashboard";
+    // Startseite nach Rechten: wer Büro-Übersichten hat, landet auf der
+    // Startseite; reine Erfassungs-, Hausmeister- oder Waagen-Rollen direkt
+    // auf ihrer Arbeitsseite (lib/rollen.ts ersteSeite).
+    const start = darfMenue(profile, "/dashboard") ? "/dashboard" : ersteSeite(profile)?.href ?? "/dashboard";
     router.replace(start);
   }, [loading, profile, userId, router]);
 

@@ -28,7 +28,7 @@ import {
   tageAufschluesselung,
 } from "@/lib/svPruefung";
 
-import { hatRolle } from "@/lib/rollen";
+import { darf } from "@/lib/rollen";
 const CURRENT_YEAR = new Date().getFullYear();
 // Das Formular zur Feststellung der Versicherungspflicht wird seit
 // 2026-08-11 NICHT mehr hochgeladen (Nutzer-Vorgabe) - der über das
@@ -44,7 +44,7 @@ function vortag(iso: string): string {
 
 export default function SozialversicherungPage() {
   const { profile } = useProfile();
-  const canEdit = hatRolle(profile, "admin", "hr");
+  const canEdit = darf(profile, "personal.sv:S");
 
   const [jahr, setJahr] = useState(CURRENT_YEAR);
   const [showInactive, setShowInactive] = useState(false);

@@ -49,7 +49,7 @@ import PageHeader from "@/components/PageHeader";
 import DokumentKameraAufnahme from "@/components/DokumentKameraAufnahme";
 import { CalendarRange, Pencil, Trash2 } from "lucide-react";
 
-import { hatRolle } from "@/lib/rollen";
+import { darf } from "@/lib/rollen";
 import { heuteLokalIso } from "@/lib/datum";
 const emptyForm = {
   personal_nr: "",
@@ -70,7 +70,7 @@ const emptyForm = {
 export default function PersonalplanungPage() {
   const { profile } = useProfile();
   const bereiche = useBereiche(profile);
-  const canEdit = hatRolle(profile, "admin", "hr");
+  const canEdit = darf(profile, "personal.planung:S");
 
   const [kandidaten, setKandidaten] = useState<PersonalKandidat[]>([]);
   const [employees, setEmployees] = useState<Employee[]>([]);

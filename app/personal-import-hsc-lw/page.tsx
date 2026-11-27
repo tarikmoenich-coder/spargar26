@@ -15,7 +15,7 @@ import { FileUp } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { getSupabaseClient } from "@/lib/supabase/client";
 import { useProfile } from "@/lib/useProfile";
-import { hatRolle } from "@/lib/rollen";
+import { darf as hatRecht } from "@/lib/rollen";
 import { ladeAlleSeiten } from "@/lib/ladeAlle";
 import { hscCsvLesen, hscDekodieren, normName } from "@/lib/hscImport";
 import {
@@ -109,7 +109,7 @@ function csvLaden(name: string, kopf: string[], zeilen: string[][]) {
 
 export default function PersonalImportHscLwPage() {
   const { profile } = useProfile();
-  const darf = hatRolle(profile, "admin", "hr");
+  const darf = hatRecht(profile, "personal.verwaltung:S");
   const ansichtNurVt = profile?.bereich_ansicht === "VT";
   const [firmen, setFirmen] = useState<Firma[]>([]);
   const [dateien, setDateien] = useState<LwHscDatei[]>([]);

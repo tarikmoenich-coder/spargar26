@@ -36,7 +36,7 @@ import type {
   ProfilName,
 } from "@/lib/types";
 
-import { hatRolle } from "@/lib/rollen";
+import { darf } from "@/lib/rollen";
 import { ladeAlleSeiten } from "@/lib/ladeAlle";
 const CURRENT_YEAR = new Date().getFullYear();
 
@@ -50,7 +50,7 @@ interface AusgabeSumme {
 
 export default function LagerPage() {
   const { profile } = useProfile();
-  const canView = hatRolle(profile, "admin", "hr");
+  const canView = darf(profile, "erfassung.lager:S");
 
   const [lagerbestand, setLagerbestand] = useState<KleidungLagerbestand[]>([]);
   const [ausgaben, setAusgaben] = useState<AusgabeSumme[]>([]);

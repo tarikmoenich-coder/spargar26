@@ -47,7 +47,7 @@ import {
   type SeasonSummaryRow,
   type UnterkunftMangel,
 } from "@/lib/types";
-import { darfMenue, hatRolle, rollenVon } from "@/lib/rollen";
+import { darf, istAdmin, MENUE_RECHTE, darfMenue, bereicheVon, ersteSeite, rollenVon } from "@/lib/rollen";
 
 const CURRENT_YEAR = new Date().getFullYear();
 const tag = (d: string) => new Date(`${d}T12:00:00`).toLocaleDateString("de-DE", { weekday: "short", day: "2-digit", month: "2-digit" });
@@ -128,21 +128,20 @@ export default function DashboardPage() {
 
   // Was diese Rolle sieht - immer an den Menürechten ausgerichtet.
   const sieht = useMemo(() => {
-    const alleBereiche = hatRolle(profile, "admin", "management", "pruefer");
     const controlling = darfMenue(profile, "/management");
     return {
       controlling,
       kasse: darfMenue(profile, "/kasse"),
-      freigabe: hatRolle(profile, "admin", "pruefer"),
+      freigabe: darf(profile, "sonder.kasse_freigeben:S"),
       personal: darfMenue(profile, "/mitarbeiter"),
       // Lohn-Karte nur für die, die das Controlling nicht sehen (dort stehen
       // die Abweichungen schon).
-      lohn: hatRolle(profile, "lohnabrechnung") && !controlling,
+      lohn: darf(profile, "lohn.uebersicht:S") && !controlling,
       unterkunft: darfMenue(profile, "/unterkunft"),
-      vertrieb: darfMenue(profile, "/vertrieb") && (alleBereiche || (profile?.bereiche ?? []).includes("VT")),
-      vorschlaege: hatRolle(profile, "admin"),
+      vertrieb: darfMenue(profile, "/vertrieb") && bereicheVon(profile).includes("VT"),
+      vorschlaege: istAdmin(profile),
       protokoll: darfMenue(profile, "/aenderungsprotokoll"),
-      ernte: hatRolle(profile, "admin", "erntewirtschaft"),
+      ernte: darf(profile, "ernte.anbau:S"),
     };
   }, [profile]);
   const controlling = useControllingCounts(!!profile && sieht.controlling);
@@ -362,16 +361,7 @@ export default function DashboardPage() {
   const datumZeile = `${datumLang(heute)} · KW ${kalenderwoche(heute)}`;
 
   if (keinDashboard) {
-    const ziel =
-      rollenVon(profile).length === 0
-        ? null
-        : hatRolle(profile, "hausmeister")
-          ? { href: "/unterkunft/reparaturen", text: "Zu den Reparaturen" }
-          : hatRolle(profile, "zeiterfassung")
-            ? { href: "/erfassung", text: "Zur Stundenerfassung" }
-            : hatRolle(profile, "waage")
-              ? { href: "/erntewirtschaft/waage/kiosk", text: "Zum Waagen-Kiosk" }
-              : null;
+    const ziel = ersteSeite(profile);
     return (
       <div className="flex flex-col gap-4">
         <Begruessung datum={datumZeile} titel={`Hallo ${vorname}.`} />

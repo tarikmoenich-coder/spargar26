@@ -30,7 +30,7 @@ import type {
   ZuckermaisSatz,
 } from "@/lib/types";
 
-import { hatRolle } from "@/lib/rollen";
+import { darf } from "@/lib/rollen";
 import { heuteLokalIso, lokalIsoPlusTage } from "@/lib/datum";
 function heuteIso() {
   return heuteLokalIso();
@@ -62,8 +62,8 @@ interface Entwurf {
 export default function PraemienZuckermaisPage() {
   const { profile } = useProfile();
   const canEdit =
-    hatRolle(profile, "admin", "hr", "zeiterfassung", "erntewirtschaft");
-  const isAdmin = hatRolle(profile, "admin");
+    darf(profile, "ernte.praemien:S");
+  const isAdmin = darf(profile, "einstellungen.grund:S");
 
   const [datum, setDatum] = useState(gesternIso());
   const [employees, setEmployees] = useState<Employee[]>([]);

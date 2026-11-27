@@ -37,7 +37,7 @@ import type {
   ZuckermaisStatistikTag,
 } from "@/lib/types";
 
-import { hatRolle } from "@/lib/rollen";
+import { darf } from "@/lib/rollen";
 const CURRENT_YEAR = new Date().getFullYear();
 
 function fmt(n: number | null | undefined, nachkomma = 2) {
@@ -136,7 +136,7 @@ export default function StatistikZuckermaisPage() {
   // gefasst als die übrige Statistikseite (dort zusätzlich lohnabrechnung/
   // erntewirtschaft, siehe zuckermais_statistik_tag).
   const kannPersonenauswertungSehen =
-    hatRolle(profile, "admin", "hr", "management");
+    darf(profile, "controlling:L");
 
   const [jahr, setJahr] = useState(CURRENT_YEAR);
   const [zeilen, setZeilen] = useState<ZuckermaisStatistikTag[]>([]);

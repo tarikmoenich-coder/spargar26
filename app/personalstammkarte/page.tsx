@@ -23,7 +23,7 @@ import {
   type Firma,
 } from "@/lib/types";
 
-import { hatRolle } from "@/lib/rollen";
+import { darf } from "@/lib/rollen";
 interface Arbeitsgruppe {
   gruppe_nr: string;
   bezeichnung: string | null;
@@ -163,7 +163,7 @@ function StammkarteInner() {
   const params = useSearchParams();
   const id = params.get("id");
   const { profile, loading: profilLaedt } = useProfile();
-  const canView = hatRolle(profile, "admin", "hr");
+  const canView = darf(profile, "personal.persoenlich:L");
 
   const [emp, setEmp] = useState<Employee | null>(null);
   const [gruppen, setGruppen] = useState<Arbeitsgruppe[]>([]);

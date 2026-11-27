@@ -25,7 +25,7 @@ import { BookOpen } from "lucide-react";
 import UmbuchungForm from "@/components/UmbuchungForm";
 import KassenSaldoKarte from "@/components/KassenSaldoKarte";
 
-import { hatRolle } from "@/lib/rollen";
+import { darf } from "@/lib/rollen";
 import { heuteLokalIso } from "@/lib/datum";
 const CURRENT_YEAR = new Date().getFullYear();
 const JAHRE = [CURRENT_YEAR, CURRENT_YEAR - 1, CURRENT_YEAR - 2];
@@ -62,7 +62,7 @@ function BuchJournalInner() {
   const params = useSearchParams();
   const buchId = Number(params.get("id"));
   const { profile } = useProfile();
-  const canWrite = hatRolle(profile, "admin", "kasse");
+  const canWrite = darf(profile, "kasse.buecher:S");
 
   const [jahr, setJahr] = useState(CURRENT_YEAR);
   const [buch, setBuch] = useState<Kassenbuch | null>(null);

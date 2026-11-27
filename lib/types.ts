@@ -1,25 +1,9 @@
 // Zentrale Typdefinitionen für die Spargar-App.
 // Spiegeln das Supabase-Schema aus supabase/schema.sql.
 
-export type UserRole =
-  | 'admin'
-  | 'hr'
-  | 'zeiterfassung'
-  | 'kasse'
-  | 'lohnabrechnung'
-  | 'pruefer'
-  | 'management'
-  // Nur Zugriff auf Prämien (Erfassung) und Statistik, sonst nichts
-  // (Nutzer-Vorgabe 2026-08-09).
-  | 'erntewirtschaft'
-  // Nur das Modul "Unterkunft" (+ Suche); pflegt dort Belegung, Übergabe/
-  // Abnahme, Kontrolle, Mängel, Fotos - keine Stammdaten (Nutzer-Vorgabe
-  // 2026-08-30).
-  | 'hausmeister'
-  // Ausschliesslich der Waagen-Kiosk-Bildschirm (app/erntewirtschaft/waage/
-  // kiosk) - sonst nichts, kein Dashboard, keine Admin-Rohdatenuebersicht
-  // (Nutzer-Vorgabe 2026-10-27).
-  | 'waage';
+// Rollen-Schlüssel aus der Tabelle rolle (seit dem Rechte-Umbau 2026-11-28
+// frei anlegbar, z.B. 'admin', 'hr', 'geschaeftsfuehrer').
+export type UserRole = string;
 
 export type Abrechnungsart =
   | 'pauschal'
@@ -44,12 +28,21 @@ export const ABRECHNUNGSART_LABELS: Record<Abrechnungsart, string> = {
   kurzfristig: 'Kurzfr.',
 };
 
+export interface ProfilRechte {
+  // 'funktion:L' (lesen) / 'funktion:S' (lesen & schreiben)
+  rechte: string[];
+  bereiche: string[];
+  admin: boolean;
+  angemeldet: boolean;
+  buero: boolean;
+}
+
 export interface Profile {
   id: string;
   full_name: string;
-  // Hauptrolle (Anzeige, Startseite). Rechte ergeben sich aus ALLEN Rollen
-  // in `rollen` (Stufe 1, 2026-11-24) - für Prüfungen immer hatRolle()/
-  // hatNurRollen() aus lib/rollen.ts verwenden, nie role direkt vergleichen.
+  // Hauptrolle (Anzeige). Rechte ergeben sich aus ALLEN Rollen in `rollen`
+  // - für Prüfungen immer darf()/istAdmin() aus lib/rollen.ts verwenden,
+  // nie Rollennamen vergleichen.
   role: UserRole;
   rollen: UserRole[];
   // Freigegebene Geschäftsbereiche (nur admin änderbar) und die selbst
@@ -59,6 +52,9 @@ export interface Profile {
   // Selbst ausgeblendete Menüpunkte (href), reine Anzeige - kein Recht
   // (Nutzer-Vorgabe 2026-11-27).
   menue_ausgeblendet?: string[] | null;
+  // Vorberechnete Rechte (Tabelle profil_rechte, Rechte-Umbau 2026-11-28),
+  // von useProfile() mitgeladen.
+  profil_rechte?: ProfilRechte | null;
   aktiv: boolean;
   // UI-Sprache je Nutzer (nicht je Rolle) - siehe lib/i18n.ts. Betrifft
   // nur die Bedienoberfläche, keine Dokumente/Formulare.

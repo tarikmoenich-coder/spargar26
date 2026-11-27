@@ -13,7 +13,7 @@ import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
 import { Car, ChevronLeft, ChevronRight, Package, Printer } from "lucide-react";
 import { getSupabaseClient } from "@/lib/supabase/client";
 import { useProfile } from "@/lib/useProfile";
-import { hatRolle } from "@/lib/rollen";
+import { darf } from "@/lib/rollen";
 import TourKarte from "@/components/TourKarte";
 import VertriebTabs from "@/components/VertriebTabs";
 import { datumPlusTageIso, heuteLokalIso } from "@/lib/datum";
@@ -26,7 +26,7 @@ function TagesplanDruck() {
   const router = useRouter();
   const datum = params.get("datum") || heuteLokalIso();
   const { profile } = useProfile();
-  const darfPflegen = hatRolle(profile, "admin", "hr");
+  const darfPflegen = darf(profile, "vertrieb.planung:S");
   const [d, setD] = useState<TagesplanDaten | null>(null);
   const [fehler, setFehler] = useState<string | null>(null);
 

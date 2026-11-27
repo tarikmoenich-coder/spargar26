@@ -33,7 +33,7 @@ import type {
   VerpflegungsSatz,
 } from "@/lib/types";
 
-import { hatRolle } from "@/lib/rollen";
+import { darf } from "@/lib/rollen";
 const CURRENT_YEAR = new Date().getFullYear();
 
 interface Entwurf {
@@ -50,8 +50,8 @@ export default function ArbeitskleidungPage() {
   const { profile } = useProfile();
   const t = uebersetzung(profile?.sprache);
   const canEdit =
-    hatRolle(profile, "admin", "hr", "zeiterfassung");
-  const canSeeLagerLink = hatRolle(profile, "admin", "hr");
+    darf(profile, "erfassung.kleidung:S");
+  const canSeeLagerLink = darf(profile, "erfassung.lager:S");
 
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [gruppen, setGruppen] = useState<Arbeitsgruppe[]>([]);

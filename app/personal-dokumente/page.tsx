@@ -16,7 +16,7 @@ import PersonalTabs from "@/components/PersonalTabs";
 import PageHeader from "@/components/PageHeader";
 import { FileText } from "lucide-react";
 
-import { hatRolle } from "@/lib/rollen";
+import { darf } from "@/lib/rollen";
 const DOKUMENTE_BUCKET = "mitarbeiter-dokumente";
 const FUEHRERSCHEIN_KATEGORIE: DokumentKategorie = "Führerschein Kopie";
 
@@ -42,7 +42,7 @@ interface Row {
 
 function PersonalDokumenteInner() {
   const { profile } = useProfile();
-  const canView = hatRolle(profile, "admin", "hr");
+  const canView = darf(profile, "personal.dokumente:L");
   // Von der Anreiseliste aus ("Dokumente hochladen →") kommt die
   // Personalnummer der gerade bearbeiteten Person als ?pn=... mit - damit
   // landet man hier direkt bei genau dieser einen Person, statt erst selbst

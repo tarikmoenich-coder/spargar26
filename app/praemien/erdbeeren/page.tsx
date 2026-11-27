@@ -30,7 +30,7 @@ import type {
   Feld,
 } from "@/lib/types";
 
-import { hatRolle } from "@/lib/rollen";
+import { darf } from "@/lib/rollen";
 import { heuteLokalIso } from "@/lib/datum";
 function heuteIso() {
   return heuteLokalIso();
@@ -49,8 +49,8 @@ interface Entwurf {
 export default function PraemienErdbeerenPage() {
   const { profile } = useProfile();
   const canEdit =
-    hatRolle(profile, "admin", "hr", "zeiterfassung", "erntewirtschaft");
-  const isAdmin = hatRolle(profile, "admin");
+    darf(profile, "ernte.praemien:S");
+  const isAdmin = darf(profile, "einstellungen.grund:S");
 
   const [datum, setDatum] = useState(heuteIso());
   const [felder, setFelder] = useState<Feld[]>([]);

@@ -36,7 +36,7 @@ import {
 import ErntewirtschaftTabs from "@/components/ErntewirtschaftTabs";
 import PageHeader from "@/components/PageHeader";
 
-import { hatRolle } from "@/lib/rollen";
+import { darf } from "@/lib/rollen";
 const BLOCK = 200;
 
 function bloecke<T>(arr: T[], groesse = BLOCK): T[][] {
@@ -102,9 +102,9 @@ function ladeVorlage() {
 
 export default function ErntewirtschaftStammdatenPage() {
   const { profile } = useProfile();
-  const canEditMaschinen = hatRolle(profile, "admin", "hr", "erntewirtschaft", "zeiterfassung");
-  const canEditWaagen = hatRolle(profile, "admin", "hr");
-  const canEditKonfig = hatRolle(profile, "admin");
+  const canEditMaschinen = darf(profile, "ernte.maschinen:S");
+  const canEditWaagen = darf(profile, "ernte.waagen:S");
+  const canEditKonfig = darf(profile, "einstellungen.grund:S");
 
   const [maschinen, setMaschinen] = useState<ErnteMaschine[]>([]);
   const [waagen, setWaagen] = useState<ErnteWaage[]>([]);

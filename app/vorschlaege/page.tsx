@@ -10,7 +10,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { Lightbulb, Trash2, X } from "lucide-react";
 import { getSupabaseClient } from "@/lib/supabase/client";
 import { useProfile } from "@/lib/useProfile";
-import { hatRolle } from "@/lib/rollen";
+import { istAdmin as istAdminProfil } from "@/lib/rollen";
 import PageHeader from "@/components/PageHeader";
 import EmptyState from "@/components/EmptyState";
 import { ARTEN } from "@/components/VorschlagKnopf";
@@ -39,7 +39,7 @@ const STATUS: { wert: Status; label: string; klasse: string }[] = [
 
 export default function VorschlaegePage() {
   const { profile, loading: profilLaedt } = useProfile();
-  const istAdmin = hatRolle(profile, "admin");
+  const istAdmin = istAdminProfil(profile);
   const [liste, setListe] = useState<Vorschlag[]>([]);
   const [namen, setNamen] = useState<Map<string, string>>(new Map());
   const [filter, setFilter] = useState<Status | "alle">("offen");

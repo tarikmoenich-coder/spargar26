@@ -13,7 +13,7 @@ import { Suspense, useCallback, useEffect, useRef, useState } from "react";
 import { Bug, Eraser, Lightbulb, Pencil, PencilLine, Sparkles, Type, Undo2, X, type LucideIcon } from "lucide-react";
 import { getSupabaseClient } from "@/lib/supabase/client";
 import { useProfile } from "@/lib/useProfile";
-import { hatRolle } from "@/lib/rollen";
+import { istAdmin as istAdminProfil } from "@/lib/rollen";
 
 type Strich = { typ: "linie"; farbe: string; punkte: [number, number][] } | { typ: "text"; farbe: string; x: number; y: number; text: string };
 const FARBEN = ["#dc2626", "#2563eb", "#111827"];
@@ -34,7 +34,7 @@ function Knopf() {
   const pathname = usePathname();
   const params = useSearchParams();
   const { profile } = useProfile();
-  const istAdmin = hatRolle(profile, "admin");
+  const istAdmin = istAdminProfil(profile);
   const [offen, setOffen] = useState(false);
   const [foto, setFoto] = useState<HTMLImageElement | null>(null);
   const [fotoLaeuft, setFotoLaeuft] = useState(false);

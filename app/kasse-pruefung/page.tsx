@@ -27,7 +27,7 @@ import PageHeader from "@/components/PageHeader";
 import { ClipboardCheck } from "lucide-react";
 import KassenSaldoKarte from "@/components/KassenSaldoKarte";
 
-import { hatRolle } from "@/lib/rollen";
+import { darf } from "@/lib/rollen";
 interface CashCheckRow {
   id: number;
   kassenbuch_id: number;
@@ -59,8 +59,8 @@ interface BewegungAnzeige {
 
 export default function KassenpruefungPage() {
   const { profile } = useProfile();
-  const canWrite = hatRolle(profile, "admin", "kasse");
-  const canFreigeben = hatRolle(profile, "admin", "pruefer");
+  const canWrite = darf(profile, "kasse.pruefung:S");
+  const canFreigeben = darf(profile, "sonder.kasse_freigeben:S");
 
   const [buecher, setBuecher] = useState<Kassenbuch[]>([]);
   const [salden, setSalden] = useState<Record<number, number>>({});

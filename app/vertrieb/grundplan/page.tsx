@@ -20,7 +20,7 @@ import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "rea
 import { Car, CalendarRange, ChevronDown, ChevronRight, GripVertical, PanelRightClose, PanelRightOpen, Printer, UserPlus, X } from "lucide-react";
 import { getSupabaseClient } from "@/lib/supabase/client";
 import { useProfile } from "@/lib/useProfile";
-import { hatRolle } from "@/lib/rollen";
+import { darf } from "@/lib/rollen";
 import PageHeader from "@/components/PageHeader";
 import EmptyState from "@/components/EmptyState";
 import VertriebTabs from "@/components/VertriebTabs";
@@ -72,7 +72,7 @@ const SCHRAFFUR = {
 
 export default function VertriebGrundplanPage() {
   const { profile } = useProfile();
-  const darfPflegen = hatRolle(profile, "admin", "hr");
+  const darfPflegen = darf(profile, "vertrieb.planung:S");
 
   const [saison, setSaison] = useState(planungsSaison());
   const [personen, setPersonen] = useState<Person[]>([]);

@@ -12,7 +12,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useRef } from "react";
 import { useProfile } from "@/lib/useProfile";
-import { darfMenue } from "@/lib/rollen";
+import { MENUE_RECHTE, darfMenue } from "@/lib/rollen";
 
 type BereichKey =
   | "ueberblick"

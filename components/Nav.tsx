@@ -30,7 +30,7 @@ import {
 import { getSupabaseClient } from "@/lib/supabase/client";
 import { useProfile } from "@/lib/useProfile";
 import { SPRACHEN, type Sprache } from "@/lib/i18n";
-import { darfMenue, rollenVon, rolleLabel } from "@/lib/rollen";
+import { rollenVon, rolleLabel, nurHausmeisterSicht, MENUE_RECHTE, darfMenue } from "@/lib/rollen";
 import { useBereiche } from "@/lib/useBereiche";
 
 interface NavItem {

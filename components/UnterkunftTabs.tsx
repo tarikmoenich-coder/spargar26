@@ -6,7 +6,7 @@ import { useEffect, useRef, useState } from "react";
 import { getSupabaseClient } from "@/lib/supabase/client";
 import { useProfile } from "@/lib/useProfile";
 
-import {  nurHausmeisterSicht } from "@/lib/rollen";
+import { nurHausmeisterSicht } from "@/lib/rollen";
 // Unterkunft-Modul. nurHausmeister: der Hausmeister arbeitet über die
 // Immobilien-Ansicht + Reparaturen (+ Auszüge, solange welche offen sind);
 // keine Zwischenkontrollen/Stammdaten (Vorgabe 2026-09-15).

@@ -20,7 +20,7 @@ import type {
   UnterkunftZimmerArt,
 } from "@/lib/types";
 
-import { hatRolle } from "@/lib/rollen";
+import { darf } from "@/lib/rollen";
 const RAUMTYP_LABEL: Record<UnterkunftZimmerArt, string> = {
   zimmer: "Schlafzimmer",
   kueche: "Küche",
@@ -32,8 +32,8 @@ const RAUMTYP_LABEL: Record<UnterkunftZimmerArt, string> = {
 
 export default function UnterkunftStammdatenPage() {
   const { profile } = useProfile();
-  const canEdit = hatRolle(profile, "admin", "hr");
-  const isAdmin = hatRolle(profile, "admin");
+  const canEdit = darf(profile, "unterkunft.immobilien:S");
+  const isAdmin = darf(profile, "einstellungen.grund:S");
 
   const [gebaeude, setGebaeude] = useState<UnterkunftGebaeude[]>([]);
   const [wohneinheiten, setWohneinheiten] = useState<UnterkunftWohneinheit[]>([]);

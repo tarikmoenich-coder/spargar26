@@ -34,7 +34,7 @@ import {
   type ZettelZeiten,
 } from "@/lib/zettelZeiten";
 
-import { hatRolle, rollenVon, rolleLabel } from "@/lib/rollen";
+import { rollenVon, rolleLabel, darf } from "@/lib/rollen";
 import { ladeAlleSeiten } from "@/lib/ladeAlle";
 import { heuteLokalIso } from "@/lib/datum";
 const OHNE_GRUPPE_KEY = "__ohne__";
@@ -145,7 +145,7 @@ function ErfassungInner() {
   const { profile } = useProfile();
   const t = uebersetzung(profile?.sprache);
   const canGruppeAendern =
-    hatRolle(profile, "admin", "hr");
+    darf(profile, "personal.stamm:S");
   // Nutzer-Vorgabe 2026-09-21: die Spalte "Markierung" ist entfallen. Urlaub
   // wird im Controlling (Urlaub / Arbeitstage am Stück) erfasst, "F" (Fahrer)
   // gibt es nicht mehr. Bestehende Markierungen bleiben in den Daten und
@@ -156,7 +156,7 @@ function ErfassungInner() {
   // aber lautlos von der Datenbank abgelehnt wurde - Nutzer-Bugreport
   // 2026-08-08 ("eingetippte Stunden nach Neuladen wieder weg").
   const canEditStunden =
-    hatRolle(profile, "admin", "hr", "zeiterfassung");
+    darf(profile, "erfassung.stunden:S");
   // Stundenkonto: Rollenregeln zentral in lib/stundenkontoRechte.ts - hier
   // nur zur Anzeige des "Verwalten"-Umschalters (die eigentliche Prüfung
   // je Aktion steckt in StundenkontoBereich/schema.sql).

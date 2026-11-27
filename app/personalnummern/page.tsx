@@ -12,7 +12,7 @@ import {
 } from "@/lib/personalnummern";
 import { useProfile } from "@/lib/useProfile";
 import { useBereiche } from "@/lib/useBereiche";
-import { hatRolle } from "@/lib/rollen";
+import { darf as hatRecht } from "@/lib/rollen";
 import PersonalTabs from "@/components/PersonalTabs";
 import PageHeader from "@/components/PageHeader";
 import { Hash } from "lucide-react";
@@ -28,7 +28,7 @@ interface Row {
 
 export default function PersonalnummernPage() {
   const { profile, loading: profilLaedt } = useProfile();
-  const darf = hatRolle(profile, "admin", "hr");
+  const darf = hatRecht(profile, "personal.verwaltung:S");
   const bereiche = useBereiche(profile);
   const [rows, setRows] = useState<Row[]>([]);
   const [loading, setLoading] = useState(true);

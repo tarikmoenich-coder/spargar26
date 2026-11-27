@@ -38,7 +38,7 @@ import {
   type UnterkunftZuordnungOffen,
 } from "@/lib/types";
 
-import { hatRolle } from "@/lib/rollen";
+import { darf } from "@/lib/rollen";
 import { ladeAlleSeiten } from "@/lib/ladeAlle";
 interface PosEntwurf {
   zustand: UnterkunftPositionZustand;
@@ -50,7 +50,7 @@ interface PosEntwurf {
 export default function UnterkunftUebergabePage() {
   const { profile } = useProfile();
   const canEdit =
-    hatRolle(profile, "admin", "hr", "hausmeister");
+    darf(profile, "unterkunft.belegung:S");
 
   const [gebaeude, setGebaeude] = useState<UnterkunftGebaeude[]>([]);
   const [zimmer, setZimmer] = useState<UnterkunftZimmer[]>([]);

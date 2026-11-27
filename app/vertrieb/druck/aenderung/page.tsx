@@ -14,7 +14,7 @@ import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
 import { Printer } from "lucide-react";
 import { getSupabaseClient } from "@/lib/supabase/client";
 import { useProfile } from "@/lib/useProfile";
-import { hatRolle } from "@/lib/rollen";
+import { darf } from "@/lib/rollen";
 import TourKarte from "@/components/TourKarte";
 import { heuteLokalIso } from "@/lib/datum";
 import { datumLang, tagesplanBerechnen, tagesplanStand, tourAenderungen } from "@/lib/tagesplan";
@@ -24,7 +24,7 @@ function Aenderungszettel() {
   const params = useSearchParams();
   const datum = params.get("datum") || heuteLokalIso();
   const { profile } = useProfile();
-  const darfPflegen = hatRolle(profile, "admin", "hr");
+  const darfPflegen = darf(profile, "vertrieb.planung:S");
   const [d, setD] = useState<TagesplanDaten | null>(null);
   const [fehler, setFehler] = useState<string | null>(null);
   // Bezug festhalten, damit der Zettel nach dem Speichern des neuen Stands nicht leer wird

@@ -19,7 +19,7 @@ import type {
   ZuckermaisPraemieTag,
 } from "@/lib/types";
 import { formatDatumDE, formatMenge } from "@/lib/format";
-import { hatRolle } from "@/lib/rollen";
+import { darf } from "@/lib/rollen";
 import { heuteLokalIso } from "@/lib/datum";
 
 const VORSCHUSS_BUCKET = "vorschuss-belege";
@@ -138,8 +138,8 @@ export default function SuchePage() {
   // Was die Rolle laut RLS sehen darf (migration_2026-11-24c, Stufe 0b) -
   // ohne Recht liefert die Datenbank leere Listen; dann den Abschnitt ganz
   // ausblenden statt "Keine Vorschüsse erfasst" anzuzeigen/zu drucken.
-  const darfVorschuesse = hatRolle(profile, "admin", "hr", "kasse", "lohnabrechnung", "pruefer", "management");
-  const darfStundenkonto = hatRolle(profile, "admin", "hr", "zeiterfassung", "kasse", "lohnabrechnung", "pruefer", "management");
+  const darfVorschuesse = darf(profile, "lohn.vorschuesse:L");
+  const darfStundenkonto = darf(profile, "erfassung.stunden:L", "lohn.uebersicht:L");
   const [alle, setAlle] = useState<SucheEmployee[]>([]);
   const [suchtext, setSuchtext] = useState("");
   const [ausgewaehlt, setAusgewaehlt] = useState<SucheEmployee | null>(null);

@@ -7,7 +7,7 @@
 // Personen/Kandidaten/Gruppen angelegt werden.
 import { useEffect, useState } from "react";
 import { getSupabaseClient } from "@/lib/supabase/client";
-import { hatRolle } from "@/lib/rollen";
+import { bereicheVon } from "@/lib/rollen";
 import type { Geschaeftsbereich, Profile } from "@/lib/types";
 
 export function useBereiche(profile: Profile | null) {
@@ -22,12 +22,9 @@ export function useBereiche(profile: Profile | null) {
       .then(({ data }) => setAlle((data as Geschaeftsbereich[]) ?? []));
   }, [profile]);
 
-  // admin/management/pruefer sehen alles (wie current_bereiche()).
-  const erlaubt: string[] = !profile
-    ? []
-    : hatRolle(profile, "admin", "management", "pruefer")
-      ? alle.map((b) => b.kuerzel)
-      : (profile.bereiche ?? ["LW"]);
+  // Wie current_bereiche() in der Datenbank (vorberechnet in profil_rechte;
+  // Admin: alle, sonst laut Nutzer/Rolle).
+  const erlaubt: string[] = bereicheVon(profile);
   const ansicht =
     profile?.bereich_ansicht && erlaubt.includes(profile.bereich_ansicht)
       ? profile.bereich_ansicht

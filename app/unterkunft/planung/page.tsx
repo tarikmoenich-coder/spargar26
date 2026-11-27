@@ -26,11 +26,11 @@ import type {
   UnterkunftWohneinheitUebersicht,
 } from "@/lib/types";
 
-import { hatRolle, nurHausmeisterSicht } from "@/lib/rollen";
+import { darf, nurHausmeisterSicht } from "@/lib/rollen";
 import { standardPlanungsJahr } from "@/lib/personalplanung";
 export default function UnterkunftPlanungPage() {
   const { profile } = useProfile();
-  const canEdit = hatRolle(profile, "admin", "hr");
+  const canEdit = darf(profile, "unterkunft.planung:S");
   const nurLesen = nurHausmeisterSicht(profile);
 
   // Gleiche Standard-Saison wie die Personalplanung (ab September die

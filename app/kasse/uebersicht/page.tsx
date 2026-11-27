@@ -16,10 +16,10 @@ import PageHeader from "@/components/PageHeader";
 import { Landmark } from "lucide-react";
 import UmbuchungForm from "@/components/UmbuchungForm";
 
-import { hatRolle } from "@/lib/rollen";
+import { darf } from "@/lib/rollen";
 export default function KassenbuecherUebersichtPage() {
   const { profile } = useProfile();
-  const isAdmin = hatRolle(profile, "admin");
+  const isAdmin = darf(profile, "einstellungen.grund:S");
 
   const [buecher, setBuecher] = useState<Kassenbuch[]>([]);
   const [salden, setSalden] = useState<Record<number, number>>({});
@@ -210,7 +210,7 @@ export default function KassenbuecherUebersichtPage() {
             ))}
           </div>
 
-          {(isAdmin || hatRolle(profile, "kasse")) && buecher.length > 1 && (
+          {(isAdmin || darf(profile, "kasse.buecher:S")) && buecher.length > 1 && (
             <div>
               <h2 className="mb-2 text-base font-semibold text-emerald-800">
                 Umbuchung
