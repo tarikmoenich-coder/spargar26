@@ -56,6 +56,9 @@ export interface Profile {
   // gewählte Ansicht (null = alle freigegebenen), Stufe 2 2026-11-24.
   bereiche?: string[] | null;
   bereich_ansicht?: string | null;
+  // Selbst ausgeblendete Menüpunkte (href), reine Anzeige - kein Recht
+  // (Nutzer-Vorgabe 2026-11-27).
+  menue_ausgeblendet?: string[] | null;
   aktiv: boolean;
   // UI-Sprache je Nutzer (nicht je Rolle) - siehe lib/i18n.ts. Betrifft
   // nur die Bedienoberfläche, keine Dokumente/Formulare.
