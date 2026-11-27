@@ -11,3 +11,4 @@ tsconfig.tsbuildinfo
 
 # Office-Sperrdateien (entstehen, wenn z.B. README.md gerade in Word offen ist)
 ~$*
+__pycache__/

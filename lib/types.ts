@@ -31,10 +31,35 @@ export const ABRECHNUNGSART_LABELS: Record<Abrechnungsart, string> = {
 export interface ProfilRechte {
   // 'funktion:L' (lesen) / 'funktion:S' (lesen & schreiben)
   rechte: string[];
+  // je Recht die Bereiche (LW/VT) der Rollen, die es geben (Stufe 2)
+  rechte_bereich?: Record<string, string[]> | null;
   bereiche: string[];
   admin: boolean;
   angemeldet: boolean;
   buero: boolean;
+}
+
+// Rolle als Datensatz (Tabelle rolle, Rechte-Umbau 2026-11-28)
+export interface Rolle {
+  id: string;
+  bezeichnung: string;
+  beschreibung: string;
+  // Funktion -> 'L' (lesen) / 'S' (lesen & schreiben)
+  rechte: Record<string, "L" | "S">;
+  alle_rechte: boolean;
+  system_admin: boolean;
+  bereiche: string[];
+  sortierung: number;
+}
+
+export interface RechtKatalogEintrag {
+  id: string;
+  modul: string;
+  titel: string;
+  unter: string;
+  sensibel: boolean;
+  nur_lesen: boolean;
+  sortierung: number;
 }
 
 export interface Profile {

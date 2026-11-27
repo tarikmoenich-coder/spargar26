@@ -7,9 +7,9 @@
 // profiles_admin_all + Trigger trg_profiles_schutz (role/rollen/aktiv nur
 // durch admin) + Audit-Trigger trg_audit_profiles.
 //
-// Stufe 1 (2026-11-24): mehrere Rollen je Nutzer (profiles.rollen), Rechte
-// = Vereinigung. "Hauptrolle" (profiles.role) bestimmt nur Anzeige und
-// Startseite und ist immer eine der gewählten Rollen.
+// Rechte-Umbau (2026-11-28): Rollen sind Datensätze (Einstellungen →
+// Rollen), ein Nutzer kann mehrere haben. Rechte und Bereiche kommen aus den
+// Rollen - je Rolle in ihren eigenen Bereichen.
 
 import PageHeader from "@/components/PageHeader";
 import { UserCog } from "lucide-react";
@@ -17,10 +17,12 @@ import { useCallback, useEffect, useState } from "react";
 import { getSupabaseClient } from "@/lib/supabase/client";
 import { useProfile } from "@/lib/useProfile";
 import { formatDatumDE } from "@/lib/format";
-import { ROLLEN, rollenVon, rolleLabel, darf, istAdmin as istAdminProfil } from "@/lib/rollen";
+import { istAdmin as istAdminProfil } from "@/lib/rollen";
+import { useRollen } from "@/lib/useRollen";
+import Link from "next/link";
 import EinstellungenTabs from "@/components/EinstellungenTabs";
 import { useBereiche } from "@/lib/useBereiche";
-import type { UserRole } from "@/lib/types";
+import type { Rolle, UserRole } from "@/lib/types";
 
 interface Nutzer {
   id: string;
@@ -32,25 +34,19 @@ interface Nutzer {
   created_at: string;
 }
 
-// Vorlage "Vertrieb" (Nutzer-Vorgabe 2026-11-24): darf für den Vertrieb,
-// was HR + Buchhaltung (Lohnabrechnung, Kasse) für die Landwirtschaft
-// dürfen - nur Bereich Vertrieb.
-const VORLAGE_VERTRIEB: { rollen: UserRole[]; bereiche: string[] } = {
-  rollen: ["hr", "lohnabrechnung", "kasse"],
-  bereiche: ["VT"],
-};
-// Diese Rollen sehen ohnehin alle Bereiche (wie current_bereiche()).
-const ROLLEN_ALLE_BEREICHE: UserRole[] = ["admin", "management", "pruefer"];
-
-// Rollen in fester Reihenfolge (wie ROLLEN), Hauptrolle zuerst gültig halten.
-function sortiert(rollen: UserRole[]): UserRole[] {
-  return ROLLEN.map((r) => r.wert).filter((w) => rollen.includes(w));
-}
-
 export default function NutzerVerwaltungPage() {
   const { profile } = useProfile();
   const istAdmin = istAdminProfil(profile);
   const bereiche = useBereiche(profile);
+  const { rollen: alleRollen } = useRollen(istAdmin);
+  // Rollen in Listen-Reihenfolge halten
+  const sortiert = (r: UserRole[]) => alleRollen.map((x) => x.id).filter((id) => r.includes(id));
+  // Bereiche eines Nutzers = Bereiche seiner Rollen (Administrator: alle)
+  const bereicheAus = (r: UserRole[]) => {
+    const ro = alleRollen.filter((x) => r.includes(x.id));
+    if (ro.some((x) => x.system_admin)) return bereiche.alle.map((b) => b.kuerzel);
+    return bereiche.alle.map((b) => b.kuerzel).filter((k) => ro.some((x: Rolle) => x.bereiche.includes(k)));
+  };
 
   const [nutzer, setNutzer] = useState<Nutzer[]>([]);
   const [loading, setLoading] = useState(true);
@@ -58,8 +54,7 @@ export default function NutzerVerwaltungPage() {
 
   const [neuId, setNeuId] = useState("");
   const [neuName, setNeuName] = useState("");
-  const [neuRollen, setNeuRollen] = useState<UserRole[]>(["zeiterfassung"]);
-  const [neuBereiche, setNeuBereiche] = useState<string[]>(["LW"]);
+  const [neuRollen, setNeuRollen] = useState<UserRole[]>([]);
   const [anlegen, setAnlegen] = useState(false);
 
   const laden = useCallback(async () => {
@@ -111,7 +106,7 @@ export default function NutzerVerwaltungPage() {
     }
     if (
       n.id === profile?.id &&
-      rolle === "admin" &&
+      alleRollen.find((x) => x.id === rolle)?.system_admin &&
       !an &&
       !window.confirm(
         "Du entziehst dir selbst die Administrator-Rolle. Danach kommst du nicht mehr in diese Verwaltung. Fortfahren?"
@@ -122,36 +117,6 @@ export default function NutzerVerwaltungPage() {
     // Hauptrolle bleibt, solange sie noch gewählt ist - sonst die erste.
     const hauptrolle = neu.includes(n.role) ? n.role : neu[0];
     patch(n.id, { rollen: neu, role: hauptrolle });
-  }
-
-  async function bereichUmschalten(n: Nutzer, bereich: string, an: boolean) {
-    const neu = bereiche.alle
-      .map((b) => b.kuerzel)
-      .filter((k) => (k === bereich ? an : n.bereiche.includes(k)));
-    if (neu.length === 0) {
-      setFehler("Ein Nutzer braucht mindestens einen Bereich.");
-      return;
-    }
-    patch(n.id, { bereiche: neu });
-  }
-
-  async function vorlageVertrieb(n: Nutzer) {
-    if (
-      !window.confirm(
-        `${n.full_name}: Rollen auf Personal (HR) + Lohnabrechnung + Kasse und Bereich auf NUR Vertrieb setzen?`
-      )
-    ) {
-      return;
-    }
-    patch(n.id, {
-      rollen: VORLAGE_VERTRIEB.rollen,
-      role: "hr",
-      bereiche: VORLAGE_VERTRIEB.bereiche,
-    });
-  }
-
-  async function hauptrolleSetzen(n: Nutzer, rolle: UserRole) {
-    patch(n.id, { role: rolle });
   }
 
   async function aktivSetzen(n: Nutzer, aktiv: boolean) {
@@ -183,10 +148,6 @@ export default function NutzerVerwaltungPage() {
       setFehler("Bitte mindestens eine Rolle wählen.");
       return;
     }
-    if (neuBereiche.length === 0) {
-      setFehler("Bitte mindestens einen Bereich wählen.");
-      return;
-    }
     setAnlegen(true);
     const { error } = await getSupabaseClient()
       .from("profiles")
@@ -195,7 +156,6 @@ export default function NutzerVerwaltungPage() {
         full_name: neuName.trim(),
         role: sortiert(neuRollen)[0],
         rollen: sortiert(neuRollen),
-        bereiche: neuBereiche,
       });
     setAnlegen(false);
     if (error) {
@@ -208,8 +168,7 @@ export default function NutzerVerwaltungPage() {
     }
     setNeuId("");
     setNeuName("");
-    setNeuRollen(["zeiterfassung"]);
-    setNeuBereiche(["LW"]);
+    setNeuRollen([]);
     laden();
   }
 
@@ -217,7 +176,7 @@ export default function NutzerVerwaltungPage() {
     return (
       <div className="flex flex-col gap-4">
         <EinstellungenTabs />
-        <PageHeader icon={UserCog} titel="Nutzer &amp; Rollen" />
+        <PageHeader icon={UserCog} titel="Nutzer" />
         <p className="text-sm text-neutral-500">
           Nur Administratoren dürfen die Nutzerverwaltung öffnen.
         </p>
@@ -229,17 +188,18 @@ export default function NutzerVerwaltungPage() {
     <div className="flex flex-col gap-6">
       <EinstellungenTabs />
       <div>
-        <PageHeader icon={UserCog} titel="Nutzer &amp; Rollen" />
+        <PageHeader icon={UserCog} titel="Nutzer" />
         <p className="text-sm text-neutral-500">
           Name, Rollen und Aktiv-Status je Nutzer. Ein Nutzer kann mehrere
-          Rollen haben und darf dann alles, was eine seiner Rollen darf. Die
-          Hauptrolle bestimmt nur die Startseite. Bereiche (Landwirtschaft /
-          Vertrieb) legen fest, wessen Personal, Stunden und Löhne der Nutzer
-          sieht - Administrator, Management und Prüfer sehen immer alle. Der
-          Login (E-Mail/Passwort)
-          wird in Supabase → Authentication → Users angelegt; hier wird
-          anschließend das Profil gepflegt. Rollenwechsel landen im
-          Änderungsprotokoll.
+          Rollen haben und darf dann alles, was eine seiner Rollen darf - jeweils
+          in den Bereichen dieser Rolle. Was eine Rolle darf und für welche
+          Bereiche sie gilt, legst du unter{" "}
+          <Link href="/einstellungen/rollen" className="text-emerald-700 underline">
+            Rollen
+          </Link>{" "}
+          fest. Der Login (E-Mail/Passwort) wird in Supabase → Authentication →
+          Users angelegt; hier wird anschließend das Profil gepflegt.
+          Rollenwechsel landen im Änderungsprotokoll.
         </p>
       </div>
 
@@ -255,7 +215,6 @@ export default function NutzerVerwaltungPage() {
                 <tr>
                   <th>Name</th>
                   <th>Rollen</th>
-                  <th>Hauptrolle</th>
                   <th>Bereiche</th>
                   <th>Aktiv</th>
                   <th>Angelegt</th>
@@ -278,74 +237,25 @@ export default function NutzerVerwaltungPage() {
                     </td>
                     <td>
                       <div className="flex max-w-md flex-wrap gap-x-3 gap-y-1">
-                        {ROLLEN.map((r) => (
+                        {alleRollen.map((r) => (
                           <label
-                            key={r.wert}
+                            key={r.id}
                             className="inline-flex items-center gap-1 whitespace-nowrap text-xs"
                           >
                             <input
                               type="checkbox"
-                              checked={n.rollen.includes(r.wert)}
+                              checked={n.rollen.includes(r.id)}
                               onChange={(e) =>
-                                rolleUmschalten(n, r.wert, e.target.checked)
+                                rolleUmschalten(n, r.id, e.target.checked)
                               }
                             />
-                            {r.label}
+                            {r.bezeichnung}
                           </label>
                         ))}
                       </div>
                     </td>
-                    <td>
-                      <select
-                        value={n.role}
-                        onChange={(e) =>
-                          hauptrolleSetzen(n, e.target.value as UserRole)
-                        }
-                        disabled={n.rollen.length < 2}
-                        title="Bestimmt nur die Startseite nach der Anmeldung"
-                      >
-                        {n.rollen.map((r) => (
-                          <option key={r} value={r}>
-                            {rolleLabel(r)}
-                          </option>
-                        ))}
-                      </select>
-                    </td>
-                    <td>
-                      {n.rollen.some((r) => ROLLEN_ALLE_BEREICHE.includes(r)) ? (
-                        <span
-                          className="text-xs text-neutral-500"
-                          title="Administrator, Management und Prüfer sehen immer alle Bereiche"
-                        >
-                          alle (Rolle)
-                        </span>
-                      ) : (
-                        <div className="flex flex-col gap-0.5">
-                          {bereiche.alle.map((b) => (
-                            <label
-                              key={b.kuerzel}
-                              className="inline-flex items-center gap-1 whitespace-nowrap text-xs"
-                            >
-                              <input
-                                type="checkbox"
-                                checked={n.bereiche.includes(b.kuerzel)}
-                                onChange={(e) =>
-                                  bereichUmschalten(n, b.kuerzel, e.target.checked)
-                                }
-                              />
-                              {b.bezeichnung}
-                            </label>
-                          ))}
-                        </div>
-                      )}
-                      <button
-                        type="button"
-                        className="mt-1 text-xs text-emerald-700 underline"
-                        onClick={() => vorlageVertrieb(n)}
-                        title="Rollen HR + Lohnabrechnung + Kasse, nur Bereich Vertrieb"
-                      >
-                        Vorlage Vertrieb
-                      </button>
+                    <td className="whitespace-nowrap text-xs text-neutral-600">
+                      {bereicheAus(n.rollen).map((k) => bereiche.label(k)).join(", ") || "—"}
                     </td>
                     <td>
                       <input
@@ -398,47 +308,23 @@ export default function NutzerVerwaltungPage() {
               <fieldset className="text-sm">
                 <legend>Rollen</legend>
                 <div className="mt-1 flex max-w-md flex-wrap gap-x-3 gap-y-1">
-                  {ROLLEN.map((r) => (
+                  {alleRollen.map((r) => (
                     <label
-                      key={r.wert}
+                      key={r.id}
                       className="inline-flex items-center gap-1 whitespace-nowrap text-xs"
                     >
                       <input
                         type="checkbox"
-                        checked={neuRollen.includes(r.wert)}
+                        checked={neuRollen.includes(r.id)}
                         onChange={(e) =>
                           setNeuRollen((prev) =>
                             e.target.checked
-                              ? [...prev, r.wert]
-                              : prev.filter((x) => x !== r.wert)
+                              ? [...prev, r.id]
+                              : prev.filter((x) => x !== r.id)
                           )
                         }
                       />
-                      {r.label}
-                    </label>
-                  ))}
-                </div>
-              </fieldset>
-              <fieldset className="text-sm">
-                <legend>Bereiche</legend>
-                <div className="mt-1 flex flex-col gap-0.5">
-                  {bereiche.alle.map((b) => (
-                    <label
-                      key={b.kuerzel}
-                      className="inline-flex items-center gap-1 whitespace-nowrap text-xs"
-                    >
-                      <input
-                        type="checkbox"
-                        checked={neuBereiche.includes(b.kuerzel)}
-                        onChange={(e) =>
-                          setNeuBereiche((prev) =>
-                            e.target.checked
-                              ? [...prev, b.kuerzel]
-                              : prev.filter((x) => x !== b.kuerzel)
-                          )
-                        }
-                      />
-                      {b.bezeichnung}
+                      {r.bezeichnung}
                     </label>
                   ))}
                 </div>
@@ -449,28 +335,6 @@ export default function NutzerVerwaltungPage() {
             </form>
           </div>
 
-          <div>
-            <h2 className="mb-2 text-base font-semibold text-emerald-800">
-              Was die Rollen dürfen
-            </h2>
-            <dl className="grid gap-2 sm:grid-cols-2">
-              {ROLLEN.map((r) => (
-                <div key={r.wert} className="rounded border border-linie p-3">
-                  <dt className="font-medium text-emerald-900">
-                    {r.label}{" "}
-                    <span className="font-mono text-xs text-neutral-400">
-                      {r.wert}
-                    </span>
-                  </dt>
-                  <dd className="text-sm text-neutral-600">{r.kurz}</dd>
-                </div>
-              ))}
-            </dl>
-            <p className="mt-2 text-xs text-neutral-400">
-              Rollen {rollenVon(profile).map(rolleLabel).join(", ") || "—"} · angemeldet als{" "}
-              {profile?.full_name}
-            </p>
-          </div>
         </>
       )}
     </div>

@@ -30,7 +30,8 @@ import {
 import { getSupabaseClient } from "@/lib/supabase/client";
 import { useProfile } from "@/lib/useProfile";
 import { SPRACHEN, type Sprache } from "@/lib/i18n";
-import { rollenVon, rolleLabel, nurHausmeisterSicht, MENUE_RECHTE, darfMenue } from "@/lib/rollen";
+import { rollenVon, darfMenue } from "@/lib/rollen";
+import { useRollen } from "@/lib/useRollen";
 import { useBereiche } from "@/lib/useBereiche";
 
 interface NavItem {
@@ -150,6 +151,7 @@ const items: NavItem[] = [
       "/einstellungen/herkuenfte",
       "/einstellungen/einsatzbereiche",
       "/einstellungen/nutzer",
+      "/einstellungen/rollen",
     ],
   },
 ];
@@ -159,6 +161,7 @@ export default function Nav() {
   const router = useRouter();
   const { profile } = useProfile();
   const bereiche = useBereiche(profile);
+  const { label: rolleBez } = useRollen(!!profile);
   // Unter `lg` (Telefon/kleines Tablet) sind die Bereichs-Links + Name/Rolle
   // + Sprache + Abmelden in eine Schublade ausgelagert - vorher lagen alle
   // ~13 Links plus der Rolle-Block in einer festen 56px-Zeile und
@@ -405,7 +408,7 @@ export default function Nav() {
               <>
                 <span>
                   {profile.full_name} ·{" "}
-                  <span className="italic">{rollenVon(profile).map(rolleLabel).join(", ")}</span>
+                  <span className="italic">{rollenVon(profile).map(rolleBez).join(", ")}</span>
                 </span>
                 {bereichWahl}
                 {sprachWahl}
@@ -528,7 +531,7 @@ export default function Nav() {
               <div className="mt-4 border-t border-linie pt-4 text-sm text-neutral-600">
                 <div className="mb-3">
                   {profile.full_name} ·{" "}
-                  <span className="italic">{rollenVon(profile).map(rolleLabel).join(", ")}</span>
+                  <span className="italic">{rollenVon(profile).map(rolleBez).join(", ")}</span>
                 </div>
                 {bereichWahl && (
                   <label className="mb-3 flex items-center gap-2">

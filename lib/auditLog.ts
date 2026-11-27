@@ -37,6 +37,7 @@ export const BEREICH_LABELS: Record<string, string> = {
   kleidung_ausgaben: "Arbeitskleidung",
   qs_kontrolle: "Qualitätskontrolle",
   zuckermais_annahme: "Zuckermais-Annahme",
+  rolle: "Rolle",
 };
 
 export const AKTION_LABELS: Record<string, string> = {

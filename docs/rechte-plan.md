@@ -31,5 +31,13 @@ Nutzer-Entscheidungen 2026-11-27 (Katalog: https://claude.ai/artifact/QQY8SNxXxS
 
 ## Stufen
 
-1. DB-Umbau (unsichtbar) + Client auf darf() umstellen.
-2. Rollen-Editor unter Einstellungen, Geschäftsführer-Rolle anlegen.
+1. DB-Umbau (Migration 2026-11-28 + 28b) + App auf darf() umgestellt - live seit 2026-11-28.
+2. Bereiche je Rolle (Nutzer-Entscheidung 2026-11-28: je Rolle GETRENNT, d.h. "HR nur LW" +
+   "Kasse nur VT" = HR nur in LW, Kasse nur in VT). Migration 28c: profil_rechte.rechte_bereich,
+   bereiche_fuer(rechte[]), Bereichs-Grenzen je Befehl (Rechte aus den Policies der Tabelle).
+   Rollen-Editor unter Einstellungen → Rollen, Nutzerverwaltung ohne Bereiche je Nutzer.
+
+## Tests
+
+`supabase/tests/rechte_test.sh` (Nachbau vom Live-Stand, Rollen/Katalog aus
+`supabase/rechte/seed_erzeugen.py`, Matrix inkl. Geschäftsführer).

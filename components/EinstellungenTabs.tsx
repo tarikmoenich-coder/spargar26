@@ -20,7 +20,8 @@ const tabs: { href: string; label: string; sichtbar: (p: Profile | null) => bool
   { href: "/einstellungen/arbeitsgruppen", label: "Arbeitsgruppen", sichtbar: (p) => darf(p, "erfassung.gruppen:S") },
   { href: "/einstellungen/herkuenfte", label: "Herkünfte", sichtbar: (p) => darf(p, "einstellungen.grund:S") },
   { href: "/einstellungen/einsatzbereiche", label: "Einsatzbereiche", sichtbar: (p) => darf(p, "einstellungen.grund:S") },
-  { href: "/einstellungen/nutzer", label: "Nutzer & Rollen", sichtbar: (p) => istAdmin(p) },
+  { href: "/einstellungen/nutzer", label: "Nutzer", sichtbar: (p) => istAdmin(p) },
+  { href: "/einstellungen/rollen", label: "Rollen", sichtbar: (p) => istAdmin(p) },
 ];
 
 export default function EinstellungenTabs() {

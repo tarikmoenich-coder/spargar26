@@ -23,10 +23,14 @@ begin
   insert into public.profiles(id, full_name, role, aktiv) values ('00000000-0000-0000-0000-00000000ff02', 'Inaktiv (admin)', 'admin', false)
     on conflict (id) do update set role = 'admin', aktiv = false;
   insert into public._subjekt values ('inaktiv_admin', 'authenticated', '00000000-0000-0000-0000-00000000ff02');
-  for r in select unnest(enum_range(null::user_role))::text loop
+  -- Rollen: seit dem Rechte-Umbau aus der Tabelle rolle (inkl. neuer Rollen
+  -- wie Geschäftsführer), vorher aus dem Typ user_role.
+  for r in execute case when to_regclass('public.rolle') is not null
+                        then 'select id from public.rolle order by sortierung, id'
+                        else 'select unnest(enum_range(null::user_role))::text' end loop
     i := i + 1;
     insert into auth.users(id, email) values (('00000000-0000-0000-0000-0000000001' || lpad(i::text, 2, '0'))::uuid, r || '@test') on conflict do nothing;
-    insert into public.profiles(id, full_name, role, aktiv) values (('00000000-0000-0000-0000-0000000001' || lpad(i::text, 2, '0'))::uuid, 'Test ' || r, r::user_role, true)
+    insert into public.profiles(id, full_name, role, aktiv) values (('00000000-0000-0000-0000-0000000001' || lpad(i::text, 2, '0'))::uuid, 'Test ' || r, r, true)
       on conflict (id) do update set role = excluded.role, aktiv = true;
     insert into public._subjekt values (r, 'authenticated', ('00000000-0000-0000-0000-0000000001' || lpad(i::text, 2, '0'))::uuid);
   end loop;
