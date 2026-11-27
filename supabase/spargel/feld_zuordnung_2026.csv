@@ -13,7 +13,7 @@ Gass gross;62;Gass groß;sicher;
 Gass klein;63;Gass klein;sicher;
 Graf;7;Graf;sicher;
 Gruenspargel Kleiner Klos;36;Klos klein;sicher;(vom Nutzer bestätigt)
-Gruenspargel Klos 1;85;Klos Groß 2019;offen;Nutzer: Klos Groß 2019 + 2021 zusammen - Zeilen lassen sich nicht aufteilen
+Gruenspargel Klos 1;85;Klos Groß 2019;sicher;inklusive Klos groß 2021 (49) - Zeilen nicht aufteilbar, Nutzer 2026-11-28
 Heinrich gross;64;Heinrich Gr.;sicher;
 Heinrich klein;65;Heinrich Kl.;sicher;
 Himbeerfeld;;;entfallen;gibt es nicht mehr (Nutzer 2026-11-28) - 2026 nur mit Feldname, ohne App-Feld
@@ -38,14 +38,14 @@ Orah;50;Orah;sicher;
 Pumpenhaus gross;70;Pumpenhaus gr.;sicher;
 Pumpenhaus klein;69;Pumpenhaus kl;sicher;
 R- 30 Morgen;96;Die 30 Morgen;sicher;(vom Nutzer bestätigt)
-R- Edeka 2;;;unklar;kein passendes Feld (Edeka = 51)
+R- Edeka 2;;;entfallen;unbekannt (Nutzer 2026-11-28) - 2026 nur mit Feldname
 R- GS Bruchweg;90;Bruchweg Xe;sicher;
 R- Im Damm A;88;Im Damm A;sicher;
 R- Im Damm B;87;Im Damm B;sicher;
 R- Zirkus 3;93;Zirkus 3;sicher;
-R- Zirkus 4;;;unklar;fehlt in der App
-R- Zirkus 5;;;unklar;fehlt in der App
-R-Kanal 3;;;unklar;eigenes Feld neben Kanal 3?
+R- Zirkus 4;66;R 15 Morgen 1;sicher;Nutzer 2026-11-28
+R- Zirkus 5;68;R 15 Morgen 2;sicher;Nutzer 2026-11-28
+R-Kanal 3;;;entfallen;unbekannt (Nutzer 2026-11-28) - 2026 nur mit Feldname
 Rehbock;44;Rehbock;sicher;
 Schaefer 3;9;Schäfer 3;sicher;
 Schaefer 4;78;Schäfer 4;sicher;
