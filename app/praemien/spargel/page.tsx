@@ -12,7 +12,7 @@
 import PageHeader from "@/components/PageHeader";
 import ErntewirtschaftTabs from "@/components/ErntewirtschaftTabs";
 import { Kennzahl } from "@/components/Uebersicht";
-import { Award, Clock, Euro, Scale, TrendingDown, Users } from "lucide-react";
+import { Award, Clock, Euro, Printer, Scale, TrendingDown, Users } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { getSupabaseClient } from "@/lib/supabase/client";
 import { useProfile } from "@/lib/useProfile";
@@ -194,6 +194,7 @@ export default function PraemienSpargelPage() {
   return (
     <div className="flex flex-col gap-5">
       <ErntewirtschaftTabs />
+      <div className="print:hidden">
       <PageHeader
         icon={Award}
         titel="Prämien – Spargel"
@@ -210,6 +211,7 @@ export default function PraemienSpargelPage() {
           )
         }
       />
+      </div>
 
       {fehler && <p className="text-sm text-beere-700">Konnte nicht geladen werden: {fehler}</p>}
       {laedt ? (
@@ -218,8 +220,8 @@ export default function PraemienSpargelPage() {
         <p className="text-sm text-neutral-500">Noch keine Spargeldaten vorhanden.</p>
       ) : (
         <>
-          {quelle && <p className="-mt-2 text-xs text-neutral-500">{quelle}</p>}
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
+          {quelle && <p className="-mt-2 text-xs text-neutral-500 print:hidden">{quelle}</p>}
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6 print:hidden">
             <Kennzahl icon={Scale} titel="Geerntet" wert={`${formatMenge(summe.kg / 1000, 1)} t`} />
             <Kennzahl icon={Clock} titel="Stunden" wert={formatMenge(summe.std, 0)} />
             <Kennzahl icon={Scale} titel="Ø kg je Stunde" wert={formatMenge(summe.std ? summe.kg / summe.std : null, 1)} />
@@ -228,7 +230,7 @@ export default function PraemienSpargelPage() {
             <Kennzahl icon={TrendingDown} titel="Unter der Schwelle" wert={formatEuro(summe.fehl)} unter="nicht verrechnet" />
           </div>
 
-          <div className="flex flex-wrap gap-4 border-b border-linie text-sm">
+          <div className="flex flex-wrap gap-4 border-b border-linie text-sm print:hidden">
             {(
               [
                 ["personen", "Je Person"],
@@ -304,8 +306,16 @@ export default function PraemienSpargelPage() {
           )}
 
           {ansicht === "tag" && (
-            <div className="flex flex-col gap-3">
-              <div className="flex flex-wrap items-center gap-2">
+            <div className="spargel-tagesliste flex flex-col gap-3">
+              <div className="hidden print:block">
+                <h1 className="text-base font-semibold">Spargelprämien – Tagesliste {formatDatumDE(tag)}</h1>
+                <p className="text-xs">
+                  {tagZeilen.filter((z) => !z.gruppe).length} Personen · {formatMenge(tagZeilen.reduce((a, z) => a + Number(z.kg), 0), 1)} kg · Prämie{" "}
+                  {formatEuro(tagZeilen.reduce((a, z) => a + Number(z.praemie), 0))} · Mindestlohn{" "}
+                  {saison && mindestlohn[saison] ? formatEuro(mindestlohn[saison]) : "—"} je Stunde
+                </p>
+              </div>
+              <div className="flex flex-wrap items-center gap-2 print:hidden">
                 <button
                   type="button"
                   className="btn-secondary"
@@ -332,13 +342,18 @@ export default function PraemienSpargelPage() {
                 <span className="text-sm text-neutral-500">
                   {tagZeilen.length} Zeilen · Prämie {formatEuro(tagZeilen.reduce((a, z) => a + Number(z.praemie), 0))}
                 </span>
+                <button type="button" className="btn-secondary ml-auto" onClick={() => window.print()}>
+                  <Printer className="h-4 w-4" />
+                  Drucken
+                </button>
               </div>
               <div className="overflow-x-auto">
-                <table>
+                <table className="print-form-table print-dense-table">
                   <thead>
                     <tr>
                       <th>Feld</th>
                       <th>Person</th>
+                      <th>Pers.-Nr.</th>
                       <th className="text-right">kg</th>
                       <th className="text-right">Std.</th>
                       <th className="text-right">kg/h</th>
@@ -354,6 +369,7 @@ export default function PraemienSpargelPage() {
                       <tr key={i} className={z.gruppe ? "text-neutral-500" : ""}>
                         <td className="whitespace-nowrap">{z.feld_name || "—"}</td>
                         <td className="whitespace-nowrap">{person(z)}</td>
+                        <td className="text-neutral-500">{z.gruppe ? "" : z.personal_nr}</td>
                         <td className="text-right tabular-nums">{formatMenge(z.kg, 1)}</td>
                         <td className="text-right tabular-nums">{formatMenge(z.stunden, 2)}</td>
                         <td className="text-right tabular-nums">{formatMenge(z.stunden ? z.kg / z.stunden : null, 1)}</td>
@@ -370,6 +386,18 @@ export default function PraemienSpargelPage() {
                       </tr>
                     ))}
                   </tbody>
+                  <tfoot>
+                    <tr className="font-semibold">
+                      <td colSpan={3}>Summe</td>
+                      <td className="text-right tabular-nums">{formatMenge(tagZeilen.reduce((a, z) => a + Number(z.kg), 0), 1)}</td>
+                      <td className="text-right tabular-nums">{formatMenge(tagZeilen.reduce((a, z) => a + Number(z.stunden), 0), 2)}</td>
+                      <td colSpan={4} />
+                      <td className="text-right tabular-nums">{formatEuro(tagZeilen.reduce((a, z) => a + Number(z.praemie), 0))}</td>
+                      <td className="text-right tabular-nums">
+                        {formatEuro(tagZeilen.filter((z) => !z.gruppe).reduce((a, z) => a + Number(z.fehlbetrag), 0))}
+                      </td>
+                    </tr>
+                  </tfoot>
                 </table>
               </div>
               <p className="text-xs text-neutral-500">

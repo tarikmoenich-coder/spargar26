@@ -776,3 +776,23 @@ input[type="number"]::-webkit-inner-spin-button {
     break-inside: avoid;
   }
 }
+
+/* Spargelprämien-Tagesliste (Prämien → Spargel → Tagesliste, ersetzt das
+   Excel-Blatt "Prämien"): A4 quer, benannte Page wie bei der Stammkarte,
+   damit andere Drucke nicht beeinflusst werden. Kopfzeile wiederholt sich
+   auf jeder Seite, Zeilen werden nicht zerrissen. */
+@media print {
+  @page spargel-tagesliste {
+    size: A4 landscape;
+    margin: 10mm;
+  }
+  .spargel-tagesliste {
+    page: spargel-tagesliste;
+  }
+  .spargel-tagesliste thead {
+    display: table-header-group;
+  }
+  .spargel-tagesliste tr {
+    break-inside: avoid;
+  }
+}
