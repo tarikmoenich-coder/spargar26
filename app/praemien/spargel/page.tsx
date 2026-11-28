@@ -20,6 +20,7 @@ import { ladeAlleSeiten } from "@/lib/ladeAlle";
 import { formatDatumDE, formatEuro, formatMenge } from "@/lib/format";
 import { darf } from "@/lib/rollen";
 import { KategorienFestlegen, KategorienPflege } from "@/components/SpargelKategorien";
+import SpargelFreigabe from "@/components/SpargelFreigabe";
 
 interface TagZeile {
   datum: string;
@@ -48,7 +49,7 @@ interface Kat {
   preis_kg: number;
 }
 
-type Ansicht = "personen" | "tag" | "festlegen" | "kategorien";
+type Ansicht = "personen" | "tag" | "freigabe" | "festlegen" | "kategorien";
 const MONATE = ["März", "April", "Mai", "Juni", "Juli"];
 const monatVon = (iso: string) => Number(iso.slice(5, 7));
 
@@ -168,7 +169,10 @@ export default function PraemienSpargelPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [saisonZeilen, tag, namen]
   );
-  const quelle = saison === 2026 ? "Übernommen aus der Excel „Spargelprämien 2026“ (nicht lohnwirksam, lief über die Excel)." : null;
+  const quelle =
+    saison === 2026
+      ? "Übernommen aus der Excel „Spargelprämien 2026“ (nicht lohnwirksam, lief über die Excel)."
+      : "Nur freigegebene Tage (Reiter „Prüfen & Freigeben“)."
 
   if (!darfLesen) {
     return (
@@ -229,6 +233,7 @@ export default function PraemienSpargelPage() {
               [
                 ["personen", "Je Person"],
                 ["tag", "Tagesliste"],
+                ["freigabe", "Prüfen & Freigeben"],
                 ["festlegen", "Kategorien festlegen"],
                 ["kategorien", "Preise & Standard"],
               ] as [Ansicht, string][]
@@ -374,6 +379,8 @@ export default function PraemienSpargelPage() {
           )}
 
           {ansicht === "festlegen" && <KategorienFestlegen darfAendern={darfKategorien} />}
+
+          {ansicht === "freigabe" && <SpargelFreigabe darfFreigeben={darfKategorien} namen={namen} />}
 
           {ansicht === "kategorien" && saison && (
             <KategorienPflege
