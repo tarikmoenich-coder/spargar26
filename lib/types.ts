@@ -77,6 +77,8 @@ export interface Profile {
   // Selbst ausgeblendete Menüpunkte (href), reine Anzeige - kein Recht
   // (Nutzer-Vorgabe 2026-11-27).
   menue_ausgeblendet?: string[] | null;
+  // Startseite: Größe je Kachel ("G" | "M" | "K" | "aus"), fehlend = Mittel
+  startseite?: Record<string, "G" | "M" | "K" | "aus"> | null;
   // Vorberechnete Rechte (Tabelle profil_rechte, Rechte-Umbau 2026-11-28),
   // von useProfile() mitgeladen.
   profil_rechte?: ProfilRechte | null;
