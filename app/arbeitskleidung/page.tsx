@@ -127,7 +127,7 @@ export default function ArbeitskleidungPage() {
     const werte = entwurfFuer(empId);
     const anzahl = Number(werte.anzahl);
     if (!anzahl || anzahl <= 0) {
-      setFehler("Anzahl muss größer als 0 sein.");
+      setFehler(t("arbeitskleidung.anzahlfehler"));
       return;
     }
     setSpeichernId(empId);
@@ -220,9 +220,9 @@ export default function ArbeitskleidungPage() {
           {canSeeLagerLink && (
             <>
               {" "}
-              Lagerbestand siehe{" "}
+              {t("arbeitskleidung.lagersiehe")}{" "}
               <Link href="/lager" className="text-emerald-700 underline">
-                Lager
+                {t("tabs.lager")}
               </Link>
               .
             </>
@@ -249,7 +249,7 @@ export default function ArbeitskleidungPage() {
           </h2>
           <div className="flex flex-wrap items-center gap-3">
             <input
-              placeholder="Suche nach Name oder Personalnummer…"
+              placeholder={t("erfassung.suchplatzhalter")}
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               className="w-64"
@@ -336,7 +336,7 @@ export default function ArbeitskleidungPage() {
                             <p className="text-sm font-semibold text-emerald-800">
                               {emp.name}, {emp.vorname}{" "}
                               <span className="font-normal text-neutral-500">
-                                (Pers.-Nr. {emp.personal_nr})
+                                ({t("erfassung.persnr")} {emp.personal_nr})
                               </span>
                             </p>
                             <div className="flex flex-wrap items-end gap-3">

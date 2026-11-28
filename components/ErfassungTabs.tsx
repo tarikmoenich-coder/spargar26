@@ -5,10 +5,11 @@ import { usePathname } from "next/navigation";
 import { useEffect, useRef } from "react";
 import { useProfile } from "@/lib/useProfile";
 import { darf } from "@/lib/rollen";
+import { uebersetzung, type TKey } from "@/lib/i18n";
 
 interface Tab {
   href: string;
-  label: string;
+  label: TKey;
   // Recht (lesen), das den Reiter einblendet. "Lager" ist bewusst eigenes
   // Recht (Nutzer-Vorgabe 2026-08-25: "Den Lagerbestand soll nur 'admin und
   // hr' sehen und bearbeiten können. 'Stundenerfassung' macht nur die
@@ -17,10 +18,10 @@ interface Tab {
 }
 
 const tabs: Tab[] = [
-  { href: "/erfassung", label: "Erfassung", recht: "erfassung.stunden:L" },
-  { href: "/erfassung-import", label: "Import", recht: "erfassung.stunden:S" },
-  { href: "/arbeitskleidung", label: "Arbeitskleidung", recht: "erfassung.kleidung:L" },
-  { href: "/lager", label: "Lager", recht: "erfassung.lager:L" },
+  { href: "/erfassung", label: "tabs.erfassung", recht: "erfassung.stunden:L" },
+  { href: "/erfassung-import", label: "tabs.import", recht: "erfassung.stunden:S" },
+  { href: "/arbeitskleidung", label: "tabs.arbeitskleidung", recht: "erfassung.kleidung:L" },
+  { href: "/lager", label: "tabs.lager", recht: "erfassung.lager:L" },
 ];
 
 // Analog zu components/PersonalTabs.tsx - siehe dort für die Erklärung der
@@ -30,6 +31,7 @@ const tabs: Tab[] = [
 export default function ErfassungTabs() {
   const pathname = usePathname();
   const { profile } = useProfile();
+  const t = uebersetzung(profile?.sprache);
   const sichtbareTabs = tabs.filter((tab) => darf(profile, tab.recht));
   const ref = useRef<HTMLDivElement>(null);
 
@@ -63,7 +65,7 @@ export default function ErfassungTabs() {
               : "border-transparent text-neutral-600 hover:text-emerald-800"
           }`}
         >
-          {tab.label}
+          {t(tab.label)}
         </Link>
       ))}
     </div>

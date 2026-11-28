@@ -5,7 +5,7 @@ import { formatMenge } from "@/lib/format";
 import { useSearchParams } from "next/navigation";
 import { getSupabaseClient } from "@/lib/supabase/client";
 import { useProfile } from "@/lib/useProfile";
-import { uebersetzung } from "@/lib/i18n";
+import { zeitFehlerUebersetzen, uebersetzung } from "@/lib/i18n";
 import { kannStundenkontoAuszahlen, kannStundenkontoBuchen } from "@/lib/stundenkontoRechte";
 import {
   speichereWorkEntryFeld,
@@ -65,9 +65,9 @@ function addDays(iso: string, delta: number): string {
 }
 
 // Kurzform "Mo 04.08." für die Spaltenköpfe der Wochentage.
-function kurzDatum(iso: string): string {
+function kurzDatum(iso: string, locale = "de-DE"): string {
   const [, m, t] = iso.split("-");
-  const wochentag = new Date(`${iso}T00:00:00Z`).toLocaleDateString("de-DE", {
+  const wochentag = new Date(`${iso}T00:00:00Z`).toLocaleDateString(locale, {
     weekday: "short",
     timeZone: "UTC",
   });
@@ -113,7 +113,8 @@ interface Gruppierung {
 
 function gruppiere(
   employees: Employee[],
-  gruppen: Arbeitsgruppe[]
+  gruppen: Arbeitsgruppe[],
+  ohneGruppeLabel = "Ohne Gruppe"
 ): Gruppierung[] {
   const gruppenByNr = new Map(gruppen.map((g) => [g.gruppe_nr, g]));
   const buckets = new Map<string, Employee[]>();
@@ -133,7 +134,7 @@ function gruppiere(
     key,
     anzeige:
       key === OHNE_GRUPPE_KEY
-        ? "Ohne Gruppe"
+        ? ohneGruppeLabel
         : `${key} – ${gruppenByNr.get(key)?.bezeichnung ?? key}`,
     employees: buckets.get(key)!,
   }));
@@ -589,7 +590,7 @@ function ErfassungInner() {
 
   function empfaengerName(employeeId: string): string {
     const e = employees.find((emp) => emp.id === employeeId);
-    return e ? `${e.name}, ${e.vorname}` : "diese Person";
+    return e ? `${e.name}, ${e.vorname}` : t("erfassung.diesePerson");
   }
 
   // Gemeinsame Speicherlogik für Stunden/Markierung/Notiz - ausgelagert in
@@ -613,13 +614,11 @@ function ErfassungInner() {
     if (!ergebnis.ok) {
       if (ergebnis.konflikt) {
         setSpeicherFehler(
-          `${feldLabel} für ${empfaengerName(employeeId)} konnte nicht gespeichert werden - ` +
-            `eine andere Person hat diesen Eintrag zwischenzeitlich geändert. ` +
-            `Der aktuelle Stand wurde neu geladen, bitte bei Bedarf erneut eingeben.`
+          t("erfassung.speicherkonflikt", { feld: feldLabel, name: empfaengerName(employeeId) })
         );
       } else {
         setSpeicherFehler(
-          `${feldLabel} für ${empfaengerName(employeeId)} konnte nicht gespeichert werden: ${ergebnis.fehler}`
+          t("erfassung.speicherfehler", { feld: feldLabel, name: empfaengerName(employeeId), fehler: String(ergebnis.fehler) })
         );
       }
       await ladeEintragNeu(employeeId);
@@ -631,7 +630,7 @@ function ErfassungInner() {
 
   async function saveHours(employeeId: string, value: string) {
     const stunden = value === "" ? null : Number(value);
-    await speichereFeld(employeeId, { stunden }, "Stunden");
+    await speichereFeld(employeeId, { stunden }, t("erfassung.stunden"));
   }
 
   async function saveZeiten(employeeId: string, w: ZeitenSpeichern) {
@@ -639,7 +638,7 @@ function ErfassungInner() {
     await speichereFeld(
       employeeId,
       stunden === undefined ? zeiten : { ...zeiten, stunden },
-      "Arbeitszeiten"
+      t("erfassung.feldarbeitszeiten")
     );
   }
 
@@ -647,7 +646,7 @@ function ErfassungInner() {
   // der "Suche"-Seite bei den Arbeitsstunden der Person.
   async function saveNotiz(employeeId: string, notiz: string) {
     const value = notiz.trim() === "" ? null : notiz;
-    await speichereFeld(employeeId, { notiz: value }, "Notiz");
+    await speichereFeld(employeeId, { notiz: value }, t("gemeinsam.notiz"));
   }
 
   function stundenkontoAufklappen(employeeId: string) {
@@ -722,7 +721,7 @@ function ErfassungInner() {
     if (r.leer || r.fehler) {
       setGruppenMeldung((prev) => ({
         ...prev,
-        [g.key]: { text: r.fehler ?? t("erfassung.gruppezeitenleer"), fehler: true },
+        [g.key]: { text: zeitFehlerUebersetzen(t, r.fehler) ?? t("erfassung.gruppezeitenleer"), fehler: true },
       }));
       return;
     }
@@ -881,7 +880,7 @@ function ErfassungInner() {
       .eq("id", employeeId);
     if (error) {
       // z.B. fehlende Rechte - Auswahl bleibt unverändert
-      setSpeicherFehler(`Gruppe für ${empfaengerName(employeeId)} konnte nicht geändert werden: ${error.message}`);
+      setSpeicherFehler(t("erfassung.gruppeaendernfehler", { name: empfaengerName(employeeId), fehler: error.message }));
       return;
     }
     setEmployees((prev) =>
@@ -899,7 +898,7 @@ function ErfassungInner() {
     );
   });
 
-  const gruppierungen = gruppiere(gefilterteEmployees, gruppen);
+  const gruppierungen = gruppiere(gefilterteEmployees, gruppen, t("erfassung.ohnegruppe"));
   const aktiverIndex = gruppierungen.findIndex((g) => g.key === gruppeFilter);
   // Existiert die gewählte Gruppe nicht mehr (z.B. Suchfilter oder leer
   // geworden), werden wieder alle gezeigt.
@@ -928,7 +927,7 @@ function ErfassungInner() {
       0
     );
 
-  const kwLabel = `KW ${isoKw(datum)} · ${tagMonat(wochenTage[0])}–${tagMonat(
+  const kwLabel = `${t("erfassung.kw", { kw: isoKw(datum) })} · ${tagMonat(wochenTage[0])}–${tagMonat(
     wochenTage[6]
   )}`;
 
@@ -949,7 +948,7 @@ function ErfassungInner() {
       <div className="sticky top-[calc(3.5rem+var(--subtabs-h,2.5rem))] z-30 flex flex-col gap-2 bg-sand py-2 print:hidden">
         <div className="flex flex-wrap items-center gap-3">
           <input
-            placeholder="Suche nach Name oder Personalnummer…"
+            placeholder={t("erfassung.suchplatzhalter")}
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             className="w-64"
@@ -959,7 +958,7 @@ function ErfassungInner() {
               type="button"
               className="btn-secondary px-2 text-xs"
               onClick={() => datumWechseln(addDays(datum, -7))}
-              title="Eine Kalenderwoche zurück"
+              title={t("erfassung.kwzurueck")}
             >
               ‹‹
             </button>
@@ -970,7 +969,7 @@ function ErfassungInner() {
               type="button"
               className="btn-secondary px-2 text-xs"
               onClick={() => datumWechseln(addDays(datum, 7))}
-              title="Eine Kalenderwoche vor"
+              title={t("erfassung.kwvor")}
             >
               ››
             </button>
@@ -1002,8 +1001,8 @@ function ErfassungInner() {
             </span>
           </label>
           <span className="text-sm text-neutral-500">
-            {t("erfassung.tagessumme", { wert: formatMenge(gesamtStunden, 2) })} ·
-            Woche {formatMenge(wochenStunden, 2)}
+            {t("erfassung.tagessumme", { wert: formatMenge(gesamtStunden, 2) })} ·{" "}
+            {t("erfassung.wochensumme", { wert: formatMenge(wochenStunden, 2) })}
           </span>
           <span className="flex items-center gap-3 text-sm text-neutral-600">
             <label className="flex items-center gap-1">
@@ -1212,10 +1211,10 @@ function ErfassungInner() {
                     <span className="font-medium">{t("erfassung.zeitengruppe")}</span>
                     {(
                       [
-                        ["vmVon", "Vormittag von"],
-                        ["vmBis", "Vormittag bis"],
-                        ["nmVon", "Nachmittag von"],
-                        ["nmBis", "Nachmittag bis"],
+                        ["vmVon", t("erfassung.vmvon")],
+                        ["vmBis", t("erfassung.vmbis")],
+                        ["nmVon", t("erfassung.nmvon")],
+                        ["nmBis", t("erfassung.nmbis")],
                       ] as const
                     ).map(([feld, titel], i) => (
                       <Fragment key={feld}>
@@ -1293,21 +1292,21 @@ function ErfassungInner() {
                         title={
                           istBearbeitbar
                             ? t("erfassung.stunden")
-                            : `${t("erfassung.nurkontrolle")} – zum Bearbeiten anklicken`
+                            : `${t("erfassung.nurkontrolle")} – ${t("erfassung.zumbearbeiten")}`
                         }
                         onClick={
                           istBearbeitbar ? undefined : () => datumWechseln(d)
                         }
                       >
-                        {kurzDatum(d)}
+                        {kurzDatum(d, profile?.sprache === "hr" ? "hr-HR" : "de-DE")}
                       </th>
                     );
                   })}
                   {zeitenOffen[g.key] && <th>{t("erfassung.arbeitszeit")}</th>}
                   {zeigeNotiz && <th>{t("gemeinsam.notiz")}</th>}
                   {zeigeStundenkonto && (
-                    <th title="Immer sichtbar, unabhängig vom gewählten Tag - siehe Erklärung beim Aufklappen">
-                      Stundenkonto
+                    <th title={t("erfassung.stundenkontotitel")}>
+                      {t("erfassung.stundenkonto")}
                     </th>
                   )}
                 </tr>
@@ -1388,7 +1387,7 @@ function ErfassungInner() {
                             key={d}
                             className="cursor-pointer text-neutral-400 hover:text-emerald-700"
                             onClick={() => datumWechseln(d)}
-                            title="Zum Bearbeiten anklicken"
+                            title={t("erfassung.zumbearbeitentitel")}
                           >
                             {kalt?.stunden ?? kalt?.markierung ?? "—"}
                           </td>
@@ -1427,7 +1426,7 @@ function ErfassungInner() {
                               : "font-medium"
                           }
                         >
-                          {formatMenge(saldo, 2)} Std.
+                          {formatMenge(saldo, 2)} {t("gemeinsam.std")}
                         </span>{" "}
                         {(canStundenkontoBuchen || canStundenkontoAuszahlen) && (
                           <button
@@ -1436,10 +1435,10 @@ function ErfassungInner() {
                             onClick={() => stundenkontoAufklappen(emp.id)}
                           >
                             {stundenkontoOffen
-                              ? "Schließen"
+                              ? t("gemeinsam.schliessen")
                               : canStundenkontoBuchen
-                                ? "Verwalten"
-                                : "Ansehen"}
+                                ? t("erfassung.verwalten")
+                                : t("erfassung.ansehen")}
                           </button>
                         )}
                       </td>

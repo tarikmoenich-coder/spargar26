@@ -11,6 +11,8 @@ import {
   type ZettelZeiten,
 } from "@/lib/zettelZeiten";
 import { formatMenge } from "@/lib/format";
+import { useProfile } from "@/lib/useProfile";
+import { uebersetzung, zeitFehlerUebersetzen } from "@/lib/i18n";
 
 // Arbeitszeiten einer Person für den gewählten Tag: Vormittag von-bis und
 // Nachmittag von-bis, daneben die errechnete Summe und die Pause. Wird beim
@@ -52,6 +54,8 @@ export default function ZeitenZelle({
   disabled: boolean;
   onSpeichern: (werte: ZeitenSpeichern) => void;
 }) {
+  const { profile } = useProfile();
+  const t = uebersetzung(profile?.sprache);
   const gespeichert = alsZeiten(entry);
   const [z, setZ] = useState<ZettelZeiten>(gespeichert);
   const ergebnis = stundenAusZeiten(z, rundung);
@@ -108,30 +112,30 @@ export default function ZeitenZelle({
 
   return (
     <div onBlur={beiVerlassen} className="flex items-center gap-1">
-      {feld("vmVon", "Vormittag von")}
+      {feld("vmVon", t("erfassung.vmvon"))}
       <span className="text-neutral-400">–</span>
-      {feld("vmBis", "Vormittag bis")}
+      {feld("vmBis", t("erfassung.vmbis"))}
       <span className="mx-1 text-neutral-300">|</span>
-      {feld("nmVon", "Nachmittag von")}
+      {feld("nmVon", t("erfassung.nmvon"))}
       <span className="text-neutral-400">–</span>
-      {feld("nmBis", "Nachmittag bis")}
+      {feld("nmBis", t("erfassung.nmbis"))}
       <span className="ml-1 text-xs">
         {ergebnis.fehler ? (
-          <span className="text-beere-600">{ergebnis.fehler}</span>
+          <span className="text-beere-600">{zeitFehlerUebersetzen(t, ergebnis.fehler)}</span>
         ) : ergebnis.leer ? null : (
           <>
-            <span className="font-medium">{formatMenge(ergebnis.stunden, 2)} Std.</span>
+            <span className="font-medium">{formatMenge(ergebnis.stunden, 2)} {t("gemeinsam.std")}</span>
             {ergebnis.pauseMinuten ? (
-              <span className="text-neutral-500"> · Pause {ergebnis.pauseMinuten} Min.</span>
+              <span className="text-neutral-500"> · {t("zeit.pause", { min: ergebnis.pauseMinuten })}</span>
             ) : null}
           </>
         )}
         {weichtAb && !ergebnis.fehler && (
           <span
             className="ml-1 text-amber-700"
-            title={`Die Zeiten ergeben ${formatMenge(gespErgebnis.stunden, 2)} Std., eingetragen sind ${formatMenge(Number(entry?.stunden), 2)} Std.`}
+            title={t("zeit.weichtabtitel", { zeiten: formatMenge(gespErgebnis.stunden, 2), eingetragen: formatMenge(Number(entry?.stunden), 2) })}
           >
-            ⚠ weicht ab
+            ⚠ {t("zeit.weichtab")}
           </span>
         )}
       </span>

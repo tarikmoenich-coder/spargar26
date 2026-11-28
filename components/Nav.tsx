@@ -29,10 +29,28 @@ import {
 } from "lucide-react";
 import { getSupabaseClient } from "@/lib/supabase/client";
 import { useProfile } from "@/lib/useProfile";
-import { SPRACHEN, type Sprache } from "@/lib/i18n";
+import { SPRACHEN, uebersetzung, type Sprache, type TKey } from "@/lib/i18n";
 import { rollenVon, darfMenue } from "@/lib/rollen";
 import { useRollen } from "@/lib/useRollen";
 import { useBereiche } from "@/lib/useBereiche";
+
+// Menü-Beschriftung je Sprache; Schlüssel = href.
+const NAV_KEYS: Record<string, TKey> = {
+  "/dashboard": "nav.start",
+  "/mitarbeiter": "nav.personal",
+  "/unterkunft": "nav.unterkunft",
+  "/fahrzeuge": "nav.fahrzeuge",
+  "/erfassung": "nav.erfassung",
+  "/suche": "nav.suche",
+  "/uebersicht": "nav.lohn",
+  "/erntewirtschaft": "nav.erntewirtschaft",
+  "/vertrieb": "nav.vertrieb",
+  "/kasse": "nav.kasse",
+  "/management": "nav.controlling",
+  "/aenderungsprotokoll": "nav.protokoll",
+  "/vorschlaege": "nav.vorschlaege",
+  "/einstellungen": "nav.einstellungen",
+};
 
 interface NavItem {
   href: string;
@@ -160,6 +178,8 @@ export default function Nav() {
   const pathname = usePathname();
   const router = useRouter();
   const { profile } = useProfile();
+  const t = uebersetzung(profile?.sprache);
+  const lab = (item: { href: string; label: string }) => (NAV_KEYS[item.href] ? t(NAV_KEYS[item.href]) : item.label);
   const bereiche = useBereiche(profile);
   const { label: rolleBez } = useRollen(!!profile);
   // Unter `lg` (Telefon/kleines Tablet) sind die Bereichs-Links + Name/Rolle
@@ -233,7 +253,7 @@ export default function Nav() {
       .update({ sprache: neueSprache })
       .eq("id", profile.id);
     if (error) {
-      alert(`Konnte nicht gespeichert werden: ${error.message}`);
+      alert(t("nav.speicherfehler", { fehler: error.message }));
       return;
     }
     window.location.reload();
@@ -249,7 +269,7 @@ export default function Nav() {
       .update({ bereich_ansicht: neu || null })
       .eq("id", profile.id);
     if (error) {
-      alert(`Konnte nicht gespeichert werden: ${error.message}`);
+      alert(t("nav.speicherfehler", { fehler: error.message }));
       return;
     }
     window.location.reload();
@@ -258,10 +278,10 @@ export default function Nav() {
     <select
       value={bereiche.ansicht ?? ""}
       onChange={(e) => bereichAendern(e.target.value)}
-      title="Welcher Bereich wird angezeigt (Landwirtschaft / Vertrieb)"
+      title={t("nav.bereichtitel")}
       className={`text-xs ${bereiche.ansicht ? "border-amber-400 bg-amber-50" : ""}`}
     >
-      <option value="">Alle Bereiche</option>
+      <option value="">{t("nav.allebereiche")}</option>
       {bereiche.alle
         .filter((b) => bereiche.erlaubt.includes(b.kuerzel))
         .map((b) => (
@@ -294,7 +314,7 @@ export default function Nav() {
       .eq("id", profile.id);
     if (error) {
       setAusgeblendet(vorher);
-      alert(`Konnte nicht gespeichert werden: ${error.message}`);
+      alert(t("nav.speicherfehler", { fehler: error.message }));
     }
   }
 
@@ -312,7 +332,7 @@ export default function Nav() {
     <select
       value={profile.sprache}
       onChange={(e) => spracheAendern(e.target.value as Sprache)}
-      title="Sprache der Bedienoberfläche (nur für dich, betrifft keine Dokumente)"
+      title={t("nav.sprachetitel")}
       className="text-xs"
     >
       {SPRACHEN.map((s) => (
@@ -349,7 +369,7 @@ export default function Nav() {
                     }`}
                   >
                     <Icon className="h-4 w-4 shrink-0" />
-                    {item.label}
+                    {lab(item)}
                   </Link>
                 );
               })}
@@ -360,10 +380,10 @@ export default function Nav() {
                   type="button"
                   onClick={() => setMehrOffen((v) => !v)}
                   aria-expanded={mehrOffen}
-                  title="Ausgeblendete Menüpunkte"
+                  title={t("nav.ausgeblendetepunkte")}
                   className="inline-flex items-center gap-1 whitespace-nowrap rounded-md px-1.5 py-1 text-sm text-neutral-500 hover:bg-emerald-50 hover:text-emerald-800"
                 >
-                  Mehr
+                  {t("nav.mehr")}
                   <span className="rounded-full bg-neutral-100 px-1.5 text-xs tabular-nums text-neutral-600">
                     {versteckteItems.length}
                   </span>
@@ -382,7 +402,7 @@ export default function Nav() {
                             className="flex items-center gap-2.5 rounded-md px-2 py-1.5 text-sm text-neutral-700 hover:bg-emerald-50"
                           >
                             <Icon className="h-4 w-4 shrink-0 text-neutral-400" />
-                            {item.label}
+                            {lab(item)}
                           </Link>
                         );
                       })}
@@ -395,7 +415,7 @@ export default function Nav() {
                         className="mt-1 flex w-full items-center gap-2.5 rounded-md border-t border-linie px-2 py-1.5 text-left text-sm text-emerald-700 hover:bg-emerald-50"
                       >
                         <SlidersHorizontal className="h-4 w-4 shrink-0" />
-                        Menü anpassen
+                        {t("nav.anpassen")}
                       </button>
                     </div>
                   </>
@@ -415,8 +435,8 @@ export default function Nav() {
                 <button
                   type="button"
                   onClick={() => setAnpassenOffen(true)}
-                  title="Menü anpassen: Menüpunkte ein- und ausblenden"
-                  aria-label="Menü anpassen"
+                  title={t("nav.anpassentitel")}
+                  aria-label={t("nav.anpassen")}
                   className="rounded-md p-1.5 text-neutral-500 hover:bg-emerald-50 hover:text-emerald-800"
                 >
                   <SlidersHorizontal className="h-4 w-4" />
@@ -425,7 +445,7 @@ export default function Nav() {
             )}
             <button className="btn-secondary" onClick={logout}>
               <LogOut className="h-4 w-4" />
-              Abmelden
+              {t("nav.abmelden")}
             </button>
           </div>
 
@@ -437,13 +457,13 @@ export default function Nav() {
                 return (
                   <span className="inline-flex items-center gap-1.5 truncate text-sm font-semibold text-emerald-800">
                     <BereichIcon className="h-4 w-4 shrink-0" />
-                    {aktuellerBereich.label}
+                    {lab(aktuellerBereich)}
                   </span>
                 );
               })()}
             <button
               type="button"
-              aria-label="Menü"
+              aria-label={t("nav.menue")}
               aria-expanded={menuOffen}
               className="shrink-0 rounded-md border border-linie p-1.5 text-neutral-700"
               onClick={() => setMenuOffen((v) => !v)}
@@ -469,7 +489,7 @@ export default function Nav() {
               </span>
               <button
                 type="button"
-                aria-label="Menü schließen"
+                aria-label={t("nav.menueschliessen")}
                 className="text-neutral-500"
                 onClick={() => setMenuOffen(false)}
               >
@@ -490,7 +510,7 @@ export default function Nav() {
                     }`}
                   >
                     <Icon className="h-4 w-4 shrink-0" />
-                    {item.label}
+                    {lab(item)}
                   </Link>
                 );
               })}
@@ -506,7 +526,7 @@ export default function Nav() {
                   <ChevronDown
                     className={`h-4 w-4 shrink-0 transition ${ausgeblendetAufgeklappt ? "" : "-rotate-90"}`}
                   />
-                  Ausgeblendet ({versteckteItems.length})
+                  {t("nav.ausgeblendet")} ({versteckteItems.length})
                 </button>
                 {ausgeblendetAufgeklappt && (
                   <div className="flex flex-col gap-1">
@@ -519,7 +539,7 @@ export default function Nav() {
                           className="flex items-center gap-2.5 rounded-md px-2 py-2 text-sm text-neutral-500 hover:bg-emerald-50"
                         >
                           <Icon className="h-4 w-4 shrink-0" />
-                          {item.label}
+                          {lab(item)}
                         </Link>
                       );
                     })}
@@ -535,12 +555,12 @@ export default function Nav() {
                 </div>
                 {bereichWahl && (
                   <label className="mb-3 flex items-center gap-2">
-                    Bereich
+                    {t("nav.bereich")}
                     {bereichWahl}
                   </label>
                 )}
                 <label className="mb-3 flex items-center gap-2">
-                  Sprache
+                  {t("nav.sprache")}
                   {sprachWahl}
                 </label>
                 <button
@@ -552,11 +572,11 @@ export default function Nav() {
                   }}
                 >
                   <SlidersHorizontal className="h-4 w-4" />
-                  Menü anpassen
+                  {t("nav.anpassen")}
                 </button>
                 <button className="btn-secondary w-full" onClick={logout}>
                   <LogOut className="h-4 w-4" />
-                  Abmelden
+                  {t("nav.abmelden")}
                 </button>
               </div>
             )}
@@ -569,14 +589,14 @@ export default function Nav() {
           <div className="fixed inset-0" onClick={() => setAnpassenOffen(false)} />
           <div
             role="dialog"
-            aria-label="Menü anpassen"
+            aria-label={t("nav.anpassen")}
             className="relative w-full max-w-sm rounded-xl border border-linie bg-white p-5 shadow-xl"
           >
             <div className="mb-1 flex items-center justify-between">
-              <h2 className="font-semibold text-neutral-900">Menü anpassen</h2>
+              <h2 className="font-semibold text-neutral-900">{t("nav.anpassen")}</h2>
               <button
                 type="button"
-                aria-label="Schließen"
+                aria-label={t("gemeinsam.schliessen")}
                 className="text-neutral-500"
                 onClick={() => setAnpassenOffen(false)}
               >
@@ -584,7 +604,7 @@ export default function Nav() {
               </button>
             </div>
             <p className="mb-3 text-sm text-neutral-500">
-              Blende aus, was du selten brauchst. Ausgeblendetes bleibt unter „Mehr“ erreichbar.
+              {t("nav.anpassenhinweis")}
             </p>
             <ul className="divide-y divide-linie">
               {sichtbareItems.map((item) => {
@@ -593,7 +613,7 @@ export default function Nav() {
                 return (
                   <li key={item.href} className="flex items-center gap-2.5 py-2 text-sm">
                     <Icon className={`h-4 w-4 shrink-0 ${aus ? "text-neutral-300" : "text-neutral-500"}`} />
-                    <span className={aus ? "text-neutral-400" : "text-neutral-800"}>{item.label}</span>
+                    <span className={aus ? "text-neutral-400" : "text-neutral-800"}>{lab(item)}</span>
                     {ausblendbar(item) ? (
                       <button
                         type="button"
@@ -606,10 +626,10 @@ export default function Nav() {
                         }`}
                       >
                         {aus ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
-                        {aus ? "Ausgeblendet" : "Sichtbar"}
+                        {aus ? t("nav.ausgeblendet") : t("nav.sichtbar")}
                       </button>
                     ) : (
-                      <span className="ml-auto text-xs text-neutral-400">immer sichtbar</span>
+                      <span className="ml-auto text-xs text-neutral-400">{t("nav.immersichtbar")}</span>
                     )}
                   </li>
                 );

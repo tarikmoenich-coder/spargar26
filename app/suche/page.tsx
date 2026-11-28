@@ -6,7 +6,7 @@ import { useEffect, useMemo, useState } from "react";
 import { getSupabaseClient } from "@/lib/supabase/client";
 import { ladeAlleSeiten } from "@/lib/ladeAlle";
 import { useProfile } from "@/lib/useProfile";
-import { uebersetzung } from "@/lib/i18n";
+import { uebersetzung, type TKey } from "@/lib/i18n";
 import type {
   Employee,
   EmployeeAuslagenHistorie,
@@ -108,9 +108,25 @@ function montagDerWoche(iso: string): string {
 }
 
 // Wochentag-Kürzel für ein Datum, z.B. "Do" für einen Donnerstag.
-function wochentagKuerzel(iso: string): string {
+function wochentagKuerzel(iso: string, sprache?: string | null): string {
+  if (sprache === "hr") {
+    return new Date(`${iso}T00:00:00Z`).toLocaleDateString("hr-HR", { weekday: "short", timeZone: "UTC" });
+  }
   return WOCHENTAGE_KUERZEL[wochentagIndex(iso)];
 }
+
+// Bildschirm-Übersetzung der (für den deutschen Druck gebauten) Vorschuss-
+// Zeilen: Auslagen-Posten und Art. Unbekannte Texte bleiben unverändert.
+const ANZEIGE_KEYS: Record<string, TKey> = {
+  Buskosten: "suche.buskosten",
+  Fahrerkaution: "suche.fahrerkaution",
+  Zimmerkaution: "suche.zimmerkaution",
+  "Arbeitskleidung (Hose)": "suche.kleidunghose",
+  "Arbeitskleidung (Jacke)": "suche.kleidungjacke",
+  "Arbeitskleidung (Stiefel)": "suche.kleidungstiefel",
+  Auslage: "suche.auslage",
+  "Strafe/Rechnung": "suche.strafe",
+};
 
 // "18.08." statt vollem Datum - die Spaltenüberschrift nennt bereits den
 // Wochentag, siehe WOCHENTAGE.
@@ -285,7 +301,7 @@ export default function SuchePage() {
       .from(VORSCHUSS_BUCKET)
       .createSignedUrl(pfad, 60);
     if (error || !data) {
-      window.alert("Beleg konnte nicht geöffnet werden.");
+      window.alert(t("suche.belegfehler"));
       return;
     }
     window.open(data.signedUrl, "_blank");
@@ -447,7 +463,7 @@ export default function SuchePage() {
         <p className="text-sm text-neutral-500">{t("suche.untertitel")}</p>
         {detailFehler && (
           <p className="mt-1 text-sm font-medium text-beere-600">
-            ⚠ Daten konnten nicht vollständig geladen werden: {detailFehler}
+            ⚠ {t("suche.ladefehler")} {detailFehler}
           </p>
         )}
       </div>
@@ -588,7 +604,7 @@ export default function SuchePage() {
                           return (
                             <tr key={datum} className={leer ? "text-neutral-400" : ""}>
                               <td>
-                                {wochentagKuerzel(datum)}, {formatDatumDE(datum)}
+                                {wochentagKuerzel(datum, profile?.sprache)}, {formatDatumDE(datum)}
                               </td>
                               <td>{e?.stunden ?? "—"}</td>
                               <td>{e?.markierung ?? "—"}</td>
@@ -635,11 +651,11 @@ export default function SuchePage() {
                       <tbody>
                         {vorschussZeilen.map((z) => (
                           <tr key={z.key} className={z.storniert ? "opacity-50" : ""}>
-                            <td>{z.datumAnzeige}</td>
+                            <td>{z.datumAnzeige.replace(/^Saison /, `${t("suche.saison")} `)}</td>
                             <td>{formatMenge(z.betrag, 2)}</td>
-                            <td>{z.artLabel}</td>
+                            <td>{ANZEIGE_KEYS[z.artLabel] ? t(ANZEIGE_KEYS[z.artLabel]) : z.artLabel}</td>
                             <td>
-                              {z.begruendung}
+                              {ANZEIGE_KEYS[z.begruendung] ? t(ANZEIGE_KEYS[z.begruendung]) : z.begruendung}
                               {z.belegStoragePath && (
                                 <button
                                   type="button"
@@ -648,7 +664,7 @@ export default function SuchePage() {
                                     belegAnsehen(z.belegStoragePath!)
                                   }
                                 >
-                                  Beleg
+                                  {t("suche.beleg")}
                                 </button>
                               )}
                             </td>
@@ -670,7 +686,7 @@ export default function SuchePage() {
               <div className="rounded border border-linie bg-white p-4">
                 <div className="mb-2 flex items-baseline justify-between">
                   <h2 className="text-base font-semibold text-emerald-800">
-                    Stundenkonto ({saisonJahr})
+                    {t("erfassung.stundenkonto")} ({saisonJahr})
                   </h2>
                   <span
                     className={
@@ -679,12 +695,12 @@ export default function SuchePage() {
                         : "text-sm font-medium text-neutral-700"
                     }
                   >
-                    Saldo: {formatMenge(stundenkontoSaldo, 2)} Std.
+                    {t("suche.saldo")}: {formatMenge(stundenkontoSaldo, 2)} {t("gemeinsam.std")}
                   </span>
                 </div>
                 {stundenkontoBewegungen.length === 0 ? (
                   <p className="text-sm text-neutral-500">
-                    Keine Buchungen für {saisonJahr}.
+                    {t("konto.keine", { jahr: saisonJahr })}
                   </p>
                 ) : (
                   <div className="max-h-96 overflow-y-auto">
@@ -692,8 +708,8 @@ export default function SuchePage() {
                       <thead>
                         <tr>
                           <th>{t("gemeinsam.datum")}</th>
-                          <th>Stunden</th>
-                          <th>Art</th>
+                          <th>{t("erfassung.stunden")}</th>
+                          <th>{t("suche.art")}</th>
                           <th>{t("gemeinsam.notiz")}</th>
                         </tr>
                       </thead>
@@ -705,7 +721,7 @@ export default function SuchePage() {
                               {b.stunden > 0 ? "+" : ""}
                               {formatMenge(Number(b.stunden), 2)}
                             </td>
-                            <td>{b.art}</td>
+                            <td>{b.art === "Gutschrift" ? t("konto.gutschrift") : b.art === "Freizeitausgleich" ? t("konto.freizeitausgleich") : b.art === "Korrektur" ? t("konto.korrektur") : b.art === "Auszahlung" ? t("konto.auszahlung") : b.art}</td>
                             <td className="text-neutral-500">
                               {b.notiz ?? "—"}
                             </td>
@@ -720,20 +736,20 @@ export default function SuchePage() {
 
               <div className="rounded border border-linie bg-white p-4">
                 <h2 className="mb-2 text-base font-semibold text-emerald-800">
-                  Unterkunft
+                  {t("suche.unterkunft")}
                 </h2>
                 {unterkunft.length === 0 ? (
                   <p className="text-sm text-neutral-500">
-                    Keine Belegung erfasst.
+                    {t("suche.keinebelegung")}
                   </p>
                 ) : (
                   <div className="max-h-96 overflow-y-auto">
                     <table>
                       <thead>
                         <tr>
-                          <th>Zeitraum</th>
-                          <th>Gebäude</th>
-                          <th>Zimmer</th>
+                          <th>{t("suche.zeitraum")}</th>
+                          <th>{t("suche.gebaeude")}</th>
+                          <th>{t("suche.zimmer")}</th>
                           <th>{t("gemeinsam.notiz")}</th>
                         </tr>
                       </thead>
@@ -745,10 +761,10 @@ export default function SuchePage() {
                             <tr key={u.id}>
                               <td>
                                 {formatDatumDE(u.von)} –{" "}
-                                {u.bis ? formatDatumDE(u.bis) : "offen"}
+                                {u.bis ? formatDatumDE(u.bis) : t("suche.offen")}
                                 {laeuft && (
                                   <span className="ml-2 rounded bg-emerald-100 px-1.5 py-0.5 text-xs text-emerald-800">
-                                    aktuell
+                                    {t("suche.aktuell")}
                                   </span>
                                 )}
                               </td>
@@ -787,7 +803,7 @@ export default function SuchePage() {
                           <th>{t("gemeinsam.kisten")}</th>
                           <th>{t("gemeinsam.std")}</th>
                           <th
-                            title="Erwartete Kolbenzahl bei der an diesem Tag gültigen Norm (Stunden × Norm/Std.) - erst darüber gibt es eine Prämie"
+                            title={t("suche.kolbennormtitel")}
                           >
                             {t("gemeinsam.kolbennorm")}
                           </th>

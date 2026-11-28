@@ -17,6 +17,7 @@
 import { useEffect, useState } from "react";
 import { getSupabaseClient } from "@/lib/supabase/client";
 import { useProfile } from "@/lib/useProfile";
+import { uebersetzung } from "@/lib/i18n";
 import { formatDatumDE, formatMenge } from "@/lib/format";
 import { kannStundenkontoBuchen } from "@/lib/stundenkontoRechte";
 import type { EmployeeStundenkontoSaldo, StundenkontoBewegung } from "@/lib/types";
@@ -45,6 +46,9 @@ export default function StundenkontoBereich({
   bearbeitetesDatum,
 }: StundenkontoBereichProps) {
   const { profile } = useProfile();
+  const t = uebersetzung(profile?.sprache);
+  const artLabel = (a: string) =>
+    a === "Gutschrift" ? t("konto.gutschrift") : a === "Freizeitausgleich" ? t("konto.freizeitausgleich") : a === "Korrektur" ? t("konto.korrektur") : a === "Auszahlung" ? t("konto.auszahlung") : a;
   const canBuchen = kannStundenkontoBuchen(profile);
 
   const [saldo, setSaldo] = useState(0);
@@ -101,17 +105,15 @@ export default function StundenkontoBereich({
   async function buchen() {
     const wert = Number(stunden);
     if (!stunden || Number.isNaN(wert) || wert === 0) {
-      setFehler("Bitte eine Stundenzahl ungleich 0 angeben.");
+      setFehler(t("konto.fehlerstunden"));
       return;
     }
     if (!datum) {
-      setFehler(
-        "Bitte ein Datum angeben - jede Buchung muss einem Tag zugeordnet sein."
-      );
+      setFehler(t("konto.fehlerdatum"));
       return;
     }
     if (Number(datum.slice(0, 4)) !== saisonJahr) {
-      setFehler(`Das Datum muss im Saisonjahr ${saisonJahr} liegen.`);
+      setFehler(t("konto.fehlerjahr", { jahr: saisonJahr }));
       return;
     }
     setLaeuft(true);
@@ -132,7 +134,7 @@ export default function StundenkontoBereich({
       return;
     }
     setErfolg(
-      `${wert > 0 ? "+" : ""}${formatMenge(wert, 2)} Std. (${art}) zum ${formatDatumDE(datum)} gebucht.`
+      t("konto.gebucht", { wert: `${wert > 0 ? "+" : ""}${formatMenge(wert, 2)}`, art: artLabel(art), datum: formatDatumDE(datum) })
     );
     setStunden("");
     setNotiz("");
@@ -142,15 +144,10 @@ export default function StundenkontoBereich({
   return (
     <div className="flex flex-col gap-3 p-2">
       <p className="text-sm font-semibold">
-        Stundenkonto {personLabel} - Saison {saisonJahr}: aktueller Saldo{" "}
-        {formatMenge(saldo, 2)} Std.
+        {t("konto.kopf", { person: personLabel, jahr: saisonJahr, saldo: formatMenge(saldo, 2) })}
       </p>
       <p className="text-xs text-neutral-500">
-        Buchungen für das Jahr {saisonJahr}. Der Saldo zählt sofort zum
-        Bruttolohn (Stunden × Stundenlohn, Spalte „Zulage" in der
-        Lohnübersicht). Jede Buchung braucht ein Datum - es bestimmt, zu
-        welchem Monat die Stunden gehören. Was beim Abrechnen noch auf dem
-        Konto steht, wird automatisch in Zulage umgewandelt.
+        {t("konto.erklaerung", { jahr: saisonJahr })}
       </p>
 
       {fehler && (
@@ -163,7 +160,7 @@ export default function StundenkontoBereich({
       {canBuchen && (
         <div className="flex flex-wrap items-end gap-2 rounded border border-linie bg-white p-2">
           <label className="flex flex-col text-xs">
-            Datum (Pflicht)
+            {t("konto.datumpflicht")}
             <input
               type="date"
               className="w-36"
@@ -175,33 +172,33 @@ export default function StundenkontoBereich({
             />
           </label>
           <label className="flex flex-col text-xs">
-            Art
+            {t("suche.art")}
             <select
               value={art}
               onChange={(e) => setArt(e.target.value as typeof art)}
             >
-              <option value="Gutschrift">Gutschrift (+)</option>
-              <option value="Freizeitausgleich">Freizeitausgleich (−)</option>
-              <option value="Korrektur">Korrektur (± ohne Saldo-Prüfung)</option>
+              <option value="Gutschrift">{t("konto.gutschrift")} (+)</option>
+              <option value="Freizeitausgleich">{t("konto.freizeitausgleich")} (−)</option>
+              <option value="Korrektur">{t("konto.korrekturoption")}</option>
             </select>
           </label>
           <label className="flex flex-col text-xs">
-            Stunden
+            {t("erfassung.stunden")}
             <input
               type="number"
               step="0.25"
               className="w-24"
-              placeholder="z.B. 3 oder -8"
+              placeholder={t("konto.stundenplatzhalter")}
               value={stunden}
               onChange={(e) => setStunden(e.target.value)}
             />
           </label>
           <label className="flex flex-col text-xs">
-            Notiz
+            {t("gemeinsam.notiz")}
             <input
               type="text"
               className="w-48"
-              placeholder="optional"
+              placeholder={t("konto.optional")}
               value={notiz}
               onChange={(e) => setNotiz(e.target.value)}
             />
@@ -212,29 +209,29 @@ export default function StundenkontoBereich({
             disabled={laeuft}
             onClick={buchen}
           >
-            Buchen
+            {t("konto.buchen")}
           </button>
         </div>
       )}
 
       <div>
         <p className="mb-1 text-xs font-medium text-neutral-600">
-          Letzte Buchungen
+          {t("konto.letzte")}
         </p>
         {ladeHistorie ? (
-          <p className="text-xs text-neutral-500">Lädt…</p>
+          <p className="text-xs text-neutral-500">{t("gemeinsam.laedt")}</p>
         ) : historie.length === 0 ? (
           <p className="text-xs text-neutral-500">
-            Noch keine Buchungen für {saisonJahr}.
+            {t("konto.keine", { jahr: saisonJahr })}
           </p>
         ) : (
           <table className="text-xs">
             <thead>
               <tr>
-                <th>Datum</th>
-                <th>Stunden</th>
-                <th>Art</th>
-                <th>Notiz</th>
+                <th>{t("gemeinsam.datum")}</th>
+                <th>{t("erfassung.stunden")}</th>
+                <th>{t("suche.art")}</th>
+                <th>{t("gemeinsam.notiz")}</th>
               </tr>
             </thead>
             <tbody>
@@ -247,9 +244,9 @@ export default function StundenkontoBereich({
                       !b.ist_storno && (
                         <span
                           className="ml-1 text-amber-600"
-                          title="Buchung von vor der Pflichtdatum-Umstellung - das Datum wird beim Abrechnen abgefragt (bestätigen oder nachtragen)"
+                          title={t("konto.unbestaetigttitel")}
                         >
-                          ⚠ unbestätigt
+                          ⚠ {t("konto.unbestaetigt")}
                         </span>
                       )}
                   </td>
@@ -258,8 +255,8 @@ export default function StundenkontoBereich({
                     {formatMenge(Number(b.stunden), 2)}
                   </td>
                   <td>
-                    {b.art}
-                    {b.storniert && " (storniert)"}
+                    {artLabel(b.art)}
+                    {b.storniert && ` (${t("gemeinsam.storniert")})`}
                   </td>
                   <td>{b.notiz ?? "—"}</td>
                 </tr>

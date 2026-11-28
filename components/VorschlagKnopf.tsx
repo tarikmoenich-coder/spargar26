@@ -13,6 +13,7 @@ import { Suspense, useCallback, useEffect, useRef, useState } from "react";
 import { Bug, Eraser, Lightbulb, Pencil, PencilLine, Sparkles, Type, Undo2, X, type LucideIcon } from "lucide-react";
 import { getSupabaseClient } from "@/lib/supabase/client";
 import { useProfile } from "@/lib/useProfile";
+import { uebersetzung, type TKey } from "@/lib/i18n";
 import { istAdmin as istAdminProfil } from "@/lib/rollen";
 
 type Strich = { typ: "linie"; farbe: string; punkte: [number, number][] } | { typ: "text"; farbe: string; x: number; y: number; text: string };
@@ -34,6 +35,7 @@ function Knopf() {
   const pathname = usePathname();
   const params = useSearchParams();
   const { profile } = useProfile();
+  const t = uebersetzung(profile?.sprache);
   const istAdmin = istAdminProfil(profile);
   const [offen, setOffen] = useState(false);
   const [foto, setFoto] = useState<HTMLImageElement | null>(null);
@@ -142,8 +144,8 @@ function Knopf() {
   function runter(e: React.PointerEvent<HTMLCanvasElement>) {
     const p = punkt(e);
     if (werkzeug === "text") {
-      const t = window.prompt("Text an dieser Stelle:");
-      if (t && t.trim()) setStriche((s) => [...s, { typ: "text", farbe, x: p[0], y: p[1], text: t.trim() }]);
+      const eingabe = window.prompt(t("vorschlag.textprompt"));
+      if (eingabe && eingabe.trim()) setStriche((s) => [...s, { typ: "text", farbe, x: p[0], y: p[1], text: eingabe.trim() }]);
       return;
     }
     malt.current = true;
@@ -164,8 +166,8 @@ function Knopf() {
   }
 
   async function absenden() {
-    if (!art) return setFehler("Bitte oben auswählen: Etwas geht nicht / Bitte ändern / Neue Idee.");
-    if (!text.trim()) return setFehler("Bitte kurz beschreiben, was geändert werden soll.");
+    if (!art) return setFehler(t("vorschlag.fehlerart"));
+    if (!text.trim()) return setFehler(t("vorschlag.fehlertext"));
     setSenden(true);
     setFehler(null);
     let screenshot: string | null = null;
@@ -185,7 +187,7 @@ function Knopf() {
     setSenden(false);
     if (error) return setFehler(error.message);
     setOffen(false);
-    setMeldung("Danke! Dein Vorschlag ist angekommen.");
+    setMeldung(t("vorschlag.danke"));
     setTimeout(() => setMeldung(null), 4000);
   }
 
@@ -198,11 +200,11 @@ function Knopf() {
         <button
           onClick={oeffnen}
           className="group relative flex h-14 w-14 items-center justify-center rounded-full border-[3px] border-black bg-yellow-300 shadow-lg transition hover:scale-105 hover:bg-yellow-200"
-          aria-label="Änderung vorschlagen"
+          aria-label={t("vorschlag.titel")}
         >
           <Lightbulb className="h-7 w-7 text-black" strokeWidth={2.4} />
           <span className="pointer-events-none absolute right-16 whitespace-nowrap rounded bg-black px-2 py-1 text-sm font-medium text-white opacity-0 transition group-hover:opacity-100">
-            Änderung vorschlagen
+            {t("vorschlag.titel")}
           </span>
           {istAdmin && anzahlOffen > 0 && (
             <span className="absolute -right-1 -top-1 flex h-5 min-w-5 items-center justify-center rounded-full bg-beere-600 px-1 text-[11px] font-bold text-white">
@@ -221,14 +223,14 @@ function Knopf() {
                   <Lightbulb className="h-5 w-5" />
                 </span>
                 <div>
-                  <h2 className="font-semibold">Änderung vorschlagen</h2>
+                  <h2 className="font-semibold">{t("vorschlag.titel")}</h2>
                   <p className="text-xs text-neutral-500">
-                    Seite: <span className="font-mono">{seite.pfad}</span>
+                    {t("vorschlag.seite")}: <span className="font-mono">{seite.pfad}</span>
                     {seite.titel && ` · ${seite.titel}`}
                   </p>
                 </div>
               </div>
-              <button className="rounded p-1 hover:bg-neutral-100" onClick={() => setOffen(false)} title="schließen">
+              <button className="rounded p-1 hover:bg-neutral-100" onClick={() => setOffen(false)} title={t("gemeinsam.schliessen")}>
                 <X className="h-5 w-5" />
               </button>
             </div>
@@ -244,20 +246,20 @@ function Knopf() {
                 >
                   <a.Icon className="h-7 w-7 shrink-0" />
                   <span>
-                    <span className="block font-semibold">{a.label}</span>
-                    <span className="block text-xs text-neutral-600">{a.hinweis}</span>
+                    <span className="block font-semibold">{t(`vorschlag.art.${a.wert}` as TKey)}</span>
+                    <span className="block text-xs text-neutral-600">{t(`vorschlag.hinweis.${a.wert}` as TKey)}</span>
                   </span>
                 </button>
               ))}
             </div>
 
             <label className="flex flex-col gap-1 text-sm">
-              Was soll geändert werden?
+              {t("vorschlag.frage")}
               <textarea
                 rows={4}
                 value={text}
                 onChange={(e) => setText(e.target.value)}
-                placeholder="z.B. Hier fehlt eine Spalte für …, dieser Knopf ist schwer zu finden, …"
+                placeholder={t("vorschlag.platzhalter")}
               />
             </label>
 
@@ -265,7 +267,7 @@ function Knopf() {
               <div className="flex flex-wrap items-center gap-2 text-sm">
                 <label className="flex items-center gap-1.5">
                   <input type="checkbox" checked={mitFoto} disabled={!foto} onChange={(e) => setMitFoto(e.target.checked)} />
-                  Bildschirmfoto mitschicken
+                  {t("vorschlag.mitfoto")}
                 </label>
                 {foto && mitFoto && (
                   <>
@@ -273,16 +275,16 @@ function Knopf() {
                     <button
                       className={`flex items-center gap-1 rounded border px-2 py-0.5 ${werkzeug === "stift" ? "border-black bg-yellow-100" : "border-linie"}`}
                       onClick={() => setWerkzeug("stift")}
-                      title="Malen / einkreisen"
+                      title={t("vorschlag.malentitel")}
                     >
-                      <Pencil className="h-4 w-4" /> malen
+                      <Pencil className="h-4 w-4" /> {t("vorschlag.malen")}
                     </button>
                     <button
                       className={`flex items-center gap-1 rounded border px-2 py-0.5 ${werkzeug === "text" ? "border-black bg-yellow-100" : "border-linie"}`}
                       onClick={() => setWerkzeug("text")}
-                      title="Ins Bild klicken, um Text zu setzen"
+                      title={t("vorschlag.texttitel")}
                     >
-                      <Type className="h-4 w-4" /> Text
+                      <Type className="h-4 w-4" /> {t("vorschlag.text")}
                     </button>
                     {FARBEN.map((f) => (
                       <button
@@ -290,20 +292,20 @@ function Knopf() {
                         className={`h-6 w-6 rounded-full border-2 ${farbe === f ? "border-black" : "border-white ring-1 ring-neutral-300"}`}
                         style={{ background: f }}
                         onClick={() => setFarbe(f)}
-                        title="Farbe"
+                        title={t("vorschlag.farbe")}
                       />
                     ))}
                     <button className="flex items-center gap-1 rounded border border-linie px-2 py-0.5" onClick={() => setStriche((s) => s.slice(0, -1))} disabled={!striche.length}>
-                      <Undo2 className="h-4 w-4" /> zurück
+                      <Undo2 className="h-4 w-4" /> {t("vorschlag.zurueck")}
                     </button>
                     <button className="flex items-center gap-1 rounded border border-linie px-2 py-0.5" onClick={() => setStriche([])} disabled={!striche.length}>
-                      <Eraser className="h-4 w-4" /> alles weg
+                      <Eraser className="h-4 w-4" /> {t("vorschlag.alleweg")}
                     </button>
                   </>
                 )}
               </div>
-              {fotoLaeuft && <p className="text-sm text-neutral-500">Bildschirmfoto wird erstellt …</p>}
-              {!fotoLaeuft && !foto && <p className="text-sm text-neutral-500">Kein Bildschirmfoto möglich - der Text reicht auch.</p>}
+              {fotoLaeuft && <p className="text-sm text-neutral-500">{t("vorschlag.fotolaeuft")}</p>}
+              {!fotoLaeuft && !foto && <p className="text-sm text-neutral-500">{t("vorschlag.keinfoto")}</p>}
               <canvas
                 ref={canvasRef}
                 className={`w-full touch-none rounded border border-neutral-300 ${foto && mitFoto ? "" : "hidden"} ${werkzeug === "text" ? "cursor-text" : "cursor-crosshair"}`}
@@ -316,16 +318,16 @@ function Knopf() {
 
             <div className="flex flex-wrap items-center gap-2">
               <button className="btn" onClick={absenden} disabled={senden || fotoLaeuft}>
-                {senden ? "Sendet …" : "Vorschlag abschicken"}
+                {senden ? t("vorschlag.sendet") : t("vorschlag.abschicken")}
               </button>
               <button className="btn-secondary" onClick={() => setOffen(false)}>
-                Abbrechen
+                {t("gemeinsam.abbrechen")}
               </button>
-              <span className="text-xs text-neutral-500">Dein Name, die Seite und die Uhrzeit werden automatisch mitgeschickt. Lesen kann das nur der Admin.</span>
+              <span className="text-xs text-neutral-500">{t("vorschlag.datenschutz")}</span>
               {fehler && <span className="text-sm text-beere-600">{fehler}</span>}
               {istAdmin && (
                 <Link href="/vorschlaege" className="ml-auto text-sm text-emerald-700 underline" onClick={() => setOffen(false)}>
-                  alle Vorschläge ansehen
+                  {t("vorschlag.alle")}
                 </Link>
               )}
             </div>
