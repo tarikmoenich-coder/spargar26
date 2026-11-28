@@ -3,8 +3,9 @@
 // Aushang der Spargel-Tagesliste für die Erntehelfer (Nutzer-Vorgabe
 // 2026-11-28): wird ausgedruckt (A3 hochkant) und gelesen von Menschen, die
 // kein Deutsch sprechen und Prämienformeln nicht kennen. Deshalb nur im Druck
-// sichtbar und bewusst schlicht: nach Namen sortiert, wenige kurze deutsche
-// Wörter, Zahlen groß, je Zeile ein klares Zeichen (✓ Prämie / – keine) und
+// sichtbar und bewusst schlicht: nach Feld und Nachname sortiert, wenige
+// kurze deutsche Wörter, Zahlen groß, Prämie nur als Betrag (leer = keine),
+// oben die Tagesstatistik (kg, Stunden, Ø kg/Std.), und
 // das "Ziel": ab so vielen kg pro Stunde gibt es auf diesem Feld Prämie
 // (= Mindestlohn ÷ Preis je kg der Kategorie). Akkordwert, Lohn, Kategorie
 // und "unter der Schwelle" bleiben im Büro (Bildschirmtabelle).
@@ -51,7 +52,9 @@ export default function SpargelAushang({
         praemie: Number(z.praemie),
       };
     })
-    .sort((a, b) => a.name.localeCompare(b.name, "de"));
+    .sort((a, b) => (a.z.feld_name ?? "").localeCompare(b.z.feld_name ?? "", "de") || a.name.localeCompare(b.name, "de"));
+  const sumKg = personen.reduce((s, p) => s + Number(p.z.kg), 0);
+  const sumStd = personen.reduce((s, p) => s + Number(p.z.stunden), 0);
   const d = new Date(tag + "T12:00:00");
   // Schriftstufe so, dass die Liste auf höchstens 2 Seiten A3 passt
   // (gemessen: groß bis 80, mittel bis 110, klein bis ~140 Personen).
@@ -66,14 +69,22 @@ export default function SpargelAushang({
             {WOCHENTAG[d.getDay()]} {formatDatumDE(tag)}
           </div>
         </div>
-        <div style={{ fontSize: "13pt", textAlign: "right" }}>
-          <div>
-            <b>✓</b> = Prämie
-          </div>
-          <div>
-            <b>–</b> = keine Prämie
-          </div>
-        </div>
+        <table style={{ width: "auto", fontSize: "13pt" }}>
+          <tbody>
+            <tr>
+              <td>Summe kg heute</td>
+              <td style={{ textAlign: "right", fontWeight: 700 }}>{formatMenge(sumKg, 0)}</td>
+            </tr>
+            <tr>
+              <td>Summe Stunden heute</td>
+              <td style={{ textAlign: "right", fontWeight: 700 }}>{formatMenge(sumStd, 1)}</td>
+            </tr>
+            <tr>
+              <td>Durchschnitt heute kg / Stunde</td>
+              <td style={{ textAlign: "right", fontWeight: 700 }}>{formatMenge(sumStd ? sumKg / sumStd : null, 1)}</td>
+            </tr>
+          </tbody>
+        </table>
       </div>
       <table>
         <thead>
@@ -92,7 +103,6 @@ export default function SpargelAushang({
             <tr key={i}>
               <td>
                 <b>{name}</b>
-                {z.personal_nr && <span style={{ fontSize: "10pt" }}> · {z.personal_nr}</span>}
               </td>
               <td>{z.feld_name || ""}</td>
               <td style={{ textAlign: "right" }}>{formatMenge(z.kg, 0)}</td>
@@ -100,7 +110,7 @@ export default function SpargelAushang({
               <td style={{ textAlign: "right", fontWeight: 700 }}>{formatMenge(kgh, 1)}</td>
               <td style={{ textAlign: "right" }}>{z.gruppenanteil ? "Gruppe" : formatMenge(ziel, 1)}</td>
               <td style={{ textAlign: "right", fontWeight: 700, whiteSpace: "nowrap" }}>
-                {praemie > 0 ? `✓ ${formatEuro(praemie)} €` : "–"}
+                {praemie > 0 ? `${formatEuro(praemie)} €` : ""}
               </td>
             </tr>
           ))}

@@ -122,7 +122,7 @@ export default function PraemienSpargelPage() {
     z.gruppe ?? (z.employee_id ? namen[z.employee_id] ?? z.personal_nr ?? "?" : `Pers.-Nr. ${z.personal_nr ?? "?"}`);
 
   const summe = useMemo(() => {
-    const s = { kg: 0, std: 0, praemie: 0, fehl: 0, personen: new Set<string>() };
+    const s = { kg: 0, std: 0, praemie: 0, fehl: 0, personen: new Set<string>(), tage: 0, tageMit: 0, lohnStd: 0, praemiePers: 0 };
     for (const z of saisonZeilen) {
       s.kg += Number(z.kg);
       s.std += Number(z.stunden);
@@ -130,6 +130,10 @@ export default function PraemienSpargelPage() {
       if (!z.gruppe) {
         s.fehl += Number(z.fehlbetrag);
         s.personen.add(z.employee_id ?? z.personal_nr ?? "");
+        s.tage += 1;
+        if (Number(z.praemie) > 0) s.tageMit += 1;
+        s.lohnStd += Number(z.lohnanspruch ?? 0);
+        s.praemiePers += Number(z.praemie);
       }
     }
     return s;
@@ -223,13 +227,26 @@ export default function PraemienSpargelPage() {
       ) : (
         <>
           {quelle && <p className="-mt-2 text-xs text-neutral-500 print:hidden">{quelle}</p>}
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6 print:hidden">
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 print:hidden">
             <Kennzahl icon={Scale} titel="Geerntet" wert={`${formatMenge(summe.kg / 1000, 1)} t`} />
             <Kennzahl icon={Clock} titel="Stunden" wert={formatMenge(summe.std, 0)} />
             <Kennzahl icon={Scale} titel="Ø kg je Stunde" wert={formatMenge(summe.std ? summe.kg / summe.std : null, 1)} />
             <Kennzahl icon={Users} titel="Personen" wert={summe.personen.size} />
             <Kennzahl icon={Euro} titel="Prämie" wert={formatEuro(summe.praemie)} ton="gruen" />
             <Kennzahl icon={TrendingDown} titel="Unter der Schwelle" wert={formatEuro(summe.fehl)} unter="nicht verrechnet" />
+            <Kennzahl
+              icon={Users}
+              titel="Anteil mit Prämie"
+              wert={summe.tage ? `${formatMenge((summe.tageMit / summe.tage) * 100, 0)} %` : "—"}
+              unter="der Personen-Tage"
+              title="Personen mit Prämie ÷ alle Personen, die gestochen haben (über alle Tage)"
+            />
+            <Kennzahl
+              icon={Euro}
+              titel="Prämienquote"
+              wert={summe.lohnStd ? `${formatMenge((summe.praemiePers / summe.lohnStd) * 100, 1)} %` : "—"}
+              unter="Prämie ÷ (Stunden × Mindestlohn)"
+            />
           </div>
 
           <div className="flex flex-wrap gap-4 border-b border-linie text-sm print:hidden">
@@ -337,6 +354,18 @@ export default function PraemienSpargelPage() {
                 <span className="text-sm text-neutral-500">
                   {tagZeilen.length} Zeilen · Prämie {formatEuro(tagZeilen.reduce((a, z) => a + Number(z.praemie), 0))}
                 </span>
+                {(() => {
+                  const pers = tagZeilen.filter((z) => !z.gruppe);
+                  const mit = pers.filter((z) => Number(z.praemie) > 0).length;
+                  const lohn = pers.reduce((a, z) => a + Number(z.lohnanspruch ?? 0), 0);
+                  const pr = pers.reduce((a, z) => a + Number(z.praemie), 0);
+                  return pers.length > 0 ? (
+                    <span className="text-sm text-neutral-700">
+                      · Anteil mit Prämie <b>{formatMenge((mit / pers.length) * 100, 0)} %</b> ({mit} von {pers.length}) · Prämienquote{" "}
+                      <b>{lohn ? `${formatMenge((pr / lohn) * 100, 1)} %` : "—"}</b>
+                    </span>
+                  ) : null;
+                })()}
                 <button
                   type="button"
                   className="btn-secondary ml-auto"
