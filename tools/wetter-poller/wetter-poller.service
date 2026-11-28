@@ -1,0 +1,15 @@
+[Unit]
+Description=Wetter-Poller (DWD MOSMIX -> Supabase)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=tarik
+EnvironmentFile=/etc/wetter-poller.env
+WorkingDirectory=/home/tarik/projekte/spargar26/tools/wetter-poller
+ExecStart=/usr/bin/node index.mjs
+TimeoutStartSec=300
+
+[Install]
+WantedBy=multi-user.target
