@@ -175,7 +175,7 @@ type Groesse = "G" | "M" | "K" | "aus";
 // Umschalter Groß / Mittel / Klein / Aus im Anpassen-Modus
 function GroessenWahl({ id, titel, wert, onChange }: { id: string; titel: string; wert: Groesse; onChange: (id: string, g: Groesse) => void }) {
   return (
-    <div role="radiogroup" aria-label={`Größe ${titel}`} className="inline-flex self-start overflow-hidden rounded-lg border border-emerald-300 bg-white text-xs">
+    <div role="radiogroup" aria-label={`Größe ${titel}`} className="inline-flex overflow-hidden rounded-lg border border-emerald-300 bg-white text-xs shadow-sm">
       {(["G", "M", "K", "aus"] as const).map((g) => (
         <button
           key={g}
@@ -1147,26 +1147,35 @@ export default function DashboardPage() {
         </div>
       )}
 
-      {(["G", "M", "K"] as const).map((g) => {
-        const liste = sortiert.filter((k) => groesseVon(k.id) === g);
-        if (liste.length === 0) return null;
-        return (
-          <div
-            key={g}
-            className={`grid gap-4 ${g === "G" ? "xl:grid-cols-2" : g === "M" ? "md:grid-cols-2 xl:grid-cols-3" : "grid-cols-2 md:grid-cols-3 xl:grid-cols-4"}`}
-          >
-            {liste.map((k, i) => (
+      {/* Raster (Nutzer-Vorgabe 2026-11-28): 3 Spalten, feste Zeilen.
+          Klein = 1 Feld, Mittel = 1 Spalte x 2 Zeilen, Groß = 2 x 2 (Fläche
+          von vier kleinen) - neben einer großen passen eine mittlere oder
+          zwei kleine. Reihenfolge groß > mittel > klein, darin nach
+          Dringlichkeit; Lücken füllt das Raster selbst (dense).
+          Handy: 2 Spalten, Höhe nach Inhalt. */}
+      <div className="grid grid-flow-row-dense grid-cols-2 gap-4 md:auto-rows-[10rem] xl:grid-cols-3">
+        {sortiert
+          .filter((k) => groesseVon(k.id) !== "aus")
+          .sort((a, b) => "GMK".indexOf(groesseVon(a.id)) - "GMK".indexOf(groesseVon(b.id)))
+          .map((k) => {
+            const g = groesseVon(k.id) as "G" | "M" | "K";
+            return (
               <div
                 key={k.id}
-                className={`flex min-w-0 flex-col gap-1.5 ${g === "G" && i === liste.length - 1 && liste.length % 2 === 1 ? "xl:col-span-2" : ""}`}
+                className={`relative min-w-0 ${
+                  g === "G" ? "col-span-2 md:row-span-2" : g === "M" ? "col-span-2 md:col-span-1 md:row-span-2" : "col-span-1"
+                } ${anpassen ? "rounded-xl outline-dashed outline-2 outline-offset-2 outline-emerald-300" : ""}`}
               >
-                {anpassen && <GroessenWahl id={k.id} titel={k.titel} wert={g} onChange={groesseSetzen} />}
-                <div className="min-w-0 flex-1">{g === "K" ? k.klein() : k.liste(g)}</div>
+                <div className="h-full">{g === "K" ? k.klein() : k.liste(g)}</div>
+                {anpassen && (
+                  <div className="absolute bottom-2 right-2 z-10">
+                    <GroessenWahl id={k.id} titel={k.titel} wert={g} onChange={groesseSetzen} />
+                  </div>
+                )}
               </div>
-            ))}
-          </div>
-        );
-      })}
+            );
+          })}
+      </div>
 
       {anpassen && ausgeblendet.length > 0 && (
         <div className="rounded-xl border border-dashed border-linie bg-white p-4">
