@@ -842,6 +842,11 @@ export interface SeasonSummaryMonatRow {
   // (Freizeitausgleich/Korrektur).
   stundenkonto_stunden: number;
   stundenkonto_betrag: number;
+  // Tagesprämien mit Datum in diesem Monat (Sicht praemie_monat, 2026-11-28),
+  // im Client dazugemischt. Spargel nur freigegebene Tage.
+  spargel_praemie?: number;
+  erdbeeren_praemie?: number;
+  zuckermais_praemie?: number;
 }
 
 // Monatsabschluss (periods-Tabelle): sperrt/entsperrt die Stundenerfassung

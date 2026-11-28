@@ -425,7 +425,7 @@ export default function UebersichtPage() {
     if (monatFilter === 0) return;
     setLoadingMonat(true);
     const supabase = getSupabaseClient();
-    const [{ data: mRows }, { data: pRow }] = await Promise.all([
+    const [{ data: mRows }, { data: pRow }, { data: prRows, error: prFehler }] = await Promise.all([
       supabase
         .from("season_summary_monat")
         .select("*")
@@ -437,8 +437,49 @@ export default function UebersichtPage() {
         .eq("saison_jahr", jahr)
         .eq("monat", monatFilter)
         .maybeSingle(),
+      // Tagesprämien des Monats (Spargel/Erdbeeren/Zuckermais), Nutzer-
+      // Vorgabe 2026-11-28: gehören ins Monats-Brutto und auf die Liste.
+      supabase
+        .from("praemie_monat")
+        .select("*")
+        .eq("saison_jahr", jahr)
+        .eq("monat", monatFilter),
     ]);
-    setMonatsRows((mRows as SeasonSummaryMonatRow[]) ?? []);
+    if (prFehler) setLadeFehler(`Prämien je Monat konnten nicht geladen werden: ${prFehler.message}`);
+    type PraemieMonatRow = Pick<
+      SeasonSummaryMonatRow,
+      "employee_id" | "personal_nr" | "name" | "vorname" | "gruppe_nr" | "aktiv" | "herkunft" | "saison_jahr" | "monat"
+    > & { spargel_praemie: number; erdbeeren_praemie: number; zuckermais_praemie: number };
+    const praemien = new Map(((prRows as PraemieMonatRow[]) ?? []).map((p) => [p.employee_id, p]));
+    const gemischt: SeasonSummaryMonatRow[] = ((mRows as SeasonSummaryMonatRow[]) ?? []).map((r) => {
+      const p = praemien.get(r.employee_id);
+      praemien.delete(r.employee_id);
+      return {
+        ...r,
+        spargel_praemie: Number(p?.spargel_praemie ?? 0),
+        erdbeeren_praemie: Number(p?.erdbeeren_praemie ?? 0),
+        zuckermais_praemie: Number(p?.zuckermais_praemie ?? 0),
+      };
+    });
+    // Prämie im Monat, aber keine Stunden/Stundenkonto-Zeile: trotzdem
+    // zeigen, sonst fehlt die Prämie in der Monatsliste.
+    for (const p of praemien.values()) {
+      gemischt.push({
+        ...p,
+        gesamt_stunden: 0,
+        anwesenheitstage: 0,
+        letzter_eintrag: null,
+        basis_brutto: 0,
+        abzug_verpflegung: 0,
+        abzug_wohnen: 0,
+        stundenkonto_stunden: 0,
+        stundenkonto_betrag: 0,
+        spargel_praemie: Number(p.spargel_praemie),
+        erdbeeren_praemie: Number(p.erdbeeren_praemie),
+        zuckermais_praemie: Number(p.zuckermais_praemie),
+      });
+    }
+    setMonatsRows(gemischt);
     setPeriode((pRow as Period) ?? null);
     setLoadingMonat(false);
   }
@@ -1218,11 +1259,28 @@ export default function UebersichtPage() {
         zulage: acc.zulage + Number(r.stundenkonto_betrag || 0),
         verpflegung: acc.verpflegung + Number(r.abzug_verpflegung || 0),
         wohnen: acc.wohnen + Number(r.abzug_wohnen || 0),
+        spargel: acc.spargel + Number(r.spargel_praemie || 0),
+        erdbeeren: acc.erdbeeren + Number(r.erdbeeren_praemie || 0),
+        zuckermais: acc.zuckermais + Number(r.zuckermais_praemie || 0),
       }),
-      { stunden: 0, tage: 0, basis: 0, zulage: 0, verpflegung: 0, wohnen: 0 }
+      { stunden: 0, tage: 0, basis: 0, zulage: 0, verpflegung: 0, wohnen: 0, spargel: 0, erdbeeren: 0, zuckermais: 0 }
     );
   }
   const summeMonatSichtbar = monatsSumme(gefilterteMonatsRows);
+  // Prämien-Spalten nur für Kulturen mit Prämie in diesem Monat (Mai z.B.
+  // nur Spargel) - auf Bildschirm und Druck gleich.
+  const PRAEMIE_SPALTEN = [
+    { feld: "spargel_praemie", summe: "spargel", titel: "Spargel €" },
+    { feld: "erdbeeren_praemie", summe: "erdbeeren", titel: "Erdbeeren €" },
+    { feld: "zuckermais_praemie", summe: "zuckermais", titel: "Zuckermais €" },
+  ] as const;
+  const praemieSpalten = PRAEMIE_SPALTEN.filter((sp) =>
+    monatsRows.some((r) => Number(r[sp.feld] || 0) !== 0)
+  );
+  const praemieMonat = (r: SeasonSummaryMonatRow) =>
+    Number(r.spargel_praemie || 0) + Number(r.erdbeeren_praemie || 0) + Number(r.zuckermais_praemie || 0);
+  const bruttoMonat = (r: SeasonSummaryMonatRow) =>
+    Number(r.basis_brutto || 0) + Number(r.stundenkonto_betrag || 0) + praemieMonat(r);
 
   return (
     <div className="flex flex-col gap-4">
@@ -1981,11 +2039,12 @@ export default function UebersichtPage() {
           </div>
 
           <p className="text-sm text-neutral-500">
-            Reine Monats-Kontrolle: Stunden, Anwesenheitstage, Basis-Brutto
-            (nur Stunden × Stundenlohn, <strong>ohne</strong> Prämien - weder
-            Saison-Prämien wie Akkord/Fahrer-Zulage noch die Tagesprämien
-            Zuckermais/Erdbeeren; die stehen nur in der Saison-Summe) sowie Verpflegung/
-            Unterkunft als monatlicher Durchlaufposten. Die eigentliche
+            Monats-Kontrolle: Stunden, Anwesenheitstage, Basis-Brutto (Stunden ×
+            Stundenlohn), Zulage aus dem Stundenkonto und die Tagesprämien des
+            Monats (Spargel nur freigegebene Tage, Erdbeeren, Zuckermais) - zusammen
+            das Brutto des Monats. Saison-Prämien ohne Datum (Akkord, Fahrer-Zulage)
+            stehen nur in der Saison-Summe. Verpflegung/Unterkunft als monatlicher
+            Durchlaufposten. Die eigentliche
             Auszahlung bleibt ein Saison-Vorgang ("Jetzt Abrechnen" oben bei
             "Alle"). „⚠" bedeutet: letzter Eintrag liegt vor dem erwarteten
             Ende ({formatDatumDE(erwartetesEnde)}) - möglicherweise fehlen
@@ -2068,9 +2127,18 @@ export default function UebersichtPage() {
                     >
                       Zulage €
                     </th>
+                    {praemieSpalten.map((sp) => (
+                      <th
+                        key={sp.feld}
+                        className={FARBE_ZULAGE_TH}
+                        title="Tagesprämien mit Datum in diesem Monat (Spargel: nur freigegebene Tage, stornierte zählen nicht)"
+                      >
+                        {sp.titel}
+                      </th>
+                    ))}
                     <th
                       className={FARBE_BRUTTO_TH}
-                      title="Basis-Brutto + Zulage aus dem Stundenkonto - ohne Saison-Prämien (die werden nur einmal je Saison erfasst)"
+                      title="Basis-Brutto + Zulage aus dem Stundenkonto + Tagesprämien des Monats - ohne Saison-Prämien wie Akkord/Fahrer-Zulage (die haben kein Datum)"
                     >
                       Brutto Monat €
                     </th>
@@ -2094,7 +2162,7 @@ export default function UebersichtPage() {
                         <td>{r.personal_nr}</td>
                         <td>
                           {r.name}, {r.vorname}
-                          {minijobUeberGrenze(r) && (
+                          {minijobUeberGrenze({ ...r, stundenkonto_betrag: Number(r.stundenkonto_betrag || 0) + praemieMonat(r) }) && (
                             <span
                               className="badge-warn ml-1 text-[10px]"
                               title={`Minijob: Monatsbrutto über der Minijob-Grenze von ${fmt(minijobGrenze ?? 0)} €`}
@@ -2126,12 +2194,10 @@ export default function UebersichtPage() {
                         >
                           {fmt(r.stundenkonto_betrag)}
                         </td>
-                        <td className={FARBE_BRUTTO_TD}>
-                          {fmt(
-                            Number(r.basis_brutto || 0) +
-                              Number(r.stundenkonto_betrag || 0)
-                          )}
-                        </td>
+                        {praemieSpalten.map((sp) => (
+                          <td key={sp.feld}>{Number(r[sp.feld] || 0) !== 0 ? fmt(r[sp.feld]) : "—"}</td>
+                        ))}
+                        <td className={FARBE_BRUTTO_TD}>{fmt(bruttoMonat(r))}</td>
                         <td>{fmt(r.abzug_verpflegung)}</td>
                         <td>{fmt(r.abzug_wohnen)}</td>
                         <td>
@@ -2171,6 +2237,9 @@ export default function UebersichtPage() {
                       <td>—</td>
                       <td>—</td>
                       <td>—</td>
+                      {praemieSpalten.map((sp) => (
+                        <td key={sp.feld}>—</td>
+                      ))}
                       <td>—</td>
                       <td>—</td>
                       <td>—</td>
@@ -2182,7 +2251,7 @@ export default function UebersichtPage() {
                   {gefilterteMonatsRows.length === 0 &&
                     fehlendeImMonat.length === 0 && (
                       <tr>
-                        <td colSpan={12} className="text-neutral-500">
+                        <td colSpan={12 + praemieSpalten.length} className="text-neutral-500">
                           Keine Daten für diesen Monat.
                         </td>
                       </tr>
@@ -2200,8 +2269,17 @@ export default function UebersichtPage() {
                         {fmt(summeMonatSichtbar.basis)}
                       </td>
                       <td>{fmt(summeMonatSichtbar.zulage)}</td>
+                      {praemieSpalten.map((sp) => (
+                        <td key={sp.feld}>{fmt(summeMonatSichtbar[sp.summe])}</td>
+                      ))}
                       <td className={FARBE_BRUTTO_TD}>
-                        {fmt(summeMonatSichtbar.basis + summeMonatSichtbar.zulage)}
+                        {fmt(
+                          summeMonatSichtbar.basis +
+                            summeMonatSichtbar.zulage +
+                            summeMonatSichtbar.spargel +
+                            summeMonatSichtbar.erdbeeren +
+                            summeMonatSichtbar.zuckermais
+                        )}
                       </td>
                       <td>{fmt(summeMonatSichtbar.verpflegung)}</td>
                       <td>{fmt(summeMonatSichtbar.wohnen)}</td>
@@ -2410,6 +2488,9 @@ export default function UebersichtPage() {
                     <th>Tage</th>
                     <th>Basis-Brutto €</th>
                     <th>Zulage €</th>
+                    {praemieSpalten.map((sp) => (
+                      <th key={sp.feld}>{sp.titel}</th>
+                    ))}
                     <th>Brutto Monat €</th>
                     <th>Verpflegung €</th>
                     <th>Unterkunft €</th>
@@ -2428,12 +2509,10 @@ export default function UebersichtPage() {
                       <td>{r.anwesenheitstage}</td>
                       <td>{fmt(r.basis_brutto)}</td>
                       <td>{fmt(r.stundenkonto_betrag)}</td>
-                      <td>
-                        {fmt(
-                          Number(r.basis_brutto || 0) +
-                            Number(r.stundenkonto_betrag || 0)
-                        )}
-                      </td>
+                      {praemieSpalten.map((sp) => (
+                        <td key={sp.feld}>{Number(r[sp.feld] || 0) !== 0 ? fmt(r[sp.feld]) : "—"}</td>
+                      ))}
+                      <td>{fmt(bruttoMonat(r))}</td>
                       <td>{fmt(r.abzug_verpflegung)}</td>
                       <td>{fmt(r.abzug_wohnen)}</td>
                       <td>
@@ -2451,7 +2530,10 @@ export default function UebersichtPage() {
                     <td className="font-semibold">{s.tage}</td>
                     <td className="font-semibold">{fmt(s.basis)}</td>
                     <td className="font-semibold">{fmt(s.zulage)}</td>
-                    <td className="font-semibold">{fmt(s.basis + s.zulage)}</td>
+                    {praemieSpalten.map((sp) => (
+                      <td key={sp.feld} className="font-semibold">{fmt(s[sp.summe])}</td>
+                    ))}
+                    <td className="font-semibold">{fmt(s.basis + s.zulage + s.spargel + s.erdbeeren + s.zuckermais)}</td>
                     <td className="font-semibold">{fmt(s.verpflegung)}</td>
                     <td className="font-semibold">{fmt(s.wohnen)}</td>
                     <td></td>
