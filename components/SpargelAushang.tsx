@@ -53,9 +53,12 @@ export default function SpargelAushang({
     })
     .sort((a, b) => a.name.localeCompare(b.name, "de"));
   const d = new Date(tag + "T12:00:00");
+  // Schriftstufe so, dass die Liste auf höchstens 2 Seiten A3 passt
+  // (gemessen: groß bis 80, mittel bis 110, klein bis ~140 Personen).
+  const stufe = personen.length <= 80 ? "" : personen.length <= 110 ? "aushang-mittel" : "aushang-klein";
 
   return (
-    <div className="spargel-aushang hidden print:block">
+    <div className={`spargel-aushang hidden print:block ${stufe}`}>
       <div className="mb-3 flex items-end justify-between gap-4">
         <div>
           <div style={{ fontSize: "26pt", fontWeight: 700, lineHeight: 1.1 }}>Spargel – Prämie</div>

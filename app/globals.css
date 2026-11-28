@@ -812,4 +812,28 @@ input[type="number"]::-webkit-inner-spin-button {
     background: #e5e7eb;
     font-size: 12pt;
   }
+  /* Höchstens 2 Seiten A3 (Nutzer-Vorgabe): bei vielen Personen kleiner
+     (Stufe nach Personenzahl, siehe components/SpargelAushang.tsx). */
+  .spargel-aushang.aushang-mittel {
+    font-size: 11pt;
+  }
+  .spargel-aushang.aushang-mittel th,
+  .spargel-aushang.aushang-mittel td {
+    padding: 0.15rem 0.45rem;
+  }
+  .spargel-aushang.aushang-mittel th {
+    font-size: 10.5pt;
+  }
+  .spargel-aushang.aushang-klein {
+    font-size: 9pt;
+    line-height: 1.15;
+  }
+  .spargel-aushang.aushang-klein th,
+  .spargel-aushang.aushang-klein td {
+    padding: 0 0.35rem;
+    border-width: 0.75pt;
+  }
+  .spargel-aushang.aushang-klein th {
+    font-size: 9pt;
+  }
 }
