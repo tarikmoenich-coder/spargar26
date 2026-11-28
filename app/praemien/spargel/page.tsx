@@ -20,6 +20,7 @@ import { ladeAlleSeiten } from "@/lib/ladeAlle";
 import { formatDatumDE, formatEuro, formatMenge } from "@/lib/format";
 import { darf } from "@/lib/rollen";
 import { KategorienFestlegen, KategorienPflege } from "@/components/SpargelKategorien";
+import SpargelAushang from "@/components/SpargelAushang";
 import SpargelFreigabe from "@/components/SpargelFreigabe";
 
 interface TagZeile {
@@ -41,6 +42,7 @@ interface TagZeile {
   lohnanspruch: number | null;
   praemie: number;
   fehlbetrag: number;
+  gruppenanteil?: boolean;
 }
 
 interface Kat {
@@ -306,15 +308,8 @@ export default function PraemienSpargelPage() {
           )}
 
           {ansicht === "tag" && (
-            <div className="spargel-tagesliste flex flex-col gap-3">
-              <div className="hidden print:block">
-                <h1 className="text-base font-semibold">Spargelprämien – Tagesliste {formatDatumDE(tag)}</h1>
-                <p className="text-xs">
-                  {tagZeilen.filter((z) => !z.gruppe).length} Personen · {formatMenge(tagZeilen.reduce((a, z) => a + Number(z.kg), 0), 1)} kg · Prämie{" "}
-                  {formatEuro(tagZeilen.reduce((a, z) => a + Number(z.praemie), 0))} · Mindestlohn{" "}
-                  {saison && mindestlohn[saison] ? formatEuro(mindestlohn[saison]) : "—"} je Stunde
-                </p>
-              </div>
+            <div className="flex flex-col gap-3">
+              <SpargelAushang tag={tag} zeilen={tagZeilen} name={person} />
               <div className="flex flex-wrap items-center gap-2 print:hidden">
                 <button
                   type="button"
@@ -342,13 +337,18 @@ export default function PraemienSpargelPage() {
                 <span className="text-sm text-neutral-500">
                   {tagZeilen.length} Zeilen · Prämie {formatEuro(tagZeilen.reduce((a, z) => a + Number(z.praemie), 0))}
                 </span>
-                <button type="button" className="btn-secondary ml-auto" onClick={() => window.print()}>
+                <button
+                  type="button"
+                  className="btn-secondary ml-auto"
+                  onClick={() => window.print()}
+                  title="Aushang für die Erntehelfer: A3 hochkant, einfache Liste nach Namen"
+                >
                   <Printer className="h-4 w-4" />
-                  Drucken
+                  Aushang drucken (A3)
                 </button>
               </div>
-              <div className="overflow-x-auto">
-                <table className="print-form-table print-dense-table">
+              <div className="overflow-x-auto print:hidden">
+                <table>
                   <thead>
                     <tr>
                       <th>Feld</th>
@@ -400,7 +400,7 @@ export default function PraemienSpargelPage() {
                   </tfoot>
                 </table>
               </div>
-              <p className="text-xs text-neutral-500">
+              <p className="text-xs text-neutral-500 print:hidden">
                 <span className="text-amber-600">•</span> Kategorie weicht vom Vorschlag ab. Gruppenzeilen bekommen keine Prämie.
               </p>
             </div>

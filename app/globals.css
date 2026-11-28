@@ -777,22 +777,39 @@ input[type="number"]::-webkit-inner-spin-button {
   }
 }
 
-/* Spargelprämien-Tagesliste (Prämien → Spargel → Tagesliste, ersetzt das
-   Excel-Blatt "Prämien"): A4 quer, benannte Page wie bei der Stammkarte,
-   damit andere Drucke nicht beeinflusst werden. Kopfzeile wiederholt sich
-   auf jeder Seite, Zeilen werden nicht zerrissen. */
+/* Spargelprämien-Tagesliste zum Aushang für die Erntehelfer (Prämien →
+   Spargel → Tagesliste → Drucken): A3 hochkant (Nutzer-Vorgabe 2026-11-28,
+   so wird im Betrieb gedruckt), große Schrift, benannte Page wie bei der
+   Stammkarte, damit andere Drucke nicht beeinflusst werden. Kopfzeile
+   wiederholt sich auf jeder Seite, Zeilen werden nicht zerrissen. */
 @media print {
-  @page spargel-tagesliste {
-    size: A4 landscape;
-    margin: 10mm;
+  @page spargel-aushang {
+    size: A3 portrait;
+    margin: 12mm;
   }
-  .spargel-tagesliste {
-    page: spargel-tagesliste;
+  .spargel-aushang {
+    page: spargel-aushang;
+    font-size: 13pt;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
   }
-  .spargel-tagesliste thead {
+  .spargel-aushang table {
+    width: 100%;
+    border-collapse: collapse;
+  }
+  .spargel-aushang thead {
     display: table-header-group;
   }
-  .spargel-tagesliste tr {
+  .spargel-aushang tr {
     break-inside: avoid;
+  }
+  .spargel-aushang th,
+  .spargel-aushang td {
+    border: 1pt solid #000;
+    padding: 0.35rem 0.5rem;
+  }
+  .spargel-aushang th {
+    background: #e5e7eb;
+    font-size: 12pt;
   }
 }
