@@ -131,7 +131,7 @@ export function ListenKarte({
 }) {
   const zahlKlasse = zahlTon && zahlTon !== "grau" ? TON_TEXT[zahlTon] : "text-neutral-900";
   return (
-    <KarteRahmen className="flex h-full flex-col">
+    <KarteRahmen className="flex h-full flex-col overflow-hidden">
       <div className="flex items-center gap-2">
         <span className={`rounded-lg p-2 ${SYMBOL_FARBE[farbe]}`}>
           <Icon className="h-4 w-4" />
@@ -151,7 +151,11 @@ export function ListenKarte({
         <>
           {unter && <div className="mt-2 text-sm text-neutral-500">{unter}</div>}
           {!laedt && eintraege.length > 0 && (
-            <ul className={`mt-3 text-sm ${spalten === 2 ? "grid gap-x-8 sm:grid-cols-2 [&>li]:border-b [&>li]:border-linie" : "divide-y divide-linie"}`}>
+            <ul
+              className={`mt-3 min-h-0 flex-1 overflow-y-auto text-sm ${
+                spalten === 2 ? "grid content-start gap-x-8 sm:grid-cols-2 [&>li]:border-b [&>li]:border-linie" : "divide-y divide-linie"
+              }`}
+            >
               {eintraege.slice(0, max).map((e) => {
                 const inhalt = (
                   <span className={`truncate ${e.fett ? "font-medium" : ""}`}>{e.text}</span>
