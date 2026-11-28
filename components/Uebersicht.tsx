@@ -111,6 +111,7 @@ export function ListenKarte({
   fehler,
   laedt,
   children,
+  spalten = 1,
 }: {
   icon: LucideIcon;
   farbe?: SymbolFarbe;
@@ -125,6 +126,8 @@ export function ListenKarte({
   fehler?: string | null;
   laedt?: boolean;
   children?: React.ReactNode;
+  // Große Kachel auf der Startseite: Liste zweispaltig
+  spalten?: 1 | 2;
 }) {
   const zahlKlasse = zahlTon && zahlTon !== "grau" ? TON_TEXT[zahlTon] : "text-neutral-900";
   return (
@@ -148,7 +151,7 @@ export function ListenKarte({
         <>
           {unter && <div className="mt-2 text-sm text-neutral-500">{unter}</div>}
           {!laedt && eintraege.length > 0 && (
-            <ul className="mt-3 divide-y divide-linie text-sm">
+            <ul className={`mt-3 text-sm ${spalten === 2 ? "grid gap-x-8 sm:grid-cols-2 [&>li]:border-b [&>li]:border-linie" : "divide-y divide-linie"}`}>
               {eintraege.slice(0, max).map((e) => {
                 const inhalt = (
                   <span className={`truncate ${e.fett ? "font-medium" : ""}`}>{e.text}</span>
@@ -249,5 +252,57 @@ export function Ring({ prozent, groesse = 64 }: { prozent: number; groesse?: num
       </svg>
       <span className="relative text-sm font-semibold text-neutral-800">{Math.round(p)}%</span>
     </span>
+  );
+}
+
+// Kleine Kachel der Startseite: Symbol, Titel, eine Zahl mit Zustand, Klick
+// führt zur Detailseite (Startseite in drei Größen, docs/startseite-kacheln-plan.md).
+export function KleinKachel({
+  icon: Icon,
+  farbe = "gruen",
+  titel,
+  zahl,
+  ton,
+  unter,
+  href,
+  laedt,
+  fehler,
+}: {
+  icon: LucideIcon;
+  farbe?: SymbolFarbe;
+  titel: string;
+  zahl: React.ReactNode;
+  ton?: Ton;
+  unter?: React.ReactNode;
+  href?: string;
+  laedt?: boolean;
+  fehler?: string | null;
+}) {
+  const inhalt = (
+    <>
+      <div className="flex items-center gap-2">
+        <span className={`rounded-lg p-1.5 ${SYMBOL_FARBE[farbe]}`}>
+          <Icon className="h-3.5 w-3.5" />
+        </span>
+        <span className="min-w-0 truncate text-sm font-medium text-neutral-700">{titel}</span>
+      </div>
+      <div
+        className={`mt-2 text-2xl font-semibold tabular-nums ${
+          laedt || fehler ? "text-neutral-300" : ton && ton !== "grau" ? TON_TEXT[ton] : ton === "grau" ? "text-neutral-400" : "text-neutral-900"
+        }`}
+        title={fehler ?? undefined}
+      >
+        {laedt ? "…" : fehler ? "—" : zahl}
+      </div>
+      {unter && <div className="mt-0.5 truncate text-xs text-neutral-500">{unter}</div>}
+    </>
+  );
+  const k = "block h-full min-w-0 rounded-xl border border-linie bg-white px-4 py-3 shadow-card";
+  return href ? (
+    <Link href={href} className={`${k} transition hover:border-emerald-300 hover:shadow-md`}>
+      {inhalt}
+    </Link>
+  ) : (
+    <div className={k}>{inhalt}</div>
   );
 }
