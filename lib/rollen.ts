@@ -190,6 +190,7 @@ export const MENUE_RECHTE: Record<string, string[]> = {
   "/erntewirtschaft/ernte": modul("ernte.ernte"),
   "/erntewirtschaft/ausweise": modul("ernte.ausweise"),
   "/erntewirtschaft/stammdaten": modul("ernte.maschinen", "ernte.waagen"),
+  "/wetter": modul("wetter"),
   "/vertrieb": modul("vertrieb.planung"),
   "/kasse": modul("kasse.buecher", "kasse.pruefung"),
   "/management": modul("controlling"),

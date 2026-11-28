@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import {
+  CloudSun,
   Building2,
   ChevronDown,
   Clock,
@@ -44,6 +45,7 @@ const NAV_KEYS: Record<string, TKey> = {
   "/suche": "nav.suche",
   "/uebersicht": "nav.lohn",
   "/erntewirtschaft": "nav.erntewirtschaft",
+  "/wetter": "nav.wetter",
   "/vertrieb": "nav.vertrieb",
   "/kasse": "nav.kasse",
   "/management": "nav.controlling",
@@ -129,6 +131,12 @@ const items: NavItem[] = [
     label: "Erntewirtschaft",
     icon: Sprout,
     auchAktivBei: ["/praemien", "/anbau", "/statistik", "/qualitaet"],
+  },
+  {
+    href: "/wetter",
+    label: "Wetter",
+    icon: CloudSun,
+    // DWD-Vorhersage + Frostwarnung (docs/wetter-konzept.md), Recht "wetter".
   },
   {
     // Vertriebsplanung (docs/vertriebsplanung-plan.md): Stände, Touren,

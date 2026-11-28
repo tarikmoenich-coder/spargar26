@@ -17,6 +17,8 @@
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import {
+  CloudSun,
+  Snowflake,
   AlertTriangle,
   Building2,
   Cherry,
@@ -46,6 +48,7 @@ import { useControllingCounts } from "@/lib/useControllingCounts";
 import { datumLang, kalenderwoche, tagesplanBerechnen, wochentagVon } from "@/lib/tagesplan";
 import { saisonVon, tagesplanDatenLaden } from "@/lib/tagesplanLaden";
 import { ARTEN } from "@/components/VorschlagKnopf";
+import { KULTUR_TEXT, fmtGrad, fmtMm, ortsDatum, ortsStunde, tageswerte, umschwuenge, veraltet, wetterLaden, type FrostNacht, type Umschwung, type WetterTag } from "@/lib/wetter";
 import { Begruessung, KleinKachel, ListenKarte, Ring, type Eintrag } from "@/components/Uebersicht";
 import {
   UNTERKUNFT_MANGEL_SCHWERE_LABELS,
@@ -63,7 +66,7 @@ function plusTage(iso: string, n: number): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
 
-type Fehler = Partial<Record<"kasse" | "personal" | "lohn" | "unterkunft" | "vertrieb" | "vorschlaege" | "protokoll" | "ernte" | "spargel" | "spinnen", string>>;
+type Fehler = Partial<Record<"kasse" | "personal" | "lohn" | "unterkunft" | "vertrieb" | "vorschlaege" | "protokoll" | "ernte" | "spargel" | "spinnen" | "wetter", string>>;
 
 
 interface KassenZeile {
@@ -124,6 +127,7 @@ interface Daten {
   ebFelder: { feld: string; personen: number; praemie: number }[];
   spinnen: Spinne[];
   spinnenUeberfaellig: number;
+  wetter: { frost: FrostNacht[]; tage: WetterTag[]; umschwuenge: Umschwung[]; ort: string | null; veraltet: boolean; vorhanden: boolean };
   ebPersonen: number;
   ebSumme: number;
   spHeuteKg: number;
@@ -159,6 +163,7 @@ const LEER: Daten = {
   ebFelder: [],
   spinnen: [],
   spinnenUeberfaellig: 0,
+  wetter: { frost: [], tage: [], umschwuenge: [], ort: null, veraltet: false, vorhanden: false },
   ebPersonen: 0,
   ebSumme: 0,
   spHeuteKg: 0,
@@ -242,6 +247,7 @@ export default function DashboardPage() {
       spinnen: darf(profile, "ernte.ernte:L"),
       spargel: darf(profile, "ernte.praemien:L", "ernte.ernte:L", "ernte.statistik:L"),
       spargelFreigabe: darf(profile, "sonder.spargel_kategorie:S"),
+      wetter: darf(profile, "wetter:L"),
     };
   }, [profile]);
   const controlling = useControllingCounts(!!profile && sieht.controlling);
@@ -505,6 +511,23 @@ export default function DashboardPage() {
       neu.spinnenUeberfaellig = l.count ?? 0;
     }
 
+    async function wetter() {
+      const w = await wetterLaden();
+      if (w.fehler) merke("wetter", { message: w.fehler });
+      const tage = tageswerte(w.stunden);
+      const station = w.stationen.find((x) => x.id === w.stationId);
+      neu.wetter = {
+        frost: w.frost,
+        tage,
+        // nur die nächsten 3 Tage (Startseite = akut); Bodenfrost allgemein
+        // weglassen - feldgenauer Frost steht oben in der Kachel
+        umschwuenge: umschwuenge(tage).filter((u) => u.datum <= plusTage(heute, 3) && u.art !== "frost"),
+        ort: station?.name ?? null,
+        veraltet: !!station && veraltet(station),
+        vorhanden: w.stunden.length > 0,
+      };
+    }
+
     setLaedt(true);
     Promise.all([
       sieht.kasse ? kasse() : null,
@@ -517,6 +540,7 @@ export default function DashboardPage() {
       sieht.ernte ? ernte() : null,
       sieht.spargel ? spargel() : null,
       sieht.spinnen ? spinnen() : null,
+      sieht.wetter ? wetter() : null,
     ]).then(() => {
       setD(neu);
       setFehler(f);
@@ -596,6 +620,15 @@ export default function DashboardPage() {
         text: d.spNachzuegler.length === 1 ? "1 Spargeltag neu freigeben" : `${d.spNachzuegler.length} Spargeltage neu freigeben`,
         icon: Sprout,
       });
+    const frostKritisch = d.wetter.frost.filter((n) => n.stufe === "kritisch");
+    if (sieht.wetter && frostKritisch.length > 0) {
+      const felder = new Set(frostKritisch.map((n) => n.feld_id)).size;
+      hinweise.push({
+        href: "/wetter",
+        text: `Frost: ${felder === 1 ? "1 Feld" : `${felder} Felder`} bis ${fmtGrad(Math.min(...frostKritisch.map((n) => n.tiefst)))}`,
+        icon: Snowflake,
+      });
+    }
   }
   const alleRuhig = !laedt && !c.loading && hinweise.length === 0 && controllingSumme === 0;
 
@@ -1033,6 +1066,87 @@ export default function DashboardPage() {
           max={g === "G" ? 30 : 4}
           spalten={g === "G" ? 2 : 1}
           link={{ href: "/praemien/erdbeeren", text: "Zu den Erdbeer-Prämien" }}
+        />
+      ),
+    });
+  }
+
+  if (sieht.wetter) {
+    const w = d.wetter;
+    const kritisch = w.frost.filter((n) => n.stufe === "kritisch");
+    const heuteW = w.tage.find((t) => t.datum === heute);
+    const morgenW = w.tage.find((t) => t.datum === plusTage(heute, 1));
+    const tagZeile = (t: WetterTag | undefined, name: string): Eintrag[] =>
+      t
+        ? [
+            {
+              key: name,
+              href: "/wetter",
+              text: name,
+              rechts: `${fmtGrad(t.tmin)} / ${fmtGrad(t.tmax)} · ${t.regen > 0.05 ? fmtMm(t.regen) : "trocken"} · ${t.sonne_h.toLocaleString("de-DE", { maximumFractionDigits: 1 })} h Sonne`,
+              ton: t.regen >= 10 ? ("gelb" as const) : ("grau" as const),
+            },
+          ]
+        : [];
+    const frostEintraege: Eintrag[] = w.frost.map((n) => ({
+      key: `f${n.feld_id}-${n.von}`,
+      href: "/wetter",
+      text: (
+        <>
+          <span className="font-medium">{n.bezeichnung}</span> <span className="text-neutral-500">{KULTUR_TEXT[n.kultur]}</span>
+        </>
+      ),
+      rechts: `${ortsDatum(n.von) === heute ? "heute" : tag(ortsDatum(n.von))} ${ortsStunde(n.von)}–${ortsStunde(n.bis)} · ${fmtGrad(n.tiefst)}`,
+      ton: n.stufe === "kritisch" ? ("rot" as const) : ("gelb" as const),
+    }));
+    const umschwungEintraege: Eintrag[] = w.umschwuenge.map((u, i) => ({
+      key: `u${i}`,
+      href: "/wetter",
+      text: u.text,
+      rechts: u.datum === heute ? "heute" : tag(u.datum),
+      ton: "gelb" as const,
+    }));
+    const ton: Kachel["ton"] = kritisch.length > 0 ? "rot" : w.frost.length > 0 || w.umschwuenge.length > 0 || w.veraltet ? "gelb" : "ruhig";
+    kacheln.push({
+      id: "wetter",
+      titel: "Wetter",
+      ton,
+      klein: () => (
+        <KleinKachel
+          icon={CloudSun}
+          farbe="blau"
+          titel="Wetter"
+          zahl={w.frost.length > 0 ? fmtGrad(Math.min(...w.frost.map((n) => n.tiefst))) : heuteW ? fmtGrad(heuteW.tmax) : "–"}
+          ton={kritisch.length > 0 ? "rot" : w.frost.length > 0 ? "gelb" : "grau"}
+          unter={w.frost.length > 0 ? `Frost auf ${new Set(w.frost.map((n) => n.feld_id)).size} Feld(ern)` : heuteW ? `heute max · ${heuteW.regen > 0.05 ? fmtMm(heuteW.regen) : "trocken"}` : "keine Daten"}
+          href="/wetter"
+          laedt={laedt}
+          fehler={fehler.wetter}
+        />
+      ),
+      liste: (g) => (
+        <ListenKarte
+          icon={CloudSun}
+          farbe="blau"
+          titel="Wetter"
+          zahl={w.frost.length > 0 ? w.frost.length : undefined}
+          zahlTon={kritisch.length > 0 ? "rot" : "gelb"}
+          laedt={laedt}
+          fehler={fehler.wetter}
+          unter={
+            !w.vorhanden
+              ? "Noch keine Wetterdaten (Wetter-Abruf einrichten)."
+              : w.veraltet
+                ? "⚠ Vorhersage veraltet – läuft der Wetter-Abruf?"
+                : w.frost.length > 0
+                  ? `Frostgefahr in den nächsten 48 h · ${w.ort ?? ""}`
+                  : `Kein Frost für Erdbeerblüte/Grünspargel · ${w.ort ?? ""}`
+          }
+          eintraege={[...frostEintraege, ...tagZeile(heuteW, "Heute"), ...tagZeile(morgenW, "Morgen"), ...umschwungEintraege]}
+          max={g === "G" ? 30 : 6}
+          spalten={1}
+          leer="Keine Daten."
+          link={{ href: "/wetter", text: "48 Stunden & 10 Tage" }}
         />
       ),
     });

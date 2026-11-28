@@ -1,0 +1,10 @@
+[Unit]
+Description=Wetter-Poller stündlich (lädt nur neue DWD-Ausgaben)
+
+[Timer]
+OnBootSec=2min
+OnCalendar=*-*-* *:20:00
+Persistent=true
+
+[Install]
+WantedBy=timers.target
