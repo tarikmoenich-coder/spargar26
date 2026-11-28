@@ -57,7 +57,16 @@ function plusTage(iso: string, n: number): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
 
-type Fehler = Partial<Record<"kasse" | "personal" | "lohn" | "unterkunft" | "vertrieb" | "vorschlaege" | "protokoll" | "ernte", string>>;
+type Fehler = Partial<Record<"kasse" | "personal" | "lohn" | "unterkunft" | "vertrieb" | "vorschlaege" | "protokoll" | "ernte" | "spargel", string>>;
+
+interface SpargelSaison {
+  saison_jahr: number;
+  kg: number;
+  praemie: number;
+  lohnanspruch: number;
+  personen_tage: number;
+  tage_mit_praemie: number;
+}
 
 interface KassenZeile {
   buch: Kassenbuch;
@@ -94,6 +103,13 @@ interface Daten {
   ebPersonen: number;
   ebSumme: number;
   kolbenSaison: number;
+  spHeuteKg: number;
+  spHeuteKisten: number;
+  spHeuteFelder: number;
+  spOffen: string[];
+  spTage: number;
+  spUngeklaert: number;
+  spSaison: SpargelSaison | null;
 }
 const LEER: Daten = {
   kassen: [],
@@ -116,6 +132,13 @@ const LEER: Daten = {
   ebPersonen: 0,
   ebSumme: 0,
   kolbenSaison: 0,
+  spHeuteKg: 0,
+  spHeuteKisten: 0,
+  spHeuteFelder: 0,
+  spOffen: [],
+  spTage: 0,
+  spUngeklaert: 0,
+  spSaison: null,
 };
 
 const SCHWERE_RANG: Record<string, number> = { hoch: 0, mittel: 1, gering: 2 };
@@ -142,6 +165,8 @@ export default function DashboardPage() {
       vorschlaege: istAdmin(profile),
       protokoll: darfMenue(profile, "/aenderungsprotokoll"),
       ernte: darf(profile, "ernte.anbau:S"),
+      spargel: darf(profile, "ernte.praemien:L", "ernte.ernte:L", "ernte.statistik:L"),
+      spargelFreigabe: darf(profile, "sonder.spargel_kategorie:S"),
     };
   }, [profile]);
   const controlling = useControllingCounts(!!profile && sieht.controlling);
@@ -329,6 +354,31 @@ export default function DashboardPage() {
       neu.kolbenSaison = ((kolben.data as { summe_kolben: number | null }[]) ?? []).reduce((s, r) => s + Number(r.summe_kolben ?? 0), 0);
     }
 
+    async function spargel() {
+      const [ertrag, frei, saison, luecken] = await Promise.all([
+        sb.from("ernte_ertrag_tag").select("tag, feld_id, netto_kg, kisten").gte("tag", `${CURRENT_YEAR}-01-01`),
+        sb.from("spargel_freigabe").select("datum").gte("datum", `${CURRENT_YEAR}-01-01`),
+        sb.from("spargel_saison_summe").select("*").order("saison_jahr", { ascending: false }).limit(1),
+        sb.from("ernte_kette_luecken").select("*", { count: "exact", head: true }),
+      ]);
+      merke("spargel", ertrag.error ?? frei.error ?? saison.error);
+      type E = { tag: string; feld_id: number | null; netto_kg: number | null; kisten: number };
+      const er = (ertrag.data as E[]) ?? [];
+      const heuteR = er.filter((r) => r.tag.slice(0, 10) === heute);
+      neu.spHeuteKg = heuteR.reduce((s, r) => s + Number(r.netto_kg ?? 0), 0);
+      neu.spHeuteKisten = heuteR.reduce((s, r) => s + Number(r.kisten ?? 0), 0);
+      neu.spHeuteFelder = new Set(heuteR.map((r) => r.feld_id)).size;
+      const freigegeben = new Set(((frei.data as { datum: string }[]) ?? []).map((r) => r.datum));
+      // offene Erntetage bis gestern (heute wird noch geerntet)
+      neu.spOffen = Array.from(new Set(er.map((r) => r.tag.slice(0, 10))))
+        .filter((t) => t < heute && !freigegeben.has(t))
+        .sort()
+        .reverse();
+      neu.spTage = new Set(er.map((r) => r.tag.slice(0, 10))).size;
+      neu.spUngeklaert = luecken.count ?? 0;
+      neu.spSaison = ((saison.data as SpargelSaison[]) ?? [])[0] ?? null;
+    }
+
     setLaedt(true);
     Promise.all([
       sieht.kasse ? kasse() : null,
@@ -339,6 +389,7 @@ export default function DashboardPage() {
       sieht.vorschlaege ? vorschlaege() : null,
       sieht.protokoll ? protokoll() : null,
       sieht.ernte ? ernte() : null,
+      sieht.spargel ? spargel() : null,
     ]).then(() => {
       setD(neu);
       setFehler(f);
@@ -410,6 +461,12 @@ export default function DashboardPage() {
     if (maengelHoch > 0) hinweise.push({ href: "/unterkunft/maengel", text: maengelHoch === 1 ? "1 schwerer Mangel" : `${maengelHoch} schwere Mängel`, icon: Building2 });
     if (vHeute && vHeute.unbesetzt > 0) hinweise.push({ href: "/vertrieb/woche", text: `Heute ${vHeute.unbesetzt} Halbtage ohne Verkäufer`, icon: Store });
     if (ernteZeigen && d.zmSatzFehlt && d.zmPersonen > 0) hinweise.push({ href: "/praemien/zuckermais", text: "Zuckermais-Satz fehlt", icon: Wheat });
+    if (sieht.spargelFreigabe && d.spOffen.length > 0)
+      hinweise.push({
+        href: "/praemien/spargel",
+        text: d.spOffen.length === 1 ? "1 Spargeltag freigeben" : `${d.spOffen.length} Spargeltage freigeben`,
+        icon: Sprout,
+      });
   }
   const alleRuhig = !laedt && !c.loading && hinweise.length === 0 && controllingSumme === 0;
 
@@ -630,6 +687,54 @@ export default function DashboardPage() {
               })}
               leer="Nichts offen."
               link={{ href: "/vorschlaege", text: "Alle Vorschläge" }}
+            />
+          )}
+
+          {sieht.spargel && (
+            <ListenKarte
+              icon={Sprout}
+              farbe="gruen"
+              titel="Spargel"
+              zahl={d.spOffen.length}
+              zahlTon={d.spOffen.length > 0 ? "gelb" : "gruen"}
+              laedt={laedt}
+              fehler={fehler.spargel}
+              unter={
+                d.spOffen.length > 0
+                  ? d.spOffen.length === 1
+                    ? "Erntetag noch nicht freigegeben"
+                    : "Erntetage noch nicht freigegeben"
+                  : d.spHeuteKisten > 0
+                    ? `Heute ${formatZahlDE(d.spHeuteKg)} kg · ${d.spHeuteKisten} Kisten · ${d.spHeuteFelder} ${d.spHeuteFelder === 1 ? "Feld" : "Felder"}`
+                    : d.spTage > 0
+                      ? "Alle Erntetage freigegeben"
+                      : `${CURRENT_YEAR} noch keine Spargelernte erfasst`
+              }
+              eintraege={[
+                ...d.spOffen.slice(0, 3).map((t) => ({ key: t, href: "/praemien/spargel", text: `${datumLang(t)} freigeben`, ton: "gelb" as const, rechts: "offen" })),
+                ...(d.spOffen.length > 0 && d.spHeuteKisten > 0
+                  ? [{ key: "heute", text: "Heute gewogen", rechts: `${formatZahlDE(d.spHeuteKg)} kg · ${d.spHeuteKisten} Kisten` }]
+                  : []),
+                ...(d.spUngeklaert > 0
+                  ? [{ key: "luecken", href: "/erntewirtschaft/ernte", text: "Kisten ungeklärt / nicht gewogen", rechts: String(d.spUngeklaert), ton: "rot" as const }]
+                  : []),
+                ...(d.spSaison
+                  ? [
+                      { key: "s-kg", href: "/statistik/spargel", text: `Saison ${d.spSaison.saison_jahr}: Ertrag`, rechts: `${formatZahlDE(Number(d.spSaison.kg) / 1000)} t` },
+                      { key: "s-pr", href: "/praemien/spargel", text: `Saison ${d.spSaison.saison_jahr}: Prämie`, rechts: `${formatEuro(d.spSaison.praemie)} €` },
+                      {
+                        key: "s-anteil",
+                        text: "Anteil mit Prämie · Prämienquote",
+                        rechts: `${d.spSaison.personen_tage ? Math.round((100 * d.spSaison.tage_mit_praemie) / d.spSaison.personen_tage) : 0} % · ${
+                          d.spSaison.lohnanspruch ? ((100 * Number(d.spSaison.praemie)) / Number(d.spSaison.lohnanspruch)).toLocaleString("de-DE", { maximumFractionDigits: 1 }) : "0"
+                        } %`,
+                      },
+                    ]
+                  : []),
+              ]}
+              max={8}
+              leer="Noch keine Spargeldaten."
+              link={sieht.spargelFreigabe && d.spOffen.length > 0 ? { href: "/praemien/spargel", text: "Zu Prüfen & Freigeben" } : { href: "/praemien/spargel", text: "Zu den Spargelprämien" }}
             />
           )}
         </div>
