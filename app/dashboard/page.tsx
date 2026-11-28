@@ -456,12 +456,14 @@ export default function DashboardPage() {
     }
 
     async function spargel() {
-      const [ertrag, frei, luecken] = await Promise.all([
+      const [ertrag, erntetage, frei, luecken] = await Promise.all([
         sb.from("ernte_ertrag_tag").select("tag, feld_id, netto_kg, kisten").gte("tag", `${CURRENT_YEAR}-01-01`),
+        // Erntetag = Tag der Befüllung, gleiche Kistenauswahl wie die Freigabe-Vorschau
+        sb.from("spargel_erntetag").select("tag").gte("tag", `${CURRENT_YEAR}-01-01`),
         sb.from("spargel_freigabe").select("datum").gte("datum", `${CURRENT_YEAR}-01-01`),
         sb.from("ernte_kette_luecken").select("*", { count: "exact", head: true }),
       ]);
-      merke("spargel", ertrag.error ?? frei.error);
+      merke("spargel", ertrag.error ?? erntetage.error ?? frei.error);
       type E = { tag: string; feld_id: number | null; netto_kg: number | null; kisten: number };
       const er = (ertrag.data as E[]) ?? [];
       const heuteR = er.filter((r) => r.tag.slice(0, 10) === heute);
@@ -470,11 +472,12 @@ export default function DashboardPage() {
       neu.spHeuteFelder = new Set(heuteR.map((r) => r.feld_id)).size;
       const freigegeben = new Set(((frei.data as { datum: string }[]) ?? []).map((r) => r.datum));
       // offene Erntetage bis gestern (heute wird noch geerntet)
-      neu.spOffen = Array.from(new Set(er.map((r) => r.tag.slice(0, 10))))
+      const tage = ((erntetage.data as { tag: string }[]) ?? []).map((r) => r.tag.slice(0, 10));
+      neu.spOffen = tage
         .filter((t) => t < heute && !freigegeben.has(t))
         .sort()
         .reverse();
-      neu.spTage = new Set(er.map((r) => r.tag.slice(0, 10))).size;
+      neu.spTage = tage.length;
       neu.spUngeklaert = luecken.count ?? 0;
     }
 

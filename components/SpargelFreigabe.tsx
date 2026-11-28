@@ -83,12 +83,12 @@ export default function SpargelFreigabe({ darfFreigeben, namen }: { darfFreigebe
     setLaedt(true);
     const [f, t, p] = await Promise.all([
       sb.from("spargel_freigabe").select("*").order("datum", { ascending: false }),
-      sb.from("ernte_ertrag_tag").select("tag").order("tag", { ascending: false }).limit(400),
+      sb.from("spargel_erntetag").select("tag").order("tag", { ascending: false }).limit(30),
       sb.from("profile_namen").select("id, full_name"),
     ]);
     const fr = (f.data as Freigabe[]) ?? [];
     setFreigaben(fr);
-    setErntetage(Array.from(new Set(((t.data as { tag: string }[]) ?? []).map((x) => x.tag.slice(0, 10)))).slice(0, 30));
+    setErntetage(((t.data as { tag: string }[]) ?? []).map((x) => x.tag.slice(0, 10)));
     setNutzer(Object.fromEntries(((p.data as { id: string; full_name: string }[]) ?? []).map((x) => [x.id, x.full_name])));
     if (fr.some((x) => x.datum === datum)) {
       const { data } = await sb.from("spargel_praemie_tag").select("*").eq("datum", datum).eq("quelle", "ernteerfassung");
