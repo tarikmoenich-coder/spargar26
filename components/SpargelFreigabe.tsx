@@ -70,6 +70,7 @@ export default function SpargelFreigabe({ darfFreigeben, namen }: { darfFreigebe
   const [freigaben, setFreigaben] = useState<Freigabe[]>([]);
   const [fest, setFest] = useState<FestZeile[]>([]);
   const [erntetage, setErntetage] = useState<string[]>([]);
+  const [nachzuegler, setNachzuegler] = useState<Record<string, number>>({});
   const [nutzer, setNutzer] = useState<Record<string, string>>({});
   const [korrektur, setKorrektur] = useState<Record<string, { stunden: string; grund: string }>>({});
   const [laedt, setLaedt] = useState(false);
@@ -81,11 +82,13 @@ export default function SpargelFreigabe({ darfFreigeben, namen }: { darfFreigebe
 
   const laden = useCallback(async () => {
     setLaedt(true);
-    const [f, t, p] = await Promise.all([
+    const [f, t, p, nz] = await Promise.all([
       sb.from("spargel_freigabe").select("*").order("datum", { ascending: false }),
       sb.from("spargel_erntetag").select("tag").order("tag", { ascending: false }).limit(30),
       sb.from("profile_namen").select("id, full_name"),
+      sb.from("spargel_nachzuegler").select("datum, kisten"),
     ]);
+    setNachzuegler(Object.fromEntries(((nz.data as { datum: string; kisten: number }[]) ?? []).map((x) => [x.datum, x.kisten])));
     const fr = (f.data as Freigabe[]) ?? [];
     setFreigaben(fr);
     setErntetage(((t.data as { tag: string }[]) ?? []).map((x) => x.tag.slice(0, 10)));
@@ -207,15 +210,16 @@ export default function SpargelFreigabe({ darfFreigeben, namen }: { darfFreigebe
           <span className="py-1 text-neutral-500">Letzte Erntetage:</span>
           {erntetage.map((t) => {
             const fr = freigaben.some((f) => f.datum === t);
+            const nach = nachzuegler[t] ?? 0;
             return (
               <button
                 key={t}
                 type="button"
                 onClick={() => setDatum(t)}
                 className={`rounded-md border px-2 py-1 tabular-nums ${
-                  t === datum ? "border-emerald-500 bg-emerald-50 font-semibold" : fr ? "border-emerald-200 text-emerald-800" : "border-amber-300 text-amber-800"
+                  t === datum ? "border-emerald-500 bg-emerald-50 font-semibold" : fr && !nach ? "border-emerald-200 text-emerald-800" : "border-amber-300 text-amber-800"
                 }`}
-                title={fr ? "freigegeben" : "noch offen"}
+                title={nach ? `${nach} Kiste(n) nach der Freigabe gewogen` : fr ? "freigegeben" : "noch offen"}
               >
                 {formatDatumDE(t).slice(0, 6)}
               </button>
@@ -234,6 +238,12 @@ export default function SpargelFreigabe({ darfFreigeben, namen }: { darfFreigebe
             Freigegeben am {formatDatumDE(freigabe.freigegeben_am.slice(0, 10))} von {nutzer[freigabe.freigegeben_von ?? ""] ?? "—"} ·{" "}
             {freigabe.zeilen} Zeilen · Prämie {formatEuro(freigabe.praemie)}
           </p>
+          {(nachzuegler[datum] ?? 0) > 0 && (
+            <p className="rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-800">
+              {nachzuegler[datum] === 1 ? "1 Kiste wurde" : `${nachzuegler[datum]} Kisten wurden`} erst nach der Freigabe gewogen und
+              fehlen in der Prämie. Freigabe zurücknehmen und den Tag neu freigeben.
+            </p>
+          )}
           <div className="overflow-x-auto">
             <table>
               <thead>
