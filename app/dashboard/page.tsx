@@ -130,6 +130,7 @@ interface Daten {
   spHeuteKisten: number;
   spHeuteFelder: number;
   spOffen: string[];
+  spNachzuegler: string[];
   spTage: number;
   spUngeklaert: number;
 }
@@ -164,6 +165,7 @@ const LEER: Daten = {
   spHeuteKisten: 0,
   spHeuteFelder: 0,
   spOffen: [],
+  spNachzuegler: [],
   spTage: 0,
   spUngeklaert: 0,
 };
@@ -456,13 +458,15 @@ export default function DashboardPage() {
     }
 
     async function spargel() {
-      const [ertrag, erntetage, frei, luecken] = await Promise.all([
+      const [ertrag, erntetage, frei, luecken, nachz] = await Promise.all([
         sb.from("ernte_ertrag_tag").select("tag, feld_id, netto_kg, kisten").gte("tag", `${CURRENT_YEAR}-01-01`),
         // Erntetag = Tag der Befüllung, gleiche Kistenauswahl wie die Freigabe-Vorschau
         sb.from("spargel_erntetag").select("tag").gte("tag", `${CURRENT_YEAR}-01-01`),
         sb.from("spargel_freigabe").select("datum").gte("datum", `${CURRENT_YEAR}-01-01`),
         sb.from("ernte_kette_luecken").select("*", { count: "exact", head: true }),
+        sb.from("spargel_nachzuegler").select("datum").gte("datum", `${CURRENT_YEAR}-01-01`),
       ]);
+      neu.spNachzuegler = ((nachz.data as { datum: string }[]) ?? []).map((r) => r.datum).sort().reverse();
       merke("spargel", ertrag.error ?? erntetage.error ?? frei.error);
       type E = { tag: string; feld_id: number | null; netto_kg: number | null; kisten: number };
       const er = (ertrag.data as E[]) ?? [];
@@ -584,6 +588,12 @@ export default function DashboardPage() {
       hinweise.push({
         href: "/praemien/spargel",
         text: d.spOffen.length === 1 ? "1 Spargeltag freigeben" : `${d.spOffen.length} Spargeltage freigeben`,
+        icon: Sprout,
+      });
+    if (sieht.spargelFreigabe && d.spNachzuegler.length > 0)
+      hinweise.push({
+        href: "/praemien/spargel",
+        text: d.spNachzuegler.length === 1 ? "1 Spargeltag neu freigeben" : `${d.spNachzuegler.length} Spargeltage neu freigeben`,
         icon: Sprout,
       });
   }
@@ -882,7 +892,7 @@ export default function DashboardPage() {
     kacheln.push({
       id: "spargel",
       titel: "Spargel",
-      ton: d.spUngeklaert > 0 ? "rot" : d.spOffen.length > 0 ? "gelb" : "ruhig",
+      ton: d.spUngeklaert > 0 ? "rot" : d.spOffen.length > 0 || d.spNachzuegler.length > 0 ? "gelb" : "ruhig",
       klein: () => (
         <KleinKachel icon={Sprout} farbe="gruen" titel="Spargel" zahl={d.spTage > 0 || d.spHeuteKisten > 0 ? d.spOffen.length : "–"} ton={d.spUngeklaert > 0 ? "rot" : d.spOffen.length > 0 ? "gelb" : d.spTage > 0 ? "gruen" : "grau"} unter={d.spTage > 0 || d.spHeuteKisten > 0 ? "Tage nicht freigegeben" : "heute keine Ernte"} href="/praemien/spargel" laedt={laedt} fehler={fehler.spargel} />
       ),
@@ -908,6 +918,7 @@ export default function DashboardPage() {
               }
               eintraege={[
                 ...d.spOffen.slice(0, 3).map((t) => ({ key: t, href: "/praemien/spargel", text: `${datumLang(t)} freigeben`, ton: "gelb" as const, rechts: "offen" })),
+                ...d.spNachzuegler.slice(0, 3).map((t) => ({ key: `nz-${t}`, href: "/praemien/spargel", text: `${datumLang(t)} neu freigeben`, ton: "gelb" as const, rechts: "nachgewogen" })),
                 ...(d.spOffen.length > 0 && d.spHeuteKisten > 0
                   ? [{ key: "heute", text: "Heute gewogen", rechts: `${formatZahlDE(d.spHeuteKg)} kg · ${d.spHeuteKisten} Kisten` }]
                   : []),
@@ -916,7 +927,7 @@ export default function DashboardPage() {
                   : []),
               ]}
               leer={d.spTage > 0 ? "Nichts offen." : "Heute keine Spargelernte."}
-              link={sieht.spargelFreigabe && d.spOffen.length > 0 ? { href: "/praemien/spargel", text: "Zu Prüfen & Freigeben" } : { href: "/praemien/spargel", text: "Zu den Spargelprämien" }}
+              link={sieht.spargelFreigabe && (d.spOffen.length > 0 || d.spNachzuegler.length > 0) ? { href: "/praemien/spargel", text: "Zu Prüfen & Freigeben" } : { href: "/praemien/spargel", text: "Zu den Spargelprämien" }}
           max={g === "G" ? 30 : 6}
           spalten={g === "G" ? 2 : 1}
         />

@@ -36,6 +36,7 @@ interface KisteZyklusZeile {
   gewogen_am: string | null;
   gewicht_netto_kg: number | null;
   status: ZyklusStatus;
+  verworfen_grund: string | null;
   employee_id: string | null;
   ernte_maschine: { nummer: string; bezeichnung: string | null } | null;
   employees: { name: string; vorname: string; personal_nr: string } | null;
@@ -45,7 +46,7 @@ interface KisteZyklusZeile {
 const STATUS_LABEL: Record<ZyklusStatus, string> = {
   offen: "offen",
   gewogen: "gewogen",
-  verworfen: "verworfen",
+  verworfen: "verloren",
   ungeklaert: "ungeklärt",
 };
 
@@ -55,6 +56,88 @@ const STATUS_BADGE: Record<ZyklusStatus, string> = {
   verworfen: "badge badge-danger",
   ungeklaert: "badge badge-warn",
 };
+
+// Offene Kiste als verloren abschließen (Nutzer-Vorgabe 2026-11-28): Grund
+// ist Pflicht, danach fällt sie aus den Lücken/roten Hinweisen.
+function StatusZelle({
+  zyklus,
+  canEdit,
+  onGesetzt,
+}: {
+  zyklus: KisteZyklusZeile;
+  canEdit: boolean;
+  onGesetzt: () => void;
+}) {
+  const [offen, setOffen] = useState(false);
+  const [grund, setGrund] = useState("");
+  const [arbeitet, setArbeitet] = useState(false);
+  const [fehler, setFehler] = useState<string | null>(null);
+
+  const badge = (
+    <span className={STATUS_BADGE[zyklus.status]} title={zyklus.verworfen_grund ?? undefined}>
+      {STATUS_LABEL[zyklus.status]}
+    </span>
+  );
+
+  if (zyklus.status === "verworfen") {
+    return (
+      <div className="flex flex-col gap-0.5">
+        {badge}
+        {zyklus.verworfen_grund && <span className="text-xs text-neutral-500">{zyklus.verworfen_grund}</span>}
+      </div>
+    );
+  }
+  if (zyklus.status !== "offen" || !canEdit) return badge;
+
+  if (!offen) {
+    return (
+      <div className="flex flex-wrap items-center gap-2">
+        {badge}
+        <button type="button" className="text-xs text-beere-700 underline" onClick={() => setOffen(true)}>
+          Als verloren abschließen
+        </button>
+      </div>
+    );
+  }
+
+  async function abschliessen() {
+    setArbeitet(true);
+    setFehler(null);
+    const { error } = await getSupabaseClient().rpc("ernte_kiste_verloren", {
+      p_zyklus_id: zyklus.id,
+      p_grund: grund,
+    });
+    setArbeitet(false);
+    if (error) {
+      setFehler(error.message);
+      return;
+    }
+    setOffen(false);
+    onGesetzt();
+  }
+
+  return (
+    <div className="flex min-w-[14rem] flex-col gap-1">
+      <input
+        type="text"
+        autoFocus
+        placeholder="Grund, z.B. vom Anhänger gefallen"
+        value={grund}
+        onChange={(e) => setGrund(e.target.value)}
+        className="text-sm"
+      />
+      <div className="flex gap-2">
+        <button type="button" className="btn text-xs" disabled={arbeitet || grund.trim() === ""} onClick={abschliessen}>
+          Verloren
+        </button>
+        <button type="button" className="btn-secondary text-xs" disabled={arbeitet} onClick={() => setOffen(false)}>
+          Abbrechen
+        </button>
+      </div>
+      {fehler && <span className="text-xs text-beere-700">{fehler}</span>}
+    </div>
+  );
+}
 
 function formatZeitpunktDE(iso: string | null): string {
   if (!iso) return "—";
@@ -249,7 +332,7 @@ export default function ErntewirtschaftErntePage() {
       let query = supabase
         .from("ernte_kiste_zyklus")
         .select(
-          `id, tag_uid, befuellt_am, voll_am, gewogen_am, gewicht_netto_kg, status, employee_id,
+          `id, tag_uid, befuellt_am, voll_am, gewogen_am, gewicht_netto_kg, status, verworfen_grund, employee_id,
            ernte_maschine(nummer, bezeichnung),
            employees(name, vorname, personal_nr),
            feld(bezeichnung)`
@@ -392,7 +475,7 @@ export default function ErntewirtschaftErntePage() {
                   <td>{z.gewicht_netto_kg != null ? `${formatMenge(z.gewicht_netto_kg)} kg` : "—"}</td>
                   <td className="whitespace-nowrap">{formatZeitpunktDE(z.gewogen_am)}</td>
                   <td>
-                    <span className={STATUS_BADGE[z.status]}>{STATUS_LABEL[z.status]}</span>
+                    <StatusZelle zyklus={z} canEdit={canEdit} onGesetzt={laden} />
                   </td>
                 </tr>
               ))}
