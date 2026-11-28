@@ -35,6 +35,7 @@ import { Users } from "lucide-react";
 
 import { darf, istAdmin } from "@/lib/rollen";
 import { datumPlusTageIso, heuteLokalIso } from "@/lib/datum";
+import { sucheNormal } from "@/lib/suche";
 const CURRENT_YEAR = new Date().getFullYear();
 
 // Ortszeit statt UTC (toISOString lieferte zwischen 0 und 2 Uhr den Vortag)
@@ -1067,12 +1068,12 @@ export default function MitarbeiterPage() {
   }
 
   const filtered = employees.filter((e) => {
-    const q = search.toLowerCase();
+    const q = sucheNormal(search);
     const passtSuche =
       !q ||
-      e.name.toLowerCase().includes(q) ||
-      e.vorname.toLowerCase().includes(q) ||
-      e.personal_nr.toLowerCase().includes(q);
+      sucheNormal(e.name).includes(q) ||
+      sucheNormal(e.vorname).includes(q) ||
+      sucheNormal(e.personal_nr).includes(q);
     const passtHerkunft =
       !herkunftListenFilter || e.herkunft === herkunftListenFilter;
     return passtSuche && passtHerkunft;

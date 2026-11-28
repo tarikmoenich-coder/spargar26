@@ -50,6 +50,7 @@ import {
 } from "@/lib/vertrieb";
 import { ladeAlleSeiten, ladeAlleMitFehler } from "@/lib/ladeAlle";
 import { saisonText } from "@/lib/tagesplan";
+import { sucheNormal } from "@/lib/suche";
 
 type Person = { id: string; personal_nr: string; name: string; vorname: string; fuehrerschein_b: boolean | null; geschlecht: "M" | "F" | null };
 type Feld = { stand_id: number; wochentag: number; halbtag: VtHalbtag };
@@ -325,10 +326,10 @@ export default function VertriebGrundplanPage() {
   // Zeilen: aktive Stände (+ inaktive mit Planeinträgen) nach Mo-Sa-Tour gruppiert, gefiltert
   const gruppen = useMemo(() => {
     const geplant = new Set(plan.map((g) => g.stand_id));
-    const q = standSuche.trim().toLowerCase();
+    const q = sucheNormal(standSuche);
     const passt = (s: VtStand) => {
       if (!(s.aktiv || geplant.has(s.id))) return false;
-      if (q && !`${s.nummer} ${s.name}`.toLowerCase().includes(q)) return false;
+      if (q && !sucheNormal(`${s.nummer} ${s.name}`).includes(q)) return false;
       const f = fortschritt.get(s.id);
       if (nurLuecken && !(f && f.ist < f.soll)) return false;
       if (nurKonflikte && !f?.konflikt) return false;
@@ -511,11 +512,11 @@ export default function VertriebGrundplanPage() {
   const kandidaten = useMemo(() => {
     if (!auswahl) return [];
     const felder = zielFelder(auswahl).filter((f) => offen.has(planKey(f.stand_id, f.wochentag, f.halbtag)));
-    const q = suche.trim().toLowerCase();
+    const q = sucheNormal(suche);
     return planung
       .map((pl) => ({ p: personById.get(pl.employee_id), max: pl.max_halbtage_woche ?? null }))
       .filter((x): x is { p: Person; max: number | null } => !!x.p)
-      .filter(({ p }) => !q || `${p.vorname} ${p.name} ${p.personal_nr}`.toLowerCase().includes(q))
+      .filter(({ p }) => !q || sucheNormal(`${p.vorname} ${p.name} ${p.personal_nr}`).includes(q))
       .map(({ p, max }) => {
         let ja = 0;
         let nein = 0;
@@ -768,12 +769,12 @@ export default function VertriebGrundplanPage() {
 
   // Seitenleiste: Verkäufer der Saison mit Auslastung
   const leiste = useMemo(() => {
-    const q = leisteSuche.trim().toLowerCase();
+    const q = sucheNormal(leisteSuche);
     const sichtTage = tage.map((t) => t.nr);
     return planung
       .map((pl) => ({ p: personById.get(pl.employee_id), max: pl.max_halbtage_woche ?? null }))
       .filter((x): x is { p: Person; max: number | null } => !!x.p)
-      .filter(({ p }) => !q || `${p.vorname} ${p.name} ${p.personal_nr}`.toLowerCase().includes(q))
+      .filter(({ p }) => !q || sucheNormal(`${p.vorname} ${p.name} ${p.personal_nr}`).includes(q))
       .filter(({ p }) => !nurFs || hatFuehrerschein(p.id))
       .map(({ p, max }) => {
         let kannN = 0;

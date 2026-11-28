@@ -19,6 +19,7 @@ import { ladeAlleSeiten } from "@/lib/ladeAlle";
 import { heuteLokalIso, lokalIsoPlusTage, tagesgrenzenLokal } from "@/lib/datum";
 
 import { darf } from "@/lib/rollen";
+import { sucheNormal } from "@/lib/suche";
 type EmpOpt = {
   id: string;
   personal_nr: string;
@@ -173,13 +174,13 @@ function FahrerZelle({
   const aktuell = zyklus.employees;
 
   const treffer = useMemo(() => {
-    const q = suche.trim().toLowerCase();
+    const q = sucheNormal(suche);
     const liste = q
       ? mitarbeiter.filter(
           (m) =>
-            `${m.name} ${m.vorname}`.toLowerCase().includes(q) ||
-            `${m.vorname} ${m.name}`.toLowerCase().includes(q) ||
-            (m.personal_nr ?? "").toLowerCase().includes(q)
+            sucheNormal(`${m.name} ${m.vorname}`).includes(q) ||
+            sucheNormal(`${m.vorname} ${m.name}`).includes(q) ||
+            sucheNormal(m.personal_nr ?? "").includes(q)
         )
       : mitarbeiter;
     return liste.slice(0, 8);

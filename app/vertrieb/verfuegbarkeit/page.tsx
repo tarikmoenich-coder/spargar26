@@ -487,8 +487,8 @@ export default function VertriebVerfuegbarkeitPage() {
       <section className="flex flex-col gap-3">
         <h2 className="font-semibold text-emerald-900">Abwesenheiten {saison}</h2>
         {darfPflegen && zeilen.length > 0 && (
-          <form onSubmit={abwesenheitAnlegen} className="flex flex-wrap items-end gap-2 text-sm">
-            <select required value={abw.employee_id} onChange={(e) => setAbw({ ...abw, employee_id: e.target.value })}>
+          <form onSubmit={abwesenheitAnlegen} className="grid grid-cols-2 items-end gap-2 text-sm sm:flex sm:flex-wrap">
+            <select required className="col-span-2 sm:col-span-1" value={abw.employee_id} onChange={(e) => setAbw({ ...abw, employee_id: e.target.value })}>
               <option value="">Person …</option>
               {zeilen.map(({ p }) => (
                 <option key={p.id} value={p.id}>
@@ -504,13 +504,13 @@ export default function VertriebVerfuegbarkeitPage() {
               bis
               <input type="date" min={abw.von} value={abw.bis} onChange={(e) => setAbw({ ...abw, bis: e.target.value })} />
             </label>
-            <select value={abw.halbtag} onChange={(e) => setAbw({ ...abw, halbtag: e.target.value })}>
+            <select className="col-span-2 sm:col-span-1" value={abw.halbtag} onChange={(e) => setAbw({ ...abw, halbtag: e.target.value })}>
               <option value="">ganzer Tag</option>
               <option value="VM">nur Vormittag</option>
               <option value="NM">nur Nachmittag</option>
             </select>
-            <input placeholder="Grund (optional)" value={abw.grund} onChange={(e) => setAbw({ ...abw, grund: e.target.value })} />
-            <button className="btn" type="submit">
+            <input className="col-span-2 sm:col-span-1" placeholder="Grund (optional)" value={abw.grund} onChange={(e) => setAbw({ ...abw, grund: e.target.value })} />
+            <button className="btn col-span-2 sm:col-span-1" type="submit">
               Eintragen
             </button>
           </form>
@@ -518,7 +518,33 @@ export default function VertriebVerfuegbarkeitPage() {
         {abwesenheiten.length === 0 ? (
           <p className="text-sm text-neutral-500">Keine Abwesenheiten eingetragen.</p>
         ) : (
-          <table className="text-sm">
+          <>
+          {/* Handy (Vorschlag #1, 2026-11-28): Karten statt Tabelle - die
+              Tabelle lief rechts aus dem Bild. */}
+          <ul className="flex flex-col gap-2 sm:hidden">
+            {abwesenheiten.map((a) => {
+              const p = personById.get(a.employee_id);
+              return (
+                <li key={a.id} className="card flex items-start justify-between gap-3 p-3 text-sm">
+                  <div className="min-w-0">
+                    <div className="font-medium">{p ? `${p.name}, ${p.vorname}` : "—"}</div>
+                    <div className="text-neutral-600">
+                      {formatDatumDE(a.von)}
+                      {a.bis !== a.von && ` – ${formatDatumDE(a.bis)}`} ·{" "}
+                      {a.halbtag === "VM" ? "Vormittag" : a.halbtag === "NM" ? "Nachmittag" : "ganzer Tag"}
+                    </div>
+                    {a.grund && <div className="text-neutral-500">{a.grund}</div>}
+                  </div>
+                  {darfPflegen && (
+                    <button className="btn-secondary shrink-0 px-2 text-xs" onClick={() => abwesenheitLoeschen(a.id)}>
+                      Löschen
+                    </button>
+                  )}
+                </li>
+              );
+            })}
+          </ul>
+          <table className="hidden text-sm sm:table">
             <thead>
               <tr>
                 <th>Person</th>
@@ -552,6 +578,7 @@ export default function VertriebVerfuegbarkeitPage() {
               })}
             </tbody>
           </table>
+          </>
         )}
       </section>
     </div>

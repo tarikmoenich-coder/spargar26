@@ -32,6 +32,7 @@ import {
 } from "@/lib/farben";
 
 import { darf } from "@/lib/rollen";
+import { sucheNormal } from "@/lib/suche";
 const OHNE_GRUPPE_KEY = "__ohne__";
 
 const CURRENT_YEAR = new Date().getFullYear();
@@ -707,11 +708,11 @@ export default function UebersichtPage() {
     vorname: string;
   }) => {
     if (!search) return true;
-    const q = search.toLowerCase();
+    const q = sucheNormal(search);
     return (
-      r.name.toLowerCase().includes(q) ||
-      r.vorname.toLowerCase().includes(q) ||
-      r.personal_nr.toLowerCase().includes(q)
+      sucheNormal(r.name).includes(q) ||
+      sucheNormal(r.vorname).includes(q) ||
+      sucheNormal(r.personal_nr).includes(q)
     );
   };
 

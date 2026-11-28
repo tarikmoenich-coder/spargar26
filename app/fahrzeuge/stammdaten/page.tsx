@@ -24,6 +24,7 @@ import PageHeader from "@/components/PageHeader";
 
 import { darf } from "@/lib/rollen";
 import { ladeAlleSeiten } from "@/lib/ladeAlle";
+import { sucheNormal } from "@/lib/suche";
 // Foto client-seitig auf eine kleine Kante herunterrechnen und als JPEG-data-URL
 // zurückgeben. Reicht, um auf der Karte das Auto zum Kennzeichen zu erkennen.
 function fotoVerkleinern(
@@ -148,14 +149,14 @@ function FahrerZelle({
   const aktuell = mitarbeiter.find((m) => m.id === fahrzeug.fahrer_employee_id);
 
   const treffer = useMemo(() => {
-    const q = suche.trim().toLowerCase();
+    const q = sucheNormal(suche);
     const aktive = mitarbeiter.filter((m) => m.aktiv);
     const liste = q
       ? aktive.filter(
           (m) =>
-            `${m.name} ${m.vorname}`.toLowerCase().includes(q) ||
-            `${m.vorname} ${m.name}`.toLowerCase().includes(q) ||
-            (m.personal_nr ?? "").toLowerCase().includes(q)
+            sucheNormal(`${m.name} ${m.vorname}`).includes(q) ||
+            sucheNormal(`${m.vorname} ${m.name}`).includes(q) ||
+            sucheNormal(m.personal_nr ?? "").includes(q)
         )
       : aktive;
     return liste.slice(0, 8);
@@ -469,15 +470,15 @@ export default function FahrzeugeStammdatenPage() {
         b.alarm.stundenStill - a.alarm.stundenStill
     );
 
-  const sucheNorm = suche.trim().toLowerCase();
+  const sucheNorm = sucheNormal(suche);
   const fahrzeugeGefiltert = fahrzeuge.filter((f) => {
     if (statusFilter === "angemeldet" && !f.aktiv) return false;
     if (statusFilter === "abgemeldet" && f.aktiv) return false;
     if (!sucheNorm) return true;
     return (
-      f.bezeichnung.toLowerCase().includes(sucheNorm) ||
-      (f.kennzeichen ?? "").toLowerCase().includes(sucheNorm) ||
-      fahrzeugTypLabel(f.typ).toLowerCase().includes(sucheNorm)
+      sucheNormal(f.bezeichnung).includes(sucheNorm) ||
+      sucheNormal(f.kennzeichen ?? "").includes(sucheNorm) ||
+      sucheNormal(fahrzeugTypLabel(f.typ)).includes(sucheNorm)
     );
   });
 

@@ -37,6 +37,7 @@ import {
 import { rollenVon, rolleLabel, darf } from "@/lib/rollen";
 import { ladeAlleSeiten } from "@/lib/ladeAlle";
 import { heuteLokalIso } from "@/lib/datum";
+import { sucheNormal } from "@/lib/suche";
 const OHNE_GRUPPE_KEY = "__ohne__";
 
 function todayIso() {
@@ -890,11 +891,11 @@ function ErfassungInner() {
 
   const gefilterteEmployees = employees.filter((e) => {
     if (!search) return true;
-    const q = search.toLowerCase();
+    const q = sucheNormal(search);
     return (
-      e.name.toLowerCase().includes(q) ||
-      e.vorname.toLowerCase().includes(q) ||
-      e.personal_nr.toLowerCase().includes(q)
+      sucheNormal(e.name).includes(q) ||
+      sucheNormal(e.vorname).includes(q) ||
+      sucheNormal(e.personal_nr).includes(q)
     );
   });
 

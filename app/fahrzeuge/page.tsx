@@ -18,6 +18,7 @@ import { fahrzeugAlarmBerechnen } from "@/lib/fahrzeugAlarme";
 import FahrzeugeTabs from "@/components/FahrzeugeTabs";
 import FahrzeugKarte from "@/components/FahrzeugKarte";
 import PageHeader from "@/components/PageHeader";
+import { sucheNormal } from "@/lib/suche";
 
 function minutenHer(iso: string | null): number | null {
   if (!iso) return null;
@@ -147,16 +148,16 @@ export default function FahrzeugeUebersichtPage() {
         letztesHofEreignis: hofStatusByFahrzeug.get(f.id)?.letztes_hof_ereignis,
       }) !== null
   ).length;
-  const sucheNorm = suche.trim().toLowerCase();
+  const sucheNorm = sucheNormal(suche);
   const sichtbar = fahrzeuge.filter((f) => {
     if (!zeigeAbgemeldete && !f.aktiv) return false;
     if (typFilter && f.typ !== typFilter) return false;
     if (!sucheNorm) return true;
     return (
-      f.bezeichnung.toLowerCase().includes(sucheNorm) ||
-      (f.kennzeichen ?? "").toLowerCase().includes(sucheNorm) ||
-      (f.fahrer_name ?? "").toLowerCase().includes(sucheNorm) ||
-      (f.fahrer_vorname ?? "").toLowerCase().includes(sucheNorm)
+      sucheNormal(f.bezeichnung).includes(sucheNorm) ||
+      sucheNormal(f.kennzeichen ?? "").includes(sucheNorm) ||
+      sucheNormal(f.fahrer_name ?? "").includes(sucheNorm) ||
+      sucheNormal(f.fahrer_vorname ?? "").includes(sucheNorm)
     );
   });
 

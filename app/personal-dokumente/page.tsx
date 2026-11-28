@@ -17,6 +17,7 @@ import PageHeader from "@/components/PageHeader";
 import { FileText } from "lucide-react";
 
 import { darf } from "@/lib/rollen";
+import { sucheNormal } from "@/lib/suche";
 const DOKUMENTE_BUCKET = "mitarbeiter-dokumente";
 const FUEHRERSCHEIN_KATEGORIE: DokumentKategorie = "Führerschein Kopie";
 
@@ -216,12 +217,12 @@ function PersonalDokumenteInner() {
   }
 
   const filtered = employees.filter((e) => {
-    const q = search.toLowerCase();
+    const q = sucheNormal(search);
     return (
       !q ||
-      e.name.toLowerCase().includes(q) ||
-      e.vorname.toLowerCase().includes(q) ||
-      e.personal_nr.toLowerCase().includes(q)
+      sucheNormal(e.name).includes(q) ||
+      sucheNormal(e.vorname).includes(q) ||
+      sucheNormal(e.personal_nr).includes(q)
     );
   });
 

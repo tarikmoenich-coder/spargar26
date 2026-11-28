@@ -29,6 +29,7 @@ import {
 } from "@/lib/svPruefung";
 
 import { darf } from "@/lib/rollen";
+import { sucheNormal } from "@/lib/suche";
 const CURRENT_YEAR = new Date().getFullYear();
 // Das Formular zur Feststellung der Versicherungspflicht wird seit
 // 2026-08-11 NICHT mehr hochgeladen (Nutzer-Vorgabe) - der über das
@@ -160,12 +161,12 @@ export default function SozialversicherungPage() {
   }, [jahr, showInactive]);
 
   const gefiltert = employees.filter((e) => {
-    const q = search.toLowerCase();
+    const q = sucheNormal(search);
     const passtSuche =
       !q ||
-      e.name.toLowerCase().includes(q) ||
-      e.vorname.toLowerCase().includes(q) ||
-      e.personal_nr.toLowerCase().includes(q);
+      sucheNormal(e.name).includes(q) ||
+      sucheNormal(e.vorname).includes(q) ||
+      sucheNormal(e.personal_nr).includes(q);
     const passtHerkunft = !herkunftFilter || e.herkunft === herkunftFilter;
     return passtSuche && passtHerkunft;
   });

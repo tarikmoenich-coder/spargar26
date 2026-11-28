@@ -34,6 +34,7 @@ import type {
 } from "@/lib/types";
 
 import { darf } from "@/lib/rollen";
+import { sucheNormal } from "@/lib/suche";
 const CURRENT_YEAR = new Date().getFullYear();
 
 interface Entwurf {
@@ -171,11 +172,11 @@ export default function ArbeitskleidungPage() {
   const gefiltert = employees.filter((e) => {
     if (gruppeFilter && e.gruppe_nr !== gruppeFilter) return false;
     if (!search) return true;
-    const q = search.toLowerCase();
+    const q = sucheNormal(search);
     return (
-      e.name.toLowerCase().includes(q) ||
-      e.vorname.toLowerCase().includes(q) ||
-      e.personal_nr.toLowerCase().includes(q)
+      sucheNormal(e.name).includes(q) ||
+      sucheNormal(e.vorname).includes(q) ||
+      sucheNormal(e.personal_nr).includes(q)
     );
   });
 

@@ -40,6 +40,7 @@ import {
 
 import { darf } from "@/lib/rollen";
 import { ladeAlleSeiten } from "@/lib/ladeAlle";
+import { sucheNormal } from "@/lib/suche";
 interface PosEntwurf {
   zustand: UnterkunftPositionZustand;
   bemerkung: string;
@@ -799,9 +800,7 @@ export default function UnterkunftUebergabePage() {
                           (e) =>
                             e.aktiv &&
                             !einzug.has(e.id) &&
-                            `${e.vorname} ${e.name} ${e.personal_nr}`
-                              .toLowerCase()
-                              .includes(personSuche.trim().toLowerCase())
+                            sucheNormal(`${e.vorname} ${e.name} ${e.personal_nr}`).includes(sucheNormal(personSuche))
                         )
                         .slice(0, 6)
                         .map((e) => (

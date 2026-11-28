@@ -22,6 +22,7 @@ import { darf } from "@/lib/rollen";
 import { KategorienFestlegen, KategorienPflege } from "@/components/SpargelKategorien";
 import SpargelAushang from "@/components/SpargelAushang";
 import SpargelFreigabe from "@/components/SpargelFreigabe";
+import { sucheNormal } from "@/lib/suche";
 
 interface TagZeile {
   datum: string;
@@ -156,9 +157,9 @@ export default function PraemienSpargelPage() {
       p.monat[monatVon(z.datum)] = (p.monat[monatVon(z.datum)] ?? 0) + Number(z.praemie);
       m.set(key, p);
     }
-    const q = suche.trim().toLowerCase();
+    const q = sucheNormal(suche);
     return Array.from(m.values())
-      .filter((p) => !q || p.name.toLowerCase().includes(q) || p.pnr.includes(q))
+      .filter((p) => !q || sucheNormal(p.name).includes(q) || sucheNormal(p.pnr).includes(q))
       .sort((a, b) => b.praemie - a.praemie);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [saisonZeilen, namen, suche]);

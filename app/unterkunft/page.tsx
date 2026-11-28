@@ -51,6 +51,7 @@ import {
 } from "@/lib/types";
 
 import { darf, nurHausmeisterSicht } from "@/lib/rollen";
+import { sucheNormal } from "@/lib/suche";
 const MIN_COLS = 14;
 const MIN_ROWS = 10;
 
@@ -561,10 +562,10 @@ export default function UnterkunftGrundrissPage() {
             herkunft: p.herkunft,
             hint: "ohne Bleibe",
           });
-    const q = einzugSuche.trim().toLowerCase();
+    const q = sucheNormal(einzugSuche);
     return [...map.values()]
       .filter(
-        (p) => !q || `${p.vorname} ${p.name}`.toLowerCase().includes(q)
+        (p) => !q || sucheNormal(`${p.vorname} ${p.name}`).includes(q)
       )
       .sort((a, b) => a.name.localeCompare(b.name, "de"));
   }, [einzugQuelle, geplanteImGebaeude, personenOffen, einzugSuche]);
@@ -1728,9 +1729,7 @@ export default function UnterkunftGrundrissPage() {
               <div className="mt-2 flex max-h-40 flex-wrap gap-1.5 overflow-y-auto">
                 {personenOffen
                   .filter((p) =>
-                    `${p.vorname} ${p.name} ${p.personal_nr}`
-                      .toLowerCase()
-                      .includes(belegenSuche.trim().toLowerCase())
+                    sucheNormal(`${p.vorname} ${p.name} ${p.personal_nr}`).includes(sucheNormal(belegenSuche))
                   )
                   .slice(0, 40)
                   .map((p) => {
@@ -2756,11 +2755,9 @@ export default function UnterkunftGrundrissPage() {
                                 <ul className="max-h-40 space-y-0.5 overflow-y-auto text-sm">
                                   {personenOffen
                                     .filter((p) =>
-                                      `${p.vorname} ${p.name} ${p.personal_nr}`
-                                        .toLowerCase()
-                                        .includes(
-                                          direkt.suche.trim().toLowerCase()
-                                        )
+                                      sucheNormal(`${p.vorname} ${p.name} ${p.personal_nr}`).includes(
+                                        sucheNormal(direkt.suche)
+                                      )
                                     )
                                     .slice(0, 12)
                                     .map((p) => (

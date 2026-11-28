@@ -34,6 +34,7 @@ import {
 import { darf, nurHausmeisterSicht } from "@/lib/rollen";
 import { ladeAlleSeiten } from "@/lib/ladeAlle";
 import Link from "next/link";
+import { sucheNormal } from "@/lib/suche";
 const VERURSACHUNG_REIHENFOLGE: UnterkunftMangelVerursachung[] = [
   "bewohner",
   "verschleiss",
@@ -956,13 +957,9 @@ export default function UnterkunftReparaturenPage() {
                                       .filter(
                                         (emp) =>
                                           !vids.includes(emp.id) &&
-                                          `${emp.vorname} ${emp.name} ${emp.personal_nr}`
-                                            .toLowerCase()
-                                            .includes(
-                                              (suche[m.id] ?? "")
-                                                .trim()
-                                                .toLowerCase()
-                                            )
+                                          sucheNormal(`${emp.vorname} ${emp.name} ${emp.personal_nr}`).includes(
+                                            sucheNormal(suche[m.id])
+                                          )
                                       )
                                       .slice(0, 8)
                                       .map((emp) => (

@@ -29,6 +29,7 @@ import type {
 
 import { darf } from "@/lib/rollen";
 import { ladeAlleSeiten } from "@/lib/ladeAlle";
+import { sucheNormal } from "@/lib/suche";
 interface EmployeeMini {
   id: string;
   personal_nr: string;
@@ -122,12 +123,12 @@ export default function UnterkunftBelegungPage() {
 
   // --- Planung -------------------------------------------------------------
   const personenGefiltert = useMemo(() => {
-    const q = suchtext.trim().toLowerCase();
+    const q = sucheNormal(suchtext);
     return personenOffen
       .filter(
         (p) =>
           !q ||
-          `${p.vorname} ${p.name} ${p.personal_nr}`.toLowerCase().includes(q)
+          sucheNormal(`${p.vorname} ${p.name} ${p.personal_nr}`).includes(q)
       )
       .sort(
         (a, b) =>

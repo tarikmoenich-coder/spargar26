@@ -47,6 +47,7 @@ import {
 
 import { darf } from "@/lib/rollen";
 import { heuteLokalIso } from "@/lib/datum";
+import { sucheNormal } from "@/lib/suche";
 const CURRENT_YEAR = new Date().getFullYear();
 
 interface Checkpunkt {
@@ -352,16 +353,16 @@ export default function LohnsteuerantragPage() {
   );
 
   const hinzufuegenKandidaten = useMemo(() => {
-    const q = hinzufuegenSuche.toLowerCase();
+    const q = sucheNormal(hinzufuegenSuche);
     return alleAktiven.filter((e) => {
       if (positionsEmployeeIds.has(e.id)) return false;
       // nur Personen, die im Antragsjahr zur Firma des Antrags gehören
       if (firma && firmaFuer(firmenListe, e, saisonFirma)?.kuerzel !== firma.kuerzel) return false;
       if (!q) return true;
       return (
-        e.name.toLowerCase().includes(q) ||
-        e.vorname.toLowerCase().includes(q) ||
-        e.personal_nr.toLowerCase().includes(q)
+        sucheNormal(e.name).includes(q) ||
+        sucheNormal(e.vorname).includes(q) ||
+        sucheNormal(e.personal_nr).includes(q)
       );
     });
   }, [alleAktiven, positionsEmployeeIds, hinzufuegenSuche, firma, firmenListe, saisonFirma]);

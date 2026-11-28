@@ -21,6 +21,7 @@ import { useProfile } from "@/lib/useProfile";
 import { ladeAlleSeiten } from "@/lib/ladeAlle";
 import { formatDatumDE, formatEuro, formatMenge } from "@/lib/format";
 import { darf } from "@/lib/rollen";
+import { sucheNormal } from "@/lib/suche";
 
 interface Zeile {
   datum: string;
@@ -298,8 +299,8 @@ export default function StatistikSpargelPage() {
       p.woche.set(kw(z.datum), w);
       m.set(key, p);
     }
-    const q = suche.trim().toLowerCase();
-    const liste = Array.from(m.values()).filter((p) => !q || p.name.toLowerCase().includes(q) || p.pnr.includes(q));
+    const q = sucheNormal(suche);
+    const liste = Array.from(m.values()).filter((p) => !q || sucheNormal(p.name).includes(q) || sucheNormal(p.pnr).includes(q));
     const leistung = (p: (typeof liste)[number]) => (p.soll ? p.kg / p.soll : -1);
     return liste.sort((a, b) =>
       sortPers === "kg"

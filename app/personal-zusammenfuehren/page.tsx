@@ -19,6 +19,7 @@ import { darf as hatRecht } from "@/lib/rollen";
 import { ladeAlleSeiten } from "@/lib/ladeAlle";
 import { dublettenFinden, type DublettenPerson } from "@/lib/dubletten";
 import { formatDatumDE as formatDatum } from "@/lib/format";
+import { sucheNormal } from "@/lib/suche";
 
 interface Person extends DublettenPerson {
   aktiv: boolean;
@@ -56,15 +57,15 @@ function PersonWahl({
 }) {
   const [suche, setSuche] = useState("");
   const treffer = useMemo(() => {
-    const s = suche.trim().toLowerCase();
+    const s = sucheNormal(suche);
     if (s.length < 2) return [];
     return personen
       .filter(
         (p) =>
-          p.personal_nr.toLowerCase() === s ||
-          p.personal_nr.toLowerCase().startsWith(s) ||
-          `${p.name} ${p.vorname}`.toLowerCase().includes(s) ||
-          `${p.vorname} ${p.name}`.toLowerCase().includes(s)
+          sucheNormal(p.personal_nr) === s ||
+          sucheNormal(p.personal_nr).startsWith(s) ||
+          sucheNormal(`${p.name} ${p.vorname}`).includes(s) ||
+          sucheNormal(`${p.vorname} ${p.name}`).includes(s)
       )
       .slice(0, 12);
   }, [suche, personen]);

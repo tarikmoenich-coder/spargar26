@@ -37,6 +37,7 @@ import ErntewirtschaftTabs from "@/components/ErntewirtschaftTabs";
 import PageHeader from "@/components/PageHeader";
 
 import { darf } from "@/lib/rollen";
+import { sucheNormal } from "@/lib/suche";
 const BLOCK = 200;
 
 function bloecke<T>(arr: T[], groesse = BLOCK): T[][] {
@@ -181,13 +182,13 @@ export default function ErntewirtschaftStammdatenPage() {
   const [ausgewaehlt, setAusgewaehlt] = useState<Set<number>>(new Set());
   const [bulkLaeuft, setBulkLaeuft] = useState(false);
 
-  const sucheNorm = maschineSuche.trim().toLowerCase();
+  const sucheNorm = sucheNormal(maschineSuche);
   const maschinenGefiltert = maschinen.filter(
     (m) =>
       !sucheNorm ||
-      m.nummer.toLowerCase().includes(sucheNorm) ||
-      (m.bezeichnung ?? "").toLowerCase().includes(sucheNorm) ||
-      (m.box_seriennummer ?? "").toLowerCase().includes(sucheNorm)
+      sucheNormal(m.nummer).includes(sucheNorm) ||
+      sucheNormal(m.bezeichnung ?? "").includes(sucheNorm) ||
+      sucheNormal(m.box_seriennummer ?? "").includes(sucheNorm)
   );
   const maschinenGruppen = [
     { label: "Aktiv", liste: maschinenGefiltert.filter((m) => m.aktiv) },

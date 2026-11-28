@@ -27,6 +27,7 @@ import {
   zeitInput,
   zeitKurz,
 } from "@/lib/vertrieb";
+import { sucheNormal } from "@/lib/suche";
 
 type ZeitFeld = { offen: boolean; von: string; bis: string };
 type ZeitRaster = Record<string, ZeitFeld>; // Schlüssel "1-VM"
@@ -161,14 +162,14 @@ export default function VertriebStaendePage() {
   );
 
   const sichtbar = useMemo(() => {
-    const q = suche.trim().toLowerCase();
+    const q = sucheNormal(suche);
     return staende.filter(
       (s) =>
         (!nurAktive || s.aktiv) &&
         (!q ||
           String(s.nummer) === q ||
-          s.name.toLowerCase().includes(q) ||
-          (s.adresse ?? "").toLowerCase().includes(q))
+          sucheNormal(s.name).includes(q) ||
+          sucheNormal(s.adresse ?? "").includes(q))
     );
   }, [staende, suche, nurAktive]);
 

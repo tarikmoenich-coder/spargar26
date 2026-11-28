@@ -32,6 +32,7 @@ import {
 import { formatDatumDE } from "@/lib/format";
 
 import { darf } from "@/lib/rollen";
+import { sucheNormal } from "@/lib/suche";
 const CURRENT_YEAR = new Date().getFullYear();
 // Das Formular "Doppelte Haushaltsführung" wird seit 2026-08-11 NICHT mehr
 // als Datei hochgeladen (Nutzer-Vorgabe) - die über das Eingabeformular
@@ -134,12 +135,12 @@ export default function LohnsteuerPage() {
   }, [jahr, showInactive]);
 
   const gefiltert = employees.filter((e) => {
-    const q = search.toLowerCase();
+    const q = sucheNormal(search);
     return (
       !q ||
-      e.name.toLowerCase().includes(q) ||
-      e.vorname.toLowerCase().includes(q) ||
-      e.personal_nr.toLowerCase().includes(q)
+      sucheNormal(e.name).includes(q) ||
+      sucheNormal(e.vorname).includes(q) ||
+      sucheNormal(e.personal_nr).includes(q)
     );
   });
 

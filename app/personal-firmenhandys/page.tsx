@@ -17,6 +17,7 @@ import PersonalTabs from "@/components/PersonalTabs";
 import type { Firmenhandy } from "@/lib/types";
 
 import { darf } from "@/lib/rollen";
+import { sucheNormal } from "@/lib/suche";
 type EmpOpt = {
   id: string;
   personal_nr: string;
@@ -66,13 +67,13 @@ function InhaberZelle({
   const aktuell = mitarbeiterMap.get(firmenhandy.employee_id ?? "");
 
   const treffer = useMemo(() => {
-    const q = suche.trim().toLowerCase();
+    const q = sucheNormal(suche);
     const liste = q
       ? mitarbeiter.filter(
           (m) =>
-            `${m.name} ${m.vorname}`.toLowerCase().includes(q) ||
-            `${m.vorname} ${m.name}`.toLowerCase().includes(q) ||
-            (m.personal_nr ?? "").toLowerCase().includes(q)
+            sucheNormal(`${m.name} ${m.vorname}`).includes(q) ||
+            sucheNormal(`${m.vorname} ${m.name}`).includes(q) ||
+            sucheNormal(m.personal_nr ?? "").includes(q)
         )
       : mitarbeiter;
     return liste.slice(0, 8);
@@ -270,14 +271,14 @@ export default function FirmenhandyPage() {
   );
 
   const gefiltert = useMemo(() => {
-    const q = suche.trim().toLowerCase();
+    const q = sucheNormal(suche);
     if (!q) return firmenhandys;
     return firmenhandys.filter((f) => {
       const inhaber = inhaberAnzeige(f, mitarbeiterMap);
       return (
-        f.nummer.toLowerCase().includes(q) ||
-        (inhaber ?? "").toLowerCase().includes(q) ||
-        (f.notiz ?? "").toLowerCase().includes(q)
+        sucheNormal(f.nummer).includes(q) ||
+        sucheNormal(inhaber ?? "").includes(q) ||
+        sucheNormal(f.notiz ?? "").includes(q)
       );
     });
   }, [firmenhandys, suche, mitarbeiterMap]);

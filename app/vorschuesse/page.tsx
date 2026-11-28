@@ -21,6 +21,7 @@ import { erzeugeSepaXml, sepaDateiHerunterladen } from "@/lib/sepa";
 import { darf } from "@/lib/rollen";
 import { ladeAlleSeiten } from "@/lib/ladeAlle";
 import { heuteLokalIso } from "@/lib/datum";
+import { sucheNormal } from "@/lib/suche";
 function heuteIsoDatum() {
   return heuteLokalIso();
 }
@@ -386,12 +387,12 @@ export default function VorschuessePage() {
   }
 
   const gefilterteEmployees = employees.filter((e) => {
-    const q = suche.toLowerCase();
+    const q = sucheNormal(suche);
     return (
       !q ||
-      e.name.toLowerCase().includes(q) ||
-      e.vorname.toLowerCase().includes(q) ||
-      e.personal_nr.toLowerCase().includes(q)
+      sucheNormal(e.name).includes(q) ||
+      sucheNormal(e.vorname).includes(q) ||
+      sucheNormal(e.personal_nr).includes(q)
     );
   });
 

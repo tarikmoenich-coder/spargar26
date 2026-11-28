@@ -20,6 +20,7 @@ import type { KartenFokus, StandEntwurf, TourLinie } from "@/components/StandKar
 import type { VtGrundplan, VtStand, VtStandZeit, VtTagesart, VtTour, VtTourStand } from "@/lib/types";
 import { ladeAlleMitFehler } from "@/lib/ladeAlle";
 import { TAGESARTEN, WOCHENTAGE, fahrerStandId, planungsSaison } from "@/lib/vertrieb";
+import { sucheNormal } from "@/lib/suche";
 
 const StandKarte = dynamic(() => import("@/components/StandKarte"), {
   ssr: false,
@@ -286,14 +287,14 @@ export default function VertriebKartePage() {
   const ohnePos = staende.filter((s) => s.lat === null || s.lng === null).length;
 
   const sichtbar = useMemo(() => {
-    const q = suche.trim().toLowerCase();
+    const q = sucheNormal(suche);
     return staende.filter(
       (s) =>
         (!nurOhnePos || s.lat === null || s.lng === null) &&
         (!q ||
           String(s.nummer) === q ||
-          s.name.toLowerCase().includes(q) ||
-          (s.adresse ?? "").toLowerCase().includes(q))
+          sucheNormal(s.name).includes(q) ||
+          sucheNormal(s.adresse ?? "").includes(q))
     );
   }, [staende, suche, nurOhnePos]);
 

@@ -31,6 +31,7 @@ import {
   type Tagesplan,
 } from "@/lib/tagesplan";
 import { saisonVon, tagesplanDatenLaden, type TagesplanDaten } from "@/lib/tagesplanLaden";
+import { sucheNormal } from "@/lib/suche";
 
 const WT = ["", "Mo", "Di", "Mi", "Do", "Fr", "Sa", "So"];
 const SCHRAFFUR = { backgroundImage: "repeating-linear-gradient(135deg, transparent 0 5px, rgba(0,0,0,0.045) 5px 6px)" };
@@ -103,10 +104,10 @@ export default function VertriebWochePage() {
   // Zeilen nach Mo-Sa-Tour gruppiert (wie im Grundplan)
   const gruppen = useMemo(() => {
     if (!d) return [];
-    const q = standSuche.trim().toLowerCase();
+    const q = sucheNormal(standSuche);
     const sichtbar = (s: VtStand) => {
       if (!s.aktiv) return false;
-      if (q && !`${s.nummer} ${s.name}`.toLowerCase().includes(q)) return false;
+      if (q && !sucheNormal(`${s.nummer} ${s.name}`).includes(q)) return false;
       if (nurProbleme && !plaene.some((tp) => HALBTAGE.some((h) => problem(tp.feld(s.id, h.wert))))) return false;
       return true;
     };
@@ -229,12 +230,12 @@ export default function VertriebWochePage() {
     if (!auswahl || !d) return [];
     const tp = plaene.find((x) => x.datum === auswahl.datum)!;
     const hs: VtHalbtag[] = auswahl.umfang === "TAG" ? ["VM", "NM"] : [auswahl.umfang];
-    const q = suche.trim().toLowerCase();
+    const q = sucheNormal(suche);
     return d.planung
       .filter((pl) => pl.saison_jahr === saisonVon(auswahl.datum))
       .map((pl) => personById.get(pl.employee_id))
       .filter((p): p is NonNullable<typeof p> => !!p)
-      .filter((p) => !q || `${p.vorname} ${p.name} ${p.personal_nr}`.toLowerCase().includes(q))
+      .filter((p) => !q || sucheNormal(`${p.vorname} ${p.name} ${p.personal_nr}`).includes(q))
       .map((p) => {
         const kannWerte = hs.map((h) => d.verf.find((v) => v.employee_id === p.id && v.saison_jahr === saisonVon(auswahl.datum) && v.wochentag === tp.planTag && v.halbtag === h)?.kann ?? null);
         const abwesend = d.abwesenheiten.find((a) => a.employee_id === p.id && a.von <= auswahl.datum && a.bis >= auswahl.datum && (a.halbtag === null || hs.includes(a.halbtag)));
@@ -406,7 +407,11 @@ export default function VertriebWochePage() {
                 <th className="sticky left-0 top-0 z-30 min-w-52 border-x-0 border-t-0 bg-emerald-50 text-sm">Stand</th>
                 {plaene.map((tp) => {
                   const ae = aenderungenJeTag.get(tp.datum);
-                  const luecken = [...tp.felder.values()].filter(problem).length;
+                  // Vorschlag #3 (2026-11-28): vorrangig Stände zählen, Halbtage
+                  // klein dahinter - ein Stand mit VM+NM offen ist EIN Stand.
+                  const problemFelder = [...tp.felder.values()].filter(problem);
+                  const luecken = problemFelder.length;
+                  const staendeOffen = new Set(problemFelder.map((f) => f.stand_id)).size;
                   return (
                     <th key={tp.datum} colSpan={2} className={`sticky top-0 z-20 border-r-0 border-t-0 p-0.5 text-center ${tp.feiertag ? "bg-amber-100" : "bg-emerald-50"}`}>
                       <div className="text-sm">
@@ -417,7 +422,19 @@ export default function VertriebWochePage() {
                           {tp.feiertag.name} · wie So
                         </div>
                       )}
-                      <div className={`text-[10px] font-normal ${luecken ? "text-beere-700" : "text-emerald-700"}`}>{luecken ? `${luecken} offen` : "alles besetzt"}</div>
+                      <div
+                        className={`text-[10px] font-normal ${luecken ? "text-beere-700" : "text-emerald-700"}`}
+                        title={luecken ? `${staendeOffen} ${staendeOffen === 1 ? "Stand" : "Stände"} ohne Verkäufer, zusammen ${luecken} Halbtage (Vormittag/Nachmittag einzeln gezählt)` : undefined}
+                      >
+                        {luecken ? (
+                          <>
+                            <span className="font-semibold">{staendeOffen} {staendeOffen === 1 ? "Stand" : "Stände"} offen</span>
+                            <span className="text-beere-600/70"> · {luecken} Halbt.</span>
+                          </>
+                        ) : (
+                          "alles besetzt"
+                        )}
+                      </div>
                       <div className="mt-0.5 flex justify-center gap-1 font-normal print:hidden">
                         <Link href={`/vertrieb/druck/tag?datum=${tp.datum}`} className="rounded border border-linie bg-white px-1 text-[10px] hover:bg-sand" title="Tagesplan aller Touren (DIN A3)">
                           <Printer className="inline h-3 w-3" /> A3

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { getSupabaseClient } from "@/lib/supabase/client";
 import { nachFirmaGruppieren } from "@/lib/firmen";
 import { useProfile } from "@/lib/useProfile";
@@ -29,6 +29,10 @@ import {
 
 import { darf } from "@/lib/rollen";
 import { heuteLokalIso } from "@/lib/datum";
+import { sucheNormal } from "@/lib/suche";
+import { ladeAlleSeiten } from "@/lib/ladeAlle";
+
+type BelegPerson = { auszahlungsbeleg_id: number; name: string; vorname: string; personal_nr: string };
 function monatsSchluessel(d: Date) {
   const mm = String(d.getMonth() + 1).padStart(2, "0");
   return `KU-${mm}-${d.getFullYear()}`;
@@ -258,6 +262,7 @@ export default function AuszahlungenPage() {
   // Personenfilter: nur Belege zeigen, in denen die gesuchte Person als
   // Zeile vorkommt (Suche über auszahlungsbeleg_zeilen). null = kein Filter.
   const [personFilter, setPersonFilter] = useState("");
+  const belegPersonenCache = useRef<BelegPerson[] | null>(null);
   const [personBelegIds, setPersonBelegIds] = useState<Set<number> | null>(null);
   const [personTreffer, setPersonTreffer] = useState<
     { name: string; vorname: string; personal_nr: string }[]
@@ -288,7 +293,10 @@ export default function AuszahlungenPage() {
         .eq("storniert", false),
       supabase.from("sepa_export").select("*").eq("art", "auszahlung"),
     ]);
-    if (!error) setBelege((data as AuszahlungsbelegSummary[]) ?? []);
+    if (!error) {
+      setBelege((data as AuszahlungsbelegSummary[]) ?? []);
+      belegPersonenCache.current = null; // Personensuche beim nächsten Tippen neu laden
+    }
     const sm: Record<number, SepaExport> = {};
     ((sepaEx as SepaExport[]) ?? []).forEach((e) => (sm[e.beleg_id] = e));
     setSepaExporte(sm);
@@ -319,27 +327,34 @@ export default function AuszahlungenPage() {
   }, [druckZeilen]);
 
   useEffect(() => {
-    const q = personFilter.trim().replace(/[%,()*\\]/g, "");
+    const q = sucheNormal(personFilter);
     if (q.length < 2) {
       setPersonBelegIds(null);
       setPersonTreffer([]);
       return;
     }
     const timer = setTimeout(async () => {
+      // Akzent-unabhängig suchen (Nutzer-Vorgabe 2026-11-28): die Datenbank
+      // kann das per ilike nicht - darum alle Belegzeilen (nur Name/Nr.)
+      // einmal laden und hier filtern.
       const supabase = getSupabaseClient();
-      const { data } = await supabase
-        .from("auszahlungsbeleg_zeilen")
-        .select("auszahlungsbeleg_id, name, vorname, personal_nr")
-        .or(
-          `name.ilike.%${q}%,vorname.ilike.%${q}%,personal_nr.ilike.%${q}%`
+      if (!belegPersonenCache.current) {
+        belegPersonenCache.current = await ladeAlleSeiten<BelegPerson>((von, bis) =>
+          supabase
+            .from("auszahlungsbeleg_zeilen")
+            .select("auszahlungsbeleg_id, name, vorname, personal_nr")
+            .order("auszahlungsbeleg_id")
+            .range(von, bis)
         );
-      const rows =
-        (data as {
-          auszahlungsbeleg_id: number;
-          name: string;
-          vorname: string;
-          personal_nr: string;
-        }[]) ?? [];
+      }
+      const rows = belegPersonenCache.current.filter(
+        (r) =>
+          sucheNormal(r.name).includes(q) ||
+          sucheNormal(r.vorname).includes(q) ||
+          sucheNormal(`${r.name} ${r.vorname}`).includes(q) ||
+          sucheNormal(`${r.vorname} ${r.name}`).includes(q) ||
+          sucheNormal(r.personal_nr).includes(q)
+      );
       setPersonBelegIds(new Set(rows.map((r) => r.auszahlungsbeleg_id)));
       const gesehen = new Set<string>();
       const treffer: { name: string; vorname: string; personal_nr: string }[] =

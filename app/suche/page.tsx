@@ -21,6 +21,7 @@ import type {
 import { formatDatumDE, formatMenge } from "@/lib/format";
 import { darf } from "@/lib/rollen";
 import { heuteLokalIso } from "@/lib/datum";
+import { sucheNormal } from "@/lib/suche";
 
 const VORSCHUSS_BUCKET = "vorschuss-belege";
 
@@ -202,15 +203,15 @@ export default function SuchePage() {
   }, []);
 
   const treffer = useMemo(() => {
-    const q = suchtext.trim().toLowerCase();
+    const q = sucheNormal(suchtext);
     if (!q) return [];
     return alle
       .filter(
         (m) =>
-          m.personal_nr.toLowerCase().includes(q) ||
-          m.name.toLowerCase().includes(q) ||
-          m.vorname.toLowerCase().includes(q) ||
-          `${m.name} ${m.vorname}`.toLowerCase().includes(q)
+          sucheNormal(m.personal_nr).includes(q) ||
+          sucheNormal(m.name).includes(q) ||
+          sucheNormal(m.vorname).includes(q) ||
+          sucheNormal(`${m.name} ${m.vorname}`).includes(q)
       )
       .slice(0, 20);
   }, [alle, suchtext]);

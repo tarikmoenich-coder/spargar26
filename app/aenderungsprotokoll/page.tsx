@@ -29,6 +29,7 @@ import {
 } from "@/lib/auditLog";
 
 import { darf } from "@/lib/rollen";
+import { sucheNormal } from "@/lib/suche";
 const SEITENGROESSE = 100;
 
 function formatZeitpunktDE(iso: string): string {
@@ -126,15 +127,15 @@ export default function AenderungsprotokollPage() {
   // ohnehin geladene Personenliste.
   const gefiltert = eintraege.filter((e) => {
     if (!personSuche) return true;
-    const q = personSuche.toLowerCase();
+    const q = sucheNormal(personSuche);
     const p = e.betroffene_employee_id
       ? personen[e.betroffene_employee_id]
       : undefined;
     if (!p) return false;
     return (
-      p.name.toLowerCase().includes(q) ||
-      p.vorname.toLowerCase().includes(q) ||
-      p.personal_nr.toLowerCase().includes(q)
+      sucheNormal(p.name).includes(q) ||
+      sucheNormal(p.vorname).includes(q) ||
+      sucheNormal(p.personal_nr).includes(q)
     );
   });
 
